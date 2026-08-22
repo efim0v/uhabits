@@ -1,0 +1,15 @@
+name: uhabits_core
+description: Pure Dart core of Loop Habit Tracker — models, commands, persistence and presenters. Must never depend on Flutter.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  meta: ^1.16.0
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^5.1.0
+  sqflite_common_ffi: ^2.3.4

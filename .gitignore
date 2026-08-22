@@ -24,3 +24,11 @@ kotlin-js-store
 # Migration docs are tracked despite the blanket *.md rule above
 !GOAL.md
 !docs/**/*.md
+
+# Flutter
+.dart_tool/
+.flutter-plugins-dependencies
+.packages
+Pods/
+*.lock
+!pubspec.lock
