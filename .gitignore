@@ -20,3 +20,7 @@ crowdin.yml
 kotlin-js-store
 *.md
 .kotlin
+
+# Migration docs are tracked despite the blanket *.md rule above
+!GOAL.md
+!docs/**/*.md
