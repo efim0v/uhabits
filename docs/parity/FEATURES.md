@@ -602,7 +602,7 @@ written from the rules below.
 
 #### time.local-date-core
 
-- [ ] `time.local-date-core` — LocalDate representation and arithmetic
+- [x] `time.local-date-core` — LocalDate representation and arithmetic
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/DatesTest.kt`
@@ -621,7 +621,7 @@ written from the rules below.
 
 #### time.day-of-week
 
-- [ ] `time.day-of-week` — Day-of-week computation and weekday sequences
+- [x] `time.day-of-week` — Day-of-week computation and weekday sequences
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/DatesTest.kt`
@@ -636,7 +636,7 @@ written from the rules below.
 
 #### time.truncation
 
-- [ ] `time.truncation` — Date truncation (start of week/month/quarter/year)
+- [x] `time.truncation` — Date truncation (start of week/month/quarter/year)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/DatesTest.kt`
