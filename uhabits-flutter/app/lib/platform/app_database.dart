@@ -30,7 +30,14 @@ class AppDatabase {
   /// Opens [path] and brings it up to [databaseVersion]. Exposed separately so
   /// tests and the importer can drive it against an arbitrary file.
   static Database openAndMigrate(String path) {
-    final database = Sqlite3DatabaseOpener().open(path);
+    // The opener mirrors Android's OPEN_READWRITE and deliberately refuses to
+    // create a missing file, so a first launch has to place an empty one; an
+    // empty file is a valid empty SQLite database.
+    final file = File(path);
+    if (!file.existsSync()) {
+      file.createSync(recursive: true);
+    }
+    final database = const Sqlite3DatabaseOpener().open(path);
     if (database.getVersion() == 0) {
       database.setVersion(_schemaBaseVersion);
     }

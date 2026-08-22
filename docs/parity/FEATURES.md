@@ -1037,7 +1037,7 @@ written from the rules below.
 
 #### persistence.schema-legacy-tables
 
-- [ ] `persistence.schema-legacy-tables` — Legacy and unused tables
+- [x] `persistence.schema-legacy-tables` — Legacy and unused tables
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/09.sql`, `19.sql`, `20.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1049,7 +1049,7 @@ written from the rules below.
 
 #### persistence.schema-indexes
 
-- [ ] `persistence.schema-indexes` — Index lifecycle across migrations
+- [x] `persistence.schema-indexes` — Index lifecycle across migrations
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/13.sql`, `17.sql`, `20.sql`, `22.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1079,7 +1079,7 @@ written from the rules below.
 
 #### persistence.migration-v09
 
-- [ ] `persistence.migration-v09` — Migration 09 — initial schema
+- [x] `persistence.migration-v09` — Migration 09 — initial schema
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/09.sql`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/MigrationTest.kt`
@@ -1093,7 +1093,7 @@ written from the rules below.
 
 #### persistence.migration-cache-resets
 
-- [ ] `persistence.migration-cache-resets` — Migrations 10, 12 and 15 — derived-cache resets
+- [x] `persistence.migration-cache-resets` — Migrations 10, 12 and 15 — derived-cache resets
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/10.sql`, `12.sql`, `15.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1104,7 +1104,7 @@ written from the rules below.
 
 #### persistence.migration-v11
 
-- [ ] `persistence.migration-v11` — Migration 11 — reminder_days column
+- [x] `persistence.migration-v11` — Migration 11 — reminder_days column
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/11.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1114,7 +1114,7 @@ written from the rules below.
 
 #### persistence.migration-v13
 
-- [ ] `persistence.migration-v13` — Migration 13 — create per-habit timestamp indexes
+- [x] `persistence.migration-v13` — Migration 13 — create per-habit timestamp indexes
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/13.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1124,7 +1124,7 @@ written from the rules below.
 
 #### persistence.migration-v14
 
-- [ ] `persistence.migration-v14` — Migration 14 — first color remap (ARGB to palette 0..12)
+- [x] `persistence.migration-v14` — Migration 14 — first color remap (ARGB to palette 0..12)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/14.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1135,7 +1135,7 @@ written from the rules below.
 
 #### persistence.migration-v16
 
-- [ ] `persistence.migration-v16` — Migration 16 — habit type and repetition value
+- [x] `persistence.migration-v16` — Migration 16 — habit type and repetition value
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/16.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1146,7 +1146,7 @@ written from the rules below.
 
 #### persistence.migration-v17
 
-- [ ] `persistence.migration-v17` — Migration 17 — Score.score becomes REAL
+- [x] `persistence.migration-v17` — Migration 17 — Score.score becomes REAL
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/17.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1158,7 +1158,7 @@ written from the rules below.
 
 #### persistence.migration-v18
 
-- [ ] `persistence.migration-v18` — Migration 18 — numerical target columns
+- [x] `persistence.migration-v18` — Migration 18 — numerical target columns
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/18.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1169,7 +1169,7 @@ written from the rules below.
 
 #### persistence.migration-v19
 
-- [ ] `persistence.migration-v19` — Migration 19 — Events table
+- [x] `persistence.migration-v19` — Migration 19 — Events table
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/19.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1179,7 +1179,7 @@ written from the rules below.
 
 #### persistence.migration-v20
 
-- [ ] `persistence.migration-v20` — Migration 20 — drop derived tables
+- [x] `persistence.migration-v20` — Migration 20 — drop derived tables
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/20.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1189,7 +1189,7 @@ written from the rules below.
 
 #### persistence.migration-v21
 
-- [ ] `persistence.migration-v21` — Migration 21 — second color remap (palette 0..12 to 0..19)
+- [x] `persistence.migration-v21` — Migration 21 — second color remap (palette 0..12 to 0..19)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/21.sql`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1202,7 +1202,7 @@ written from the rules below.
 
 #### persistence.migration-v22
 
-- [ ] `persistence.migration-v22` — Migration 22 — Repetitions cleanup and constraint rebuild
+- [x] `persistence.migration-v22` — Migration 22 — Repetitions cleanup and constraint rebuild
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/assets/main/migrations/22.sql`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/migrations/Version22Test.kt`
@@ -1220,7 +1220,7 @@ written from the rules below.
 
 #### persistence.migration-v23
 
-- [ ] `persistence.migration-v23` — Migration 23 — description split into question
+- [x] `persistence.migration-v23` — Migration 23 — description split into question
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/23.sql`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/migrations/Version23Test.kt`
@@ -1233,7 +1233,7 @@ written from the rules below.
 
 #### persistence.migration-v24
 
-- [ ] `persistence.migration-v24` — Migration 24 — uuid backfill
+- [x] `persistence.migration-v24` — Migration 24 — uuid backfill
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/24.sql`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/HabitRepository.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -1258,7 +1258,7 @@ written from the rules below.
 
 #### persistence.sql-parser
 
-- [ ] `persistence.sql-parser` — SQL script parser
+- [x] `persistence.sql-parser` — SQL script parser
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/SQLParser.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/SQLParserTest.kt`
@@ -1284,7 +1284,7 @@ written from the rules below.
 
 #### persistence.database-abstraction
 
-- [ ] `persistence.database-abstraction` — Database / PreparedStatement abstraction and query helpers
+- [x] `persistence.database-abstraction` — Database / PreparedStatement abstraction and query helpers
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Database.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/database/AndroidDatabaseOpener.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/DatabaseTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/DatabaseQueryHelpersTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/database/AndroidDatabaseTest.kt`
@@ -1313,7 +1313,7 @@ written from the rules below.
 
 #### persistence.habit-repository
 
-- [ ] `persistence.habit-repository` — HabitRepository query semantics
+- [x] `persistence.habit-repository` — HabitRepository query semantics
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/HabitRepository.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/HabitRepositoryTest.kt`
@@ -1332,7 +1332,7 @@ written from the rules below.
 
 #### persistence.entry-repository
 
-- [ ] `persistence.entry-repository` — EntryRepository query semantics
+- [x] `persistence.entry-repository` — EntryRepository query semantics
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/EntryRepository.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/EntryRepositoryTest.kt`
