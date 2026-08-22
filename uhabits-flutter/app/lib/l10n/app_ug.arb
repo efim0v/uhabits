@@ -1,0 +1,15 @@
+{
+  "@@locale": "ug",
+  "mainActivityTitle": "ئادەت",
+  "actionSettings": "تەڭشەك",
+  "edit": "تەھرىرلەش",
+  "delete": "ئۆچۈرۈش",
+  "archive": "ئارخىپلاش",
+  "unarchive": "ئارخىپتىن چىقىرىش",
+  "addHabit": "ئادەت قېتىلدى",
+  "colorPickerDefaultTitle": "رەڭ ئۆزگەردى",
+  "toastHabitCreated": "ئادەت قۇرۇلدى",
+  "settings": "تەڭشەك",
+  "selectPublicBackupFolder": "ئاممىۋى زاپاس قىسقۇچىنى تاللاڭ",
+  "noPublicBackupFolderSelected": "ھېچقانداق قىسقۇچ تاللانمىدى"
+}
