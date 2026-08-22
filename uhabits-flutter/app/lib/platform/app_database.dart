@@ -2,9 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:uhabits_core/src/database/database.dart';
-import 'package:uhabits_core/src/database/migrations.g.dart';
-import 'package:uhabits_core/src/database/sqlite3_database.dart';
+import 'package:uhabits_core/uhabits_core.dart';
 
 /// Opens the app's habit database, creating and migrating it when needed.
 ///

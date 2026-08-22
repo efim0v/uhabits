@@ -62,6 +62,16 @@ dev_dependencies:
 flutter:
   generate: true
 
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+    - family: FontAwesome
+      fonts:
+        - asset: assets/fonts/FontAwesome.ttf
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

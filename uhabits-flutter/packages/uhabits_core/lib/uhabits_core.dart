@@ -29,6 +29,14 @@ export 'src/models/streak.dart';
 export 'src/models/streak_list.dart';
 export 'src/models/weekday_list.dart';
 
+// Persistence
+export 'src/database/database.dart';
+export 'src/database/entry_repository.dart';
+export 'src/database/habit_repository.dart';
+export 'src/database/migrations.g.dart';
+export 'src/database/sql_parser.dart';
+export 'src/database/sqlite3_database.dart';
+
 // Drawing and theming
 export 'src/gui/canvas.dart';
 export 'src/gui/color.dart';
