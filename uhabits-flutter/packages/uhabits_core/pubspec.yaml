@@ -8,8 +8,11 @@ environment:
 
 dependencies:
   meta: ^1.16.0
+  # Pure-Dart FFI bindings to SQLite. Not a Flutter package, so the core's
+  # no-Flutter invariant still holds, and the same implementation serves the
+  # app, the tests and any future sync tooling.
+  sqlite3: ^2.7.0
 
 dev_dependencies:
   test: ^1.25.0
   lints: ^5.1.0
-  sqflite_common_ffi: ^2.3.4
