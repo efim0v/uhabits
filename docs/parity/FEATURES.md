@@ -147,7 +147,7 @@ written from the rules below.
 
 #### models.entry-list-recompute
 
-- [ ] `models.entry-list-recompute` — Recomputing computedEntries from originalEntries
+- [x] `models.entry-list-recompute` — Recomputing computedEntries from originalEntries
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteEntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`
@@ -733,7 +733,7 @@ written from the rules below.
 
 #### commands.command-runner-run
 
-- [ ] `commands.command-runner-run` — CommandRunner.run dispatch
+- [x] `commands.command-runner-run` — CommandRunner.run dispatch
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/CommandRunner.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/AppScope.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/tasks/CoroutineTaskRunnerTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HabitCardListCacheTest.kt`
@@ -766,7 +766,7 @@ written from the rules below.
 
 #### commands.task-runner-contract
 
-- [ ] `commands.task-runner-contract` — TaskRunner contract behind CommandRunner
+- [x] `commands.task-runner-contract` — TaskRunner contract behind CommandRunner
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/Task.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/TaskRunner.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/CoroutineTaskRunner.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/tasks/CoroutineTaskRunnerTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/BaseUnitTest.kt`
@@ -985,7 +985,7 @@ written from the rules below.
 
 #### commands.test-harness
 
-- [ ] `commands.test-harness` — Command test harness expectations
+- [x] `commands.test-harness` — Command test harness expectations
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/BaseUnitTest.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/BaseUnitTest.kt`, `.../commands/CreateHabitCommandTest.kt`, `.../commands/CreateRepetitionCommandTest.kt`, `.../commands/EditHabitCommandTest.kt`
@@ -1000,7 +1000,7 @@ written from the rules below.
 
 #### persistence.schema-habits
 
-- [ ] `persistence.schema-habits` — Habits table schema at version 25
+- [x] `persistence.schema-habits` — Habits table schema at version 25
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/09.sql`, `11.sql`, `16.sql`, `18.sql`, `23.sql`, `24.sql`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/HabitRepository.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/HabitRepositoryTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/MigrationTest.kt`
@@ -1020,7 +1020,7 @@ written from the rules below.
 
 #### persistence.schema-repetitions
 
-- [ ] `persistence.schema-repetitions` — Repetitions (entries) table schema at version 25
+- [x] `persistence.schema-repetitions` — Repetitions (entries) table schema at version 25
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/09.sql`, `16.sql`, `22.sql`, `25.sql`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/EntryRepository.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/EntryRepositoryTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/migrations/Version22Test.kt`
@@ -1349,7 +1349,7 @@ written from the rules below.
 
 #### persistence.sqlite-habit-list-cache
 
-- [ ] `persistence.sqlite-habit-list-cache` — SQLiteHabitList lazy loading, row mapping and position repair
+- [x] `persistence.sqlite-habit-list-cache` — SQLiteHabitList lazy loading, row mapping and position repair
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitListTest.kt`
@@ -1378,7 +1378,7 @@ written from the rules below.
 
 #### persistence.sqlite-habit-list-mutations
 
-- [ ] `persistence.sqlite-habit-list-mutations` — SQLiteHabitList write operations
+- [x] `persistence.sqlite-habit-list-mutations` — SQLiteHabitList write operations
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitListTest.kt`
@@ -1402,7 +1402,7 @@ written from the rules below.
 
 #### persistence.sqlite-entry-list
 
-- [ ] `persistence.sqlite-entry-list` — SQLite-backed originalEntries: caching and write-through
+- [x] `persistence.sqlite-entry-list` — SQLite-backed originalEntries: caching and write-through
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteEntryList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteEntryListTest.kt`
@@ -1695,7 +1695,7 @@ written from the rules below.
 
 #### io.csv-line-writer
 
-- [ ] `io.csv-line-writer` — CSV field quoting (csvLine)
+- [x] `io.csv-line-writer` — CSV field quoting (csvLine)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Strings.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`
@@ -1710,7 +1710,7 @@ written from the rules below.
 
 #### io.csv-line-parser
 
-- [ ] `io.csv-line-parser` — CSV field parsing (parseCsvLine)
+- [x] `io.csv-line-parser` — CSV field parsing (parseCsvLine)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Strings.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/StringsTest.kt`
@@ -1740,7 +1740,7 @@ written from the rules below.
 
 #### io.zip-writer-reader
 
-- [ ] `io.zip-writer-reader` — ZIP writing and reading
+- [x] `io.zip-writer-reader` — ZIP writing and reading
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Zip.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/io/Zip.kt`, `uhabits-core/src/jsMain/kotlin/org/isoron/platform/io/Zip.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/ZipTest.kt`
@@ -2046,7 +2046,7 @@ written from the rules below.
 
 #### io.userfile-api
 
-- [ ] `io.userfile-api` — UserFile abstraction (read/write/delete/resolve/list)
+- [x] `io.userfile-api` — UserFile abstraction (read/write/delete/resolve/list)
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Files.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/io/JavaFiles.kt`, `uhabits-android/src/main/java/org/isoron/platform/io/AndroidFiles.kt`, `uhabits-core/src/jsMain/kotlin/org/isoron/platform/io/JsFiles.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/FilesTest.kt`
@@ -3448,7 +3448,7 @@ written from the rules below.
 
 #### settings.preferences.key-catalog
 
-- [ ] `settings.preferences.key-catalog` — Complete preference key catalogue with types and defaults
+- [x] `settings.preferences.key-catalog` — Complete preference key catalogue with types and defaults
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-android/src/main/res/xml/preferences.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/preferences/PreferencesTest.kt`
@@ -3485,7 +3485,7 @@ written from the rules below.
 
 #### settings.preferences.storage-contract
 
-- [ ] `settings.preferences.storage-contract` — Preferences.Storage interface and MemoryStorage semantics
+- [x] `settings.preferences.storage-contract` — Preferences.Storage interface and MemoryStorage semantics
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `.../preferences/MemoryStorage.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/utils/StringUtils.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/preferences/PreferencesTest.kt`
@@ -3504,7 +3504,7 @@ written from the rules below.
 
 #### settings.preferences.listeners
 
-- [ ] `settings.preferences.listeners` — Preferences change listeners
+- [x] `settings.preferences.listeners` — Preferences change listeners
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3749,7 +3749,7 @@ written from the rules below.
 
 #### settings.widget-preferences.habit-ids
 
-- [ ] `settings.widget-preferences.habit-ids` — WidgetPreferences habit-id mapping (and snooze storage keys)
+- [x] `settings.widget-preferences.habit-ids` — WidgetPreferences habit-id mapping (and snooze storage keys)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/WidgetPreferences.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/utils/StringUtils.kt`
 - **Kotlin tests:** none — write Dart test from rules
