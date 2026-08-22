@@ -1,0 +1,68 @@
+name: Flutter port
+
+on:
+  push:
+    branches: [flutter-migration, dev]
+  pull_request:
+
+jobs:
+  core:
+    name: Core (dart test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Install dependencies
+        working-directory: uhabits-flutter/packages/uhabits_core
+        run: dart pub get
+      - name: Analyze
+        working-directory: uhabits-flutter/packages/uhabits_core
+        run: dart analyze --fatal-infos
+      - name: Test
+        working-directory: uhabits-flutter/packages/uhabits_core
+        run: dart test
+      - name: Parity coverage
+        working-directory: uhabits-flutter
+        run: dart tool/parity_coverage.dart --verify
+
+  app:
+    name: App (flutter test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        working-directory: uhabits-flutter/app
+        run: flutter pub get
+      - name: Test
+        working-directory: uhabits-flutter/app
+        run: flutter test
+
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: android
+            os: ubuntu-latest
+            command: flutter build apk --debug
+          - target: ios
+            os: macos-latest
+            command: flutter build ios --simulator --debug
+          - target: macos
+            os: macos-latest
+            command: flutter build macos --debug
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Build
+        working-directory: uhabits-flutter/app
+        run: ${{ matrix.command }}
