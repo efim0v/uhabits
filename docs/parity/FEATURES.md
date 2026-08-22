@@ -82,7 +82,7 @@ written from the rules below.
 
 #### models.entry-list-storage
 
-- [ ] `models.entry-list-storage` — EntryList storage and lookup
+- [x] `models.entry-list-storage` — EntryList storage and lookup
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`
@@ -97,7 +97,7 @@ written from the rules below.
 
 #### models.entry-list-build-intervals
 
-- [ ] `models.entry-list-build-intervals` — Frequency interval construction (buildIntervals)
+- [x] `models.entry-list-build-intervals` — Frequency interval construction (buildIntervals)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`
@@ -115,7 +115,7 @@ written from the rules below.
 
 #### models.entry-list-snap-intervals
 
-- [ ] `models.entry-list-snap-intervals` — Interval snapping (snapIntervalsTogether)
+- [x] `models.entry-list-snap-intervals` — Interval snapping (snapIntervalsTogether)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`
@@ -131,7 +131,7 @@ written from the rules below.
 
 #### models.entry-list-build-entries-from-interval
 
-- [ ] `models.entry-list-build-entries-from-interval` — Deriving computed entries from intervals
+- [x] `models.entry-list-build-entries-from-interval` — Deriving computed entries from intervals
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`
@@ -162,7 +162,7 @@ written from the rules below.
 
 #### models.entry-grouped-sum
 
-- [ ] `models.entry-grouped-sum` — Grouped sums over entries (groupedSum)
+- [x] `models.entry-grouped-sum` — Grouped sums over entries (groupedSum)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/TargetCard.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`
@@ -179,7 +179,7 @@ written from the rules below.
 
 #### models.entry-count-skipped-days
 
-- [ ] `models.entry-count-skipped-days` — Counting skipped days per period
+- [x] `models.entry-count-skipped-days` — Counting skipped days per period
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -204,7 +204,7 @@ written from the rules below.
 
 #### models.score-formula
 
-- [ ] `models.score-formula` — Score exponential-decay formula
+- [x] `models.score-formula` — Score exponential-decay formula
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Score.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt`
@@ -219,7 +219,7 @@ written from the rules below.
 
 #### models.score-list-recompute-boolean
 
-- [ ] `models.score-list-recompute-boolean` — Score recomputation for boolean habits
+- [x] `models.score-list-recompute-boolean` — Score recomputation for boolean habits
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ScoreList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt`
@@ -239,7 +239,7 @@ written from the rules below.
 
 #### models.score-list-recompute-numerical-at-least
 
-- [ ] `models.score-list-recompute-numerical-at-least` — Score recomputation for numerical AT_LEAST habits
+- [x] `models.score-list-recompute-numerical-at-least` — Score recomputation for numerical AT_LEAST habits
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ScoreList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt`
@@ -276,7 +276,7 @@ written from the rules below.
 
 #### models.score-list-access
 
-- [ ] `models.score-list-access` — Score lookup and interval queries
+- [x] `models.score-list-access` — Score lookup and interval queries
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ScoreList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt`
@@ -287,7 +287,7 @@ written from the rules below.
 
 #### models.streak-computation
 
-- [ ] `models.streak-computation` — Streak computation
+- [x] `models.streak-computation` — Streak computation
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/StreakList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Streak.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/StreakListTest.kt`
@@ -319,7 +319,7 @@ written from the rules below.
 
 #### models.habit-fields-defaults
 
-- [ ] `models.habit-fields-defaults` — Habit model, fields and defaults
+- [x] `models.habit-fields-defaults` — Habit model, fields and defaults
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitNotFoundException.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ModelFactory.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitTest.kt`
@@ -338,7 +338,7 @@ written from the rules below.
 
 #### models.habit-recompute
 
-- [ ] `models.habit-recompute` — Habit.recompute window and pipeline
+- [x] `models.habit-recompute` — Habit.recompute window and pipeline
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/StreakListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitTest.kt`
@@ -496,7 +496,7 @@ written from the rules below.
 
 #### models.habit-list-crud
 
-- [ ] `models.habit-list-crud` — HabitList CRUD contract
+- [x] `models.habit-list-crud` — HabitList CRUD contract
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryHabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitListTest.kt`
@@ -516,7 +516,7 @@ written from the rules below.
 
 #### models.habit-list-ordering
 
-- [ ] `models.habit-list-ordering` — Habit list sort orders
+- [x] `models.habit-list-ordering` — Habit list sort orders
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`
@@ -554,7 +554,7 @@ written from the rules below.
 
 #### models.habit-list-filtering
 
-- [ ] `models.habit-list-filtering` — Filtered (child) habit lists
+- [x] `models.habit-list-filtering` — Filtered (child) habit lists
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitListTest.kt`
@@ -569,7 +569,7 @@ written from the rules below.
 
 #### models.habit-matcher
 
-- [ ] `models.habit-matcher` — HabitMatcher filtering and search
+- [x] `models.habit-matcher` — HabitMatcher filtering and search
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitMatcher.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitMatcherTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`
@@ -586,7 +586,7 @@ written from the rules below.
 
 #### models.habit-list-csv
 
-- [ ] `models.habit-list-csv` — Habit list CSV export
+- [x] `models.habit-list-csv` — Habit list CSV export
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Strings.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`
@@ -685,7 +685,7 @@ written from the rules below.
 
 #### models.test-fixtures
 
-- [ ] `models.test-fixtures` — Shared habit test fixtures
+- [x] `models.test-fixtures` — Shared habit test fixtures
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/test/HabitFixtures.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/BaseUnitTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/HabitFixtures.kt`
@@ -4919,7 +4919,7 @@ written from the rules below.
 
 #### charts-canvas-theming.canvas-api
 
-- [ ] `charts-canvas-theming.canvas-api` — Canvas drawing API surface
+- [x] `charts-canvas-theming.canvas-api` — Canvas drawing API surface
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/gui/Canvas.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/CanvasTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/platform/gui/AndroidCanvasTest.kt`
@@ -4940,7 +4940,7 @@ written from the rules below.
 
 #### charts-canvas-theming.color-model
 
-- [ ] `charts-canvas-theming.color-model` — Color value type and colour math
+- [x] `charts-canvas-theming.color-model` — Color value type and colour math
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/gui/Color.kt`, `uhabits-android/src/main/java/org/isoron/platform/gui/AndroidImage.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4974,7 +4974,7 @@ written from the rules below.
 
 #### charts-canvas-theming.view-interfaces
 
-- [ ] `charts-canvas-theming.view-interfaces` — View and DataView contracts
+- [x] `charts-canvas-theming.view-interfaces` — View and DataView contracts
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/gui/View.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/views/HistoryChartTest.kt`
@@ -5091,7 +5091,7 @@ written from the rules below.
 
 #### charts-canvas-theming.theme-tokens
 
-- [ ] `charts-canvas-theming.theme-tokens` — Theme colour and size tokens
+- [x] `charts-canvas-theming.theme-tokens` — Theme colour and size tokens
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/Themes.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/views/BarChartTest.kt`, `.../HistoryChartTest.kt`
@@ -5103,7 +5103,7 @@ written from the rules below.
 
 #### charts-canvas-theming.theme-palette
 
-- [ ] `charts-canvas-theming.theme-palette` — 20-colour habit palette per theme
+- [x] `charts-canvas-theming.theme-palette` — 20-colour habit palette per theme
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/Themes.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/PaletteColor.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/PaletteUtils.kt`, `uhabits-android/src/main/res/values/colors.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/gui/Color.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5128,7 +5128,7 @@ written from the rules below.
 
 #### charts-canvas-theming.theme-variants
 
-- [ ] `charts-canvas-theming.theme-variants` — Dark, PureBlack and Widget theme variants
+- [x] `charts-canvas-theming.theme-variants` — Dark, PureBlack and Widget theme variants
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/Themes.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/views/BarChartTest.kt`, `.../HistoryChartTest.kt`
@@ -5454,7 +5454,7 @@ written from the rules below.
 
 #### charts-canvas-theming.color-utils
 
-- [ ] `charts-canvas-theming.color-utils` — Android colour blending helpers
+- [x] `charts-canvas-theming.color-utils` — Android colour blending helpers
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/ColorUtils.kt`
 - **Kotlin tests:** none — write Dart test from rules

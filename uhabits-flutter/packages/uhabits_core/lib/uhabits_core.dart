@@ -1,8 +1,38 @@
 /// Pure Dart core of Loop Habit Tracker.
 ///
-/// This library must never depend on Flutter — see
-/// test/no_flutter_dependency_test.dart.
+/// Ported one to one from the Kotlin `uhabits-core` module. This library must
+/// never depend on Flutter — see test/no_flutter_dependency_test.dart — so that
+/// its tests run under plain `dart test` and the same code can later drive a
+/// background sync isolate and a parity-checking CLI.
 library;
 
-export 'src/models/entry.dart';
+// Dates
 export 'src/time/local_date.dart';
+
+// Domain model
+export 'src/models/entry.dart';
+export 'src/models/entry_list.dart';
+export 'src/models/frequency.dart';
+export 'src/models/habit.dart';
+export 'src/models/habit_list.dart';
+export 'src/models/habit_matcher.dart';
+export 'src/models/habit_type.dart';
+export 'src/models/memory/memory_habit_list.dart';
+export 'src/models/memory/memory_model_factory.dart';
+export 'src/models/model_factory.dart';
+export 'src/models/model_observable.dart';
+export 'src/models/palette_color.dart';
+export 'src/models/reminder.dart';
+export 'src/models/score.dart';
+export 'src/models/score_list.dart';
+export 'src/models/streak.dart';
+export 'src/models/streak_list.dart';
+export 'src/models/weekday_list.dart';
+
+// Drawing and theming
+export 'src/gui/canvas.dart';
+export 'src/gui/color.dart';
+export 'src/gui/font_awesome.dart';
+export 'src/gui/image.dart';
+export 'src/gui/theme.dart';
+export 'src/gui/view.dart';

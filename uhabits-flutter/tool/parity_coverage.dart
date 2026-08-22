@@ -78,6 +78,21 @@ void main(List<String> args) {
   stdout.writeln('  rules cited by tests:${citedRules.length}');
   stdout.writeln('  rules uncited:       ${uncited.length}');
 
+  if (args.contains('--fully-cited')) {
+    final ready = rulesByFeature.entries
+        .where((e) =>
+            e.value.isNotEmpty &&
+            e.value.every(cited.contains) &&
+            !checkedFeatures.contains(e.key))
+        .map((e) => e.key)
+        .toList()
+      ..sort();
+    stdout.writeln('\nFully cited but not yet checked (${ready.length}):');
+    for (final id in ready) {
+      stdout.writeln(id);
+    }
+  }
+
   if (args.contains('--uncited')) {
     for (final entry in rulesByFeature.entries) {
       final missing = entry.value.where((r) => !cited.contains(r)).toList();

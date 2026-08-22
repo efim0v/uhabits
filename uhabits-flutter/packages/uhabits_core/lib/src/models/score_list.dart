@@ -1,0 +1,121 @@
+import 'dart:math';
+
+import '../time/local_date.dart';
+import 'entry.dart';
+import 'frequency.dart';
+import 'habit_type.dart';
+import 'score.dart';
+
+/// Port of uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ScoreList.kt
+///
+/// Kotlin annotates every method with `@Synchronized`; Dart isolates are
+/// single-threaded, so the annotation has no counterpart here.
+class ScoreList {
+  final Map<LocalDate, Score> _map = {};
+
+  /// Returns the score for a given day. If the date given happens before the
+  /// first repetition of the habit or after the last computed score, returns a
+  /// score with value zero.
+  Score operator [](LocalDate date) => _map[date] ?? Score(date, 0.0);
+
+  /// Returns the list of scores that fall within the given interval.
+  ///
+  /// There is exactly one score per day in the interval. The endpoints of the
+  /// interval are included. The list is ordered by date (decreasing). That is,
+  /// the first score corresponds to the newest date, and the last score
+  /// corresponds to the oldest date.
+  List<Score> getByInterval(LocalDate from, LocalDate to) {
+    final result = <Score>[];
+    if (from.isNewerThan(to)) return result;
+    var current = to;
+    while (!current.isOlderThan(from)) {
+      result.add(this[current]);
+      current = current.minus(1);
+    }
+    return result;
+  }
+
+  /// Recomputes all scores between the provided [from] and [to] dates.
+  ///
+  /// Kotlin takes the habit's computed `EntryList` here and calls
+  /// `getByInterval` on it. EntryList is not ported yet, so [computedEntries]
+  /// is that method itself: it must return one entry per day in `[from, to]`,
+  /// ordered newest-first, exactly like `EntryList.getByInterval`.
+  void recompute({
+    required Frequency frequency,
+    required bool isNumerical,
+    required NumericalHabitType numericalHabitType,
+    required double targetValue,
+    required List<Entry> Function(LocalDate from, LocalDate to) computedEntries,
+    required LocalDate from,
+    required LocalDate to,
+  }) {
+    _map.clear();
+    var rollingSum = 0.0;
+    var numerator = frequency.numerator;
+    var denominator = frequency.denominator;
+    final freq = frequency.toDouble();
+    final values = computedEntries(from, to).map((e) => e.value).toList();
+    final isAtMost = numericalHabitType == NumericalHabitType.atMost;
+
+    // For non-daily boolean habits, we double the numerator and the denominator
+    // to smooth out irregular repetition schedules (for example, weekly habits
+    // performed on different days of the week)
+    if (!isNumerical && freq < 1.0) {
+      numerator *= 2;
+      denominator *= 2;
+    }
+
+    var previousValue = (isNumerical && isAtMost) ? 1.0 : 0.0;
+    for (var i = 0; i < values.length; i++) {
+      final offset = values.length - i - 1;
+      if (isNumerical) {
+        rollingSum += max(0, values[offset]);
+        if (offset + denominator < values.length) {
+          rollingSum -= max(0, values[offset + denominator]);
+        }
+
+        final normalizedRollingSum = rollingSum / 1000;
+        if (values[offset] != Entry.skip) {
+          final double percentageCompleted;
+          if (!isAtMost) {
+            if (targetValue > 0) {
+              percentageCompleted =
+                  min(1.0, normalizedRollingSum / targetValue);
+            } else {
+              percentageCompleted = 1.0;
+            }
+          } else {
+            if (targetValue > 0) {
+              percentageCompleted =
+                  (1 - ((normalizedRollingSum - targetValue) / targetValue))
+                      .clamp(0.0, 1.0)
+                      .toDouble();
+            } else {
+              percentageCompleted = normalizedRollingSum > 0 ? 0.0 : 1.0;
+            }
+          }
+
+          previousValue =
+              Score.compute(freq, previousValue, percentageCompleted);
+        }
+      } else {
+        if (values[offset] == Entry.yesManual) {
+          rollingSum += 1.0;
+        }
+        if (offset + denominator < values.length) {
+          if (values[offset + denominator] == Entry.yesManual) {
+            rollingSum -= 1.0;
+          }
+        }
+        if (values[offset] != Entry.skip) {
+          final percentageCompleted = min(1.0, rollingSum / numerator);
+          previousValue =
+              Score.compute(freq, previousValue, percentageCompleted);
+        }
+      }
+      final date = from.plus(i);
+      _map[date] = Score(date, previousValue);
+    }
+  }
+}
