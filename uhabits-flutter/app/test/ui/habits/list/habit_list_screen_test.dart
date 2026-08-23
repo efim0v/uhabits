@@ -10,6 +10,7 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/habit_list_model.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
+import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
@@ -174,8 +175,15 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField), 'Meditate');
-      await tester.tap(find.text('Save'));
+      // The button opens the habit type chooser first, exactly as
+      // ListHabitsScreen does before starting EditHabitActivity
+      // (habit-type-dialog.select-type#1).
+      await tester.tap(find.text('Yes or No'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'Meditate');
+      // The toolbar Save button is upper-cased, as in the Android layout.
+      await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
       await tester.pumpAndSettle();
 
       expect(scope.habitList.size(), 1);

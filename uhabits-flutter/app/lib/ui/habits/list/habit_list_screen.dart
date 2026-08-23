@@ -28,6 +28,10 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/habit_list_model.dart';
+import '../../about/about_screen.dart';
+import '../../settings/settings_screen.dart';
+import '../edit/edit_habit_screen.dart';
+import '../show/show_habit_screen.dart';
 import 'habit_card.dart';
 import 'list_header.dart';
 
@@ -65,6 +69,9 @@ class _HabitListViewState extends State<_HabitListView> {
     // ListHabitsScreen implements ListHabitsBehavior.Screen; here the model
     // holds the presenter and re-emits its callbacks to whoever is mounted.
     _model
+      // `ListHabitsScreen.showHabitScreen(h)`: startActivity(
+      // IntentFactory().startShowHabitActivity(context, h)).
+      ..onShowHabitScreen = ((habit) => ShowHabitScreen.open(context, habit))
       ..onShowNumberPopup = _showNumberPopup
       ..onShowCheckmarkPopup = _showCheckmarkPopup;
   }
@@ -72,6 +79,7 @@ class _HabitListViewState extends State<_HabitListView> {
   @override
   void dispose() {
     _model
+      ..onShowHabitScreen = null
       ..onShowNumberPopup = null
       ..onShowCheckmarkPopup = null;
     super.dispose();
@@ -113,9 +121,32 @@ class _HabitListViewState extends State<_HabitListView> {
         foregroundColor: Colors.white,
         // `toolbar.elevation = dp(2f)`
         elevation: 2,
+        actions: <Widget>[
+          // `res/menu/list_habits.xml`: Settings sits in the overflow menu.
+          // The rest of that menu belongs to the list-menu slice; this is the
+          // entry point the settings and about screens need to be reachable
+          // at all.
+          PopupMenuButton<String>(
+            key: const Key('listHabits.overflowMenu'),
+            onSelected: (value) {
+              if (value == 'settings') _openSettings();
+              if (value == 'about') _openAbout();
+            },
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'settings',
+                child: Text(l10n.actionSettings),
+              ),
+              PopupMenuItem<String>(
+                value: 'about',
+                child: Text(l10n.about),
+              ),
+            ],
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _createHabit(model),
+        onPressed: _createHabit,
         tooltip: l10n.addHabit,
         backgroundColor: toolbarColor,
         foregroundColor: Colors.white,
@@ -241,15 +272,38 @@ class _HabitListViewState extends State<_HabitListView> {
   // Dialogs
   // -----------------------------------------------------------------------
 
-  Future<void> _createHabit(HabitListModel model) async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => const _CreateHabitDialog(),
+  /// `ListHabitsMenuBehavior.onCreateHabit()` asks the screen for the habit
+  /// type chooser, and each of its two cards starts `EditHabitActivity` with
+  /// the type it stands for (`habit-type-dialog.select-type#1`, `#6`).
+  Future<void> _createHabit() => EditHabitScreen.selectTypeAndOpen(context);
+
+  /// `res/menu/list_habits.xml` -> `SettingsActivity`.
+  Future<void> _openSettings() {
+    final scope = context.read<AppScope>();
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Provider<AppScope>.value(
+          value: scope,
+          child: SettingsScreen(
+            storage: scope.preferencesStorage,
+            onShowAbout: () => _openAbout(),
+          ),
+        ),
+      ),
     );
-    if (name == null) return;
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
-    model.createHabit(model.buildHabitTemplate(name: trimmed));
+  }
+
+  /// `res/menu/list_habits.xml` -> `AboutActivity`.
+  Future<void> _openAbout() {
+    final scope = context.read<AppScope>();
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Provider<AppScope>.value(
+          value: scope,
+          child: AboutScreen(preferences: scope.preferences),
+        ),
+      ),
+    );
   }
 
   /// Stands in for `NumberDialog` until the dialogs slice lands.
@@ -336,51 +390,6 @@ class _EmptyListView extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// The create-habit prompt behind the floating action button.
-///
-/// Android routes `actionCreateHabit` to a habit-type chooser and then to
-/// `EditHabitActivity`; neither is ported yet, so this asks for the one field
-/// `CreateHabitCommand` cannot default — the name.
-class _CreateHabitDialog extends StatefulWidget {
-  const _CreateHabitDialog();
-
-  @override
-  State<_CreateHabitDialog> createState() => _CreateHabitDialogState();
-}
-
-class _CreateHabitDialogState extends State<_CreateHabitDialog> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() => Navigator.of(context).pop(_controller.text);
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = L10n.of(context);
-    return AlertDialog(
-      title: Text(l10n.createHabit),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(labelText: l10n.name),
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-        ),
-        TextButton(onPressed: _submit, child: Text(l10n.save)),
-      ],
     );
   }
 }

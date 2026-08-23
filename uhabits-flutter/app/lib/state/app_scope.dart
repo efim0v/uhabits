@@ -17,6 +17,7 @@ import 'package:uhabits_core/src/utils/midnight_timer.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
 import '../platform/app_database.dart';
+import '../platform/file_preferences_storage.dart';
 
 /// The long-lived objects of the application, built once and shared by every
 /// screen.
@@ -43,6 +44,7 @@ class AppScope {
     required this.modelFactory,
     required this.habitList,
     required this.preferences,
+    required this.preferencesStorage,
     required this.taskRunner,
     required this.commandRunner,
     required this.midnightTimer,
@@ -63,6 +65,10 @@ class AppScope {
 
   final Preferences preferences;
 
+  /// The backing store, kept because the settings screen writes a handful of
+  /// keys core has no setter for (`pref_first_weekday` and the inert sync keys).
+  final PreferencesStorage preferencesStorage;
+
   final TaskRunner taskRunner;
 
   final CommandRunner commandRunner;
@@ -80,7 +86,15 @@ class AppScope {
   /// This is `HabitsApplication.onCreate`: call it once, before `runApp`.
   static Future<AppScope> boot() async {
     final appDatabase = await AppDatabase.open();
-    return AppScope.open(appDatabase.database, databasePath: appDatabase.path);
+    // Settings live in a JSON file next to the database, the way the Android
+    // app keeps them in SharedPreferences. Without this they would reset on
+    // every launch.
+    final storage = await FilePreferencesStorage.open();
+    return AppScope.open(
+      appDatabase.database,
+      databasePath: appDatabase.path,
+      preferencesStorage: storage,
+    );
   }
 
   /// Wires the scope around an already-opened [database].
@@ -103,7 +117,8 @@ class AppScope {
     final resolvedLogging = logging ?? StandardLogging();
     final modelFactory = SQLModelFactory(database);
     final habitList = modelFactory.buildHabitList();
-    final preferences = Preferences(preferencesStorage ?? MemoryStorage());
+    final storage = preferencesStorage ?? MemoryStorage();
+    final preferences = Preferences(storage);
 
     // HabitsApplication.onCreate, in order. Nothing above this line touches a
     // habit, because recompute(), the scores and every matcher read getToday().
@@ -142,6 +157,7 @@ class AppScope {
       modelFactory: modelFactory,
       habitList: habitList,
       preferences: preferences,
+      preferencesStorage: storage,
       taskRunner: taskRunner,
       commandRunner: commandRunner,
       midnightTimer: midnightTimer,

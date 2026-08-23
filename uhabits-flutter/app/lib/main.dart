@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import 'l10n/app_localizations.dart';
 import 'state/app_scope.dart';
+import 'state/theme_model.dart';
 import 'ui/habits/list/habit_list_screen.dart';
+import 'ui/theme/app_theme.dart';
 
 /// Port of `HabitsApplication.onCreate` plus `ListHabitsActivity`'s
 /// `setContentView`: the whole startup sequence lives in [AppScope.boot], and
@@ -24,18 +26,70 @@ class UhabitsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scope = this.scope;
+    if (scope == null) {
+      return MaterialApp(
+        onGenerateTitle: (context) => L10n.of(context).appName,
+        localizationsDelegates: L10n.localizationsDelegates,
+        supportedLocales: L10n.supportedLocales,
+        home: const _BootstrapScreen(),
+      );
+    }
+    return MultiProvider(
+      providers: [
+        Provider<AppScope>.value(value: scope),
+        ChangeNotifierProvider<ThemeModel>(
+          create: (_) => ThemeModel(scope.preferences),
+        ),
+      ],
+      child: const _ThemedApp(),
+    );
+  }
+}
+
+/// Applies whichever theme `AndroidThemeSwitcher` would have chosen.
+///
+/// The theme is a value in the tree here rather than a property of an activity,
+/// so switching it rebuilds in place instead of restarting the screen — see
+/// docs/parity/DEVIATIONS.md.
+class _ThemedApp extends StatefulWidget {
+  const _ThemedApp();
+
+  @override
+  State<_ThemedApp> createState() => _ThemedAppState();
+}
+
+class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pushSystemBrightness());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() => _pushSystemBrightness();
+
+  void _pushSystemBrightness() {
+    if (!mounted) return;
+    context.read<ThemeModel>().systemBrightness =
+        View.of(context).platformDispatcher.platformBrightness;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.watch<ThemeModel>().currentTheme;
     return MaterialApp(
       onGenerateTitle: (context) => L10n.of(context).appName,
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: L10n.supportedLocales,
-      theme: ThemeData(colorSchemeSeed: Colors.blue),
-      darkTheme: ThemeData(colorSchemeSeed: Colors.blue, brightness: Brightness.dark),
-      home: scope == null
-          ? const _BootstrapScreen()
-          : Provider<AppScope>.value(
-              value: scope,
-              child: const HabitListScreen(),
-            ),
+      theme: appThemeData(theme),
+      home: const HabitListScreen(),
     );
   }
 }

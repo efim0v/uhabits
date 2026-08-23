@@ -2637,7 +2637,7 @@ written from the rules below.
 
 #### show-habit.subtitle-card
 
-- [ ] `show-habit.subtitle-card` — Subtitle card (question, target, frequency, reminder)
+- [x] `show-habit.subtitle-card` — Subtitle card (question, target, frequency, reminder)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/SubtitleCard.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/SubtitleCardView.kt`, `uhabits-android/src/main/res/layout/show_habit_subtitle.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DateExtensions.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/show/views/SubtitleCardViewTest.kt`
@@ -2802,7 +2802,7 @@ written from the rules below.
 
 #### show-habit.streak-card
 
-- [ ] `show-habit.streak-card` — Best streaks card
+- [x] `show-habit.streak-card` — Best streaks card
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/StreakCart.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/StreakCardView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/StreakChart.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/StreakList.kt`, `.../models/Streak.kt`, `uhabits-android/src/main/res/layout/show_habit_streak.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/show/views/StreakCardViewTest.kt`
@@ -2990,7 +2990,7 @@ written from the rules below.
 
 #### edit-habit.entry-points
 
-- [ ] `edit-habit.entry-points` — Entering the create/edit habit screen
+- [x] `edit-habit.entry-points` — Entering the create/edit habit screen
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentFactory.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitType.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`, `.../acceptance/steps/CommonSteps.kt`, `.../acceptance/steps/EditHabitSteps.kt`
@@ -3099,7 +3099,7 @@ written from the rules below.
 
 #### edit-habit.frequency-display
 
-- [ ] `edit-habit.frequency-display` — Frequency summary text (formatFrequency)
+- [x] `edit-habit.frequency-display` — Frequency summary text (formatFrequency)
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3159,7 +3159,7 @@ written from the rules below.
 
 #### edit-habit.reminder-days
 
-- [ ] `edit-habit.reminder-days` — Reminder days control and its label
+- [x] `edit-habit.reminder-days` — Reminder days control and its label
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DateExtensions.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/platform/time/JavaLocalDateFormatterTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/EditHabitSteps.kt`
@@ -3519,7 +3519,7 @@ written from the rules below.
 
 #### settings.preferences.android-storage-bridge
 
-- [ ] `settings.preferences.android-storage-bridge` — SharedPreferences-backed storage and change bridging
+- [x] `settings.preferences.android-storage-bridge` — SharedPreferences-backed storage and change bridging
 - **Platform:** needs-native-per-platform · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/preferences/SharedPreferencesStorage.kt`, `uhabits-android/src/main/res/xml/preferences.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3912,7 +3912,7 @@ written from the rules below.
 
 #### settings.about.screen
 
-- [ ] `settings.about.screen` — About screen content and links
+- [x] `settings.about.screen` — About screen content and links
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/about/AboutActivity.kt`, `.../about/AboutScreen.kt`, `.../about/AboutView.kt`, `uhabits-android/src/main/res/layout/about.xml`, `.../layout/about_translators.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentFactory.kt`, `uhabits-android/src/main/res/values/constants.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/AboutTest.kt`, `.../acceptance/LinksTest.kt`
@@ -3929,7 +3929,7 @@ written from the rules below.
 
 #### settings.about.developer-countdown
 
-- [ ] `settings.about.developer-countdown` — Developer-mode easter egg
+- [x] `settings.about.developer-countdown` — Developer-mode easter egg
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/about/AboutScreen.kt`, `.../about/AboutView.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** none — write Dart test from rules

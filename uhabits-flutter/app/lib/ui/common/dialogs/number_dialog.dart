@@ -1,0 +1,370 @@
+/// Port of uhabits-android/.../activities/common/dialogs/NumberDialog.kt
+/// and the `numberButtons` half of
+/// uhabits-android/src/main/res/layout/checkmark_popup.xml.
+///
+/// The same borderless popup as [CheckmarkDialog] — the shell constants come
+/// from that file, because upstream both dialogs inflate the same layout — with
+/// a decimal amount instead of the four state buttons: a numeric field, then
+/// Save, then Skip, then the FontAwesome question mark
+/// (`number-dialog.popup#2`).
+///
+/// The dialog runs no command. It reports the amount in *display* units, and
+/// the caller multiplies by 1000 and rounds before issuing
+/// `CreateRepetitionCommand` (`number-dialog.popup#13`, `#17`).
+///
+/// Android details that do not cross:
+///
+///  * the SwiftKey/Samsung input-method sniffing (`number-dialog.popup#6`) and
+///    the synthetic touch pair that forces the keyboard open
+///    (`number-dialog.popup#7`) are Android-specific; the field simply
+///    autofocuses here;
+///  * `view.saveBtn.getCenter()` is dead code upstream
+///    (`number-dialog.popup#15`) and is not ported;
+///  * `dismissCurrentAndShow` with the tag "numberDialog"
+///    (`number-dialog.popup#18`) belongs to `dialogs.single-current-dialog`.
+///
+/// One deliberate narrowing: Java's `NumberFormat.parse` is lenient and stops
+/// at the first character it cannot read, while `intl`'s throws. Since the
+/// field only ever accepts digits and the locale decimal separator
+/// (`number-dialog.popup#5`, `#16`), the two agree on everything the keypad can
+/// produce, and a throw lands in the same branch as a Java `ParseException`:
+/// the original value is kept (`number-dialog.popup#11`).
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart' as intl;
+// Preferences are not re-exported from uhabits_core.dart yet.
+// ignore_for_file: implementation_imports
+import 'package:uhabits_core/src/preferences/preferences.dart' as core;
+import 'package:uhabits_core/uhabits_core.dart' as core;
+
+import '../../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart';
+import 'checkmark_dialog.dart' show EntryPopupMetrics, NotesDraft;
+
+/// What the dialog reports: the amount in display units and the trimmed notes.
+class NumberDialogResult {
+  const NumberDialogResult(this.value, this.notes);
+
+  /// The measurement the user typed, already divided by 1000 the way the
+  /// argument arrives (`number-dialog.popup#1`). Skip is 0.003 and unknown is
+  /// -0.001, which round back to [core.Entry.skip] and [core.Entry.unknown]
+  /// (`number-dialog.popup#9`, `#10`).
+  final double value;
+
+  /// Already trimmed.
+  final String notes;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NumberDialogResult &&
+      other.value == value &&
+      other.notes == notes;
+
+  @override
+  int get hashCode => Object.hash(value, notes);
+
+  @override
+  String toString() => 'NumberDialogResult(value=$value, notes=$notes)';
+}
+
+/// Shows the numerical entry popup and completes with the amount entered.
+///
+/// Completes with null when the dialog is dismissed without saving *and* the
+/// notes were left alone; when the notes were edited it completes with the
+/// ORIGINAL value and the new notes (`number-dialog.popup#12`).
+///
+/// [value] is the existing entry value already divided by 1000.
+Future<NumberDialogResult?> showNumberDialog(
+  BuildContext context, {
+  required double value,
+  required String notes,
+  required core.Color color,
+  required core.Preferences preferences,
+}) async {
+  final draft = NotesDraft(notes);
+  final result = await showDialog<NumberDialogResult>(
+    context: context,
+    builder: (context) => NumberDialog(
+      value: value,
+      notes: notes,
+      color: color,
+      preferences: preferences,
+      draft: draft,
+    ),
+  );
+  if (result != null) return result;
+  final current = draft.notes.trim();
+  if (current != notes) return NumberDialogResult(value, current);
+  return null;
+}
+
+/// The popup itself, exposed for tests and for screens that manage their own
+/// route.
+class NumberDialog extends StatefulWidget {
+  const NumberDialog({
+    super.key,
+    required this.value,
+    required this.notes,
+    required this.color,
+    required this.preferences,
+    this.draft,
+  });
+
+  final double value;
+
+  final String notes;
+
+  /// The habit's colour, resolved against the current theme.
+  ///
+  /// It is accepted because the Android arguments carry it
+  /// (`number-dialog.popup#1`), and it is as invisible here as it is there:
+  /// `NumberDialog.onCreateDialog` tints `yesBtn` and `noBtn`, both of which
+  /// live in the `booleanButtons` row that stays GONE for a numerical habit.
+  /// Only the question-mark button is tinted, and it uses contrast60.
+  final core.Color color;
+
+  final core.Preferences preferences;
+
+  /// Written on every keystroke so [showNumberDialog] can recover the text
+  /// after a dismissal. Null when the widget is hosted directly.
+  final NotesDraft? draft;
+
+  /// The initial text of the value field (`number-dialog.popup#4`).
+  ///
+  /// Anything below 0.01 shows as the literal "0", which is why UNKNOWN
+  /// (-0.001) and SKIP (0.003) both open as "0".
+  ///
+  /// Java formats with `DecimalFormat("#.##")`; the pattern here forces the
+  /// leading zero that Java prints anyway, so 0.5 stays "0.5", 12.345 becomes
+  /// "12.35" and 15.0 becomes "15".
+  static String formatValue(double value, [String? localeName]) {
+    if (value < 0.01) return '0';
+    return intl.NumberFormat('0.##', localeName).format(value);
+  }
+
+  /// `DecimalFormat("#.###").format(Entry.SKIP / 1000.0)` and its UNKNOWN twin
+  /// (`number-dialog.popup#9`, `#10`).
+  static String formatReserved(int entryValue, [String? localeName]) =>
+      intl.NumberFormat('0.###', localeName).format(entryValue / 1000.0);
+
+  @override
+  State<NumberDialog> createState() => _NumberDialogState();
+}
+
+class _NumberDialogState extends State<NumberDialog> {
+  late final TextEditingController _notes = TextEditingController(
+    text: widget.notes,
+  )..addListener(() => widget.draft?.notes = _notes.text);
+
+  final TextEditingController _value = TextEditingController();
+
+  final FocusNode _valueNode = FocusNode();
+
+  /// Resolved in [didChangeDependencies], where the ambient locale is known.
+  String? _localeName;
+
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // `android:selectAllOnFocus="true"` on the value field.
+    _valueNode.addListener(() {
+      if (!_valueNode.hasFocus) return;
+      _value.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _value.text.length,
+      );
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    _localeName = Localizations.maybeLocaleOf(context)?.toString();
+    _value.text = NumberDialog.formatValue(widget.value, _localeName);
+  }
+
+  @override
+  void dispose() {
+    _notes.dispose();
+    _value.dispose();
+    _valueNode.dispose();
+    super.dispose();
+  }
+
+  intl.NumberFormat get _parser =>
+      intl.NumberFormat.decimalPattern(_localeName);
+
+  /// `save()` (`number-dialog.popup#11`).
+  void _save() {
+    var value = widget.value;
+    final text = _value.text;
+    if (text.isEmpty) {
+      value = core.Entry.unknown / 1000.0;
+    } else {
+      try {
+        value = _parser.parse(text).toDouble();
+      } on FormatException {
+        // NOP — the original value survives, as it does past a ParseException.
+      }
+    }
+    Navigator.of(context).pop(NumberDialogResult(value, _notes.text.trim()));
+  }
+
+  /// The Skip and question-mark buttons write a reserved amount into the field
+  /// and then save.
+  void _saveReserved(int entryValue) {
+    _value.text = NumberDialog.formatReserved(entryValue, _localeName);
+    _save();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+    final theme = coreThemeOf(context);
+    // ?attr/contrast60 (`number-dialog.popup#2`, via CheckmarkDialog's #4).
+    final dim = toFlutterColor(theme.mediumContrastTextColor);
+    final separator = _parser.symbols.DECIMAL_SEP;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        constraints: const BoxConstraints(
+          minWidth: EntryPopupMetrics.minWidth,
+          minHeight: EntryPopupMetrics.minHeight,
+          maxWidth: EntryPopupMetrics.minWidth,
+        ),
+        decoration: BoxDecoration(
+          color: toFlutterColor(theme.cardBackgroundColor),
+          borderRadius: BorderRadius.circular(EntryPopupMetrics.cornerRadius),
+          border: Border.all(
+            color: toFlutterColor(theme.lowContrastTextColor),
+            width: EntryPopupMetrics.borderWidth,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Flexible(
+              child: Padding(
+                padding: EntryPopupMetrics.notesPadding,
+                child: TextField(
+                  key: const ValueKey<String>('number_notes'),
+                  controller: _notes,
+                  textAlign: TextAlign.center,
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText: l10n.notes,
+                  ),
+                  // The IME action inside the notes field also saves
+                  // (`number-dialog.popup#8`).
+                  onSubmitted: (_) => _save(),
+                ),
+              ),
+            ),
+            Divider(
+              height: EntryPopupMetrics.borderWidth,
+              thickness: EntryPopupMetrics.borderWidth,
+              color: toFlutterColor(theme.lowContrastTextColor),
+            ),
+            SizedBox(
+              height: EntryPopupMetrics.buttonRowHeight,
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    // `android:layout_weight="2"` on the value field.
+                    flex: 2,
+                    child: TextField(
+                      key: const ValueKey<String>('number_value'),
+                      controller: _value,
+                      focusNode: _valueNode,
+                      autofocus: true,
+                      textAlign: TextAlign.center,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      // The keypad accepts digits and the locale decimal
+                      // separator only (`number-dialog.popup#5`, `#16`).
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.allow(
+                          RegExp('[0-9${RegExp.escape(separator)}]'),
+                        ),
+                      ],
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                      ),
+                      // ENTER inside the value field saves
+                      // (`number-dialog.popup#8`).
+                      onSubmitted: (_) => _save(),
+                    ),
+                  ),
+                  _textButton(
+                    name: 'save',
+                    // NumericalPopupBtn is textAllCaps.
+                    label: l10n.save.toUpperCase(),
+                    onTap: _save,
+                  ),
+                  // GONE unless the preference is on
+                  // (`number-dialog.popup#3`).
+                  if (widget.preferences.isSkipEnabled)
+                    _textButton(
+                      name: 'skip',
+                      label: l10n.skipDay.toUpperCase(),
+                      onTap: () => _saveReserved(core.Entry.skip),
+                    ),
+                  if (widget.preferences.areQuestionMarksEnabled)
+                    _textButton(
+                      name: 'unknown',
+                      label: core.FontAwesome.question,
+                      fontFamily: 'FontAwesome',
+                      color: dim,
+                      onTap: () => _saveReserved(core.Entry.unknown),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One `NumericalPopupBtn`: wrap_content with 12dp side padding, bold,
+  /// centred.
+  Widget _textButton({
+    required String name,
+    required String label,
+    required VoidCallback onTap,
+    String? fontFamily,
+    Color? color,
+  }) {
+    return InkWell(
+      key: ValueKey<String>('number_${name}_button'),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Center(
+          widthFactor: 1,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: fontFamily,
+              color: color,
+              fontWeight: fontFamily == null ? FontWeight.bold : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
