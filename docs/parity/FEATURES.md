@@ -2133,7 +2133,7 @@ written from the rules below.
 
 #### list-habits.card-list-cache
 
-- [ ] `list-habits.card-list-cache` — Habit card list cache and incremental refresh
+- [x] `list-habits.card-list-cache` — Habit card list cache and incremental refresh
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HabitCardListCache.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HabitCardListCacheTest.kt`
@@ -2224,7 +2224,7 @@ written from the rules below.
 
 #### list-habits.filters
 
-- [ ] `list-habits.filters` — Archived and completed/entered filters
+- [x] `list-habits.filters` — Archived and completed/entered filters
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehavior.kt`, `.../models/HabitMatcher.kt`, `.../models/Habit.kt`, `.../preferences/Preferences.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehaviorTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitMatcherTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`
@@ -5190,7 +5190,7 @@ written from the rules below.
 
 #### charts-canvas-theming.historychart-layout
 
-- [ ] `charts-canvas-theming.historychart-layout` — HistoryChart calendar layout and rendering
+- [x] `charts-canvas-theming.historychart-layout` — HistoryChart calendar layout and rendering
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/HistoryChart.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/HistoryCardView.kt`, `uhabits-android/src/main/res/layout/show_habit_history.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/views/HistoryChartTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/show/views/HistoryCardViewTest.kt`
@@ -5221,7 +5221,7 @@ written from the rules below.
 
 #### charts-canvas-theming.historychart-hittest
 
-- [ ] `charts-canvas-theming.historychart-hittest` — HistoryChart date hit-testing (tap and long-press)
+- [x] `charts-canvas-theming.historychart-hittest` — HistoryChart date hit-testing (tap and long-press)
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/HistoryChart.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/views/HistoryChartTest.kt`
@@ -5238,7 +5238,7 @@ written from the rules below.
 
 #### charts-canvas-theming.checkmark-button-core
 
-- [ ] `charts-canvas-theming.checkmark-button-core` — CheckmarkButton core view
+- [x] `charts-canvas-theming.checkmark-button-core` — CheckmarkButton core view
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/CheckmarkButton.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5253,7 +5253,7 @@ written from the rules below.
 
 #### charts-canvas-theming.number-button-core
 
-- [ ] `charts-canvas-theming.number-button-core` — NumberButton core view and Double.toShortString
+- [x] `charts-canvas-theming.number-button-core` — NumberButton core view and Double.toShortString
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/NumberButton.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/NumberButtonView.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/list/views/NumberButtonViewTest.kt`
@@ -5269,7 +5269,7 @@ written from the rules below.
 
 #### charts-canvas-theming.ring-core
 
-- [ ] `charts-canvas-theming.ring-core` — Ring core view (progress ring)
+- [x] `charts-canvas-theming.ring-core` — Ring core view (progress ring)
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/Ring.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5286,7 +5286,7 @@ written from the rules below.
 
 #### charts-canvas-theming.habit-list-header-core
 
-- [ ] `charts-canvas-theming.habit-list-header-core` — HabitListHeader core view
+- [x] `charts-canvas-theming.habit-list-header-core` — HabitListHeader core view
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/HabitListHeader.kt`
 - **Kotlin tests:** none — write Dart test from rules
