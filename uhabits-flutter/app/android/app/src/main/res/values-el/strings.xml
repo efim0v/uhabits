@@ -15,4 +15,10 @@
     <string name="app_name">Loop - Καταγραφή Συνηθειών</string>
     <string name="main_activity_title">Συνήθειες</string>
     <string name="habit_not_found">Η συνήθεια διαγράφηκε / δε βρέθηκε</string>
+    <string name="checkmark">Σημάδι επιλογής</string>
+    <string name="history">Ιστορικό</string>
+    <string name="score">Σκόρ</string>
+    <string name="streaks">Σερί</string>
+    <string name="frequency">Συχνότητα</string>
+    <string name="target">Στόχος</string>
 </resources>

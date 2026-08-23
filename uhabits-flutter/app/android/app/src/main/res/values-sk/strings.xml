@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">Návyky</string>
     <string name="habit_not_found">Návyk bol odstránený / nenájdený</string>
+    <string name="checkmark">Začiarknutie</string>
+    <string name="history">História</string>
+    <string name="score">Skóre</string>
+    <string name="streaks">Série</string>
+    <string name="frequency">Frekvencia</string>
+    <string name="target">Cieľ</string>
 </resources>

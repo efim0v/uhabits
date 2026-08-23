@@ -642,10 +642,10 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         return HistoryCardView(
           key: key,
           state: state.history,
-          // `HistoryCardPresenter` is itself the chart's OnDateClickedListener,
-          // so a tap on a calendar cell lands in the presenter and leaves again
-          // as one of the two entry popups or as a CreateRepetitionCommand.
-          listener: model.presenter.historyCardPresenter,
+          // `setListener(presenter)` wires the Edit button and nothing else:
+          // the card's own chart is read-only, and the presenter reaches a
+          // chart only inside the history-editor dialog this button opens
+          // (`audit3.the-calendar-card-on-the-habit#1`).
           onClickEditButton: model.presenter.historyCardPresenter.onClickEditButton,
         );
       case ShowHabitCard.streak:

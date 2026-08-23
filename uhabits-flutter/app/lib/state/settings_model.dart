@@ -295,6 +295,14 @@ class SettingsModel extends ChangeNotifier {
 
   set areNotificationsSticky(bool value) {
     preferences.setNotificationsSticky(value);
+    // `audit3.toggling-make-notifications-sticky-does-not#1`: on Android the
+    // ongoing flag is read inside `buildNotification`, which runs when the
+    // alarm fires, so flipping the switch applies to the very next reminder
+    // with nothing to reschedule. This port has no fire-time hook — a pending
+    // alarm already carries a finished notification (see FlutterAlarmScheduler)
+    // — so the pending alarms have to be re-armed here for the new flag to
+    // reach the user. `scheduleAll` rebuilds every one of them.
+    scope.reminderScheduler?.scheduleAll();
     notifyListeners();
   }
 

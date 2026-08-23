@@ -15,4 +15,10 @@
     <string name="app_name">Loop Gewoonte tracker</string>
     <string name="main_activity_title">Gewoontes</string>
     <string name="habit_not_found">Gewoonte verwijderd / niet gevonden</string>
+    <string name="checkmark">Vinkje</string>
+    <string name="history">Geschiedenis</string>
+    <string name="score">Score</string>
+    <string name="streaks">Reeksen</string>
+    <string name="frequency">Frequentie</string>
+    <string name="target">Doel</string>
 </resources>

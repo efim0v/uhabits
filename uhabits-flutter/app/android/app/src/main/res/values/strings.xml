@@ -23,4 +23,10 @@
     <string name="widget_not_configured">Open Loop Habit Tracker to set up this widget</string>
     <string name="widget_update_required">Update Loop Habit Tracker to show this widget</string>
     <string name="widget_picker_prompt">Choose a habit in Loop Habit Tracker…</string>
+    <string name="checkmark">Checkmark</string>
+    <string name="history">History</string>
+    <string name="score">Score</string>
+    <string name="streaks">Streaks</string>
+    <string name="frequency">Frequency</string>
+    <string name="target">Target</string>
 </resources>

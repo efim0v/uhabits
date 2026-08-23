@@ -701,12 +701,10 @@ void main() {
     });
 
     testWidgets(
-        'the ringtone picker and the notification-channel intent are Android '
-        'only, so both rows render disabled', (tester) async {
+        'the ringtone picker has no counterpart here, so its row renders '
+        'disabled', (tester) async {
       await open(tester);
       expect(tester.widget<SettingsRow>(rowNamed('reminderSound')).enabled,
-          isFalse);
-      expect(tester.widget<SettingsRow>(rowNamed('reminderCustomize')).enabled,
           isFalse);
       expect(
         find.descendant(
@@ -715,6 +713,16 @@ void main() {
         ),
         findsOneWidget,
       );
+      // `reminderCustomize` used to be disabled beside it. It no longer is:
+      // `PlatformNotificationChannelSettings` and the `openChannelSettings`
+      // handler in MainActivity.kt are the counterpart, and the row that was
+      // hard-disabled in front of them is
+      // `audit3.settings-customize-notification-is-permanently-disabled`.
+      expect(tester.widget<SettingsRow>(rowNamed('reminderCustomize')).enabled,
+          isTrue,
+          reason: 'audit3.settings-customize-notification-is-permanently-'
+              'disabled#1: tapping the row creates the REMINDERS channel and '
+              'opens the system\'s per-channel notification settings');
     });
 
     testWidgets(
@@ -741,13 +749,17 @@ void main() {
       );
       // The other half of the rule — createAndroidNotificationChannel followed
       // by Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS with EXTRA_APP_PACKAGE
-      // and EXTRA_CHANNEL_ID = "REMINDERS" — is an Android intent with no
-      // cross-platform counterpart, so the row carries no action at all.
+      // and EXTRA_CHANNEL_ID = "REMINDERS" — is carried by
+      // PlatformNotificationChannelSettings over MainActivity's method
+      // channel, so the row does have a click. That the click reaches the
+      // platform at all is
+      // test/journeys/notification_channel_journey_test.dart; from here only
+      // the presence of an action is visible.
       expect(tester.widget<SettingsRow>(rowNamed('reminderCustomize')).onTap,
-          isNull,
-          reason: 'settings.screen.reminder-category#7: the click that would '
-              'create the channel and open its system settings screen has no '
-              'counterpart here, so nothing is wired to the row');
+          isNotNull,
+          reason: 'settings.screen.reminder-category#7: clicking it first '
+              'calls AndroidNotificationTray.createAndroidNotificationChannel '
+              'and then starts ACTION_CHANNEL_NOTIFICATION_SETTINGS');
     });
 
     testWidgets(

@@ -454,6 +454,36 @@ void main() {
         today: today,
       );
 
+  /// A `HistoryChart` hosted the way the *history editor* hosts one: with a
+  /// date listener installed.
+  ///
+  /// The Calendar card installs none. Upstream `HistoryCardView.setState`
+  /// builds its chart without an `onDateClickedListener`, so the card is
+  /// read-only and only the editor's chart is given the presenter
+  /// (`audit3.the-calendar-card-on-the-habit#1`, pinned at screen level by
+  /// test/ui/habits/show/calendar_card_readonly_test.dart). The rules about
+  /// what a press on a day square does are therefore exercised here on a
+  /// listening chart rather than on the card.
+  Widget listeningChart(
+    HistoryCardState state,
+    OnDateClickedListener listener,
+  ) {
+    final chart = HistoryChart(
+      today: state.today,
+      paletteColor: state.color,
+      theme: state.theme,
+      dateFormatter: formatter,
+      series: state.series,
+      defaultSquare: state.defaultSquare,
+      notesIndicators: state.notesIndicators,
+      firstWeekday: state.firstWeekday,
+    )..onDateClickedListener = listener;
+    return SizedBox(
+      height: HistoryCardView.chartHeight,
+      child: CoreView(view: chart),
+    );
+  }
+
   group('show-habit.history-card', () {
     testWidgets('#13 the card is titled "Calendar" over a 160dp chart',
         (tester) async {
@@ -511,26 +541,42 @@ void main() {
   });
 
   group('show-habit.history-interaction', () {
-    testWidgets('#13 the presenter is installed as the chart\'s date listener',
+    // Corrected: this test used to assert that the Calendar card installs a
+    // date listener on its chart, which is the behaviour
+    // `audit3.the-calendar-card-on-the-habit#1` says is wrong — upstream's
+    // `setState` builds the chart without one and `setListener(presenter)`
+    // wires only the Edit button. Where the presenter really is installed —
+    // the history-editor dialog — is pinned by
+    // test/ui/habits/show/show_habit_screen_test.dart (`history-editor.dialog#17`).
+    testWidgets('#13 the card leaves the chart\'s no-op listener in place',
         (tester) async {
-      final listener = _RecordingDateListener();
-      await _pump(
-        tester,
-        HistoryCardView(state: historyState(), listener: listener),
-      );
+      await _pump(tester, HistoryCardView(state: historyState()));
+      final chart = _viewOf<HistoryChart>(tester);
 
-      expect(_viewOf<HistoryChart>(tester).onDateClickedListener,
-          same(listener),
-          reason: 'show-habit.history-interaction#13');
+      final HistoryChart untouched = HistoryChart(
+        today: today,
+        paletteColor: habitColor,
+        theme: theme,
+        dateFormatter: formatter,
+        series: const <Square>[],
+        defaultSquare: Square.off,
+        notesIndicators: const <bool>[],
+        firstWeekday: core.DayOfWeek.sunday,
+      );
+      expect(
+        identical(chart.onDateClickedListener,
+            untouched.onDateClickedListener),
+        isTrue,
+        reason: 'audit3.the-calendar-card-on-the-habit#1 — the card must hand '
+            'the chart nothing, so it keeps the const no-op default declared '
+            'in HistoryChart.',
+      );
     });
 
     testWidgets('#1 #2 a tap becomes a short press on the hit-tested date',
         (tester) async {
       final listener = _RecordingDateListener();
-      await _pump(
-        tester,
-        HistoryCardView(state: historyState(), listener: listener),
-      );
+      await _pump(tester, listeningChart(historyState(), listener));
       final chart = _viewOf<HistoryChart>(tester);
 
       // 300x160: squareSize 20, thirteen columns, and today is a Sunday under
@@ -2226,10 +2272,7 @@ void main() {
     testWidgets('show-habit.chart-scrolling#9: a tap is onClick and a long '
         'press is onLongClick, in logical coordinates', (tester) async {
       final listener = _RecordingDateListener();
-      await _pump(
-        tester,
-        HistoryCardView(state: historyState(), listener: listener),
-      );
+      await _pump(tester, listeningChart(historyState(), listener));
       final chart = _viewOf<HistoryChart>(tester);
       final origin = tester.getTopLeft(find.byType(CoreView));
 

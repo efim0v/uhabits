@@ -15,4 +15,10 @@
     <string name="app_name">Loop - Suivi d\'habitudes</string>
     <string name="main_activity_title">Habitudes</string>
     <string name="habit_not_found">Habitude supprimée / introuvable</string>
+    <string name="checkmark">Case à cocher</string>
+    <string name="history">Historique</string>
+    <string name="score">Score</string>
+    <string name="streaks">Séries</string>
+    <string name="frequency">Fréquence</string>
+    <string name="target">Cible</string>
 </resources>

@@ -20,4 +20,10 @@
     <string name="score_stack_widget">Score Stack Widget</string>
     <string name="history_stack_widget">History Stack Widget</string>
     <string name="streaks_stack_widget">Streaks Stack Widget</string>
+    <string name="checkmark">Пташка</string>
+    <string name="history">Історія</string>
+    <string name="score">Сталість</string>
+    <string name="streaks">Серії</string>
+    <string name="frequency">Частота</string>
+    <string name="target">Мета</string>
 </resources>

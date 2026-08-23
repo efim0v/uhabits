@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">Kutimoj</string>
     <string name="habit_not_found">Kutimo forigita / ne trovita</string>
+    <string name="checkmark">Markobutono</string>
+    <string name="history">Historio</string>
+    <string name="score">Poentaroj</string>
+    <string name="streaks">Strioj</string>
+    <string name="frequency">Frekvenco</string>
+    <string name="target">Celo</string>
 </resources>

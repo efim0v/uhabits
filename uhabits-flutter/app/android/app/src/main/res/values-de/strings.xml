@@ -15,4 +15,10 @@
     <string name="app_name">Loop - Gewohnheiten Tracking</string>
     <string name="main_activity_title">Gewohnheiten</string>
     <string name="habit_not_found">Gewohnheit gelöscht / nicht gefunden</string>
+    <string name="checkmark">Häkchen</string>
+    <string name="history">Verlauf</string>
+    <string name="score">Wertung</string>
+    <string name="streaks">Serien</string>
+    <string name="frequency">Häufigkeit</string>
+    <string name="target">Ziel</string>
 </resources>

@@ -15,4 +15,10 @@
     <string name="app_name">ലൂപ്പ് ഹാബിറ്റ് ട്രാക്കർ</string>
     <string name="main_activity_title">ശീലങ്ങൾ</string>
     <string name="habit_not_found">ശീലം ഇല്ലാതാക്കി / കണ്ടെത്തിയില്ല</string>
+    <string name="checkmark">ചെക്ക്മാർക്ക്</string>
+    <string name="history">ചരിത്രം</string>
+    <string name="score">സ്കോർ</string>
+    <string name="streaks">സ്ട്രീക്ക്</string>
+    <string name="frequency">ആവൃത്തി</string>
+    <string name="target">ലക്ഷ്യം</string>
 </resources>

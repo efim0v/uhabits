@@ -20,4 +20,10 @@
     <string name="score_stack_widget">Widget susunan skor</string>
     <string name="history_stack_widget">Widget sususan riwayat</string>
     <string name="streaks_stack_widget">Widget susunan rentetan</string>
+    <string name="checkmark">Tanda centang</string>
+    <string name="history">Riwayat</string>
+    <string name="score">Skor</string>
+    <string name="streaks">Rentetan</string>
+    <string name="frequency">Frekuensi</string>
+    <string name="target">Target</string>
 </resources>

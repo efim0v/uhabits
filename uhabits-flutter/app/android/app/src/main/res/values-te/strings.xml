@@ -14,4 +14,5 @@
 <resources>
     <string name="app_name">Datasheet</string>
     <string name="main_activity_title">అలవాట్లు</string>
+    <string name="history">చరిత్ర</string>
 </resources>

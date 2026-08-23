@@ -126,8 +126,20 @@ object WidgetDateFormatter {
     fun shortWeekdayName(daysSinceSunday: Int): String =
         symbols.shortWeekdays[(daysSinceSunday % 7) + 1]
 
-    /** 'Jan'..'Dec'; [month] is 1-based. */
-    fun shortMonthName(month: Int): String = symbols.shortMonths[month - 1]
+    /**
+     * 'Jan'..'Dec'; [month] is 1-based.
+     *
+     * `JavaLocalDateFormatter.shortMonthName` reads BOTH display names and
+     * returns the LONG one when it is three characters or shorter — "for some
+     * locales, such as Japan, SHORT name is exceedingly short". It changes the
+     * answer for zh-CN, whose LONG January is 一月 and whose SHORT one is 1月
+     * (`audit3.shortmonthname-drops-the-use-the-long#1`).
+     */
+    fun shortMonthName(month: Int): String {
+        val s = symbols
+        val long = s.months[month - 1]
+        return if (long.length <= 3) long else s.shortMonths[month - 1]
+    }
 
     /** 'Nov 24, 2014', the format the Streak chart's date labels use. */
     fun longFormat(year: Int, month: Int, day: Int): String =

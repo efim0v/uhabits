@@ -26,12 +26,11 @@
 /// reuses it exactly as `about.xml` reuses `@drawable/intro_icon_1`.
 library;
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
+import 'intro_artwork.dart';
 
 /// One page of the intro: `AppIntroFragment.newInstance(title, description,
 /// image, backgroundColor)`.
@@ -333,7 +332,8 @@ class _IntroBottomBar extends StatelessWidget {
 // The drawables
 // ---------------------------------------------------------------------------
 
-/// `@drawable/intro_icon_1` — the app logo: a white loop arrow on a blue disc.
+/// `@drawable/intro_icon_1` — the Loop artwork, shipped verbatim
+/// (`audit3.the-loop-logo-and-the-two#1`).
 ///
 /// Also the About screen's icon, which is why it is public: `about.xml` points
 /// at this very drawable.
@@ -347,174 +347,59 @@ class IntroIcon1 extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(painter: _LoopLogoPainter()),
+      child: Image.memory(
+        introIcon1Png,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        // The drawable is a 484x484 bitmap; Android's ImageView filters it
+        // down to 100dp on the About screen and up on the intro slide.
+        filterQuality: FilterQuality.medium,
+      ),
     );
   }
 }
 
-class _LoopLogoPainter extends CustomPainter {
-  /// The blue of the launcher icon.
-  static const Color discColor = Color(0xFF1E88E5);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final side = math.min(size.width, size.height);
-    final center = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(
-      center,
-      side / 2,
-      Paint()..color = discColor,
-    );
-
-    final radius = side * 0.27;
-    final stroke = side * 0.115;
-    final arc = Rect.fromCircle(center: center, radius: radius);
-    // An almost-closed ring, open at the top left, where the arrow head goes.
-    canvas.drawArc(
-      arc,
-      -math.pi / 2 + 0.55,
-      math.pi * 2 - 1.1,
-      false,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..strokeCap = StrokeCap.butt,
-    );
-
-    // The arrow head: a right-angled flag pointing back into the ring.
-    final head = Path()
-      ..moveTo(center.dx - radius * 0.05, center.dy - radius * 1.55)
-      ..lineTo(center.dx + radius * 0.22, center.dy - radius * 1.55)
-      ..lineTo(center.dx + radius * 0.22, center.dy - radius * 0.4)
-      ..lineTo(center.dx - radius * 0.85, center.dy - radius * 1.0)
-      ..close();
-    canvas.drawPath(
-      head,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_LoopLogoPainter oldDelegate) => false;
-}
-
-/// `@drawable/intro_icon_2` — a habit card with a week of checkmarks.
+/// `@drawable/intro_icon_2` — the shipped illustration of a habit card, a
+/// 967x224 bitmap (`audit3.the-loop-logo-and-the-two#1`).
 class _IntroIcon2 extends StatelessWidget {
   const _IntroIcon2();
 
+  /// The bitmap is 967x224. Android's ImageView takes its size from the
+  /// bitmap; here both sides are stated so that the slide does not reflow
+  /// while the image decodes.
+  static const double width = 280.0;
+  static const double height = width * 224 / 967;
+
   @override
   Widget build(BuildContext context) {
-    const List<bool> checked = <bool>[true, true, false, true, false, false, true];
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(2),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const IntroIcon1(size: 22),
-          const SizedBox(width: 8),
-          const Text(
-            'Meditate',
-            style: TextStyle(color: Color(0xFF0277BD), fontSize: 18),
-          ),
-          const SizedBox(width: 12),
-          for (final isChecked in checked)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Icon(
-                isChecked ? Icons.check : Icons.close,
-                size: 18,
-                color: isChecked
-                    ? const Color(0xFF0277BD)
-                    : const Color(0xFFE0E0E0),
-              ),
-            ),
-        ],
-      ),
+    return Image.memory(
+      introIcon2Png,
+      width: width,
+      height: height,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
     );
   }
 }
 
-/// `@drawable/intro_icon_4` — a score chart on a white card.
+/// `@drawable/intro_icon_4` — the shipped illustration of a score graph, a
+/// 695x585 bitmap (`audit3.the-loop-logo-and-the-two#1`).
 class _IntroIcon4 extends StatelessWidget {
   const _IntroIcon4();
 
+  /// The bitmap is 695x585.
+  static const double width = 200.0;
+  static const double height = width * 585 / 695;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 200,
-      height: 160,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(2),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
-        ],
-      ),
-      child: CustomPaint(painter: _ScoreChartPainter()),
+    return Image.memory(
+      introIcon4Png,
+      width: width,
+      height: height,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
     );
   }
-}
-
-class _ScoreChartPainter extends CustomPainter {
-  static const Color lineColor = Color(0xFFF9C300);
-  static const List<double> points = <double>[
-    0.05,
-    0.55,
-    0.35,
-    0.70,
-    0.90,
-    0.70,
-  ];
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = const Color(0xFFEEEEEE)
-      ..strokeWidth = 1;
-    for (var i = 0; i < 5; i++) {
-      final y = size.height * (i + 0.5) / 5;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-
-    Offset at(int index) => Offset(
-          size.width * (index + 0.5) / points.length,
-          size.height * (1 - points[index]),
-        );
-
-    final line = Paint()
-      ..color = lineColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.shortestSide * 0.05
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < points.length - 1; i++) {
-      canvas.drawLine(at(i), at(i + 1), line);
-    }
-
-    final radius = size.shortestSide * 0.07;
-    for (var i = 0; i < points.length; i++) {
-      canvas.drawCircle(at(i), radius, Paint()..color = Colors.white);
-      canvas.drawCircle(
-        at(i),
-        radius,
-        Paint()
-          ..color = lineColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = size.shortestSide * 0.035,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ScoreChartPainter oldDelegate) => false;
 }

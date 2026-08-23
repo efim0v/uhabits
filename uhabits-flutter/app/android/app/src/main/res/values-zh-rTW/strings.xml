@@ -15,4 +15,10 @@
     <string name="app_name">Loop 習以為常</string>
     <string name="main_activity_title">習慣</string>
     <string name="habit_not_found">習慣已刪除 / 搜尋不到</string>
+    <string name="checkmark">選取標記</string>
+    <string name="history">歴史紀錄</string>
+    <string name="score">分數</string>
+    <string name="streaks">記錄</string>
+    <string name="frequency">頻率</string>
+    <string name="target">目標</string>
 </resources>

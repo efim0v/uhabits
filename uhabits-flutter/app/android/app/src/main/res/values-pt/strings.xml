@@ -15,4 +15,10 @@
     <string name="app_name">Loop - Acompanhador de Hábitos</string>
     <string name="main_activity_title">Hábitos</string>
     <string name="habit_not_found">Hábito deletado / não encontrado</string>
+    <string name="checkmark">Marcações</string>
+    <string name="history">Histórico</string>
+    <string name="score">Estabilidade</string>
+    <string name="streaks">Correntes</string>
+    <string name="frequency">Frequência</string>
+    <string name="target">Alvo</string>
 </resources>

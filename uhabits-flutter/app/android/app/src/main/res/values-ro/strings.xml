@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">Obiceiuri</string>
     <string name="habit_not_found">Obicei șters / negăsit</string>
+    <string name="checkmark">Bifă</string>
+    <string name="history">Istoric</string>
+    <string name="score">Scor</string>
+    <string name="streaks">Zile consecutive</string>
+    <string name="frequency">Frecvență</string>
+    <string name="target">Obiectiv</string>
 </resources>

@@ -11,12 +11,14 @@
 /// `<ListPreference>` / `<EditTextPreference>`, carrying the original
 /// `android:key` so the order and the identity of each row stay checkable.
 ///
-/// The rows are in `preferences.xml` order and nothing is dropped. Three of
-/// them are backed by Android-only machinery — the ringtone picker
-/// (`reminderSound`), the notification-channel settings intent
-/// (`reminderCustomize`) and the Storage Access Framework folder picker
-/// (`publicBackupFolder`) — so they render disabled with the same string
-/// Android shows when an intent has no handler, rather than disappearing.
+/// The rows are in `preferences.xml` order and nothing is dropped. Two of
+/// them are backed by Android-only machinery with no counterpart here — the
+/// ringtone picker (`reminderSound`) and the Storage Access Framework folder
+/// picker (`publicBackupFolder`) — so they render disabled with the same
+/// string Android shows when an intent has no handler, rather than
+/// disappearing. `reminderCustomize` is not one of them: notification channels
+/// are Android-only, but the app carries its own handler for them, so the row
+/// acts and reports the same string only when the intent finds no home.
 ///
 /// What the screen does *not* do is any work: exactly like
 /// `SettingsFragment.setResultOnPreferenceClick`, the database and
@@ -25,6 +27,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 // The preferences layer is not re-exported from uhabits_core.dart yet.
@@ -33,6 +36,8 @@ import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../l10n/app_localizations.dart';
+import '../../platform/flutter_notification_tray.dart'
+    show LocalNotificationsChannelCreator, PlatformNotificationChannelSettings;
 import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
 import '../theme/app_theme.dart' show coreThemeOf;
@@ -299,16 +304,48 @@ class _SettingsView extends StatelessWidget {
         onTap: () =>
             model.areNotificationsSticky = !model.areNotificationsSticky,
       ),
-      // Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS: Android notification
-      // channels do not exist elsewhere.
+      // `SettingsFragment.onPreferenceTreeClick`, key "reminderCustomize":
+      // `createAndroidNotificationChannel(requireContext())` and then
+      // `startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS))`
+      // (`settings.screen.reminder-category#7`, `notifications.channel#3`).
       SettingsRow(
         preferenceKey: 'reminderCustomize',
         title: l10n.customizeNotification,
         summary: l10n.customizeNotificationSummary,
-        note: l10n.activityNotFound,
-        enabled: false,
+        onTap: () => _customizeNotifications(context, l10n),
       ),
     ];
+  }
+
+  /// The click handler of the "reminderCustomize" row.
+  ///
+  /// Both halves already shipped — [PlatformNotificationChannelSettings] over
+  /// `MainActivity`'s method channel, and [LocalNotificationsChannelCreator]
+  /// over the plugin — and the row still rendered `enabled: false` with the
+  /// "no app was found" note under it, because nothing anywhere built them
+  /// (`audit3.settings-customize-notification-is-permanently-disabled#1`,
+  /// `audit3.customize-notifications-settings-row-is-hard#1`). It is built
+  /// here, at the point of use, exactly as `onPreferenceTreeClick` does it:
+  /// a callback passed in from above would be one more thing that can be
+  /// forgotten.
+  ///
+  /// `openReminderChannelSettings` answers false where the intent has no
+  /// handler — iOS, macOS, a desktop host — which is `startActivitySafely`'s
+  /// `ActivityNotFoundException` branch, and gets the same message Android
+  /// shows.
+  Future<void> _customizeNotifications(BuildContext context, L10n l10n) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final settings = PlatformNotificationChannelSettings(
+      creator: LocalNotificationsChannelCreator(
+        plugin: FlutterLocalNotificationsPlugin(),
+        // `R.string.reminder`, the user-visible channel name
+        // (`notifications.channel#1`) — the same string the category header
+        // above is titled with.
+        channelName: l10n.reminder,
+      ),
+    );
+    if (await settings.openReminderChannelSettings()) return;
+    messenger.showSnackBar(SnackBar(content: Text(l10n.activityNotFound)));
   }
 
   // -------------------------------------------------------------------

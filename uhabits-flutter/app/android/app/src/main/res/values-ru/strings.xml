@@ -15,4 +15,10 @@
     <string name="app_name">Трекер привычек Loop</string>
     <string name="main_activity_title">Привычки</string>
     <string name="habit_not_found">Привычка удалена / не найдена</string>
+    <string name="checkmark">Галочка</string>
+    <string name="history">История</string>
+    <string name="score">Результат</string>
+    <string name="streaks">Рекорды</string>
+    <string name="frequency">Частота</string>
+    <string name="target">Цель</string>
 </resources>

@@ -53,7 +53,28 @@ class UhabitsApp extends StatelessWidget {
       providers: [
         Provider<AppScope>.value(value: scope),
         ChangeNotifierProvider<ThemeModel>(
-          create: (_) => ThemeModel(scope.preferences),
+          // `ListHabitsActivity.onCreate` calls
+          // `component.themeSwitcher.apply()` BEFORE `setContentView`, so the
+          // window is already dark on the very first frame for a user whose
+          // theme is Dark (`audit3.one-light-themed-frame-on-every#1`).
+          //
+          // `create` runs during the first `build` of [_ThemedApp], before it
+          // reads `currentTheme` — which is the port's `setContentView` — so
+          // applying here is applying before the first layout. The system
+          // brightness comes from the binding because there is no `View`
+          // ancestor to ask yet, and `platformBrightness` is a property of the
+          // platform rather than of one view; [_ThemedAppState] is already
+          // registered as a `WidgetsBindingObserver` by now, so a change after
+          // this point arrives through `didChangePlatformBrightness`.
+          //
+          // Deferring this to a post-frame callback — which is what the port
+          // used to do — repaints on frame 2 instead, and `currentTheme`
+          // starts as `LightTheme()`: every launch flashed white.
+          create: (_) => ThemeModel(
+            scope.preferences,
+            systemBrightness:
+                WidgetsBinding.instance.platformDispatcher.platformBrightness,
+          )..apply(),
         ),
       ],
       child: const _ThemedApp(),
@@ -117,7 +138,6 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     // as it mounts; only the plugin subscription waits for the frame.
     _widgetLinks = _buildWidgetLinks();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _pushSystemBrightness();
       // Before the resume, because a notification can be what launched the
       // app: the response was decoded during AppScope.boot() and has been
       // waiting for a screen ever since.
@@ -327,10 +347,17 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
   @override
   void didChangePlatformBrightness() => _pushSystemBrightness();
 
+  /// `AndroidThemeSwitcher.getSystemTheme()`, which reads
+  /// `resources.configuration.uiMode` off the context.
+  ///
+  /// Read from the binding rather than from `View.of(context)`, so that this
+  /// and the initial `apply()` in [UhabitsApp.build] — which has no `View`
+  /// ancestor to ask — read the same value: `platformBrightness` is a property
+  /// of the platform, not of one view.
   void _pushSystemBrightness() {
     if (!mounted) return;
     context.read<ThemeModel>().systemBrightness =
-        View.of(context).platformDispatcher.platformBrightness;
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
   }
 
   @override

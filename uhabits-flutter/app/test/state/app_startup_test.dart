@@ -37,10 +37,11 @@
 ///    stop. The half of the rule that does exist — tearing the scope down in
 ///    an order that cannot touch a closed database — is asserted.
 ///
-/// Two more are asserted only in the half the port kept: `#2` (there is no test
+/// One more is asserted only in the half the port kept: `#2` (there is no test
 /// mode, so the database file is never deleted at launch and is always
-/// `uhabits.db`) and `#3` (an unknown database version does not crash startup,
-/// but is not quarantined either).
+/// `uhabits.db`). `#3` is now ported whole — the opener refuses a file outside
+/// 8..25 and `boot()` renames it aside and re-initialises
+/// (`audit3.an-unusable-database-file-is-no`).
 library;
 
 // The commands, preferences, task and time layers are reached by their `src`
@@ -605,7 +606,8 @@ void main() {
           reason: 'platform-glue.app-startup-order#2');
     });
 
-    test('#3 an unknown database version does not crash startup', () {
+    test('#3 an unusable database version is quarantined, not crashed on',
+        () async {
       final String path = p.join(supportDir.path, databaseFilename);
       seedHabits(path, count: 1);
 
@@ -620,21 +622,33 @@ void main() {
           'that exception the existing database file is renamed to its absolute '
           'path + ".invalid" and initializeDatabase is retried, so a too-new/'
           'too-old DB never crashes startup but silently starts a fresh empty '
-          'database. Only the first half is ported: opening a file stamped '
-          'past the app\'s own schema version returns normally. The quarantine '
-          'is NOT ported — there is no UnsupportedDatabaseVersionException in '
-          'this codebase and nothing renames a file aside — so a database whose '
-          'schema really has moved on would fail later, at the first query, '
-          'instead of being set aside at the door. Reported as a gap.';
+          'database.';
 
-      late Database reopened;
-      expect(() => reopened = AppDatabase.openAndMigrate(path), returnsNormally,
-          reason: rule);
-      addTearDown(reopened.close);
+      // The opener's half of the rule: `onDowngrade` always throws, so a file
+      // past this build's schema is refused at the door rather than opened and
+      // failing later at the first query.
+      expect(
+        () => AppDatabase.openAndMigrate(path),
+        throwsA(isA<UnsupportedDatabaseVersionException>()),
+        reason: '$rule persistence.android-opener#5: a database file newer '
+            'than 25 is refused rather than silently downgraded.',
+      );
 
-      // The other direction — a file older than the app — is ported in full:
-      // an unstamped file is taken to be schema 8 and migrated up to the
-      // current version, which is the whole "never crashes startup" half.
+      // And `boot()`'s half: the file is set aside and a fresh one takes its
+      // place, so the user gets an empty app rather than a startup that never
+      // reaches runApp.
+      final AppScope scope = await boot();
+      expect(File('$path.invalid').existsSync(), isTrue,
+          reason: '$rule The file is renamed, not deleted: the data is still '
+              'there to be recovered.');
+      expect(scope.habitList.size(), 0,
+          reason: '$rule …and the app comes up on a fresh empty database.');
+      expect(scope.database.getVersion(), databaseVersion,
+          reason: '$rule …stamped at this build\'s own schema version.');
+
+      // The other direction — a file older than the app — is brought forward
+      // rather than quarantined, as long as it is one this build can migrate:
+      // an unstamped file is taken to be schema 8 and migrated up.
       final String old = p.join(supportDir.path, 'old.db');
       File(old).createSync();
       final Database migrated = AppDatabase.openAndMigrate(old);
@@ -642,6 +656,19 @@ void main() {
       expect(migrated.getVersion(), databaseVersion,
           reason: 'platform-glue.app-startup-order#3: an older file is brought '
               'forward rather than rejected');
+
+      // Below 8 there is no migration script at all, which is the other arm of
+      // `onUpgrade`'s throw.
+      final String ancient = p.join(supportDir.path, 'ancient.db');
+      final Database tooOld = AppDatabase.openAndMigrate(ancient);
+      tooOld.setVersion(AppDatabase.schemaBaseVersion - 1);
+      tooOld.close();
+      expect(
+        () => AppDatabase.openAndMigrate(ancient),
+        throwsA(isA<UnsupportedDatabaseVersionException>()),
+        reason: '$rule persistence.android-opener#4: onUpgrade throws when '
+            'db.version < 8.',
+      );
     });
 
     test('#4 the DI root is a value passed to the app, not a global', () async {

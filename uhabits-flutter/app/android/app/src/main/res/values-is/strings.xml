@@ -13,4 +13,9 @@
 -->
 <resources>
     <string name="main_activity_title">Venjur</string>
+    <string name="checkmark">Gátmerki</string>
+    <string name="history">Ferill</string>
+    <string name="score">Árangur</string>
+    <string name="frequency">Tíðni</string>
+    <string name="target">Markmið</string>
 </resources>

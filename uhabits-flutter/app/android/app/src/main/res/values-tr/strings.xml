@@ -15,4 +15,10 @@
     <string name="app_name">Loop - Alışkanlık Takip Uygulaması</string>
     <string name="main_activity_title">Alışkanlıklar</string>
     <string name="habit_not_found">Alışkanlık silinmiş ya da bulunamadı</string>
+    <string name="checkmark">Yapıldı işareti</string>
+    <string name="history">Geçmiş</string>
+    <string name="score">Puan</string>
+    <string name="streaks">Seriler</string>
+    <string name="frequency">Sıklık</string>
+    <string name="target">Hedef</string>
 </resources>

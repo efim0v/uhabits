@@ -200,7 +200,7 @@
         <receiver
             android:name=".widgets.CheckmarkWidgetProvider"
             android:exported="true"
-            android:label="Checkmark">
+            android:label="@string/checkmark">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -212,7 +212,7 @@
         <receiver
             android:name=".widgets.HistoryWidgetProvider"
             android:exported="true"
-            android:label="History">
+            android:label="@string/history">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -224,7 +224,7 @@
         <receiver
             android:name=".widgets.ScoreWidgetProvider"
             android:exported="true"
-            android:label="Score">
+            android:label="@string/score">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -236,7 +236,7 @@
         <receiver
             android:name=".widgets.StreakWidgetProvider"
             android:exported="true"
-            android:label="Streaks">
+            android:label="@string/streaks">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -248,7 +248,7 @@
         <receiver
             android:name=".widgets.FrequencyWidgetProvider"
             android:exported="true"
-            android:label="Frequency">
+            android:label="@string/frequency">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -260,7 +260,7 @@
         <receiver
             android:name=".widgets.TargetWidgetProvider"
             android:exported="true"
-            android:label="Target">
+            android:label="@string/target">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

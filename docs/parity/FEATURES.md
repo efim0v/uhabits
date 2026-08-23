@@ -6572,7 +6572,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.settings-customize-notification-is-permanently-disabled
 
-- [ ] `audit3.settings-customize-notification-is-permanently-disabled` — Settings > "Customize notification" is permanently disabled although the whole Android integration behind it is implemented and tested
+- [x] `audit3.settings-customize-notification-is-permanently-disabled` — Settings > "Customize notification" is permanently disabled although the whole Android integration behind it is implemented and tested
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt — `onPreferenceTreeClick`, key "reminderCustomize": `createAndroidNotificationChannel(requireContext())` then `startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS))` with EXTRA_APP_PACKAGE and EXTRA_CHANNEL_ID = "REMINDERS" (ledger rule `notifica`
 - **Where the port should do it:** `app/lib/ui/settings/settings_screen.dart:303-310 renders the row with `note: l10n.activityNotFound, enabled: false` and no onTap. The working implementation sits unused in app/lib/platform/flutter_notification_tray.dart:960-1003 (`PlatformNotificationChannelSettings.openReminderChannelSettings`, plus `LocalNotificationsChannelCreator`) with its nat`
@@ -6594,7 +6594,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.customize-notifications-settings-row-is-hard
 
-- [ ] `audit3.customize-notifications-settings-row-is-hard` — "Customize notifications" settings row is hard-disabled although the whole implementation behind it ships and is tested
+- [x] `audit3.customize-notifications-settings-row-is-hard` — "Customize notifications" settings row is hard-disabled although the whole implementation behind it ships and is tested
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt — onPreferenceTreeClick, case "reminderCustomize" (calls createAndroidNotificationChannel(context) then startActivity(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS with EXTRA_APP_PACKAGE / EXTRA_CHANNEL_ID="REMINDERS"))`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/settings/settings_screen.dart:304-310 (SettingsRow preferenceKey 'reminderCustomize', enabled: false)`
@@ -6605,7 +6605,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.toggling-use-pure-black-background-in
 
-- [ ] `audit3.toggling-use-pure-black-background-in` — Toggling "Use pure black background" in Settings never repaints the app
+- [x] `audit3.toggling-use-pure-black-background-in` — Toggling "Use pure black background" in Settings never repaints the app
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt — onCreate captures `pureBlack = prefs.isPureBlackEnabled`, onResume calls restartWithFade(ListHabitsActivity::class.java) when prefs.theme == THEME_DARK and the flag changed (settings.theme.pure-black#6)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/state/settings_model.dart:236-239 (SettingsModel.isPureBlackEnabled setter) and uhabits-flutter/app/lib/state/theme_model.dart (ThemeModel, the object that actually paints the app)`
@@ -6616,7 +6616,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.an-unusable-database-file-is-no
 
-- [ ] `audit3.an-unusable-database-file-is-no` — An unusable database file is no longer renamed to .invalid — startup throws before runApp instead of recovering
+- [x] `audit3.an-unusable-database-file-is-no` — An unusable database file is no longer renamed to .invalid — startup throws before runApp instead of recovering
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt — onCreate's try/catch(UnsupportedDatabaseVersionException) around DatabaseUtils.initializeDatabase, plus HabitsDatabaseOpener.onUpgrade (throws when db.version < 8) and onDowngrade (always throws)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/platform/app_database.dart:33-50 (AppDatabase.openAndMigrate) and uhabits-flutter/app/lib/state/app_scope.dart (AppScope.boot, no try/catch) / app/lib/main.dart:29-31`
@@ -6638,7 +6638,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.toggling-make-notifications-sticky-does-not
 
-- [ ] `audit3.toggling-make-notifications-sticky-does-not` — Toggling 'Make notifications sticky' does not affect reminders that are already scheduled
+- [x] `audit3.toggling-make-notifications-sticky-does-not` — Toggling 'Make notifications sticky' does not affect reminders that are already scheduled
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt — buildNotification's setOngoing(preferences.shouldMakeNotificationsSticky()), evaluated at fire time`
 - **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_notification_tray.dart — ReminderNotificationBuilder.build sets NotificationSpec.ongoing from _preferences.shouldMakeNotificationsSticky(), and app/lib/platform/flutter_alarm_scheduler.dart calls it at schedule time`
@@ -6649,7 +6649,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.toggling-a-check-mark-on-the
 
-- [ ] `audit3.toggling-a-check-mark-on-the` — Toggling a check-mark on the habit list produces no haptic feedback
+- [x] `audit3.toggling-a-check-mark-on-the` — Toggling a check-mark on the habit list produces no haptic feedback
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/CheckmarkButtonView.kt — `performToggle()` calls `performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)` after `onToggle(value, notes)` (ledger rules `list-habits.checkmark-button#4`, `list-habits.checkmark-button-rendering#11`)`
 - **Where the port should do it:** `app/lib/ui/habits/list/entry_panel.dart:256-271 (`void toggle()`) — computes the next value, records it optimistically and calls `onToggle`, with no HapticFeedback call; the host app/lib/ui/core_view.dart uses a plain GestureDetector, which emits no platform feedback.`
@@ -6660,7 +6660,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.the-calendar-card-on-the-habit
 
-- [ ] `audit3.the-calendar-card-on-the-habit` — The Calendar card on the habit detail screen is editable in the port; upstream it is read-only
+- [x] `audit3.the-calendar-card-on-the-habit` — The Calendar card on the habit detail screen is editable in the port; upstream it is read-only
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/HistoryCardView.kt — `setState` builds `HistoryChart(...)` without an `onDateClickedListener`, so it keeps the no-op default declared at uhabits-core/.../ui/views/HistoryChart.kt:49; `setListener(presenter)` wires only the Edit button. ShowHabitView.setListener passes the`
 - **Where the port should do it:** `app/lib/ui/habits/show/show_habit_screen.dart (the `ShowHabitCard.history` branch) passes `listener: model.presenter.historyCardPresenter`, and app/lib/ui/habits/show/cards/history_card_view.dart:78 assigns it to `chart.onDateClickedListener`.`
@@ -6671,7 +6671,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.flipping-reverse-order-of-days-leaves
 
-- [ ] `audit3.flipping-reverse-order-of-days-leaves` — Flipping "Reverse order of days" leaves the date header out of step with the buttons it labels
+- [x] `audit3.flipping-reverse-order-of-days-leaves` — Flipping "Reverse order of days" leaves the date header out of step with the buttons it labels
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HeaderView.kt:43-80 — HeaderView implements Preferences.Listener, registers in onAttachedToWindow, and onCheckmarkSequenceChanged() calls updateScrollDirection() + postInvalidate()`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_header.dart (ListHeader takes isCheckmarkSequenceReversed as a constructor argument and registers no listener); fed from app/lib/ui/habits/list/habit_list_screen.dart:588`
@@ -6682,7 +6682,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.streak-chart-date-labels-are-hard
 
-- [ ] `audit3.streak-chart-date-labels-are-hard` — Streak-chart date labels are hard-coded to the US medium-date shape in every locale — JavaLocalDateFormatter.longFormat has no counterpart and the dateLabel seam is never supplied
+- [x] `audit3.streak-chart-date-labels-are-hard` — Streak-chart date labels are hard-coded to the US medium-date shape in every locale — JavaLocalDateFormatter.longFormat has no counterpart and the dateLabel seam is never supplied
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt:86 — JavaLocalDateFormatter.longFormat(date), consumed by uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/StreakChart.kt:180-181 and :239-240`
 - **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/time/local_date.dart:247-253 (abstract LocalDateFormatter — five methods, no longFormat); uhabits-flutter/app/lib/ui/habits/show/cards/streak_card_view.dart:87-91 (_label / the unsupplied dateLabel callback); never passed at uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart:652; the same def`
@@ -6693,7 +6693,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.home-screen-widget-names-in-the
 
-- [ ] `audit3.home-screen-widget-names-in-the` — Home-screen widget names in the launcher's widget gallery are hard-coded English, losing 43 translations
+- [x] `audit3.home-screen-widget-names-in-the` — Home-screen widget names in the launcher's widget gallery are hard-coded English, losing 43 translations
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/AndroidManifest.xml (the six <receiver> blocks: android:label="@string/checkmark", "@string/history", "@string/score", "@string/streaks", "@string/frequency", "@string/target") + uhabits-android/src/main/res/values/strings.xml and all 44 values-*/strings.xml, which translate every one of those six names`
 - **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (android:label="Checkmark" / "History" / "Score" / "Streaks" / "Frequency" / "Target" as literals) and uhabits-flutter/app/android/app/src/main/res/values/strings.xml (which mirrors app_name, main_activity_title, habit_not_found and the five *_stack_widget names, but not these six); also `
@@ -6704,7 +6704,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.the-loop-logo-and-the-two
 
-- [ ] `audit3.the-loop-logo-and-the-two` — The Loop logo and the two intro illustrations are hand-drawn approximations; the actual drawables were never shipped
+- [x] `audit3.the-loop-logo-and-the-two` — The Loop logo and the two intro illustrations are hand-drawn approximations; the actual drawables were never shipped
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/drawable/intro_icon_1.png, intro_icon_2.png, intro_icon_4.png — referenced by uhabits-android/src/main/res/layout/about.xml (<ImageView android:src="@drawable/intro_icon_1" 100dp x 100dp) and by the three intro slides`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/intro/intro_screen.dart — _LoopLogoPainter (used by IntroIcon1, which about_screen.dart also renders), _IntroIcon2 and _IntroIcon4; uhabits-flutter/app/pubspec.yaml ships no image assets at all (app/assets contains only three .ttf files)`
@@ -6715,7 +6715,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.one-light-themed-frame-on-every
 
-- [ ] `audit3.one-light-themed-frame-on-every` — One light-themed frame on every launch for users whose theme is Dark
+- [x] `audit3.one-light-themed-frame-on-every` — One light-themed frame on every launch for users whose theme is Dark
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt — onCreate calls component.themeSwitcher.apply() before setContentView`
 - **Where the port should do it:** `uhabits-flutter/app/lib/main.dart:117-124 and 330-334 (_pushSystemBrightness is only run from a post-frame callback)`
@@ -6726,7 +6726,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.shortmonthname-drops-the-use-the-long
 
-- [ ] `audit3.shortmonthname-drops-the-use-the-long` — shortMonthName drops the "use the long name when it is three characters or shorter" rule, so Simplified-Chinese chart month labels change
+- [x] `audit3.shortmonthname-drops-the-use-the-long` — shortMonthName drops the "use the long name when it is three characters or shorter" rule, so Simplified-Chinese chart month labels change
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt:55-63 — JavaLocalDateFormatter.shortMonthName`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_header.dart:612-613 (IntlLocalDateFormatter.shortMonthName, the single implementation the whole app uses); and uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/views/WidgetCanvas.kt:130 for the widget charts`

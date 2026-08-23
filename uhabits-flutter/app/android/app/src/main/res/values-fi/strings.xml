@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">Rutiinit</string>
     <string name="habit_not_found">Tapa on poistettu tai sitä ei löydy</string>
+    <string name="checkmark">Valintamerkki</string>
+    <string name="history">Historia</string>
+    <string name="score">Pisteet</string>
+    <string name="streaks">Pisimmät toistot</string>
+    <string name="frequency">Toistuvuus</string>
+    <string name="target">Tavoite</string>
 </resources>

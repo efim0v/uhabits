@@ -27,6 +27,7 @@ library;
 // yet; until it does, these are the documented import paths.
 // ignore_for_file: implementation_imports
 
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart' as core;
 import 'package:uhabits_core/uhabits_core.dart' as core;
@@ -268,6 +269,12 @@ class _EntryPanelState extends State<EntryPanel> {
       // or not the command ever comes back.
       setState(() => _optimisticValues[date.daysSince2000] = next);
       widget.onToggle?.call(date, next, note);
+      // `performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)`, the last
+      // thing performToggle does. The argument-less `HapticFeedback.vibrate()`
+      // is that same constant: the Android embedder answers
+      // HapticFeedbackType.STANDARD with LONG_PRESS
+      // (`audit3.toggling-a-check-mark-on-the#1`).
+      HapticFeedback.vibrate();
     }
 
     void edit() {

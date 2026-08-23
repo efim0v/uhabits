@@ -15,4 +15,10 @@
     <string name="app_name">Loop — ჩვევების ტრეკერი</string>
     <string name="main_activity_title">ჩვევები</string>
     <string name="habit_not_found">ჩვევა წაშლილია / ვერ მოიძებნა</string>
+    <string name="checkmark">თოლია</string>
+    <string name="history">ისტორია</string>
+    <string name="score">შეფასება</string>
+    <string name="streaks">სერიები</string>
+    <string name="frequency">სიხშირე</string>
+    <string name="target">მიზანი</string>
 </resources>

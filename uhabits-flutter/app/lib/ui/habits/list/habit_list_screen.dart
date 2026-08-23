@@ -585,8 +585,12 @@ class _HabitListViewState extends State<_HabitListView>
                     restorationId: 'header',
                     buttonCount: buttonCount,
                     dataOffset: dataOffset,
-                    isCheckmarkSequenceReversed:
-                        model.scope.preferences.isCheckmarkSequenceReversed,
+                    // `HeaderView(context, prefs, midnightTimer)`: the strip
+                    // subscribes to the preferences itself, exactly as the
+                    // panel of buttons under it does, so both halves of the
+                    // row flip on the same notification
+                    // (`audit3.flipping-reverse-order-of-days-leaves#1`).
+                    preferences: model.scope.preferences,
                     onDataOffsetChanged: (value) =>
                         setState(() => _dataOffset = value),
                     theme: theme,

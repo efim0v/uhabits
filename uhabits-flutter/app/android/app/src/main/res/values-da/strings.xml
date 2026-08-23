@@ -20,4 +20,10 @@
     <string name="score_stack_widget">Score stakkontrol</string>
     <string name="history_stack_widget">Historik stakkontrol</string>
     <string name="streaks_stack_widget">Uafbrudt række stakkontrol</string>
+    <string name="checkmark">Afkrydsning</string>
+    <string name="history">Historie</string>
+    <string name="score">Point</string>
+    <string name="streaks">Streaks</string>
+    <string name="frequency">Hyppighed</string>
+    <string name="target">Mål</string>
 </resources>

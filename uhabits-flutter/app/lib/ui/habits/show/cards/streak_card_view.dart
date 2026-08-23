@@ -33,10 +33,13 @@ export 'package:uhabits_core/src/ui/screens/habits/show/views/streak_card.dart'
 ///
 ///  * `paint.fontSpacing` becomes [chartFontSpacing] times the text size and
 ///    every baseline goes through [chartTextCenter];
-///  * `JavaLocalDateFormatter.longFormat` (a `DateFormat.MEDIUM` instance) has
-///    no counterpart on [core.LocalDateFormatter], so the flanking labels are
-///    built from `shortMonthName` as "Jan 25, 2015". Override [dateLabel] to
-///    supply a properly localized medium date.
+///  * `JavaLocalDateFormatter.longFormat` (a `DateFormat.MEDIUM` instance) is
+///    not on the `LocalDateFormatter` interface upstream either, so it lives
+///    on this port's counterpart of that class, [IntlLocalDateFormatter], and
+///    [labelFor] asks the formatter it was given for it. A formatter that
+///    cannot answer — a test stub — falls back to the US medium shape built
+///    from `shortMonthName`, and [dateLabel] overrides both
+///    (`audit3.streak-chart-date-labels-are-hard#1`).
 ///
 /// One upstream oddity is kept verbatim: [maxLabelWidth] is a *field*, and
 /// `updateMaxMinLengths` never resets it, so within one view instance it only
@@ -86,9 +89,20 @@ class StreakChartView extends core.View {
 
   final String Function(core.LocalDate date)? dateLabel;
 
-  String _label(core.LocalDate date) =>
-      dateLabel?.call(date) ??
-      '${dateFormatter.shortMonthName(date)} ${date.day}, ${date.year}';
+  /// The text that flanks a bar: `df.longFormat(date)`, the locale's medium
+  /// date pattern (`audit3.streak-chart-date-labels-are-hard#1`).
+  ///
+  /// Public because it is what the view paints, and the only way to read the
+  /// resolved label back.
+  String labelFor(core.LocalDate date) {
+    final custom = dateLabel;
+    if (custom != null) return custom(date);
+    final formatter = dateFormatter;
+    if (formatter is IntlLocalDateFormatter) return formatter.longFormat(date);
+    // No counterpart to `longFormat` on this formatter; the US medium shape is
+    // all `shortMonthName` can build.
+    return '${formatter.shortMonthName(date)} ${date.day}, ${date.year}';
+  }
 
   @override
   void draw(core.Canvas canvas) {
@@ -114,8 +128,8 @@ class StreakChartView extends core.View {
       maxLabelWidth = math.max(
         maxLabelWidth,
         math.max(
-          canvas.measureText(_label(streak.start)),
-          canvas.measureText(_label(streak.end)),
+          canvas.measureText(labelFor(streak.start)),
+          canvas.measureText(labelFor(streak.end)),
         ),
       );
     }
@@ -192,9 +206,9 @@ class StreakChartView extends core.View {
     if (shouldShowLabels) {
       canvas.setColor(theme.mediumContrastTextColor);
       canvas.setTextAlign(core.TextAlign.right);
-      canvas.drawText(_label(streak.start), gap - textMargin, y);
+      canvas.drawText(labelFor(streak.start), gap - textMargin, y);
       canvas.setTextAlign(core.TextAlign.left);
-      canvas.drawText(_label(streak.end), width - gap + textMargin, y);
+      canvas.drawText(labelFor(streak.end), width - gap + textMargin, y);
     }
   }
 

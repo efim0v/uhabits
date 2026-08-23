@@ -20,4 +20,10 @@
     <string name="score_stack_widget">Pontszám stack-widget</string>
     <string name="history_stack_widget">Előzmények stack-widget</string>
     <string name="streaks_stack_widget">Sorozat Stack Widget</string>
+    <string name="checkmark">Pipa</string>
+    <string name="history">Napló</string>
+    <string name="score">Pont</string>
+    <string name="streaks">Szériák</string>
+    <string name="frequency">Gyakoriság</string>
+    <string name="target">Cél</string>
 </resources>

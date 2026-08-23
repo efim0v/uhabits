@@ -15,4 +15,10 @@
     <string name="app_name">Loop Следене на навици</string>
     <string name="main_activity_title">Навици</string>
     <string name="habit_not_found">Навикът е изтрит / не е намерен</string>
+    <string name="checkmark">Отметка</string>
+    <string name="history">История</string>
+    <string name="score">Сила</string>
+    <string name="streaks">Поредици</string>
+    <string name="frequency">Честота</string>
+    <string name="target">Цел</string>
 </resources>

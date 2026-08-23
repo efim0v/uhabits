@@ -15,4 +15,9 @@
     <string name="app_name">Loop Vaneoversikt</string>
     <string name="main_activity_title">Vaner</string>
     <string name="habit_not_found">Vane slettet / ikke funnet</string>
+    <string name="checkmark">Hake</string>
+    <string name="history">Logg</string>
+    <string name="score">Poengsum</string>
+    <string name="streaks">Gjentakelser</string>
+    <string name="frequency">Hyppighet</string>
 </resources>

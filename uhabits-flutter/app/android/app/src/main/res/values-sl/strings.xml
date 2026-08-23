@@ -15,4 +15,10 @@
     <string name="app_name">Loop Sledilnik Navad</string>
     <string name="main_activity_title">Navade</string>
     <string name="habit_not_found">Izbrisana navada / ni najdena</string>
+    <string name="checkmark">Kljukica</string>
+    <string name="history">Zgodovina</string>
+    <string name="score">Ocena</string>
+    <string name="streaks">Serije</string>
+    <string name="frequency">Pogostost</string>
+    <string name="target">Cilj</string>
 </resources>

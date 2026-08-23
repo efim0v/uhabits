@@ -15,4 +15,10 @@
     <string name="app_name">ループ習慣トラッカー</string>
     <string name="main_activity_title">習慣</string>
     <string name="habit_not_found">習慣が削除されているか、見つかりませんでした</string>
+    <string name="checkmark">チェック</string>
+    <string name="history">履歴</string>
+    <string name="score">スコア</string>
+    <string name="streaks">連続記録</string>
+    <string name="frequency">頻度</string>
+    <string name="target">目標</string>
 </resources>

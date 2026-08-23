@@ -3,10 +3,15 @@
 /// and res/layout/show_habit_history.xml.
 ///
 /// The calendar card: a title, a 160dp core `HistoryChart` and a borderless
-/// "Edit" button underneath. The chart is already ported, and
-/// `HistoryCardPresenter` is itself the chart's `OnDateClickedListener`, so
-/// this widget hands the presenter straight to the chart and forwards the edit
-/// button to `onClickEditButton`.
+/// "Edit" button underneath. The chart is already ported, and this widget
+/// forwards the edit button to `onClickEditButton`.
+///
+/// The chart deliberately gets no `OnDateClickedListener`. `setState` upstream
+/// builds the `HistoryChart` without one, so it keeps the no-op default and
+/// the card is read-only; `setListener(presenter)` wires only the Edit button,
+/// and the presenter reaches a chart exactly once — in the history-editor
+/// dialog the Edit button opens
+/// (`audit3.the-calendar-card-on-the-habit#1`).
 library;
 
 // uhabits_core exports neither lib/src/ui/screens nor lib/src/ui/views yet.
@@ -28,7 +33,6 @@ export 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart'
 class HistoryCardView extends StatelessWidget {
   const HistoryCardView({
     required this.state,
-    this.listener,
     this.onClickEditButton,
     this.dateFormatter,
     this.dataOffset = 0,
@@ -47,11 +51,6 @@ class HistoryCardView extends StatelessWidget {
   static const Key editButtonKey = Key('showHabitHistoryEdit');
 
   final HistoryCardState state;
-
-  /// `HistoryCardPresenter` implements `OnDateClickedListener`; pass it here
-  /// and a tap on a calendar cell lands in the presenter with the date the
-  /// chart hit-tested.
-  final OnDateClickedListener? listener;
 
   /// `binding.edit.setOnClickListener { presenter.onClickEditButton() }`.
   final VoidCallback? onClickEditButton;
@@ -75,7 +74,6 @@ class HistoryCardView extends StatelessWidget {
       notesIndicators: state.notesIndicators,
       firstWeekday: state.firstWeekday,
     )..dataOffset = dataOffset;
-    if (listener != null) chart.onDateClickedListener = listener!;
 
     return ChartCard(
       theme: state.theme,

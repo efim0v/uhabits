@@ -15,4 +15,10 @@
     <string name="app_name">Loop - Hàbit Rastrejador</string>
     <string name="main_activity_title">Hàbits</string>
     <string name="habit_not_found">Hàbit suprimit / no trobat</string>
+    <string name="checkmark">Marca</string>
+    <string name="history">Història</string>
+    <string name="score">Puntuació</string>
+    <string name="streaks">Ratxa</string>
+    <string name="frequency">Freqüència</string>
+    <string name="target">Objectiu</string>
 </resources>

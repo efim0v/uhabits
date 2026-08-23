@@ -9,6 +9,7 @@ import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../ui/theme/app_theme.dart';
+import 'app_preferences.dart';
 
 /// Port of `ThemeSwitcher` (uhabits-core) and `AndroidThemeSwitcher`
 /// (uhabits-android), as a [ChangeNotifier].
@@ -68,7 +69,20 @@ class ThemeModel extends ChangeNotifier {
     SystemUiOverlayStyleSetter? setSystemUiOverlayStyle,
   })  : _systemBrightness = systemBrightness,
         setSystemUiOverlayStyle =
-            setSystemUiOverlayStyle ?? SystemChrome.setSystemUIOverlayStyle;
+            setSystemUiOverlayStyle ?? SystemChrome.setSystemUIOverlayStyle {
+    // `ListHabitsActivity.onCreate` does two things with the preferences: it
+    // applies the theme, and it takes a copy of `isPureBlackEnabled` so that
+    // `onResume` can notice a change made in Settings and restart the activity
+    // with a fade (`settings.theme.pure-black#6`). The port has no activity to
+    // restart — this object *is* what paints, and it repaints in place — so
+    // the copy-and-compare becomes a subscription: whoever writes `pref_theme`
+    // or `pref_pure_black`, from wherever, the theme is re-applied and the
+    // whole app comes back in it (`audit3.toggling-use-pure-black-background-in#1`).
+    final preferences = this.preferences;
+    if (preferences is AppPreferences) {
+      preferences.addChangeListener(_onPreferenceChanged);
+    }
+  }
 
   /// `ThemeSwitcher.THEME_AUTOMATIC` — follow the system dark-mode setting.
   /// This is the default of `pref_theme`.
@@ -79,6 +93,15 @@ class ThemeModel extends ChangeNotifier {
 
   /// `ThemeSwitcher.THEME_LIGHT`.
   static const int themeLight = 2;
+
+  /// The two keys `ThemeSwitcher.apply()` reads: `pref_theme`
+  /// (`settings.theme.theme-modes#1`) and `pref_pure_black`
+  /// (`settings.theme.pure-black#1`). A write to anything else changes nothing
+  /// about which theme this model would choose.
+  static const Set<String> themeKeys = <String>{
+    'pref_theme',
+    'pref_pure_black',
+  };
 
   final Preferences preferences;
 
@@ -127,7 +150,7 @@ class ThemeModel extends ChangeNotifier {
 
   set theme(int value) {
     if (preferences.theme == value) return;
-    preferences.theme = value;
+    _write(() => preferences.theme = value);
     apply();
   }
 
@@ -136,8 +159,48 @@ class ThemeModel extends ChangeNotifier {
 
   set isPureBlackEnabled(bool value) {
     if (preferences.isPureBlackEnabled == value) return;
-    preferences.isPureBlackEnabled = value;
+    _write(() => preferences.isPureBlackEnabled = value);
     apply();
+  }
+
+  /// True while one of this model's own setters is writing a preference.
+  ///
+  /// Those setters apply the theme themselves, on the next line; without the
+  /// flag the change callback would apply it a second time for the same write.
+  bool _writing = false;
+
+  void _write(void Function() write) {
+    _writing = true;
+    try {
+      write();
+    } finally {
+      _writing = false;
+    }
+  }
+
+  /// `SharedPreferencesStorage.onSharedPreferenceChanged`, narrowed to the two
+  /// keys `apply()` reads.
+  ///
+  /// This is what replaces `ListHabitsActivity.onResume`'s
+  /// `if (prefs.theme == THEME_DARK && prefs.isPureBlackEnabled != pureBlack)
+  /// restartWithFade(...)`: the port repaints in place instead of restarting,
+  /// and it does so for every writer rather than only for the settings screen
+  /// (`audit3.toggling-use-pure-black-background-in#1`).
+  void _onPreferenceChanged(String? key) {
+    if (_writing) return;
+    // A null key is a committed `clear()`, which takes `pref_theme` and
+    // `pref_pure_black` back to their defaults along with everything else.
+    if (key != null && !themeKeys.contains(key)) return;
+    apply();
+  }
+
+  @override
+  void dispose() {
+    final preferences = this.preferences;
+    if (preferences is AppPreferences) {
+      preferences.removeChangeListener(_onPreferenceChanged);
+    }
+    super.dispose();
   }
 
   /// `ThemeSwitcher.isNightMode`. An explicit [themeLight] is never night mode,
@@ -197,16 +260,20 @@ class ThemeModel extends ChangeNotifier {
   void toggleNightMode() {
     final systemTheme = getSystemTheme();
     final userTheme = preferences.theme;
-    if (userTheme == themeAutomatic) {
-      if (systemTheme == themeLight) preferences.theme = themeDark;
-      if (systemTheme == themeDark) preferences.theme = themeLight;
-    } else if (userTheme == themeLight) {
-      if (systemTheme == themeLight) preferences.theme = themeDark;
-      if (systemTheme == themeDark) preferences.theme = themeAutomatic;
-    } else if (userTheme == themeDark) {
-      if (systemTheme == themeLight) preferences.theme = themeAutomatic;
-      if (systemTheme == themeDark) preferences.theme = themeLight;
-    }
+    // The write is this model's own, and `apply()` below is its repaint, so
+    // the change callback stays out of it.
+    _write(() {
+      if (userTheme == themeAutomatic) {
+        if (systemTheme == themeLight) preferences.theme = themeDark;
+        if (systemTheme == themeDark) preferences.theme = themeLight;
+      } else if (userTheme == themeLight) {
+        if (systemTheme == themeLight) preferences.theme = themeDark;
+        if (systemTheme == themeDark) preferences.theme = themeAutomatic;
+      } else if (userTheme == themeDark) {
+        if (systemTheme == themeLight) preferences.theme = themeAutomatic;
+        if (systemTheme == themeDark) preferences.theme = themeLight;
+      }
+    });
     apply();
   }
 

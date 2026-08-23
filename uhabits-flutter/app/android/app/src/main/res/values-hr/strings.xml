@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">Navike</string>
     <string name="habit_not_found">Navika je izbrisana / nije pronađena</string>
+    <string name="checkmark">Kvačica</string>
+    <string name="history">Povijest</string>
+    <string name="score">Rezultat</string>
+    <string name="streaks">Niz</string>
+    <string name="frequency">Učestalost</string>
+    <string name="target">Cilj</string>
 </resources>

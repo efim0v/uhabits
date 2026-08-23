@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">عادت‌ها</string>
     <string name="habit_not_found">عادت حذف شده / پیدا نشد</string>
+    <string name="checkmark">علامت</string>
+    <string name="history">تاریخچه</string>
+    <string name="score">امتیاز</string>
+    <string name="streaks">استمرارها</string>
+    <string name="frequency">تناوب‌</string>
+    <string name="target">هدف</string>
 </resources>

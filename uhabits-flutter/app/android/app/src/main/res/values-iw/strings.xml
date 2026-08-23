@@ -15,4 +15,10 @@
     <string name="app_name">‏Loop לניהול הרגלים</string>
     <string name="main_activity_title">הרגלים</string>
     <string name="habit_not_found">ההרגל נמחק / לא נמצא</string>
+    <string name="checkmark">סימון הרגל</string>
+    <string name="history">היסטוריה</string>
+    <string name="score">ציון</string>
+    <string name="streaks">שיאים</string>
+    <string name="frequency">תדירות</string>
+    <string name="target">יעד</string>
 </resources>

@@ -15,4 +15,10 @@
     <string name="app_name">Loop Analizador de Hábitos</string>
     <string name="main_activity_title">Hábitos</string>
     <string name="habit_not_found">Hábito eliminado / no encontrado</string>
+    <string name="checkmark">Marca de verificación</string>
+    <string name="history">Historial</string>
+    <string name="score">Puntuación</string>
+    <string name="streaks">Rachas</string>
+    <string name="frequency">Frecuencia</string>
+    <string name="target">Objetivo</string>
 </resources>

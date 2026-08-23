@@ -250,8 +250,46 @@ void main() {
               xmlAttributes(receiver)['android:label']!,
       };
 
+      // Corrected: this used to expect the six labels as English literals,
+      // which is what `audit3.home-screen-widget-names-in-the#1` found —
+      // upstream every one of them is `@string/...`, translated in all 44
+      // locale directories, so the launcher's widget gallery follows the
+      // device language. The English values behind these references are
+      // pinned, against the ARB, by
+      // test/platform/widget_launcher_names_test.dart.
       expect(
         labels,
+        <String, String>{
+          'CheckmarkWidgetProvider': '@string/checkmark',
+          'HistoryWidgetProvider': '@string/history',
+          'ScoreWidgetProvider': '@string/score',
+          'StreakWidgetProvider': '@string/streaks',
+          'FrequencyWidgetProvider': '@string/frequency',
+          'TargetWidgetProvider': '@string/target',
+        },
+        reason: 'widgets.registration#1 — Exactly six app-widget providers '
+            'exist and are user-installable: CheckmarkWidgetProvider (launcher '
+            "label 'Checkmark'), HistoryWidgetProvider ('History'), "
+            "ScoreWidgetProvider ('Score'), StreakWidgetProvider ('Streaks'), "
+            "FrequencyWidgetProvider ('Frequency'), TargetWidgetProvider "
+            "('Target'). "
+            'audit3.home-screen-widget-names-in-the#1: each of those names is '
+            'a localized string resource, never a literal.',
+      );
+
+      // …and the reference resolves to the name the rule states.
+      final Map<String, String> defaults = <String, String>{
+        for (final RegExpMatch m in RegExp(
+          r'<string\s+name="([^"]+)"[^>]*>(.*?)</string>',
+          dotAll: true,
+        ).allMatches(androidSource('res/values/strings.xml')))
+          m.group(1)!: m.group(2)!,
+      };
+      expect(
+        <String, String?>{
+          for (final MapEntry<String, String> e in labels.entries)
+            e.key: defaults[e.value.replaceFirst('@string/', '')],
+        },
         <String, String>{
           'CheckmarkWidgetProvider': 'Checkmark',
           'HistoryWidgetProvider': 'History',
@@ -260,12 +298,7 @@ void main() {
           'FrequencyWidgetProvider': 'Frequency',
           'TargetWidgetProvider': 'Target',
         },
-        reason: 'widgets.registration#1 — Exactly six app-widget providers '
-            'exist and are user-installable: CheckmarkWidgetProvider (launcher '
-            "label 'Checkmark'), HistoryWidgetProvider ('History'), "
-            "ScoreWidgetProvider ('Score'), StreakWidgetProvider ('Streaks'), "
-            "FrequencyWidgetProvider ('Frequency'), TargetWidgetProvider "
-            "('Target').",
+        reason: 'widgets.registration#1',
       );
 
       // Each name resolves to a Kotlin class in this source set, so "declared"

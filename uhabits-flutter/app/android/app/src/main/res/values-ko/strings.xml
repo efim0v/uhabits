@@ -15,4 +15,10 @@
     <string name="app_name">Loop 습관제조기</string>
     <string name="main_activity_title">습관</string>
     <string name="habit_not_found">습관 삭제 / 찾을 수 없음</string>
+    <string name="checkmark">체크</string>
+    <string name="history">이력</string>
+    <string name="score">점수</string>
+    <string name="streaks">연속</string>
+    <string name="frequency">빈도</string>
+    <string name="target">목표</string>
 </resources>

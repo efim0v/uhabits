@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">பழக்கங்கள்</string>
     <string name="habit_not_found">பழக்கம் நீக்கப்பட்டுவிட்டது / காணவில்லை</string>
+    <string name="checkmark">சரிபார்ப்பு குறி</string>
+    <string name="history">வரலாறு</string>
+    <string name="score">மதிப்பெண்கள்</string>
+    <string name="streaks">சாதனைகள்</string>
+    <string name="frequency">கால இடைவெளி</string>
+    <string name="target">இலக்கு</string>
 </resources>

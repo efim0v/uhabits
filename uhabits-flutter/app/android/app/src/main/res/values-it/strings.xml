@@ -15,4 +15,10 @@
     <string name="app_name">Loop - Tracciatore di Abitudine</string>
     <string name="main_activity_title">Abitudini</string>
     <string name="habit_not_found">Abitudine cancellata / non trovata</string>
+    <string name="checkmark">Spunta</string>
+    <string name="history">Cronologia</string>
+    <string name="score">Punteggio</string>
+    <string name="streaks">Serie</string>
+    <string name="frequency">Frequenza</string>
+    <string name="target">Obiettivo</string>
 </resources>

@@ -3,8 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:intl/intl.dart' as intl;
-// The core view lives outside uhabits_core's public library; it is imported by
-// path until the package exports lib/src/ui/views.
+// The core view and the preference model live outside uhabits_core's public
+// library; they are imported by path until the package exports lib/src/ui/views
+// and lib/src/preferences.
+// ignore: implementation_imports
+import 'package:uhabits_core/src/preferences/preferences.dart' as core;
 // ignore: implementation_imports
 import 'package:uhabits_core/src/ui/views/habit_list_header.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
@@ -39,6 +42,7 @@ class ListHeader extends StatefulWidget {
     required this.buttonCount,
     this.dataOffset = 0,
     this.onDataOffsetChanged,
+    this.preferences,
     this.isCheckmarkSequenceReversed = false,
     this.maxDataOffset,
     this.today,
@@ -69,8 +73,23 @@ class ListHeader extends StatefulWidget {
   /// boundary — and only then (`list-habits.header-scrolling#7`).
   final ValueChanged<int>? onDataOffsetChanged;
 
-  /// `Preferences.isCheckmarkSequenceReversed`. The screen feeds it in and
-  /// rebuilds on `onCheckmarkSequenceChanged`; the header does not subscribe.
+  /// `HeaderView(context, prefs, midnightTimer)`'s `prefs`.
+  ///
+  /// `HeaderView` is a `Preferences.Listener` in its own right: it registers in
+  /// `onAttachedToWindow`, and `onCheckmarkSequenceChanged()` calls
+  /// `updateScrollDirection()` and `postInvalidate()`. That is what keeps the
+  /// strip in step with `ButtonPanelView`, which re-inflates its buttons on the
+  /// very same notification — the label over a button has to go on being that
+  /// button's date, and neither half may wait for an unrelated rebuild
+  /// (`audit3.flipping-reverse-order-of-days-leaves#1`).
+  ///
+  /// When it is null the header falls back to [isCheckmarkSequenceReversed],
+  /// which is the value a caller with no preferences to hand passes in.
+  final core.Preferences? preferences;
+
+  /// `Preferences.isCheckmarkSequenceReversed`, for a caller that has no
+  /// [preferences] to subscribe to — a golden test, or a preview. Ignored when
+  /// [preferences] is given: the preference itself is then the only source.
   final bool isCheckmarkSequenceReversed;
 
   /// Defaults to `max(60 - buttonCount, 0)`, the value
@@ -97,6 +116,11 @@ class ListHeader extends StatefulWidget {
 
   int get effectiveMaxDataOffset =>
       maxDataOffset ?? math.max(maxCheckmarkCount - buttonCount, 0);
+
+  /// The column direction actually in force: the preference when there is one
+  /// to read, the constructor argument otherwise.
+  bool get isReversed =>
+      preferences?.isCheckmarkSequenceReversed ?? isCheckmarkSequenceReversed;
 
   @override
   State<ListHeader> createState() => _ListHeaderState();
@@ -161,24 +185,53 @@ class _ListHeaderState extends State<ListHeader>
     });
   }
 
+  /// `HeaderView` itself, as a `Preferences.Listener`.
+  late final _HeaderPreferencesListener _preferencesListener;
+
   @override
   void initState() {
     super.initState();
     _fling = AnimationController.unbounded(vsync: this)
       ..addListener(_onFlingTick);
+    // `HeaderView.onAttachedToWindow`: `updateScrollDirection()` — which the
+    // next build does — followed by `prefs.addListener(this)`.
+    _preferencesListener =
+        _HeaderPreferencesListener(_onCheckmarkSequenceChanged);
+    widget.preferences?.addListener(_preferencesListener);
   }
 
   @override
   void dispose() {
+    // `HeaderView.onDetachedFromWindow`: `prefs.removeListener(this)`.
+    widget.preferences?.removeListener(_preferencesListener);
     _fling.dispose();
     _scrollXState.dispose();
     _reportedOffsetState.dispose();
     super.dispose();
   }
 
+  /// `HeaderView.onCheckmarkSequenceChanged()`:
+  ///
+  /// ```kotlin
+  /// override fun onCheckmarkSequenceChanged() {
+  ///     updateScrollDirection()
+  ///     postInvalidate()
+  /// }
+  /// ```
+  ///
+  /// Both halves are this rebuild: the direction is recomputed in [build] and
+  /// the strip is redrawn from it.
+  void _onCheckmarkSequenceChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void didUpdateWidget(ListHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.preferences, widget.preferences)) {
+      oldWidget.preferences?.removeListener(_preferencesListener);
+      widget.preferences?.addListener(_preferencesListener);
+    }
     // Follow the offset the parent decided on. When it accepted the value this
     // drag reported, the remainder is kept so a slow drag stays continuous;
     // when it set something else (a reset, or a clamp after the column count
@@ -211,7 +264,7 @@ class _ListHeaderState extends State<ListHeader>
   /// `list-habits.header-dates#11`).
   int _scrollDirectionOf(bool isRtl) {
     var direction = -1;
-    if (widget.isCheckmarkSequenceReversed) direction *= -1;
+    if (widget.isReversed) direction *= -1;
     if (isRtl) direction *= -1;
     return direction;
   }
@@ -282,7 +335,7 @@ class _ListHeaderState extends State<ListHeader>
     required bool isRtl,
   }) {
     var view = header;
-    if (widget.isCheckmarkSequenceReversed) {
+    if (widget.isReversed) {
       view = MirroredView(
         view,
         stripWidth: widget.buttonCount * theme.checkmarkButtonSize,
@@ -333,6 +386,17 @@ class _ListHeaderState extends State<ListHeader>
       ),
     );
   }
+}
+
+/// `Preferences.Listener`, narrowed to the one callback `HeaderView`
+/// overrides.
+class _HeaderPreferencesListener extends core.PreferencesListener {
+  _HeaderPreferencesListener(this._onChanged);
+
+  final VoidCallback _onChanged;
+
+  @override
+  void onCheckmarkSequenceChanged() => _onChanged();
 }
 
 /// The strip itself: the core [HabitListHeader]'s drawing with
@@ -588,6 +652,17 @@ class IntlLocalDateFormatter implements core.LocalDateFormatter {
   late final intl.DateFormat _shortMonth = intl.DateFormat.MMM(localeName);
   late final intl.DateFormat _longMonth = intl.DateFormat.MMMM(localeName);
 
+  /// `DateFormat.getDateInstance(DateFormat.MEDIUM, locale)`.
+  ///
+  /// `DateSymbols.DATEFORMATS` is CLDR's `[full, long, medium, short]` pattern
+  /// list, so index 2 is exactly Java's `MEDIUM` — "Jan 25, 2015" for en,
+  /// "25.01.2015" for de, "2015年1月25日" for zh
+  /// (`audit3.streak-chart-date-labels-are-hard#1`).
+  late final intl.DateFormat _mediumDate = intl.DateFormat(
+    _longMonth.dateSymbols.DATEFORMATS[2],
+    localeName,
+  );
+
   static DateTime _toDateTime(core.LocalDate date) =>
       DateTime.utc(date.year, date.month, date.day);
 
@@ -608,11 +683,31 @@ class IntlLocalDateFormatter implements core.LocalDateFormatter {
   String longWeekdayNameOf(core.DayOfWeek weekday) =>
       _longWeekday.format(_toDateTime(_dateWith(weekday)));
 
+  /// `JavaLocalDateFormatter.shortMonthName` asks the calendar for BOTH
+  /// display names and returns the LONG one when it is three characters or
+  /// shorter, because "for some locales, such as Japan, SHORT name is
+  /// exceedingly short". It changes the answer for zh-CN, whose LONG January
+  /// is 一月 and whose SHORT one is 1月
+  /// (`audit3.shortmonthname-drops-the-use-the-long#1`).
   @override
-  String shortMonthName(core.LocalDate date) =>
-      _shortMonth.format(_toDateTime(date));
+  String shortMonthName(core.LocalDate date) {
+    final dateTime = _toDateTime(date);
+    final long = _longMonth.format(dateTime);
+    if (long.length <= 3) return long;
+    return _shortMonth.format(dateTime);
+  }
 
   @override
   String longMonthName(core.LocalDate date) =>
       _longMonth.format(_toDateTime(date));
+
+  /// Port of `JavaLocalDateFormatter.longFormat`, the one method of that class
+  /// that is not on the `LocalDateFormatter` interface: the locale's medium
+  /// date, which is what flanks a bar on the streak chart.
+  ///
+  /// Kotlin forces the formatter's time zone to UTC so that a `LocalDate` is
+  /// never re-read as a local instant and printed as the day before;
+  /// [_toDateTime] builds a UTC midnight for the same reason.
+  String longFormat(core.LocalDate date) =>
+      _mediumDate.format(_toDateTime(date));
 }

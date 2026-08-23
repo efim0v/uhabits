@@ -32,6 +32,7 @@ import '../platform/flutter_alarm_scheduler.dart';
 import '../platform/flutter_files.dart';
 import '../platform/flutter_notification_tray.dart';
 import '../platform/home_widget_bridge.dart';
+import 'app_preferences.dart';
 import 'intent_router.dart';
 import 'reminder_link.dart';
 import 'widget_sync.dart';
@@ -91,7 +92,15 @@ class AppScope {
 
   final SQLiteHabitList habitList;
 
-  final Preferences preferences;
+  /// The application's preferences.
+  ///
+  /// [AppPreferences] rather than plain [Preferences] because a Flutter app
+  /// has no activity to recreate: the models that read a preference are built
+  /// once per launch, so a write has to be announced to them
+  /// (`audit3.toggling-use-pure-black-background-in#1`). Everything that reads
+  /// a preference keeps taking a [Preferences]; only the handful of objects
+  /// that must repaint when one changes ask for the callback.
+  final AppPreferences preferences;
 
   /// The backing store, kept because the settings screen writes a handful of
   /// keys core has no setter for (`pref_first_weekday` and the inert sync keys).
@@ -132,7 +141,7 @@ class AppScope {
   ///
   /// This is `HabitsApplication.onCreate`: call it once, before `runApp`.
   static Future<AppScope> boot() async {
-    final appDatabase = await AppDatabase.open();
+    final appDatabase = await _initializeDatabase();
     // Settings live in a JSON file next to the database, the way the Android
     // app keeps them in SharedPreferences. Without this they would reset on
     // every launch.
@@ -145,6 +154,49 @@ class AppScope {
     await scope._resolveBugReporter();
     await scope.startPlatformServices();
     return scope;
+  }
+
+  /// Step (2) of `HabitsApplication.onCreate`, with the `try`/`catch` that is
+  /// the difference between a bad file and a permanent crash loop:
+  ///
+  /// ```kotlin
+  /// try {
+  ///     DatabaseUtils.initializeDatabase(this)
+  /// } catch (e: UnsupportedDatabaseVersionException) {
+  ///     val db = DatabaseUtils.getDatabaseFile(this)
+  ///     db.renameTo(File(db.absolutePath + ".invalid"))
+  ///     DatabaseUtils.initializeDatabase(this)
+  /// }
+  /// ```
+  ///
+  /// `boot()` is awaited by `main()` *before* `runApp`, so anything that
+  /// escapes here is a window with no widget tree at all — no message, no
+  /// retry, nothing the user can do but reinstall and lose everything. The
+  /// file is set aside instead of deleted, so the data is still there to be
+  /// recovered (`platform-glue.app-startup-order#3`,
+  /// `persistence.android-opener#7`).
+  ///
+  /// The retry is deliberately not itself guarded: the second call opens a
+  /// path that no longer exists, which is the fresh-install path, and a
+  /// failure there is a broken device rather than a bad file.
+  static Future<AppDatabase> _initializeDatabase() async {
+    try {
+      return await AppDatabase.open();
+    } on UnsupportedDatabaseVersionException catch (error) {
+      final file = await AppDatabase.resolveFile();
+      // `File.renameTo` overwrites an existing target on POSIX, so a second
+      // unusable file replaces the first `.invalid` rather than failing.
+      if (file.existsSync()) {
+        file.renameSync('${file.path}.invalid');
+      }
+      final database = await AppDatabase.open();
+      // After the reopen, so that the logger this writes to is the one the
+      // fresh scope will keep using.
+      BugReportLogging(StandardLogging(), BugReportLog.instance)
+          .getLogger('HabitsApplication')
+          .error('Unusable database set aside as ${file.path}.invalid: $error');
+      return database;
+    }
   }
 
   /// Points [bugReporter] at `ContextCompat.getExternalFilesDirs(context,
@@ -398,7 +450,11 @@ class AppScope {
     final modelFactory = SQLModelFactory(database);
     final habitList = modelFactory.buildHabitList();
     final storage = preferencesStorage ?? MemoryStorage();
-    final preferences = Preferences(storage);
+    // `SharedPreferencesStorage`, whose `init` block registers it as a
+    // `SharedPreferences.OnSharedPreferenceChangeListener`: every write is
+    // announced, and whoever has to repaint because of one subscribes here
+    // (lib/state/app_preferences.dart).
+    final preferences = AppPreferences(storage);
 
     // HabitsApplication.onCreate, in order. Nothing above this line touches a
     // habit, because recompute(), the scores and every matcher read getToday().

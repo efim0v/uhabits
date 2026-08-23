@@ -15,4 +15,10 @@
     <string name="app_name">Śledzenie Nawyków Loop</string>
     <string name="main_activity_title">Nawyki</string>
     <string name="habit_not_found">Nawyk usunięty/nie znaleziony</string>
+    <string name="checkmark">Znacznik</string>
+    <string name="history">Historia</string>
+    <string name="score">Wynik</string>
+    <string name="streaks">Serie</string>
+    <string name="frequency">Częstotliwość</string>
+    <string name="target">Cel</string>
 </resources>

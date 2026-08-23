@@ -14,4 +14,6 @@
 <resources>
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">Սովորություններ</string>
+    <string name="history">Պատմություն</string>
+    <string name="frequency">Հաճախություն</string>
 </resources>

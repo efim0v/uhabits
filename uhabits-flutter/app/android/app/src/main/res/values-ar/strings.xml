@@ -15,4 +15,10 @@
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">عادات</string>
     <string name="habit_not_found">العادة حذفت/لم يتم العثور عليها</string>
+    <string name="checkmark">علامة الاختيار</string>
+    <string name="history">السجل</string>
+    <string name="score">النقاط</string>
+    <string name="streaks">الإنجازات</string>
+    <string name="frequency">تردد</string>
+    <string name="target">الهدف</string>
 </resources>

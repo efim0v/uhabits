@@ -15,4 +15,10 @@
     <string name="app_name">„Loop“ — praćenje navika</string>
     <string name="main_activity_title">Navike</string>
     <string name="habit_not_found">Navika obrisana / ne postoji</string>
+    <string name="checkmark">Kvačica</string>
+    <string name="history">Istorija</string>
+    <string name="score">snaga</string>
+    <string name="streaks">Rekordi</string>
+    <string name="frequency">Učestalost</string>
+    <string name="target">Cilj</string>
 </resources>
