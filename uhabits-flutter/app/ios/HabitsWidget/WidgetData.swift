@@ -230,6 +230,20 @@ struct WidgetHabit: Decodable, Identifiable {
     /// YES_AUTO days are already filled in.
     let entries: [Int]
 
+    /// One flag per published day, in the same newest-first order as
+    /// [entries]: true where that entry carries a note.
+    ///
+    /// `HistoryCardPresenter.buildState` computes it as
+    /// `entries.map { it.notes != "" }` and `HistoryWidget.refreshData` hands
+    /// the result to `HistoryChart.notesIndicators`, which marks the day with a
+    /// dot (`audit6.history-home-screen-widget-never-draws#1`). The note text
+    /// never crosses: a widget draws a dot, not prose.
+    ///
+    /// Optional, like [score] and [scores]: a widget outlives an app update for
+    /// as long as it stays on the home screen, and a document written before
+    /// the field existed simply has no dots to draw.
+    let notesIndicators: [Bool]?
+
     /// `habit.scores[today].value`, the ring percentage the Checkmark widget
     /// needs (`widgets.checkmark#2`).
     ///

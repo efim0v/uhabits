@@ -65,6 +65,7 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 ///   "version": 1,
 ///   "widgetId": 1,
 ///   "today": "2015-01-26",
+///   "midnightDelayHours": 0,
 ///   "widgetOpacity": 255,
 ///   "firstWeekday": 0,
 ///   "habits": [{
@@ -73,6 +74,7 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 ///     "target": 2.0, "targetType": "AT_LEAST",
 ///     "value": 500,
 ///     "entries": [500, 1500, ... 60 values, newest first ...],
+///     "notesIndicators": [false, true, ... one per entry ...],
 ///     "score": 0.63,
 ///     "scores": [0.63, 0.41, ... newest bucket first ...],
 ///     "bucketSize": 7,
@@ -89,6 +91,11 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 /// read from `computedEntries` — not `originalEntries`, so the YES_AUTO days a
 /// frequency implies are already filled in, the way every chart sees them.
 /// Numerical values are in thousandths, as everywhere else in the model.
+///
+/// `notesIndicators` is `entries` seen from the other side: one boolean per
+/// published day saying whether that entry carries a note, which is what the
+/// History grid marks with a dot (`widgets.history#4`,
+/// `audit6.history-home-screen-widget-never-draws#1`).
 ///
 /// ## Why the derived fields are here rather than in the widget
 ///
@@ -218,6 +225,19 @@ class HomeWidgetBridge {
   /// charts already carry.
   int get firstWeekday =>
       (_preferences?.firstWeekday ?? DayOfWeek.sunday).daysSinceSunday;
+
+  /// `Preferences.midnightDelayHours` — 3 while the "new day starts at 3am"
+  /// row is on, 0 otherwise.
+  ///
+  /// The one input of `computeToday(midnightDelayHours, 0)` that is not the
+  /// system clock, and therefore the one thing a widget host needs in order to
+  /// work out that the snapshot it is holding was built for an earlier day
+  /// (`audit6.home-screen-widgets-go-stale-at#1`). Upstream the provider simply
+  /// called `getToday()` — it ran inside the app, with `Preferences` at hand.
+  ///
+  /// Zero when no preferences were supplied, which is the preference's own
+  /// default: a day that turns at midnight.
+  int get midnightDelayHours => _preferences?.midnightDelayHours ?? 0;
 
   /// `Preferences.scoreCardSpinnerPosition` — the bucket the user last chose on
   /// the detail screen, which `widgets.score#3` says the Score widget follows.
@@ -364,6 +384,12 @@ class HomeWidgetBridge {
       'version': schemaVersion,
       'widgetId': widgetId,
       'today': formatDate(today),
+      // `audit6.home-screen-widgets-go-stale-at#1`: how the day above was
+      // computed, so the host that redraws this document an hour — or a week —
+      // later can work out whether it has gone stale and by how many days.
+      // Upstream needed nothing of the sort: the provider ran inside the app
+      // and called `getToday()` itself on every broadcast.
+      'midnightDelayHours': midnightDelayHours,
       // `settings.preferences.widget-opacity#5`: the alpha the card's
       // background paint is drawn at, unless the widget is a page of a stack.
       'widgetOpacity': widgetOpacity,
@@ -492,6 +518,18 @@ class HomeWidgetBridge {
       'isArchived': habit.isArchived,
       'value': entries.isEmpty ? Entry.unknown : entries.first.value,
       'entries': <int>[for (final Entry entry in entries) entry.value],
+      // `audit6.history-home-screen-widget-never-draws#1`: the note dot on the
+      // History grid. `HistoryCardPresenter.buildState` computes it as
+      // `entries.map { it.notes != "" }` and `HistoryWidget.refreshData`
+      // assigns the result to `historyChart.notesIndicators`; a widget process
+      // cannot see `Entry.notes`, and this array — one flag per published day,
+      // in the same newest-first order as `entries` — is the whole of what it
+      // needs. The text itself stays behind: the chart draws a dot, never a
+      // note, and shipping a user's prose to the launcher's process buys
+      // nothing.
+      'notesIndicators': <bool>[
+        for (final Entry entry in entries) entry.notes != '',
+      ],
       // `widgets.checkmark#2`: the ring around the glyph is
       // `habit.scores[today].value`.
       'score': habit.scores[today].value,

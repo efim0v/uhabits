@@ -7100,3 +7100,62 @@ green while reminders did not work at all.
 - **Severity:** cosmetic
 
 1. `audit5.habit-list-re-sort-is-unstable#1` — In the Kotlin app: `kotlin.collections.MutableList.sortWith` delegates to `java.util.List.sort`, which is TimSort and is contractually stable. When the composed comparator (primary order, then secondary order) returns 0 for two habits, their previous relative order in the backing list is preserved. Because `resort()` runs on every `add`, every `update`, every `CreateRepetitionCommand` and every filter/order change, a tied pair keeps a fixed, non-jumping position for the whole session.
+
+## Domain: Sixth audit pass (2026-08-24)
+
+Five findings, none of them a blocker or a major — the first pass to produce neither. The
+sequence over six adversarial passes is 13, 14, 18, 20, 10, 5, and the severity fell with it.
+
+Two of these are again a test not asserting what it claims: `list-habits.startup-lifecycle#4`
+spells out "and dismisses the currently visible dialog", and the test covering it waves that
+clause away in a comment while asserting only the cache half.
+
+#### audit6.history-home-screen-widget-never-draws
+
+- [x] `audit6.history-home-screen-widget-never-draws` — History home-screen widget never draws the notes indicator dot; per-entry notes are not published to either widget host
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/HistoryWidget.kt (`HistoryWidget.refreshData`, which copies `model.notesIndicators` onto the chart) together with uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/HistoryChart.kt (`drawSquare`, the `hasNotes` branch) and His`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart (`_habitDocument`, which publishes `'entries': [entry.value …]` and no notes at all) and /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/views/His`
+- **Severity:** minor
+
+1. `audit6.history-home-screen-widget-never-draws#1` — In the Kotlin app: In the Kotlin app, `HistoryWidget.refreshData` builds the card state with `HistoryCardPresenter.buildState(...)` and assigns `historyChart.notesIndicators = model.notesIndicators`. `HistoryChart.drawSquare` then paints a filled circle of radius `width/12` at `(x + width - width/5, y + width/5)` on every calendar square whose entry has a non-empty note — `theme.lowContrastTextColor` over ON/GREY squares, the habit's palette colour otherwise. A user who attaches notes to a day sees that day marked on the home-screen History widget exactly as it is marked on the detail screen's history card.
+
+#### audit6.dark-and-pure-black-themes-never
+
+- [x] `audit6.dark-and-pure-black-themes-never` — Dark and Pure Black themes never repaint the Android system navigation bar (and leave the light theme's #363636 stuck there)
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/AndroidThemeSwitcher.kt — applyDarkTheme() and applyPureBlackTheme()`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/theme/app_theme.dart — systemUiOverlayStyleFor(); consumed by /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/state/theme_model.dart — _install() / applyDarkTheme() / applyPureBlackTheme()`
+- **Severity:** minor
+
+1. `audit6.dark-and-pure-black-themes-never#1` — In the Kotlin app: applyDarkTheme() sets currentTheme = DarkTheme(), applies @style/AppBaseThemeDark AND runs `(context as Activity).window.navigationBarColor = ContextCompat.getColor(context, R.color.grey_900)` (#212121). applyPureBlackTheme() does the same with R.color.black (#000000). The light theme is the only one that gets its navigation-bar colour from a style attribute (AppBaseTheme's android:navigationBarColor = ?attr/colorPrimary = #363636); the two dark themes set it imperatively, every time a theme is applied. So on Android the gesture/navigation bar is #363636 in Light, #212121 in Dark and #000000 in Pure Black, and it changes the moment the user toggles the theme. These are exactly rules `settings.theme.theme-modes#8` and `#9`.
+
+#### audit6.home-screen-widgets-go-stale-at
+
+- [x] `audit6.home-screen-widgets-go-stale-at` — Home-screen widgets go stale at midnight: the hourly `updatePeriodMillis` refresh the widget XML declares has nothing fresh to draw
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/xml/widget_checkmark_info.xml (and widget_history_info.xml, widget_score_info.xml, widget_streak_info.xml, widget_frequency_info.xml, widget_target_info.xml) — `android:updatePeriodMillis="3600000"`; served by uhabits-android/src/main/java/org/isoron/uhabits/widgets/Base`
+- **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/BaseWidgetProvider.kt (`update` → `WidgetData.readWidget`) and uhabits-flutter/app/lib/state/widget_sync.dart (`TimerWidgetUpdateAlarm`)`
+- **Severity:** major
+
+1. `audit6.home-screen-widgets-go-stale-at#1` — In the Kotlin app: Every appwidget-provider declares `updatePeriodMillis="3600000"`, so the system broadcasts APPWIDGET_UPDATE about once an hour. That broadcast starts the app process if it is dead, and `BaseWidgetProvider.onUpdate` then resolves `habitList` and `getToday()` live out of the application component and redraws from the database. Independently, `WidgetUpdater.scheduleStartDayWidgetUpdate()` arms an `AlarmManager` RTC broadcast to `WidgetReceiver` at the next logical midnight, which calls `setToday(...)` and redraws. Between the two, a Checkmark widget left on the home screen rolls over to the new day, and shows the new day as unchecked, without the user ever opening the app.
+
+#### audit6.selection-action-bar-promotes-edit-and
+
+- [x] `audit6.selection-action-bar-promotes-edit-and` — Selection action bar promotes Edit and Change color to toolbar icons, though the menu resource gives them no `showAsAction`
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/menu/list_habits_selection.xml — items `@+id/action_edit_habit` and `@+id/action_color`; consumed by uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsSelectionMenu.kt (`onCreateActionMode` inflates it unchanged)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_habits_selection_menu.dart — `build()`, the two `IconButton`s in `actions``
+- **Severity:** cosmetic
+
+1. `audit6.selection-action-bar-promotes-edit-and#1` — In the Kotlin app: Neither `action_edit_habit` nor `action_color` declares `app:showAsAction` (the other four items declare it explicitly as `never`). `MenuInflater`'s default for the attribute is `SHOW_AS_ACTION_NEVER`, so the contextual action bar shown while habits are selected carries the selected count as its title and a single overflow button; Edit and Change color sit inside that overflow with Archive, Unarchive, Delete and Reminder. The `android:icon` on the two items only decorates the overflow row.
+
+#### audit6.an-open-entry-popup-or-colour
+
+- [x] `audit6.an-open-entry-popup-or-colour` — An open entry popup (or colour picker / delete confirmation) on the habit list is not dismissed when the app goes to the background
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt — `onPause()` calls `dismissCurrentDialog()` (uhabits-android/src/main/java/org/isoron/uhabits/utils/DialogUtils.kt), and every popup this screen opens is shown through `dismissCurrentAndShow` in ListHabits`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart — `_HabitListViewState.didChangeAppLifecycleState` (the `state != AppLifecycleState.resumed` branch, ~line 300) does only `_toasts.onDetached(); _model.detach();`, and `_showCheckmarkPopup` (~line 992), `
+- **Severity:** minor
+
+1. `audit6.an-open-entry-popup-or-colour#1` — In the Kotlin app: Kotlin app: with a check-mark or number popup open on the main habit list (or the colour picker / delete confirmation from the selection menu), pressing Home, opening recents, or taking a call runs `ListHabitsActivity.onPause`, which calls `dismissCurrentDialog()`. The popup is torn down there and then — which also runs `CheckmarkDialog.onDismiss` / `NumberDialog.onDismiss`, so notes typed but not saved are committed at that moment via `onToggle(originalValue, currentNotes)`. Returning to the app shows a plain habit list.

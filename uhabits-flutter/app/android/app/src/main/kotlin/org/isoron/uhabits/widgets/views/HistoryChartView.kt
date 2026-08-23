@@ -56,6 +56,17 @@ class HistoryChartView(context: Context) : View(context) {
     var defaultSquare: Square = Square.OFF
 
     /**
+     * `HistoryChart.notesIndicators`, newest first, parallel to [series]: true
+     * where that day's entry carries a note
+     * (`audit6.history-home-screen-widget-never-draws#1`).
+     *
+     * Empty until the widget assigns it — a view inflated with no document
+     * behind it draws no dots — which is also what a document written before
+     * the field existed leaves it at.
+     */
+    var notesIndicators: List<Boolean> = emptyList()
+
+    /**
      * `pref_first_weekday`, as `daysSinceSunday`.
      *
      * Not in the published document, so it stays at Sunday — the preference's
@@ -172,6 +183,7 @@ class HistoryChartView(context: Context) : View(context) {
         offset: Int
     ) {
         val value = if (offset >= series.size) defaultSquare else series[offset]
+        val hasNotes = if (offset >= notesIndicators.size) false else notesIndicators[offset]
         val color = WidgetTheme.color(paletteColor)
         val squareColor = when (value) {
             Square.ON -> color
@@ -202,6 +214,23 @@ class HistoryChartView(context: Context) : View(context) {
         canvas.setColor(WidgetTheme.HIGH_CONTRAST_TEXT_COLOR)
         canvas.setTextAlign(Paint.Align.CENTER)
         canvas.drawText(date.day.toString(), x + w / 2, y + w / 2)
+
+        // `HistoryChart.drawSquare`'s last block: a dot in the square's
+        // top-right corner for a day the user attached a note to
+        // (`audit6.history-home-screen-widget-never-draws#1`). The low-contrast
+        // colour is the readable one over a filled or grey square; everything
+        // else — an empty, dimmed or hatched day — takes the habit's own
+        // colour. Both offsets are measured in the square's *width*, as
+        // upstream measures them, so the dot does not move if a square ever
+        // stops being square.
+        if (hasNotes) {
+            val circleColor = when (value) {
+                Square.ON, Square.GREY -> WidgetTheme.LOW_CONTRAST_TEXT_COLOR
+                else -> color
+            }
+            canvas.setColor(circleColor)
+            canvas.fillCircle(x + w - w / 5, y + w / 5, w / 12)
+        }
     }
 
     private fun blendWithTransparent(color: Int): Int =

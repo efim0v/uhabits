@@ -21,9 +21,13 @@ import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/habit_list_model.dart';
 import 'package:uhabits/state/reminder_permission_gate.dart';
 import 'package:uhabits/ui/common/dialogs/checkmark_dialog.dart';
+import 'package:uhabits/ui/common/dialogs/color_picker_dialog.dart';
+import 'package:uhabits/ui/common/dialogs/confirm_delete_dialog.dart';
+import 'package:uhabits/ui/common/dialogs/current_dialog.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/list/list_habits_root_view.dart';
+import 'package:uhabits/ui/habits/list/list_habits_selection_menu.dart';
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 // `Intent` collides with the Flutter Actions one.
@@ -298,6 +302,163 @@ void main() {
           reason: 'list-habits.startup-lifecycle#9');
       expect(FlutterError.onError, isNotNull,
           reason: 'list-habits.startup-lifecycle#9');
+    });
+  });
+
+  // =======================================================================
+  // audit6.an-open-entry-popup-or-colour
+  //
+  // `ListHabitsActivity.onPause` ends with `dismissCurrentDialog()`, and every
+  // popup this screen opens goes up through `dismissCurrentAndShow`, so the
+  // slot always holds the visible one. Pressing Home therefore tears the popup
+  // down — and tearing a `CheckmarkDialog` down runs its `onDismiss`, which
+  // commits notes typed but never saved via `onToggle(originalValue,
+  // currentNotes)`. This is the second half of `list-habits.startup-lifecycle#4`.
+  // =======================================================================
+
+  group('audit6.an-open-entry-popup-or-colour', () {
+    // The slot is process-wide, and a Dart test process is not torn down
+    // between cases.
+    tearDown(resetCurrentDialog);
+
+    /// The states the engine sends on the way out of the foreground, in the
+    /// order the framework insists on — `ListHabitsActivity.onPause`.
+    ///
+    /// Nothing is pumped: a backgrounded app draws no frames, so the route
+    /// `dismissCurrentDialog()` popped is off the history but still finishing
+    /// its exit transition. Whatever the dismissal *did* — committing the
+    /// notes — has already happened, and is asserted right here; that the
+    /// popup is gone is asserted after [returnToForeground], which is where
+    /// the user finds out.
+    void goToBackground(WidgetTester tester) {
+      for (final AppLifecycleState state in <AppLifecycleState>[
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+    }
+
+    /// …and the way back in — `ListHabitsActivity.onResume`.
+    Future<void> returnToForeground(WidgetTester tester) async {
+      for (final AppLifecycleState state in <AppLifecycleState>[
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> selectRow(WidgetTester tester, String name) async {
+      await tester.longPress(find.text(name));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> tapSelectionItem(WidgetTester tester, String id) async {
+      await tester.tap(
+        find.byKey(const ValueKey<String>('listHabitsSelection.overflowMenu')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ListHabitsSelectionMenuItems.keyOf(id)));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('#1 an open entry popup is dismissed, and the notes typed '
+        'into it are committed with the original value', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      await tester.pumpWidget(wrap(scope));
+      await tester.pumpAndSettle();
+
+      final today = getToday();
+      final originalValue = habit.originalEntries.get(today).value;
+      await tester.tap(find.byKey(EntryPanel.buttonKey(today)));
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckmarkDialog), findsOneWidget,
+          reason: 'audit6.an-open-entry-popup-or-colour#1');
+
+      // Typed, but no button pressed: upstream this text lives only in the
+      // dialog's EditText until `onDismiss` reads it back.
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('checkmark_notes')),
+        'ran 5k',
+      );
+      await tester.pump();
+      expect(habit.originalEntries.get(today).notes, isEmpty,
+          reason: 'audit6.an-open-entry-popup-or-colour#1 — nothing is saved '
+              'while the popup is still up');
+
+      // …the user presses Home. The popup is torn down there and then, which
+      // is what commits the notes.
+      goToBackground(tester);
+      // No frame — a backgrounded app draws none — just the microtasks the
+      // popped route's future resumes, which is where `onDismiss` runs.
+      await tester.idle();
+
+      expect(habit.originalEntries.get(today).notes, 'ran 5k',
+          reason: 'audit6.an-open-entry-popup-or-colour#1 — the teardown runs '
+              '`CheckmarkDialog.onDismiss`, which commits the notes via '
+              '`onToggle(originalValue, currentNotes)`');
+      expect(habit.originalEntries.get(today).value, originalValue,
+          reason: 'audit6.an-open-entry-popup-or-colour#1 — with the value the '
+              'popup opened on, not a toggled one');
+
+      await returnToForeground(tester);
+
+      expect(find.byType(CheckmarkDialog), findsNothing,
+          reason: 'audit6.an-open-entry-popup-or-colour#1 — `onPause` calls '
+              '`dismissCurrentDialog()`, so returning to the app shows a plain '
+              'habit list');
+    });
+
+    testWidgets('#1 the colour picker from the selection menu is dismissed '
+        'without picking anything', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      final color = habit.color;
+      await tester.pumpWidget(wrap(scope));
+      await tester.pumpAndSettle();
+
+      await selectRow(tester, 'Meditate');
+      await tapSelectionItem(tester, ListHabitsSelectionMenuItems.color);
+      expect(find.byType(ColorPickerDialog), findsOneWidget,
+          reason: 'audit6.an-open-entry-popup-or-colour#1');
+
+      goToBackground(tester);
+      await returnToForeground(tester);
+
+      expect(find.byType(ColorPickerDialog), findsNothing,
+          reason: 'audit6.an-open-entry-popup-or-colour#1 — the picker is '
+              'shown through `dismissCurrentAndShow`, so `onPause` tears it '
+              'down');
+      expect(habit.color, color,
+          reason: 'audit6.an-open-entry-popup-or-colour#1 — a dismissal runs '
+              'no command (`list-habits.selection-menu-actions#15`)');
+    });
+
+    testWidgets('#1 the delete confirmation is dismissed and deletes nothing',
+        (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await tester.pumpWidget(wrap(scope));
+      await tester.pumpAndSettle();
+
+      await selectRow(tester, 'Meditate');
+      await tapSelectionItem(tester, ListHabitsSelectionMenuItems.delete);
+      expect(find.byType(ConfirmDeleteDialog), findsOneWidget,
+          reason: 'audit6.an-open-entry-popup-or-colour#1');
+
+      goToBackground(tester);
+      await returnToForeground(tester);
+
+      expect(find.byType(ConfirmDeleteDialog), findsNothing,
+          reason: 'audit6.an-open-entry-popup-or-colour#1');
+      expect(scope.habitList.size(), 1,
+          reason: 'audit6.an-open-entry-popup-or-colour#1 — cancelling the '
+              'dialog runs nothing (`list-habits.selection-menu-actions#16`)');
     });
   });
 }

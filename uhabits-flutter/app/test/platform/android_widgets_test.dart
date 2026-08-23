@@ -2254,17 +2254,41 @@ void main() {
         contains('document.singleHabit(), document.today'),
         reason: 'widgets.checkmark#5: the provider passes the document\'s today',
       );
-      // Nothing in the widget package asks the system what day it is.
-      for (final String file in Directory('${androidMain.path}/kotlin/org/'
+      // No *widget* asks the system what day it is: every one of them is
+      // handed `document.today`. The one exception is the document reader
+      // itself, which has to know what time it is now in order to notice that
+      // the snapshot it is holding was built for an earlier day
+      // (`audit6.home-screen-widgets-go-stale-at#1`) — and which answers with
+      // `getToday()`, not with the device's raw date: the wall clock less the
+      // midnight-delay offset the document publishes. That is the same day the
+      // app would compute, which is what this rule is about; a widget that
+      // could not do it went on drawing yesterday for as long as the app
+      // stayed closed.
+      for (final File source in Directory('${androidMain.path}/kotlin/org/'
               'isoron/uhabits/widgets')
           .listSync(recursive: true)
-          .whereType<File>()
-          .map((File f) => f.readAsStringSync())) {
+          .whereType<File>()) {
+        final String file = source.readAsStringSync();
         expect(file, isNot(contains('Calendar.getInstance()')),
             reason: 'widgets.checkmark#5: no widget reads the system date');
+        if (source.path.endsWith('WidgetData.kt')) continue;
         expect(file, isNot(contains('System.currentTimeMillis()')),
             reason: 'widgets.checkmark#5: nor the system clock');
       }
+      expect(
+        squashed(widgetKotlin('WidgetData.kt')),
+        contains('val adjusted = local - hourOffset * 60L * 60L * 1000L'),
+        reason: 'widgets.checkmark#5: the single clock read in the package is '
+            '`LocalDate.today(hourOffset)`, and it subtracts the published '
+            'midnight delay — so it answers the app-wide today rather than the '
+            'device\'s.',
+      );
+      expect(
+        widget,
+        isNot(contains('LocalDate.today(')),
+        reason: 'widgets.checkmark#5: …and the widget itself still takes its '
+            'day from the document it was constructed with, never from a clock.',
+      );
     });
 
     test('a numerical Checkmark tap opens the value picker for the document\'s '

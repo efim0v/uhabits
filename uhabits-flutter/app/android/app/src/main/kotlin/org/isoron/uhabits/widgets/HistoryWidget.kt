@@ -72,6 +72,12 @@ class HistoryWidget(
                 this.firstWeekday = this@HistoryWidget.firstWeekday
                 paletteColor = habit.color
                 series = HistoryChartView.seriesOf(habit)
+                // `HistoryWidget.refreshData`'s third assignment upstream:
+                // `historyChart.notesIndicators = model.notesIndicators`. The
+                // presenter that computes it runs in the app's process, so the
+                // flags arrive on the document next to the entries they index
+                // (`audit6.history-home-screen-widget-never-draws#1`).
+                notesIndicators = habit.notesIndicators
                 defaultSquare = HistoryChartView.Square.OFF
             }
         }

@@ -162,6 +162,7 @@ struct HistoryChartView: View {
                     side: squareSize - squareSpacing,
                     day: DateNames.day(date),
                     square: square(offset: offset),
+                    hasNotes: hasNotes(offset: offset),
                     font: font
                 )
             }
@@ -192,6 +193,7 @@ struct HistoryChartView: View {
         side: CGFloat,
         day: Int,
         square: HistorySquare,
+        hasNotes: Bool,
         font: Font
     ) {
         let rect = CGRect(x: x, y: y, width: side, height: side)
@@ -235,9 +237,28 @@ struct HistoryChartView: View {
             anchor: .center
         )
 
-        // The notes indicator is deliberately absent: `Entry.notes` is not part
-        // of the published contract, so `notesIndicators` is empty and every
-        // square takes the `hasNotes == false` branch.
+        // `HistoryChart.drawSquare`'s last block: a day the user attached a
+        // note to is marked with a filled circle of radius `width / 12` in the
+        // square's top-right corner, `lowContrastTextColor` over a filled or
+        // grey square and the habit's own colour over every other
+        // (`audit6.history-home-screen-widget-never-draws#1`). `Canvas
+        // .fillCircle` takes a centre and a radius; SwiftUI wants the bounding
+        // box, which is that centre minus the radius on both axes.
+        if hasNotes {
+            let radius = side / 12
+            let circleColor = square == .on || square == .grey
+                ? WidgetTheme.lowContrastText
+                : WidgetTheme.rawColor(paletteIndex: habit.color)
+            context.fill(
+                Path(ellipseIn: CGRect(
+                    x: x + side - side / 5 - radius,
+                    y: y + side / 5 - radius,
+                    width: 2 * radius,
+                    height: 2 * radius
+                )),
+                with: .color(circleColor.color)
+            )
+        }
     }
 
     /// `HistoryCardPresenter.buildState`, evaluated one offset at a time
@@ -247,6 +268,14 @@ struct HistoryChartView: View {
     private func square(offset: Int) -> HistorySquare {
         guard offset < habit.entries.count else { return .off }
         return HistorySquare.of(value: habit.entries[offset], habit: habit)
+    }
+
+    /// `HistoryChart.drawSquare`'s `hasNotes`: false past the end of the
+    /// published flags, exactly as it is false past the end of the series.
+    private func hasNotes(offset: Int) -> Bool {
+        guard let indicators = habit.notesIndicators,
+              offset < indicators.count else { return false }
+        return indicators[offset]
     }
 
     // MARK: - Canvas helpers

@@ -59,7 +59,10 @@ Future<T?> dismissCurrentAndShow<T>(
   final NavigatorState navigator = Navigator.of(context, rootNavigator: true);
   late final VoidCallback token;
   token = () {
-    if (navigator.canPop()) navigator.pop();
+    // A navigator that is gone is the weak reference that has been collected:
+    // `currentDialog.get()` returns null and `dismissCurrentDialog()` is a
+    // no-op, rather than reaching into a torn-down tree.
+    if (navigator.mounted && navigator.canPop()) navigator.pop();
   };
   _currentDialog = token;
   final Future<T?> future = show();

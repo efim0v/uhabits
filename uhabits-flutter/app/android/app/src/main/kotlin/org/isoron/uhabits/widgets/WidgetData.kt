@@ -25,6 +25,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.GregorianCalendar
+import java.util.TimeZone
 
 /**
  * The launcher-side reader of the JSON `lib/platform/home_widget_bridge.dart`
@@ -115,6 +116,18 @@ object WidgetData {
      *   habit picker has not run yet, or the app has not started since.
      * @throws UnknownSchemaException when the document is from a future
      *   schema.
+     *
+     * The document is a snapshot of one logical day, and this is the single
+     * point every redraw passes through — `BaseWidgetProvider.update`, the
+     * resize callback and `StackWidgetService` alike — so it is also where a
+     * snapshot built for an earlier day becomes one for *this* day
+     * (`audit6.home-screen-widgets-go-stale-at#1`). Upstream a provider read
+     * the habit list and `getToday()` live out of the application component on
+     * every `ACTION_APPWIDGET_UPDATE`, so the hourly broadcast
+     * `updatePeriodMillis="3600000"` asks for was enough to roll a widget over
+     * at midnight with the app closed. Here the data arrives pre-computed, and
+     * without [WidgetDocument.rolledForwardTo] that broadcast would redraw
+     * yesterday's numbers hour after hour until the Flutter side next ran.
      */
     fun readWidget(context: Context, widgetId: Int): WidgetDocument {
         val raw = storage(context).getString(documentKey(widgetId), null)
@@ -122,7 +135,8 @@ object WidgetData {
         val json = JSONObject(raw)
         val version = json.optInt("version", -1)
         if (version != SCHEMA_VERSION) throw UnknownSchemaException(version)
-        return WidgetDocument.parse(json)
+        val document = WidgetDocument.parse(json)
+        return document.rolledForwardTo(LocalDate.today(document.midnightDelayHours))
     }
 }
 
@@ -188,8 +202,56 @@ class WidgetDocument(
      * Read defensively: a document written before the field existed carries no
      * key, and false is what the preference itself defaults to.
      */
-    val areQuestionMarksEnabled: Boolean = DEFAULT_QUESTION_MARKS_ENABLED
+    val areQuestionMarksEnabled: Boolean = DEFAULT_QUESTION_MARKS_ENABLED,
+    /**
+     * `Preferences.midnightDelayHours` — 3 while "new day starts at 3am" is on,
+     * 0 otherwise.
+     *
+     * The one input of `computeToday(midnightDelayHours, 0)` that is not the
+     * system clock, and so the one thing this side needs in order to tell
+     * whether [today] is still the day it is drawing on
+     * (`audit6.home-screen-widgets-go-stale-at#1`). A widget still never *asks*
+     * the system what day it is: it asks what day the app would say it is.
+     *
+     * Read defensively: a document written before the field existed carries no
+     * key, and 0 — a day that turns at midnight — is the preference's own
+     * default.
+     */
+    val midnightDelayHours: Int = DEFAULT_MIDNIGHT_DELAY_HOURS
 ) {
+    /**
+     * This document as it would have been published on [current], for a
+     * [current] later than [today] (`audit6.home-screen-widgets-go-stale-at#1`).
+     *
+     * The arrays are newest-first, so a day passing shifts every value one
+     * place down the array and the days nobody has answered arrive UNKNOWN —
+     * which is precisely what upstream's live redraw from the database would
+     * find, since the app has not run to record anything. `value` follows
+     * `entries[0]`, and the note dots follow their entries.
+     *
+     * What cannot be rolled is left alone and stays a day old until the app
+     * republishes: the score, the bucketed score series, the streaks, the
+     * weekday frequency and the target rows are all reductions over the
+     * habit's whole history, and there is no history in this process to
+     * reduce. Upstream recomputes them; here the rollover buys the day, the
+     * grid and the tick, which is what `widgets.checkmark#5` and the History
+     * grid draw from.
+     */
+    fun rolledForwardTo(current: LocalDate): WidgetDocument {
+        val days = current.daysSince(today)
+        if (days <= 0) return this
+        return WidgetDocument(
+            widgetId = widgetId,
+            today = current,
+            habits = habits.map { it.rolledForward(days) },
+            missingHabitIds = missingHabitIds,
+            widgetOpacity = widgetOpacity,
+            firstWeekday = firstWeekday,
+            areQuestionMarksEnabled = areQuestionMarksEnabled,
+            midnightDelayHours = midnightDelayHours
+        )
+    }
+
     /**
      * `widgets.stack#1`: upstream returns a single-habit widget only when
      * exactly one habit is bound, and a StackWidget for 0 or 2+.
@@ -220,6 +282,9 @@ class WidgetDocument(
         /** `pref_unknown_enabled`'s own default: question marks off. */
         const val DEFAULT_QUESTION_MARKS_ENABLED = false
 
+        /** `pref_midnight_delay`'s own default: the day turns at midnight. */
+        const val DEFAULT_MIDNIGHT_DELAY_HOURS = 0
+
         fun parse(json: JSONObject): WidgetDocument {
             val habits = json.optJSONArray("habits") ?: JSONArray()
             val missing = json.optJSONArray("missingHabitIds") ?: JSONArray()
@@ -235,6 +300,10 @@ class WidgetDocument(
                 areQuestionMarksEnabled = json.optBoolean(
                     "areQuestionMarksEnabled",
                     DEFAULT_QUESTION_MARKS_ENABLED
+                ),
+                midnightDelayHours = json.optInt(
+                    "midnightDelayHours",
+                    DEFAULT_MIDNIGHT_DELAY_HOURS
                 )
             )
         }
@@ -274,6 +343,22 @@ class HabitData(
      * `entries[59]` is 59 days ago.
      */
     val entries: IntArray,
+    /**
+     * One flag per published day, in the same newest-first order as [entries]:
+     * true where that entry carries a note.
+     *
+     * `HistoryCardPresenter.buildState` computes it as
+     * `entries.map { it.notes != "" }` and `HistoryWidget.refreshData` assigns
+     * the result to `historyChart.notesIndicators`, which
+     * `HistoryChart.drawSquare` turns into a dot in the square's top-right
+     * corner (`audit6.history-home-screen-widget-never-draws#1`). The note text
+     * itself never crosses: a widget draws a dot, not prose.
+     *
+     * Read defensively, like every other field below: a document written
+     * before it existed carries no key, and an empty list is what
+     * `drawSquare`'s own out-of-range guard already treats as "no note".
+     */
+    val notesIndicators: List<Boolean>,
     /**
      * Today's score, 0..1 — `habit.scores[today].value`, which
      * `widgets.checkmark#2` sets the ring percentage from.
@@ -319,10 +404,52 @@ class HabitData(
     fun isCompletedToday(): Boolean =
         if (isAtMost) false else value / 1000.0 >= target
 
+    /**
+     * This habit as it would have been published [days] later
+     * (`audit6.home-screen-widgets-go-stale-at#1`).
+     *
+     * [entries] and [notesIndicators] are newest-first, so every value moves
+     * [days] places down the array and the days at the front — the ones nobody
+     * has answered, because the app has not run — come back UNKNOWN and
+     * undotted. Shifting past the end of the array simply empties it, which is
+     * the right answer for a widget nobody has looked at in sixty days.
+     *
+     * The derived fields ride along unchanged; see
+     * [WidgetDocument.rolledForwardTo] for why they cannot be recomputed here.
+     */
+    fun rolledForward(days: Int): HabitData {
+        val shifted = IntArray(entries.size) {
+            if (it < days) Entry.UNKNOWN else entries[it - days]
+        }
+        return HabitData(
+            id = id,
+            name = name,
+            question = question,
+            color = color,
+            isNumerical = isNumerical,
+            unit = unit,
+            target = target,
+            isAtMost = isAtMost,
+            isArchived = isArchived,
+            value = shifted.firstOrNull() ?: Entry.UNKNOWN,
+            entries = shifted,
+            notesIndicators = List(notesIndicators.size) {
+                if (it < days) false else notesIndicators[it - days]
+            },
+            score = score,
+            scores = scores,
+            bucketSize = bucketSize,
+            streaks = streaks,
+            weekdayFrequency = weekdayFrequency,
+            targetRows = targetRows
+        )
+    }
+
     companion object {
         fun parse(json: JSONObject): HabitData {
             val entriesJson = json.optJSONArray("entries") ?: JSONArray()
             val entries = IntArray(entriesJson.length()) { entriesJson.getInt(it) }
+            val notesJson = json.optJSONArray("notesIndicators") ?: JSONArray()
             val scoresJson = json.optJSONArray("scores")
             val streaksJson = json.optJSONArray("streaks")
             val frequencyJson = json.optJSONObject("weekdayFrequency")
@@ -339,6 +466,7 @@ class HabitData(
                 isArchived = json.optBoolean("isArchived", false),
                 value = if (json.has("value")) json.getInt("value") else Entry.UNKNOWN,
                 entries = entries,
+                notesIndicators = (0 until notesJson.length()).map { notesJson.getBoolean(it) },
                 score = if (json.has("score")) json.getDouble("score") else null,
                 scores = scoresJson?.let { arr ->
                     DoubleArray(arr.length()) { arr.getDouble(it) }
@@ -463,13 +591,45 @@ class LocalDate private constructor(private val millis: Long) : Comparable<Local
     companion object {
         private const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
-        private val UTC = java.util.TimeZone.getTimeZone("GMT")
+        private val UTC = TimeZone.getTimeZone("GMT")
 
         fun of(year: Int, month: Int, day: Int): LocalDate {
             val cal = GregorianCalendar(UTC)
             cal.clear()
             cal.set(year, month - 1, day)
             return LocalDate(cal.timeInMillis)
+        }
+
+        /**
+         * `DateUtils.getTodayWithOffset()` / the core's
+         * `computeToday(hourOffset, 0)`, recomputed here from the system clock
+         * (`audit6.home-screen-widgets-go-stale-at#1`).
+         *
+         * This is the *one* thing a widget asks the system: what instant it is
+         * now. Which day that instant belongs to is still the app's rule —
+         * local wall clock, minus the midnight delay the document carries — so
+         * a user whose day turns at 3am sees the widget turn at 3am too. It
+         * exists only so that a redraw can notice a snapshot has gone stale;
+         * the day a widget *draws* is still `WidgetDocument.today`.
+         */
+        fun today(hourOffset: Int): LocalDate {
+            val now = System.currentTimeMillis()
+            val local = now + TimeZone.getDefault().getOffset(now)
+            val adjusted = local - hourOffset * 60L * 60L * 1000L
+            return LocalDate(floorDiv(adjusted, DAY_MILLIS) * DAY_MILLIS)
+        }
+
+        /**
+         * `Math.floorDiv`, spelled out: it arrived in API 24 and this file
+         * still has to divide a pre-1970 instant correctly.
+         */
+        private fun floorDiv(value: Long, divisor: Long): Long {
+            val quotient = value / divisor
+            return if (value % divisor != 0L && (value xor divisor) < 0) {
+                quotient - 1
+            } else {
+                quotient
+            }
         }
 
         /**

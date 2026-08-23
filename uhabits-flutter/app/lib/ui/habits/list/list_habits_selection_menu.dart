@@ -120,6 +120,22 @@ class ListHabitsSelectionMenu extends StatelessWidget
     }
   }
 
+  /// The `android:icon` the menu resource puts on a row, if it declares one.
+  ///
+  /// Only `action_edit_habit` (`?iconEdit`) and `action_color`
+  /// (`?iconChangeColor`) do; the other four rows are text alone
+  /// (`audit6.selection-action-bar-promotes-edit-and#1`).
+  static Widget? iconOf(String id) {
+    switch (id) {
+      case ListHabitsSelectionMenuItems.edit:
+        return const Icon(Icons.edit);
+      case ListHabitsSelectionMenuItems.color:
+        return const Icon(Icons.palette_outlined);
+      default:
+        return null;
+    }
+  }
+
   String titleOf(String id, L10n l10n) {
     switch (id) {
       case ListHabitsSelectionMenuItems.edit:
@@ -156,35 +172,21 @@ class ListHabitsSelectionMenu extends StatelessWidget
       ),
       title: Text('${model.selected.length}'),
       actions: <Widget>[
-        // The two items with an icon are shown on the bar itself.
-        if (isVisible(ListHabitsSelectionMenuItems.edit))
-          IconButton(
-            key: ListHabitsSelectionMenuItems.keyOf(
-                ListHabitsSelectionMenuItems.edit),
-            icon: const Icon(Icons.edit),
-            tooltip: l10n.edit,
-            onPressed: () => onItemSelected(ListHabitsSelectionMenuItems.edit),
-          ),
-        if (isVisible(ListHabitsSelectionMenuItems.color))
-          IconButton(
-            key: ListHabitsSelectionMenuItems.keyOf(
-                ListHabitsSelectionMenuItems.color),
-            icon: const Icon(Icons.palette_outlined),
-            tooltip: l10n.colorPickerDefaultTitle,
-            onPressed: () => onItemSelected(ListHabitsSelectionMenuItems.color),
-          ),
-        // …and the four `showAsAction="never"` ones go to the overflow.
+        // Every item goes to the overflow. `action_archive_habit`,
+        // `action_unarchive_habit`, `action_delete` and `action_notify` say
+        // `app:showAsAction="never"` outright; `action_edit_habit` and
+        // `action_color` declare the attribute not at all, and `MenuInflater`
+        // reads a missing `showAsAction` as `SHOW_AS_ACTION_NEVER` — so the
+        // contextual bar is the selected count plus one three-dot button, and
+        // the `android:icon` those two carry only decorates their overflow row
+        // (`audit6.selection-action-bar-promotes-edit-and#1`).
         MenuAnchor(
           menuChildren: <Widget>[
-            for (final id in <String>[
-              ListHabitsSelectionMenuItems.archive,
-              ListHabitsSelectionMenuItems.unarchive,
-              ListHabitsSelectionMenuItems.delete,
-              ListHabitsSelectionMenuItems.notify,
-            ])
+            for (final id in ListHabitsSelectionMenuItems.all)
               if (isVisible(id))
                 MenuItemButton(
                   key: ListHabitsSelectionMenuItems.keyOf(id),
+                  leadingIcon: iconOf(id),
                   onPressed: () => onItemSelected(id),
                   child: Text(titleOf(id, l10n)),
                 ),

@@ -467,11 +467,13 @@ void main() {
       }
     });
 
-    testWidgets('#4 detaching cancels the refresh and stops following '
-        'commands', (tester) async {
-      // `ListHabitsActivity.onPause` also pauses the midnight timer and
-      // dismisses the visible dialog; the model unregisters from the timer
-      // instead of pausing it, and dialog dismissal is the route's business.
+    testWidgets('#4 a pause cancels the refresh, stops following commands and '
+        'dismisses the visible dialog', (tester) async {
+      // `ListHabitsActivity.onPause` also pauses the midnight timer; the model
+      // unregisters from the timer instead of pausing it, and that half is
+      // `list-habits.startup-lifecycle#7`'s. The dialog clause is this test's:
+      // `onPause` ends with `dismissCurrentDialog()`
+      // (`audit6.an-open-entry-popup-or-colour#1`).
       final scope = openScope();
       final habit = addHabit(scope, 'Meditate');
       await tester.pumpWidget(wrap(scope));
@@ -480,7 +482,22 @@ void main() {
       final today = getToday();
       final before = List<int>.of(scope.cache.getCheckmarks(habit.id!));
 
-      modelOf(tester).detach();
+      // An entry popup is open when the user leaves the app.
+      await tester.tap(find.byKey(EntryPanel.buttonKey(today)));
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckmarkDialog), findsOneWidget,
+          reason: 'list-habits.startup-lifecycle#4');
+
+      // `onPause`, in the order the engine sends the states.
+      for (final AppLifecycleState state in <AppLifecycleState>[
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.idle();
+
       scope.commandRunner.run(
         CreateRepetitionCommand(
           scope.habitList,
@@ -498,6 +515,23 @@ void main() {
       expect(scope.adapter.bindCardView(0), isNull,
           reason: 'list-habits.startup-lifecycle#4: and nothing binds a row '
               'any more');
+
+      // A backgrounded app draws no frames, so the popped route only finishes
+      // leaving once the app is back — which is when the user sees the result:
+      // a plain habit list.
+      for (final AppLifecycleState state in <AppLifecycleState>[
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CheckmarkDialog), findsNothing,
+          reason: 'list-habits.startup-lifecycle#4: "and dismisses the '
+              'currently visible dialog" — `onPause` calls '
+              '`dismissCurrentDialog()`');
     });
 
     testWidgets('#7 at midnight the list refreshes and the strip repaints',

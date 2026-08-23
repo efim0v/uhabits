@@ -32,12 +32,14 @@ import 'app_preferences.dart';
 ///    with it goes the quirk where a pure-black change only restarted the
 ///    activity while `theme == THEME_DARK`.
 ///
-/// Installing a theme also re-declares the system chrome the Android style
-/// declared: `AppBaseTheme` paints `android:navigationBarColor` #363636 and the
-/// two dark styles leave it alone (`audit.the-light-theme-s-navigation-bar#1`).
+/// Installing a theme also repaints the system navigation bar, which all three
+/// themes set: `AppBaseTheme` declares `android:navigationBarColor` #363636,
+/// and `applyDarkTheme()` / `applyPureBlackTheme()` assign
+/// `window.navigationBarColor` grey_900 (#212121) and black imperatively right
+/// after their `setTheme(...)` (`audit6.dark-and-pure-black-themes-never#1`).
 /// That is [systemUiOverlayStyleFor], written through
 /// [setSystemUiOverlayStyle] from [_install] — the point that corresponds to
-/// `AndroidThemeSwitcher.applyLightTheme()`'s `setTheme(R.style.AppBaseTheme)`.
+/// those two statements.
 ///
 /// Wiring, for `main.dart`:
 ///
@@ -234,20 +236,25 @@ class ThemeModel extends ChangeNotifier {
   /// writes that (`audit.the-light-theme-s-navigation-bar#1`).
   void applyLightTheme() => _install(core.LightTheme());
 
-  /// `AndroidThemeSwitcher.applyDarkTheme()`.
+  /// `AndroidThemeSwitcher.applyDarkTheme()` — `setTheme(AppBaseThemeDark)`
+  /// *and* `window.navigationBarColor = grey_900`, which [_install] writes
+  /// (`audit6.dark-and-pure-black-themes-never#1`).
   void applyDarkTheme() => _install(core.DarkTheme());
 
-  /// `AndroidThemeSwitcher.applyPureBlackTheme()`.
+  /// `AndroidThemeSwitcher.applyPureBlackTheme()` — the same pair, with
+  /// `R.color.black`.
   void applyPureBlackTheme() => _install(core.PureBlackTheme());
 
   void _install(core.Theme theme) {
     _currentTheme = theme;
     _hasApplied = true;
-    // `setTheme(R.style.AppBaseTheme)`'s `android:navigationBarColor`. Null for
-    // the two dark styles, which declare no such attribute and therefore leave
-    // the platform default in place (`audit.the-light-theme-s-navigation-bar#1`).
-    final style = systemUiOverlayStyleFor(theme);
-    if (style != null) setSystemUiOverlayStyle(style);
+    // The navigation-bar colour, which every theme sets: the light one through
+    // `AppBaseTheme`'s `android:navigationBarColor`, the two dark ones through
+    // the `window.navigationBarColor` assignment that follows their
+    // `setTheme(...)` (`audit6.dark-and-pure-black-themes-never#1`). Writing it
+    // unconditionally is what makes toggling repaint the bar: a theme that
+    // declined to write left the *previous* theme's colour on screen.
+    setSystemUiOverlayStyle(systemUiOverlayStyleFor(theme));
     notifyListeners();
   }
 

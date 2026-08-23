@@ -50,6 +50,7 @@ import '../../about/about_screen.dart';
 import '../../common/dialogs/checkmark_dialog.dart';
 import '../../common/dialogs/color_picker_dialog.dart';
 import '../../common/dialogs/confirm_delete_dialog.dart';
+import '../../common/dialogs/current_dialog.dart';
 import '../../common/dialogs/number_dialog.dart';
 import '../../common/screen_route_observer.dart';
 import '../../intro/intro_screen.dart';
@@ -317,6 +318,16 @@ class _HabitListViewState extends State<_HabitListView>
       // while the app is in the background raises no snackbar, because the
       // screen that would show it is not in the foreground
       // (`audit5.the-habit-list-command-toast-listener#1`).
+      //
+      // `dismissCurrentDialog()` is the last statement of `onPause`: an entry
+      // popup, the colour picker or the delete confirmation left open when the
+      // user presses Home is torn down there and then, so returning to the app
+      // shows a plain habit list. Tearing an entry popup down is also what
+      // runs `CheckmarkDialog.onDismiss` / `NumberDialog.onDismiss`, which
+      // commits notes typed but never saved
+      // (`audit6.an-open-entry-popup-or-colour#1`,
+      // `list-habits.startup-lifecycle#4`).
+      dismissCurrentDialog();
       _toasts.onDetached();
       _model.detach();
       return;
@@ -456,24 +467,35 @@ class _HabitListViewState extends State<_HabitListView>
     if (mounted) setState(() {});
   }
 
-  /// `ListHabitsSelectionMenuBehavior.Screen.showColorPicker`.
+  /// `ListHabitsSelectionMenuBehavior.Screen.showColorPicker`, which
+  /// `ListHabitsScreen` shows with
+  /// `picker.dismissCurrentAndShow(activity.supportFragmentManager, "picker")`.
   Future<void> _showColorPicker(
     core.PaletteColor defaultColor,
     core.OnColorPickedCallback callback,
   ) async {
-    final picked = await showColorPickerDialog(context, selected: defaultColor);
-    // A dismissal runs no command (`list-habits.selection-menu-actions#15`).
+    final picked = await dismissCurrentAndShow<core.PaletteColor>(
+      context,
+      () => showColorPickerDialog(context, selected: defaultColor),
+    );
+    // A dismissal runs no command (`list-habits.selection-menu-actions#15`),
+    // and `onPause` is one of the ways it can be dismissed
+    // (`audit6.an-open-entry-popup-or-colour#1`).
     if (picked == null) return;
     callback(picked);
   }
 
-  /// `ListHabitsSelectionMenuBehavior.Screen.showDeleteConfirmationScreen`.
+  /// `ListHabitsSelectionMenuBehavior.Screen.showDeleteConfirmationScreen`,
+  /// shown with `dialog.dismissCurrentAndShow()`.
   Future<void> _showDeleteConfirmation(
     core.OnConfirmedCallback callback,
     int quantity,
   ) async {
-    final confirmed =
-        await showConfirmDeleteDialog(context, quantity: quantity);
+    final confirmed = await dismissCurrentAndShow<bool>(
+          context,
+          () => showConfirmDeleteDialog(context, quantity: quantity),
+        ) ??
+        false;
     if (!confirmed) return;
     callback();
   }
@@ -995,15 +1017,22 @@ class _HabitListViewState extends State<_HabitListView>
     NumberPickerCallback callback,
   ) async {
     final theme = _coreThemeOf(context);
-    final result = await showNumberDialog(
+    // `dialog.dismissCurrentAndShow(supportFragmentManager, "numberDialog")`:
+    // the popup is the screen's current dialog, so `onPause` tears it down and
+    // the notes typed into it are committed by that teardown
+    // (`audit6.an-open-entry-popup-or-colour#1`).
+    final result = await dismissCurrentAndShow<NumberDialogResult>(
       context,
-      value: value,
-      notes: notes,
-      // NumberDialog tints only the buttons of the boolean row, which stays
-      // hidden here; the colour is passed because the Android arguments carry
-      // it (`number-dialog.popup#1`).
-      color: theme.colorOf(const core.PaletteColor(0)),
-      preferences: _model.scope.preferences,
+      () => showNumberDialog(
+        context,
+        value: value,
+        notes: notes,
+        // NumberDialog tints only the buttons of the boolean row, which stays
+        // hidden here; the colour is passed because the Android arguments
+        // carry it (`number-dialog.popup#1`).
+        color: theme.colorOf(const core.PaletteColor(0)),
+        preferences: _model.scope.preferences,
+      ),
     );
     if (result == null) {
       callback.onNumberPickerDismissed();
@@ -1024,12 +1053,17 @@ class _HabitListViewState extends State<_HabitListView>
     CheckMarkDialogCallback callback,
   ) async {
     final theme = _coreThemeOf(context);
-    final result = await showCheckmarkDialog(
+    // `dialog.dismissCurrentAndShow(supportFragmentManager, "checkmarkDialog")`
+    // — see [_showNumberPopup] (`audit6.an-open-entry-popup-or-colour#1`).
+    final result = await dismissCurrentAndShow<CheckmarkDialogResult>(
       context,
-      value: selectedValue,
-      notes: notes,
-      color: theme.colorOf(color),
-      preferences: _model.scope.preferences,
+      () => showCheckmarkDialog(
+        context,
+        value: selectedValue,
+        notes: notes,
+        color: theme.colorOf(color),
+        preferences: _model.scope.preferences,
+      ),
     );
     if (result == null) {
       callback.onNotesDismissed();

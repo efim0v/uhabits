@@ -96,6 +96,20 @@ core.Theme coreThemeOf(BuildContext context) {
 /// as the constant it is upstream.
 const Color navigationBarColorLight = Color(0xFF363636);
 
+/// `R.color.grey_900` — `#212121` in `res/values/material_colors.xml`.
+///
+/// `AndroidThemeSwitcher.applyDarkTheme()` assigns it straight to
+/// `(context as Activity).window.navigationBarColor`, so unlike the light
+/// colour above it is not a style attribute at all
+/// (`audit6.dark-and-pure-black-themes-never#1`, i.e.
+/// `settings.theme.theme-modes#8`).
+const Color navigationBarColorDark = Color(0xFF212121);
+
+/// `R.color.black` — `#000000`, the same imperative assignment made by
+/// `AndroidThemeSwitcher.applyPureBlackTheme()`
+/// (`settings.theme.theme-modes#9`).
+const Color navigationBarColorPureBlack = Color(0xFF000000);
+
 /// `@style/DialogButtonStyle`'s `android:textColor` — `@color/grey_100`.
 ///
 /// `AppBaseThemeDark` points `buttonBarPositiveButtonStyle` and
@@ -126,23 +140,45 @@ WidgetStateProperty<Color?> _whenSelected(Color color) =>
     WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) =>
         states.contains(WidgetState.selected) ? color : null);
 
-/// The system-UI overlay style a core [theme] installs, or null when it
-/// installs none.
+/// The system-UI overlay style a core [theme] installs.
 ///
-/// `AppBaseTheme` declares the `android:navigationBarColor` item as
-/// `?attr/colorPrimary`; `AppBaseThemeDark` and `AppBaseThemeDark.PureBlack`
-/// deliberately do not, leaving the platform default in place
-/// (`audit.the-light-theme-s-navigation-bar#1`). Null here is that same
-/// silence, and so are the null fields of the style itself: the Android
-/// embedding only touches a system-bar property the style actually names, so
-/// the status bar, the divider and the icon brightness stay where the platform
-/// put them, exactly as an undeclared attribute leaves them.
+/// All three themes paint the navigation bar, and they reach it by two
+/// different routes upstream. `AppBaseTheme` declares the
+/// `android:navigationBarColor` item as `?attr/colorPrimary` (#363636) and is
+/// the only style that declares it at all; `AppBaseThemeDark` and
+/// `AppBaseThemeDark.PureBlack` declare nothing, and
+/// `AndroidThemeSwitcher.applyDarkTheme()` / `applyPureBlackTheme()` assign
+/// `window.navigationBarColor` imperatively instead — `R.color.grey_900` and
+/// `R.color.black` — every time a theme is applied
+/// (`audit6.dark-and-pure-black-themes-never#1`).
+///
+/// Reading styles.xml alone made this function answer null for both dark
+/// themes, which is not "the platform default": the light theme had already
+/// painted the bar #363636 and nothing ever painted it back, so a user who
+/// toggled Light -> Dark kept a #363636 bar under a black app for ever.
+///
+/// The null *fields* of the style are still silence, and deliberately so: the
+/// Android embedding only touches a system-bar property the style actually
+/// names, so the status bar, the divider and the icon brightness stay where the
+/// platform put them — exactly as both an undeclared attribute and a lone
+/// `window.navigationBarColor = …` leave them.
 ///
 /// Applied by `ThemeModel._install`, which is where the port installs a theme —
-/// `AndroidThemeSwitcher.applyLightTheme()`'s `setTheme(R.style.AppBaseTheme)`.
-SystemUiOverlayStyle? systemUiOverlayStyleFor(core.Theme theme) {
-  // PureBlackTheme extends DarkTheme, so the one check covers both dark styles.
-  if (theme is core.DarkTheme) return null;
+/// the `setTheme(R.style.…)` call plus, for the dark pair, the assignment that
+/// follows it.
+SystemUiOverlayStyle systemUiOverlayStyleFor(core.Theme theme) {
+  // PureBlackTheme extends DarkTheme, so it has to be asked about first or its
+  // black bar would be answered grey_900 and never appear.
+  if (theme is core.PureBlackTheme) {
+    return const SystemUiOverlayStyle(
+      systemNavigationBarColor: navigationBarColorPureBlack,
+    );
+  }
+  if (theme is core.DarkTheme) {
+    return const SystemUiOverlayStyle(
+      systemNavigationBarColor: navigationBarColorDark,
+    );
+  }
   return const SystemUiOverlayStyle(
     systemNavigationBarColor: navigationBarColorLight,
   );

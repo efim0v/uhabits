@@ -24,6 +24,7 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/habit_list_model.dart';
 import 'package:uhabits/ui/common/dialogs/confirm_delete_dialog.dart';
+import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/list/list_habits_command_toasts.dart';
@@ -158,23 +159,20 @@ void main() {
         'action_notify',
       ], reason: 'list-habits.selection-menu-actions#1');
 
-      // The two items with an icon sit on the bar, Edit before Change color.
-      expect(itemFinder(ListHabitsSelectionMenuItems.edit), findsOneWidget,
-          reason: 'list-habits.selection-menu-actions#1');
-      expect(itemFinder(ListHabitsSelectionMenuItems.color), findsOneWidget,
-          reason: 'list-habits.selection-menu-actions#1');
-      expect(
-        tester.getRect(itemFinder(ListHabitsSelectionMenuItems.edit)).left,
-        lessThan(
-          tester.getRect(itemFinder(ListHabitsSelectionMenuItems.color)).left,
-        ),
-        reason: 'list-habits.selection-menu-actions#1',
-      );
-
-      // …and the `showAsAction="never"` ones follow, in declaration order.
-      // Archive and Unarchive are mutually exclusive for a non-empty
-      // selection, so only one of the two is ever on screen at a time
+      // The six items are all in the overflow, in declaration order: the two
+      // with an `android:icon` declare no `app:showAsAction` at all, which
+      // `MenuInflater` reads as `never` like the other four
+      // (`audit6.selection-action-bar-promotes-edit-and#1`). Archive and
+      // Unarchive are mutually exclusive for a non-empty selection, so only
+      // one of the two is ever on screen at a time
       // (`list-habits.selection-menu-actions#2`).
+      expect(itemFinder(ListHabitsSelectionMenuItems.edit), findsNothing,
+          reason: 'list-habits.selection-menu-actions#1 and '
+              'audit6.selection-action-bar-promotes-edit-and#1');
+      expect(itemFinder(ListHabitsSelectionMenuItems.color), findsNothing,
+          reason: 'list-habits.selection-menu-actions#1 and '
+              'audit6.selection-action-bar-promotes-edit-and#1');
+
       await openOverflow(tester);
       expect(barOf(tester).isVisible(ListHabitsSelectionMenuItems.archive),
           isTrue,
@@ -184,12 +182,7 @@ void main() {
           isFalse,
           reason: 'list-habits.selection-menu-actions#1');
       var previousTop = double.negativeInfinity;
-      for (final id in <String>[
-        ListHabitsSelectionMenuItems.archive,
-        ListHabitsSelectionMenuItems.unarchive,
-        ListHabitsSelectionMenuItems.delete,
-        ListHabitsSelectionMenuItems.notify,
-      ]) {
+      for (final id in ListHabitsSelectionMenuItems.all) {
         if (!barOf(tester).isVisible(id)) {
           expect(itemFinder(id), findsNothing,
               reason: 'list-habits.selection-menu-actions#1 — $id');
@@ -623,6 +616,105 @@ void main() {
       );
       expect(modelOf(tester).selected, isEmpty,
           reason: 'list-habits.drag-reorder#9');
+    });
+  });
+
+  // =======================================================================
+  // audit6.selection-action-bar-promotes-edit-and
+  //
+  // `res/menu/list_habits_selection.xml` gives `action_edit_habit` and
+  // `action_color` an `android:icon` and NO `app:showAsAction`, and
+  // `MenuInflater` defaults that attribute to `SHOW_AS_ACTION_NEVER`. So the
+  // contextual bar carries the selected count and one overflow button, and all
+  // six items live inside the overflow.
+  // =======================================================================
+
+  group('audit6.selection-action-bar-promotes-edit-and', () {
+    testWidgets('#1 every item sits in the overflow; the bar itself carries '
+        'only the count and the three-dot button', (tester) async {
+      final storage = MemoryStorage()..putBoolean('pref_developer', true);
+      final scope = openScope(preferencesStorage: storage);
+      addHabit(scope, 'Meditate');
+      await pumpScreen(tester, scope);
+      await selectRow(tester, 'Meditate');
+
+      expect(find.byType(ListHabitsSelectionMenu), findsOneWidget,
+          reason: 'audit6.selection-action-bar-promotes-edit-and#1');
+      // Neither item declares `app:showAsAction`, so neither is promoted.
+      expect(itemFinder(ListHabitsSelectionMenuItems.edit), findsNothing,
+          reason: 'audit6.selection-action-bar-promotes-edit-and#1 — '
+              'action_edit_habit has no app:showAsAction, and MenuInflater '
+              'defaults it to SHOW_AS_ACTION_NEVER, so Edit is not on the bar');
+      expect(itemFinder(ListHabitsSelectionMenuItems.color), findsNothing,
+          reason: 'audit6.selection-action-bar-promotes-edit-and#1 — the same '
+              'holds for action_color');
+
+      // "the selected count as its title and a single overflow button".
+      expect(find.text('1'), findsOneWidget,
+          reason: 'audit6.selection-action-bar-promotes-edit-and#1 — the bar '
+              'title is the selected count');
+      final bar = find.byType(ListHabitsSelectionMenu);
+      expect(
+        find.descendant(of: bar, matching: find.byType(IconButton)),
+        findsNWidgets(2),
+        reason: 'audit6.selection-action-bar-promotes-edit-and#1 — the close '
+            'affordance and the overflow button, and nothing else',
+      );
+
+      // …and Edit and Change color sit inside that overflow, ahead of
+      // Archive, Delete and Reminder, in the resource's declaration order.
+      await openOverflow(tester);
+      var previousTop = double.negativeInfinity;
+      for (final id in ListHabitsSelectionMenuItems.all) {
+        if (!barOf(tester).isVisible(id)) continue;
+        expect(itemFinder(id), findsOneWidget,
+            reason: 'audit6.selection-action-bar-promotes-edit-and#1 — $id is '
+                'an overflow row');
+        final top = tester.getRect(itemFinder(id)).top;
+        expect(top, greaterThan(previousTop),
+            reason: 'audit6.selection-action-bar-promotes-edit-and#1 — $id is '
+                'out of order');
+        previousTop = top;
+      }
+
+      // `android:icon` still decorates the two rows that declare one.
+      expect(
+        find.descendant(
+          of: itemFinder(ListHabitsSelectionMenuItems.edit),
+          matching: find.byIcon(Icons.edit),
+        ),
+        findsOneWidget,
+        reason: 'audit6.selection-action-bar-promotes-edit-and#1 — the '
+            'android:icon only decorates the overflow row',
+      );
+      expect(
+        find.descendant(
+          of: itemFinder(ListHabitsSelectionMenuItems.color),
+          matching: find.byIcon(Icons.palette_outlined),
+        ),
+        findsOneWidget,
+        reason: 'audit6.selection-action-bar-promotes-edit-and#1',
+      );
+
+      await tester.tapAt(const Offset(400, 500));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('#1 Edit still opens the edit screen from the overflow',
+        (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await pumpScreen(tester, scope);
+      await selectRow(tester, 'Meditate');
+
+      await openOverflow(tester);
+      await tester.tap(itemFinder(ListHabitsSelectionMenuItems.edit));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(EditHabitScreen), findsOneWidget,
+          reason: 'audit6.selection-action-bar-promotes-edit-and#1 — moving '
+              'the item into the overflow does not change what it does '
+              '(`list-habits.selection-menu-actions#4`)');
     });
   });
 }
