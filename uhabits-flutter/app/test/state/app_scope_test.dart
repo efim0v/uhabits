@@ -29,6 +29,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:uhabits/platform/app_database.dart';
+import 'package:uhabits/platform/bug_reporter.dart';
 import 'package:uhabits/platform/home_widget_bridge.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits_core/src/io/logging.dart';
@@ -436,8 +437,22 @@ void main() {
       expect(identical(scope.preferencesStorage, storage), isTrue,
           reason: 'platform-glue.di-app-component#4: Preferences is built from '
               'the storage the component was handed');
-      expect(scope.logging, isA<StandardLogging>(),
+      // `Logging = AndroidLogging`, whose loggers write to `android.util.Log`
+      // — the very thing `AndroidBugReporter.getLogcat()` reads back. The port
+      // has no system log to write into and read from, so the binding is
+      // StandardLogging wrapped in the decorator that fills BugReportLog: a
+      // bare StandardLogging would print the lines and keep none of them, and
+      // every generated bug report would have a blank space where 250 log
+      // lines should be (verify.bug-report-log-empty#1, #2).
+      expect(scope.logging, isA<BugReportLogging>(),
           reason: 'platform-glue.di-app-component#4: Logging');
+      scope.logging.getLogger('AppScopeTest').info('a line from the app');
+      expect(
+        BugReportLog.instance.lines,
+        contains('[AppScopeTest] a line from the app'),
+        reason: 'platform-glue.di-app-component#4: …and what it decorates the '
+            'logger with is the buffer the bug reporter reads back.',
+      );
 
       // "WidgetPreferences is built from the same storage instance": the widget
       // registry reads and writes the same store the settings screen does, so a

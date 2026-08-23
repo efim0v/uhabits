@@ -33,6 +33,7 @@ library;
 import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:uhabits/ui/common/views/ring_view.dart';
 import 'package:uhabits/ui/core_view.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
@@ -163,7 +164,7 @@ void main() {
         (tester) async {
       await pumpCard(tester, habit: buildHabit(), buttonCount: 3);
 
-      final ring = tester.getRect(find.byType(CoreView).first);
+      final ring = tester.getRect(find.byType(RingView));
       final label = tester.getRect(find.text('Meditate'));
       final panel = tester.getRect(find.byType(EntryPanel));
 
@@ -779,8 +780,8 @@ void main() {
       await pumpCard(tester, habit: buildHabit());
 
       final card = tester.getRect(find.byType(HabitCard));
-      // The ring is the first CoreView in the row; the rest are entry buttons.
-      final ring = tester.getRect(find.byType(CoreView).first);
+      // `scoreRing`, the RingView the inner frame puts before the label.
+      final ring = tester.getRect(find.byType(RingView));
 
       expect(ring.width, 15, reason: 'list-habits.habit-card#2');
       expect(ring.height, 15, reason: 'list-habits.habit-card#2');
@@ -789,18 +790,49 @@ void main() {
           reason: 'list-habits.habit-card#2');
     });
 
+    /// The sweep the card's ring actually draws, in degrees, for a habit whose
+    /// cached score is [score] — read off the painter the card built, so both
+    /// halves of `HabitCardView.score` (the percentage *and* the precision) are
+    /// under test.
+    Future<double> ringSweep(WidgetTester tester, double score) async {
+      await pumpCard(tester, habit: buildHabit(), score: score);
+      final painter = tester
+          .widget<CustomPaint>(
+            find.descendant(
+              of: find.byType(RingView),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .painter! as RingViewPainter;
+      return painter.sweepDegrees;
+    }
+
     testWidgets('#2 the ring sweep is the cached score, quantised to 1/16',
         (tester) async {
-      await pumpCard(tester, habit: buildHabit(), score: 0.5);
+      // `HabitCardView.score`'s setter is two calls: `setPercentage(value)`
+      // and `setPrecision(1.0f / 16)`, and `RingView.onDraw` then sweeps
+      // `360 * round(percentage / precision) * precision` — 22.5-degree steps.
+      expect(await ringSweep(tester, 0.5), closeTo(180.0, 1e-9),
+          reason: 'list-habits.habit-card#2 — 8/16 exactly, the one value at '
+              'which the quantised and the raw angle agree');
 
-      final canvas = _RecordingCanvas(width: 15, height: 15);
-      tester.widget<CoreView>(find.byType(CoreView).first).view.draw(canvas);
+      expect(await ringSweep(tester, 0.03), closeTo(0.0, 1e-9),
+          reason: 'verify.ring-not-quantised#1 — the list card ring snaps to '
+              '22.5-degree steps: a score of 0.03 rounds to 0 and draws no '
+              'arc at all');
+      expect(await ringSweep(tester, 0.97), closeTo(360.0, 1e-9),
+          reason: 'verify.ring-not-quantised#1 — and a score of 0.97 rounds '
+              'to 16/16 and draws a complete ring');
 
-      final arc = canvas.opsNamed('fillArc').first;
-      // Ring.draw sweeps `-360 * percentage` from 90 degrees, and the ring
-      // itself is `dp(3)` thick.
-      expect(arc.args[4], closeTo(-180.0, 1e-9),
-          reason: 'list-habits.habit-card#2');
+      // The two intermediate cases, which is what makes the assertions above
+      // rounding rather than a pair of clamps.
+      expect(await ringSweep(tester, 0.1), closeTo(45.0, 1e-9),
+          reason: 'verify.ring-not-quantised#2 — round(0.1 * 16) = 2, so two '
+              'steps of 22.5 degrees; the port drew the exact angle (36) '
+              'instead');
+      expect(await ringSweep(tester, 0.4), closeTo(135.0, 1e-9),
+          reason: 'verify.ring-not-quantised#2 — round(0.4 * 16) = 6, so six '
+              'steps of 22.5 degrees rather than the raw 144');
     });
   });
 

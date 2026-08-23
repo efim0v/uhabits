@@ -11,10 +11,12 @@ import 'platform/flutter_files.dart';
 import 'platform/locale_first_weekday.dart';
 import 'state/app_scope.dart';
 import 'state/intent_router.dart';
+import 'state/reminder_link.dart';
 import 'state/reminder_permission_gate.dart';
 import 'state/theme_model.dart';
 import 'state/widget_link.dart';
 import 'state/widget_sync.dart';
+import 'ui/common/dialogs/snooze_picker_dialog.dart';
 import 'ui/common/window_insets.dart';
 import 'ui/habits/list/habit_list_screen.dart';
 import 'ui/habits/show/show_habit_screen.dart';
@@ -84,6 +86,10 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
 
   WidgetLinkRouter? _widgetLinks;
 
+  /// The scope's reminder router, held from [_attachReminderResponses] so that
+  /// [dispose] can detach without looking up an ancestor.
+  ReminderResponseRouter? _reminderResponses;
+
   /// `Thread.setDefaultUncaughtExceptionHandler(BaseExceptionHandler(this))`,
   /// held so it is installed exactly once (`platform-glue.crash-handler#2`).
   BaseExceptionHandler? _exceptionHandler;
@@ -97,8 +103,13 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     // widget is mounting, and nothing on the list screen has run yet. Anything
     // that fails earlier, inside AppScope.boot(), is deliberately not covered:
     // platform-glue.crash-handler#6.
+    //
+    // `BaseExceptionHandler(this)` dumps through `AndroidBugReporter(activity)`
+    // (`io.bug-report-dump#8`); the scope holds that reporter, already pointed
+    // at <external files>/Logs, so a crash leaves the same
+    // `Log <yyyy-MM-dd HHmmss>.txt` behind that the Troubleshooting row writes.
     _exceptionHandler ??= BaseExceptionHandler(
-      const UnportedBugReporter(),
+      context.read<AppScope>().bugReporter,
       hooks: FlutterCrashHandlerHooks(),
     )..install();
     WidgetsBinding.instance.addObserver(this);
@@ -107,9 +118,63 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     _widgetLinks = _buildWidgetLinks();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pushSystemBrightness();
+      // Before the resume, because a notification can be what launched the
+      // app: the response was decoded during AppScope.boot() and has been
+      // waiting for a screen ever since.
+      _attachReminderResponses();
       unawaited(_onResume());
       unawaited(_widgetLinks?.start());
     });
+  }
+
+  /// Hands the scope's reminder router the three answers that need a screen.
+  ///
+  /// The router itself is built by `AppScope.startPlatformServices`, because
+  /// the plugin callback is registered before `runApp` — see
+  /// lib/state/reminder_link.dart. What is missing until now is everything
+  /// that needs a `BuildContext`: `ShowHabitActivity` for a tap on the body,
+  /// the ACTION_EDIT value dialog for "Enter", and `SnoozeDelayPickerActivity`
+  /// for "Later".
+  void _attachReminderResponses() {
+    if (!mounted) return;
+    // Held rather than read back in dispose(), where looking an ancestor up is
+    // no longer safe.
+    final router = _reminderResponses = context.read<AppScope>().reminderResponses;
+    // Null on a host that could not start the platform services, and in every
+    // widget test that never does.
+    router?.attach(
+      // `IntentFactory.startShowHabitActivity`, the notification's content
+      // intent — the same push the five graph widgets make.
+      showHabit: (habit) {
+        final navigatorContext = _navigatorKey.currentContext;
+        if (navigatorContext == null) return;
+        unawaited(ShowHabitScreen.open(navigatorContext, habit));
+      },
+      // `PendingIntentFactory.showNumberPicker(habit, date)` is an activity
+      // intent to `ListHabitsActivity` with ACTION_EDIT, which the list
+      // screen's `parseIntents()` answers. The app has exactly one road to
+      // that screen from outside — the deep link `WidgetLinkRouter` rebuilds
+      // into that very intent — so "Enter" takes it, and what reaches
+      // `parseIntents()` is the intent upstream would have sent.
+      openValuePicker: (habit, date) {
+        final links = _widgetLinks;
+        if (links == null) return;
+        final month = date.month.toString().padLeft(2, '0');
+        final day = date.day.toString().padLeft(2, '0');
+        unawaited(links.handle(Uri.parse(
+          'uhabits://widget/${WidgetLink.actionEdit}'
+          '?habit=${habit.id}&date=${date.year}-$month-$day',
+        )));
+      },
+      // `SnoozeDelayPickerActivity`, which upstream is a translucent activity
+      // the notification action starts and here is a dialog on the running
+      // app (see docs/parity/DEVIATIONS.md).
+      pickSnoozeDelay: (habit) async {
+        final navigatorContext = _navigatorKey.currentContext;
+        if (navigatorContext == null) return null;
+        return showSnoozePickerDialog(navigatorContext, habit: habit);
+      },
+    );
   }
 
   /// Builds the receiver for `uhabits://widget/...`, the four deep links
@@ -162,6 +227,7 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _onPause();
+    _reminderResponses?.detach();
     _widgetLinks?.stop();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -186,18 +252,46 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
   Future<void> _onResume() async {
     if (!mounted) return;
     final scope = context.read<AppScope>();
+    // The swipe upstream delivers through the notification's delete intent.
+    // `flutter_local_notifications` has no such callback, so a dismissal is
+    // discovered here instead — this is the first moment after a swipe at
+    // which Dart is running again.
+    await scope.reminderResponses?.onResumed();
+    if (!mounted) return;
     final scheduler = scope.reminderScheduler;
-    if (scheduler == null) return;
-    _resumeMidnightTimer(scope);
-    final gate = _permissionGate ??= ReminderPermissionGate(
-      scheduler: scheduler,
-      permissions: LocalNotificationsPermissions(
-        plugin: FlutterLocalNotificationsPlugin(),
-      ),
-      logging: scope.logging,
-    );
-    await gate.onResume();
+    if (scheduler != null) {
+      _resumeMidnightTimer(scope);
+      final gate = _permissionGate ??= ReminderPermissionGate(
+        scheduler: scheduler,
+        permissions: LocalNotificationsPermissions(
+          plugin: FlutterLocalNotificationsPlugin(),
+        ),
+        logging: scope.logging,
+      );
+      await gate.onResume();
+    }
+    // Outside the branch above, exactly as upstream: the background block is a
+    // sibling of the `hasHabitsWithReminders()` test, not a continuation of it.
+    await _runResumeTasks(scope);
+  }
+
+  /// The task-runner block `ListHabitsActivity.onResume` ends with:
+  ///
+  /// ```kotlin
+  /// taskRunner.run {
+  ///     AutoBackup(this@ListHabitsActivity).run()
+  ///     appComponent.widgetUpdater.updateWidgets()
+  /// }
+  /// ```
+  ///
+  /// The second statement is what repaints the home screen on a return to the
+  /// app even when this process ran no command
+  /// (`verify.widgets-not-refreshed-on-resume`, `widgets.updater#10`). It is
+  /// not conditional on the backup: a scope with no database *file* — which
+  /// only happens in a test — has nothing to back up and still has widgets.
+  Future<void> _runResumeTasks(AppScope scope) async {
     await _runAutoBackup(scope);
+    await scope.widgetSync?.updateWidgets();
   }
 
   /// `ListHabitsActivity.onPause`, whose first statement is

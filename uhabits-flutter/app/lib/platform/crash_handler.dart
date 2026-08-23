@@ -99,11 +99,15 @@ class FlutterCrashHandlerHooks implements CrashHandlerHooks {
   }
 }
 
-/// The stand-in for `AndroidBugReporter` until `io.bug-report-dump` is ported.
+/// A `ListHabitsBehavior.BugReporter` whose every method throws.
 ///
-/// `dumpBugReportToFile()` throwing is not a special case for this class: rule
-/// #4 wraps the dump precisely so that a failing bug report cannot swallow the
-/// crash, and the wrapper is what keeps the delegation of rule #5 happening.
+/// It was the app's own reporter while `io.bug-report-dump` was unported; the
+/// app now dumps through the finished `FlutterBugReporter` that
+/// `AppScope.bugReporter` holds (`verify.crash-handler-stubbed`), and what is
+/// left here is the case rule #4 exists for: a reporter that fails. The dump is
+/// wrapped precisely so that a failing bug report cannot swallow the crash, and
+/// the wrapper is what keeps the delegation of rule #5 happening — which is
+/// only observable against a reporter like this one.
 class UnportedBugReporter implements ListHabitsBehaviorBugReporter {
   const UnportedBugReporter();
 

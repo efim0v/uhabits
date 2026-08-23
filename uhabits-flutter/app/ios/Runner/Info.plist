@@ -7,15 +7,68 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Uhabits</string>
+	<string>Habits</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>af</string>
+		<string>ar</string>
+		<string>bg</string>
+		<string>ca</string>
+		<string>cs</string>
+		<string>da</string>
+		<string>de</string>
+		<string>el</string>
+		<string>en</string>
+		<string>eo</string>
+		<string>es</string>
+		<string>eu</string>
+		<string>fa</string>
+		<string>fi</string>
+		<string>fr</string>
+		<string>gu</string>
+		<string>he</string>
+		<string>hi</string>
+		<string>hr</string>
+		<string>hu</string>
+		<string>hy</string>
+		<string>id</string>
+		<string>is</string>
+		<string>it</string>
+		<string>ja</string>
+		<string>ka</string>
+		<string>ko</string>
+		<string>ml</string>
+		<string>nl</string>
+		<string>no</string>
+		<string>pl</string>
+		<string>pt</string>
+		<string>pt-BR</string>
+		<string>pt-PT</string>
+		<string>ro</string>
+		<string>ru</string>
+		<string>sk</string>
+		<string>sl</string>
+		<string>sr</string>
+		<string>sr-Latn</string>
+		<string>sv</string>
+		<string>ta</string>
+		<string>te</string>
+		<string>tr</string>
+		<string>ug</string>
+		<string>uk</string>
+		<string>vi</string>
+		<string>zh</string>
+		<string>zh-CN</string>
+		<string>zh-TW</string>
+	</array>
 	<key>CFBundleName</key>
-	<string>uhabits</string>
+	<string>Habits</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

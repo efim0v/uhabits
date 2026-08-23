@@ -5,6 +5,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:uhabits_core/src/commands/create_habit_command.dart';
 import 'package:uhabits_core/src/io/files.dart';
+import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/ui/intent_parser.dart';
 import 'package:uhabits_core/src/ui/notification_tray.dart';
@@ -82,6 +83,9 @@ class HabitListModel extends ChangeNotifier
       () => this,
     );
     _observableListener = ModelObservableListener(notifyListeners);
+    _preferencesListener = _ListHabitsPreferencesListener(
+      onQuestionMarksChanged: _onQuestionMarksChanged,
+    );
   }
 
   final AppScope scope;
@@ -146,6 +150,31 @@ class HabitListModel extends ChangeNotifier
 
   late final ModelObservableListener _observableListener;
 
+  /// `ListHabitsActivity` as a `Preferences.Listener` — `prefs.addListener(
+  /// this)` in `onCreate`.
+  late final _ListHabitsPreferencesListener _preferencesListener;
+
+  /// ```kotlin
+  /// override fun onQuestionMarksChanged() {
+  ///     invalidateOptionsMenu()
+  ///     menu.behavior.onPreferencesChanged()
+  /// }
+  /// ```
+  ///
+  /// The filter the menu applies is chosen from `areQuestionMarksEnabled`
+  /// every time it is rebuilt — `isEnteredAllowed` when they are on,
+  /// `isCompletedAllowed` when they are off — and the preference is written
+  /// from a different screen. Without this relay the list keeps whichever
+  /// matcher it was built with until the process restarts
+  /// (`verify.question-marks-filter`).
+  void _onQuestionMarksChanged() {
+    // `invalidateOptionsMenu()`: the toolbar redraws from the new preference
+    // (the "Hide completed" item is titled "Hide entered" while question marks
+    // are on).
+    notifyListeners();
+    _menuBehavior.onPreferencesChanged();
+  }
+
   bool _attached = false;
 
   bool _didStartup = false;
@@ -157,7 +186,34 @@ class HabitListModel extends ChangeNotifier
   // ---------------------------------------------------------------------
 
   void Function(Habit habit)? onShowHabitScreen;
-  void Function()? onShowIntroScreen;
+
+  /// `ListHabitsScreen.showIntroScreen()`, the one handler that can be asked
+  /// for before it is installed.
+  ///
+  /// `ListHabitsActivity.onCreate` assigns `screen = component
+  /// .listHabitsScreen` and only then calls `behavior.onStartup()`, so the
+  /// presenter upstream always has a Screen to reach. Here the model is built
+  /// by the widget layer — [attach] runs `onStartup()` from the provider's
+  /// `create`, a moment before the widget that owns this field has it in hand —
+  /// and a first run asks for the intro inside that window. Assigning the
+  /// handler therefore delivers a request that has been waiting, which is what
+  /// upstream's ordering gives for free (`verify.intro-never-shown#1`, `#2`).
+  ///
+  /// Exactly one request can be waiting: `onFirstRun()` clears `isFirstRun`
+  /// before it asks, so there is never a second one.
+  void Function()? get onShowIntroScreen => _onShowIntroScreen;
+
+  set onShowIntroScreen(void Function()? handler) {
+    _onShowIntroScreen = handler;
+    if (handler == null || !_introScreenPending) return;
+    _introScreenPending = false;
+    handler();
+  }
+
+  void Function()? _onShowIntroScreen;
+
+  bool _introScreenPending = false;
+
   void Function(ListHabitsBehaviorMessage message)? onShowMessage;
   void Function(double value, String notes, NumberPickerCallback callback)?
       onShowNumberPopup;
@@ -213,6 +269,10 @@ class HabitListModel extends ChangeNotifier
     scope.adapter.setListener(this);
     scope.adapter.observable.addListener(_observableListener);
     scope.adapter.onAttached();
+    // `prefs.addListener(this)`. Upstream this happens in `onCreate` and is
+    // never undone; here it is bracketed with the rest of the screen's
+    // subscriptions, which is the same window plus a tidy unsubscribe.
+    scope.preferences.addListener(_preferencesListener);
     if (!_didStartup) {
       _didStartup = true;
       // ListHabitsActivity.onCreate: increments the launch count and, on a
@@ -227,6 +287,7 @@ class HabitListModel extends ChangeNotifier
   void detach() {
     if (!_attached) return;
     _attached = false;
+    scope.preferences.removeListener(_preferencesListener);
     scope.adapter.cancelRefresh();
     scope.adapter.onDetached();
     scope.adapter.observable.removeListener(_observableListener);
@@ -357,7 +418,17 @@ class HabitListModel extends ChangeNotifier
   void showHabitScreen(Habit h) => onShowHabitScreen?.call(h);
 
   @override
-  void showIntroScreen() => onShowIntroScreen?.call();
+  void showIntroScreen() {
+    final handler = _onShowIntroScreen;
+    // Held rather than dropped: the widget layer installs its handlers a moment
+    // after `create` has already run `onStartup()`, and this is the one call
+    // that arrives inside that window. See [onShowIntroScreen].
+    if (handler == null) {
+      _introScreenPending = true;
+      return;
+    }
+    handler();
+  }
 
   @override
   void showMessage(ListHabitsBehaviorMessage m) => onShowMessage?.call(m);
@@ -472,6 +543,24 @@ class HabitListModel extends ChangeNotifier
       tray.show(habit, today, 0);
     }
   }
+}
+
+/// The `Preferences.Listener` half of `ListHabitsActivity`.
+///
+/// Kotlin's listener is an interface with default methods and the activity
+/// implements it directly. The Dart port of it is a concrete class with empty
+/// bodies, so a [ChangeNotifier] cannot also be one: the model relays through
+/// this instead, exactly as `SettingsModel` does
+/// (lib/state/settings_model.dart).
+class _ListHabitsPreferencesListener extends PreferencesListener {
+  _ListHabitsPreferencesListener({
+    required void Function() onQuestionMarksChanged,
+  }) : _onQuestionMarksChanged = onQuestionMarksChanged;
+
+  final void Function() _onQuestionMarksChanged;
+
+  @override
+  void onQuestionMarksChanged() => _onQuestionMarksChanged();
 }
 
 class _UnsupportedDirFinder implements ListHabitsBehaviorDirFinder {

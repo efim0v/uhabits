@@ -100,6 +100,11 @@ void main() {
       AppDatabase.openAndMigrate(path),
       databasePath: path,
     );
+    // `BaseUserInterfaceTest.setUp`: `prefs.isFirstRun = false`. A scope over an
+    // empty preference store IS a first run, and a first run now opens the intro
+    // on top of the habit list (`verify.intro-never-shown`) — which is
+    // test/ui/intro/intro_wiring_test.dart's subject, not this file's.
+    scope.preferences.isFirstRun = false;
     scopes.add(scope);
     return scope;
   }

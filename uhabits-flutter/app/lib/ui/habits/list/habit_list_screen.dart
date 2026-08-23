@@ -25,6 +25,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+// The core package does not re-export lib/src/time/date_utils.dart either; it
+// is where `computeToday` lives.
+// ignore: implementation_imports
+import 'package:uhabits_core/src/time/date_utils.dart' as core;
 // The core package does not re-export lib/src/ui/screens yet.
 // ignore: implementation_imports
 import 'package:uhabits_core/src/ui/screens/habits/list/hint_list.dart' as core;
@@ -47,6 +51,7 @@ import '../../common/dialogs/checkmark_dialog.dart';
 import '../../common/dialogs/color_picker_dialog.dart';
 import '../../common/dialogs/confirm_delete_dialog.dart';
 import '../../common/dialogs/number_dialog.dart';
+import '../../intro/intro_screen.dart';
 import '../../settings/data_actions.dart';
 import '../../settings/settings_screen.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
@@ -58,6 +63,20 @@ import 'list_habits_menu.dart';
 import 'list_habits_root_view.dart';
 import 'list_habits_selection_menu.dart';
 import 'list_header.dart';
+
+/// `resources.getStringArray(R.array.hints)`.
+///
+/// `R.array.hints` is a `<string-array>` of two `@string` references —
+/// `@string/hint_drag` then `@string/hint_landscape` — so Android resolves
+/// both through the device locale and every one of the 47 shipped translations
+/// reaches the hint box. That is what this rebuilds: the same two entries, in
+/// the same order, read off the ambient [L10n] rather than off
+/// `core.listHabitsHints`, which is the English source array the core keeps as
+/// data (`verify.hints-hardcoded-english#1`).
+List<String> listHabitsHintsOf(L10n l10n) => <String>[
+      l10n.hintDrag,
+      l10n.hintLandscape,
+    ];
 
 /// The main screen. Owns the [HabitListModel] for as long as it is mounted.
 class HabitListScreen extends StatelessWidget {
@@ -91,6 +110,11 @@ class HabitListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<HabitListModel>(
+      // `attach()` runs `behavior.onStartup()`, which on a first run asks for
+      // the intro screen before `_HabitListView` below has installed a single
+      // handler. `HabitListModel.onShowIntroScreen` is the one sink that keeps
+      // such a request until the widget layer arrives, so the ordering here is
+      // the ordering upstream has: the Screen is never missing.
       create: (context) => HabitListModel(context.read<AppScope>())..attach(),
       child: _HabitListView(onOpenUrl: onOpenUrl, widgetLinks: widgetLinks),
     );
@@ -108,7 +132,8 @@ class _HabitListView extends StatefulWidget {
   State<_HabitListView> createState() => _HabitListViewState();
 }
 
-class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
+class _HabitListViewState extends State<_HabitListView>
+    with RestorationMixin, WidgetsBindingObserver {
   /// `HabitCardListView.dataOffset`, fed by the header's scroll controller —
   /// `ListHabitsRootView.setupControllers`.
   ///
@@ -143,7 +168,14 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
   /// `ListHabitsRootView.hintView`, and the `HintList` it was built with.
   final GlobalKey<HintViewState> _hintKey = GlobalKey<HintViewState>();
 
-  late final core.HintList _hintList;
+  /// Built in [didChangeDependencies], not in [initState]: its hint array is
+  /// `R.array.hints` resolved against the current locale, and reading a
+  /// localization is an inherited-widget lookup, which is exactly what
+  /// `didChangeDependencies` is for. Upstream this is the same moment —
+  /// `ListHabitsRootView.init` asks the *activity's* resources, so the array is
+  /// resolved after the configuration is attached, and a configuration change
+  /// rebuilds the view with the new one.
+  core.HintList? _hintList;
 
   /// `ListHabitsActivity.menu`.
   final GlobalKey<ListHabitsMenuState> _menuKey =
@@ -187,6 +219,10 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
       // `ListHabitsScreen.showHabitScreen(h)`: startActivity(
       // IntentFactory().startShowHabitActivity(context, h)).
       ..onShowHabitScreen = ((habit) => ShowHabitScreen.open(context, habit))
+      // `ListHabitsScreen.showIntroScreen()`: startActivity(intentFactory
+      // .startIntroActivity(activity)) — the first-run intro, which
+      // `ListHabitsBehavior.onFirstRun()` asks for.
+      ..onShowIntroScreen = _showIntroScreen
       ..onShowNumberPopup = _showNumberPopup
       ..onShowCheckmarkPopup = _showCheckmarkPopup
       ..onShowConfetti = _showConfetti;
@@ -211,12 +247,6 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
       ..onShowColorPicker = _showColorPicker
       ..onShowDeleteConfirmationScreen = _showDeleteConfirmation
       ..onShowEditHabitsScreen = _showEditHabitsScreen;
-    // `ListHabitsRootView.init`: the root builds the hint list from the
-    // `R.array.hints` string-array and hands it to its HintView.
-    _hintList = core.HintList(
-      _model.scope.preferences,
-      core.listHabitsHints,
-    );
     // `ListHabitsActivity.onResume` -> `screen.onAttached()`.
     _toasts = ListHabitsCommandToasts(
       commandRunner: _model.scope.commandRunner,
@@ -232,6 +262,63 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.widgetLinks?.attachListScreen(_onDeepLinkIntent);
     });
+    // Upstream this screen *is* an activity, so the system runs `onPause` when
+    // the app leaves the foreground and `onResume` when it comes back. A
+    // Flutter app has one activity for the whole process: this widget stays
+    // mounted across a background/foreground round trip, and the provider that
+    // owns the model only attaches and detaches it on mount and unmount. The
+    // observer is what gives the two callbacks their other half.
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// `ListHabitsRootView.init`: the root builds the hint list from the
+  /// `R.array.hints` string-array and hands it to its HintView.
+  ///
+  /// `R.array.hints` is two `@string` references, so `getStringArray` resolves
+  /// both through the device locale and a French user reads a French hint
+  /// (`verify.hints-hardcoded-english#1`). Here the array is
+  /// [listHabitsHintsOf], off the ambient [L10n], and it is rebuilt whenever
+  /// that changes — the locale is a dependency of this widget, which is why
+  /// the list cannot be built in `initState`.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // `HintListFactory.create(resources.getStringArray(R.array.hints))`: the
+    // factory closes over the application-scoped Preferences and takes only
+    // the array.
+    _hintList = core.HintListFactory(_model.scope.preferences)
+        .create(listHabitsHintsOf(L10n.of(context)));
+  }
+
+  /// `ListHabitsActivity.onResume` / `onPause` for the transitions that are not
+  /// a mount (`verify.list-not-refreshed-on-resume`).
+  ///
+  /// `onResume` re-runs `adapter.refresh()`, which recomputes the whole
+  /// `HabitCardListCache` against the current `getToday()`, and
+  /// `screen.onAttached()`, which puts the cache back on the command runner.
+  /// Both are [HabitListModel.attach]. `onPause` is the mirror image, and it
+  /// matters for the same reason it does upstream: a detached cache is one
+  /// that cannot be left holding a half-finished refresh.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      // `midnightTimer.onPause(); screen.onDetached(); adapter.cancelRefresh()`
+      // — the app-level half of `onPause` lives in main.dart, next to the
+      // timer it pauses.
+      _model.detach();
+      return;
+    }
+    // `DateUtils.getToday()` is a clock read on every call upstream, so the
+    // refresh below sees the real day even when the process spent it in the
+    // background. The port stamps the day into a process-global instead, and
+    // its only writer — the midnight timer — was paused for exactly that
+    // interval and, on resume, schedules the *next* boundary rather than
+    // firing for one already crossed. Re-stamping here is what makes the
+    // refresh recompute today rather than yesterday.
+    core.setToday(
+      core.computeToday(_model.scope.preferences.midnightDelayHours, 0),
+    );
+    _model.attach();
   }
 
   /// `ListHabitsActivity.onNewIntent` -> `setIntent(intent)`, followed by the
@@ -247,11 +334,13 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _dataOffsetState.dispose();
     // `ListHabitsActivity.onPause` -> `screen.onDetached()`.
     _toasts.onDetached();
     _model
       ..onShowHabitScreen = null
+      ..onShowIntroScreen = null
       ..onShowNumberPopup = null
       ..onShowCheckmarkPopup = null
       ..onShowConfetti = null
@@ -271,6 +360,40 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
     widget.widgetLinks?.detachListScreen(_onDeepLinkIntent);
     _listScrollController.dispose();
     super.dispose();
+  }
+
+  /// `ListHabitsScreen.showIntroScreen()`:
+  ///
+  /// ```kotlin
+  /// override fun showIntroScreen() {
+  ///     val intent = intentFactory.startIntroActivity(activity)
+  ///     activity.startActivity(intent)
+  /// }
+  /// ```
+  ///
+  /// `IntroActivity` is a separate activity started on top of the list, so the
+  /// port pushes a route on top of this one rather than replacing it.
+  ///
+  /// The push waits for the end of the frame because `onStartup()` runs from
+  /// [initState], where this screen's route is still being built and there is
+  /// no navigator to push onto yet. `startActivity` waits for the same thing:
+  /// the activity it is called from has not finished `onCreate`, and the
+  /// transaction it queues is only carried out once it has.
+  ///
+  /// The navigator is looked up here rather than inside the callback: by the
+  /// time a post-frame callback runs, this element may have been taken out of
+  /// the tree, and an ancestor lookup from a deactivated element throws. The
+  /// same reason `startActivity` on a finishing activity is dropped rather than
+  /// crashing, so a navigator that is gone by then simply shows nothing.
+  void _showIntroScreen() {
+    final navigator = Navigator.maybeOf(context);
+    if (navigator == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !navigator.mounted) return;
+      navigator.push<void>(
+        MaterialPageRoute<void>(builder: (_) => const IntroScreen()),
+      );
+    });
   }
 
   ThemeModel? _readThemeModel() {
@@ -503,7 +626,9 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
                 bottom: 0,
                 child: HintView(
                   key: _hintKey,
-                  hintList: _hintList,
+                  // Non-null from `didChangeDependencies` onwards, which runs
+                  // before the first build.
+                  hintList: _hintList!,
                   title: l10n.hintTitle,
                 ),
               ),

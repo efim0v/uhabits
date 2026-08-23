@@ -195,7 +195,11 @@ void main() {
   // -----------------------------------------------------------------------
 
   group('the reminder small icon', () {
-    test('the plugin is initialised with the ic_notification drawable', () {
+    // That this name really reaches `plugin.initialize` at startup — which is
+    // what makes the notification appear at all — is asserted where the
+    // startup runs: test/state/reminder_response_wiring_test.dart.
+    test('the small icon the app initialises the plugin with is the drawable',
+        () {
       expect(LocalNotificationsPresenter.androidSmallIcon, 'ic_notification',
           reason: 'notifications.content#2: small icon is '
               'R.drawable.ic_notification. The plugin takes the drawable by '

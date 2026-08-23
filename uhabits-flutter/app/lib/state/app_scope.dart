@@ -26,10 +26,14 @@ import 'package:uhabits_core/src/ui/notification_tray.dart';
 
 import '../l10n/app_localizations.dart';
 import '../platform/app_database.dart';
+import '../platform/bug_reporter.dart';
 import '../platform/file_preferences_storage.dart';
 import '../platform/flutter_alarm_scheduler.dart';
+import '../platform/flutter_files.dart';
 import '../platform/flutter_notification_tray.dart';
 import '../platform/home_widget_bridge.dart';
+import 'intent_router.dart';
+import 'reminder_link.dart';
 import 'widget_sync.dart';
 
 /// This build's `BuildConfig.VERSION_CODE`.
@@ -101,6 +105,25 @@ class AppScope {
 
   final Logging logging;
 
+  /// `AndroidBugReporter`, which `ListHabitsModule` binds as the
+  /// `ListHabitsBehavior.BugReporter` and which `BaseExceptionHandler` builds
+  /// on the spot to dump a crash (`platform-glue.crash-handler#4`,
+  /// `io.bug-report-dump#8`).
+  ///
+  /// One per application, because the crash handler and the Troubleshooting row
+  /// dump the same report to the same place. [boot] points it at the resolved
+  /// external files directory; a scope that never booted — every widget test —
+  /// still answers with a reporter, one whose `getFilesDir` finds nothing.
+  /// That is upstream's own `log dir should not be null` branch: an IOException
+  /// the dump catches and prints, which keeps the crash path's collaborator
+  /// non-null without inventing a directory.
+  FlutterBugReporter get bugReporter => _bugReporter ??= FlutterBugReporter(
+        dirFinder: HabitsDirFinder(const <String>[]),
+        deviceInfo: DeviceInfo.current(),
+      );
+
+  FlutterBugReporter? _bugReporter;
+
   final HabitCardListCache cache;
 
   final HabitCardListAdapter adapter;
@@ -119,8 +142,32 @@ class AppScope {
       databasePath: appDatabase.path,
       preferencesStorage: storage,
     );
+    await scope._resolveBugReporter();
     await scope.startPlatformServices();
     return scope;
+  }
+
+  /// Points [bugReporter] at `ContextCompat.getExternalFilesDirs(context,
+  /// null)`, which is a platform call and so cannot happen in [open].
+  ///
+  /// Upstream `AndroidBugReporter` takes a `Context` and asks it for the
+  /// directory on every dump; here the answer is resolved once, at startup,
+  /// because the crash handler that dumps through it is installed before the
+  /// first frame and cannot await anything.
+  Future<void> _resolveBugReporter() async {
+    try {
+      final directories = await AppDirectories.resolve();
+      _bugReporter = FlutterBugReporter(
+        dirFinder: HabitsDirFinder.of(directories),
+        deviceInfo: DeviceInfo.current(),
+      );
+    } on Object catch (error) {
+      // The fallback below still answers, and its dump fails the way upstream's
+      // does when `getFilesDir` returns null.
+      logging
+          .getLogger('HabitsApplication')
+          .error('Bug report directory unavailable: $error');
+    }
   }
 
   /// Constructs and starts the singletons `HabitsApplication.onCreate` starts:
@@ -154,18 +201,39 @@ class AppScope {
       strings: NotificationStrings.from(l10n),
     );
     final plugin = FlutterLocalNotificationsPlugin();
-    final presenter =
-        LocalNotificationsPresenter(plugin: plugin, builder: builder);
 
+    // `AndroidNotificationTray` sets `R.drawable.ic_notification` on every
+    // notification it builds and creates the REMINDERS channel before
+    // notifying. Both of those are things this plugin is told once, at
+    // initialisation — and so is the pair of callbacks without which nothing
+    // the user does to a notification reaches Dart at all. Constructing the
+    // presenter without initialising it is what made every scheduled reminder
+    // throw inside the plugin at fire time, and every button a dead end.
+    //
+    // The response callback is registered here, and not from a widget,
+    // because a notification can start the app: by the time the first frame
+    // is built the response has already been delivered. See
+    // lib/state/reminder_link.dart.
+    ReminderResponseRouter? responses;
+    final presenter = await LocalNotificationsPresenter.initialize(
+      builder: builder,
+      plugin: plugin,
+      onResponse: (response) => responses?.handleResponse(response),
+      // An Android action button that shows no user interface — "Yes" and
+      // "No" — is delivered to a background isolate and to nothing else.
+      onBackgroundResponse: reminderBackgroundResponse,
+    );
+
+    final flutterTray = FlutterNotificationTray(
+      presenter: presenter,
+      builder: builder,
+      logging: logging,
+    );
     final tray = NotificationTray(
       taskRunner,
       commandRunner,
       preferences,
-      FlutterNotificationTray(
-        presenter: presenter,
-        builder: builder,
-        logging: logging,
-      ),
+      flutterTray,
     );
 
     final scheduler = ReminderScheduler(
@@ -196,7 +264,44 @@ class AppScope {
       preferences: preferences,
     );
 
+    // `ReminderReceiver` + `ReminderController` + the two `WidgetReceiver`
+    // actions a reminder carries. Built here because the callback registered
+    // above has to have something to call from the moment the plugin is
+    // initialised.
+    final controller = ReminderController(scheduler, tray, preferences);
+    responses = ReminderResponseRouter(
+      habits: habitList,
+      controller: controller,
+      checkmarks: WidgetIntentReceiver(
+        parser: IntentParser(habitList),
+        controller: WidgetBehavior(
+          habitList: habitList,
+          commandRunner: commandRunner,
+          notificationTray: tray,
+          preferences: preferences,
+        ),
+        preferences: preferences,
+        updateWidgets: sync.updateWidgets,
+        scheduleStartDayWidgetUpdate: sync.scheduleStartDayWidgetUpdate,
+        logging: logging,
+      ),
+      // The delete intent this plugin does not have.
+      dismissals: DismissedReminderDetector(
+        tray: flutterTray,
+        platform: presenter,
+        onDismiss: controller.onDismiss,
+        logging: logging,
+      ),
+      logging: logging,
+    );
+    _reminderResponses = responses;
+
     startServices(tray: tray, scheduler: scheduler, sync: sync);
+
+    // Last, because it can act immediately: the notification that started the
+    // app is not replayed through the callback, and everything else has to be
+    // listening before it is answered.
+    await responses.replayLaunchResponse(plugin);
   }
 
   /// Steps (7) to (10) of `HabitsApplication.onCreate`, once the three
@@ -250,6 +355,16 @@ class AppScope {
   /// Publishes the data the native home-screen widgets read.
   WidgetSync? get widgetSync => _started?.sync;
 
+  ReminderResponseRouter? _reminderResponses;
+
+  /// Answers a tap on a reminder notification. Null until
+  /// [startPlatformServices] has run, which widget tests never do.
+  ///
+  /// It is a property of the scope rather than of a screen because the plugin
+  /// callback is registered before `runApp`: a notification can be what
+  /// launched the app, and the response arrives before any widget exists.
+  ReminderResponseRouter? get reminderResponses => _reminderResponses;
+
   /// Wires the scope around an already-opened [database].
   ///
   /// [preferencesStorage] defaults to a [MemoryStorage]: the Android app reads
@@ -267,7 +382,19 @@ class AppScope {
     Dispatcher ioDispatcher = const AsyncDispatcher(),
     Logging? logging,
   }) {
-    final resolvedLogging = logging ?? StandardLogging();
+    // `Logging = AndroidLogging`, whose loggers write to `android.util.Log` —
+    // which is exactly what `AndroidBugReporter.getLogcat()` reads back out of
+    // `logcat -d`. Off Android there is no system log to write into and read
+    // from, so [BugReportLog] is that shared buffer and [BugReportLogging] is
+    // the half that fills it: without this decorator every generated bug report
+    // has a blank space where 250 log lines should be
+    // (`io.bug-report-dump#3`, `#4`).
+    //
+    // An injected [logging] is a test replacing the binding outright — upstream
+    // `HabitsApplicationTestComponent` overriding a `@Provides` — so it is
+    // taken as given rather than wrapped.
+    final resolvedLogging =
+        logging ?? BugReportLogging(StandardLogging(), BugReportLog.instance);
     final modelFactory = SQLModelFactory(database);
     final habitList = modelFactory.buildHabitList();
     final storage = preferencesStorage ?? MemoryStorage();
@@ -331,6 +458,8 @@ class AppScope {
     // reminderScheduler.stopListening(), widgetUpdater.stopListening(),
     // notificationTray.stopListening() (`commands.command-runner-listeners#8`).
     // Null in every test that never started the platform services.
+    _reminderResponses?.dispose();
+    _reminderResponses = null;
     final started = _started;
     if (started != null) {
       started.scheduler.stopListening();

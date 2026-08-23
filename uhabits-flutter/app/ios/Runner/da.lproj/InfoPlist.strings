@@ -1,0 +1,5 @@
+/* The home-screen label: the iOS counterpart of the Android string
+   resource main_activity_title. Generated from mainActivityTitle in
+   lib/l10n/app_da.arb, the one catalogue both platforms read. */
+"CFBundleDisplayName" = "Vaner";
+"CFBundleName" = "Vaner";

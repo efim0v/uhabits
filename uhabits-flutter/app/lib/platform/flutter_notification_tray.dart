@@ -524,7 +524,13 @@ class FlutterNotificationTray implements SystemTray {
   /// Port of `private var active = HashSet<Int>()`
   /// (`notifications.id-and-registry#6`). It is the tray's own bookkeeping —
   /// the core keeps a separate registry keyed by habit.
-  final Set<int> _active = <int>{};
+  ///
+  /// The habit is kept beside the id, which the `HashSet<Int>` upstream does
+  /// not need: Android answers a dismissal with an intent that names the
+  /// habit, and this plugin answers it with nothing at all, so the id that
+  /// vanished from the shade has to be translatable back into the habit
+  /// [ReminderController.onDismiss] wants. See [DismissedReminderDetector].
+  final Map<int, Habit> _active = <int, Habit>{};
 
   /// Every platform call, in order.
   ///
@@ -534,7 +540,20 @@ class FlutterNotificationTray implements SystemTray {
   /// a `cancel` issued after a `show` reaches the platform after it.
   Future<void> _pending = Future<void>.value();
 
-  Set<int> get activeNotificationIds => Set<int>.unmodifiable(_active);
+  Set<int> get activeNotificationIds => Set<int>.unmodifiable(_active.keys);
+
+  /// The notifications this tray believes are on screen, by notification id.
+  Map<int, Habit> get activeReminders => Map<int, Habit>.unmodifiable(_active);
+
+  /// Drops one entry from the registry without touching the platform.
+  ///
+  /// The one caller is [DismissedReminderDetector]: a notification the user
+  /// swiped away is already gone from the shade, so cancelling it would be a
+  /// no-op, but the bookkeeping still has to let go of it before
+  /// `ReminderController.onDismiss` decides whether to put it back.
+  void forgetNotification(int notificationId) {
+    _active.remove(notificationId);
+  }
 
   /// Awaits every platform call issued so far. For tests and for shutdown.
   Future<void> settle() => _pending;
@@ -574,8 +593,89 @@ class FlutterNotificationTray implements SystemTray {
         _logger.info('Failed to show notification. Retrying without sound.');
         await _presenter.show(spec.copyWith(playSound: false));
       }
-      _active.add(notificationId);
+      _active[notificationId] = habit;
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The delete intent, which this plugin does not have
+// ---------------------------------------------------------------------------
+
+/// What the platform still has in its shade.
+///
+/// Upstream every reminder carries `setDeleteIntent(pendingIntents
+/// .dismissNotification(habit))`, so a swipe is *delivered*:
+/// `ReminderReceiver` gets ACTION_DISMISS_REMINDER and calls
+/// `ReminderController.onDismiss`. `flutter_local_notifications` 18.0.1 has no
+/// delete intent and no notification-dismissed callback of any kind — there is
+/// no `setDeleteIntent` anywhere in its Android source — so the port cannot be
+/// told. What it can do is *ask*, which is what this seam is: the plugin does
+/// expose the set of notifications that are still posted.
+abstract interface class ActiveNotificationQuery {
+  /// The ids the platform still shows, or null when this host cannot say.
+  ///
+  /// Null rather than an empty set matters: "nothing is posted" and "I cannot
+  /// see what is posted" must not look alike, or every reminder would be
+  /// treated as swiped away. Only Android reports ids at all.
+  Future<Set<int>?> activeNotificationIds();
+}
+
+/// Port of the delete intent's effect: `ReminderController.onDismiss(habit)`
+/// for every reminder that has left the shade.
+///
+/// It runs when the app comes back to the foreground, because that is the
+/// first moment after a swipe at which Dart is running again. Upstream the
+/// call is immediate; here it is late, and the difference is visible for
+/// sticky notifications on Android 14+ — the reminder reappears when the user
+/// next opens the app rather than the instant they dismiss it. Both of the
+/// consequences the ledger names are nevertheless repaired: the sticky
+/// reminder comes back (`notifications.sticky-and-dismiss#5`), and the core
+/// tray's `active` registry stops claiming a notification that is no longer on
+/// screen (`#6`).
+class DismissedReminderDetector {
+  DismissedReminderDetector({
+    required FlutterNotificationTray tray,
+    required ActiveNotificationQuery platform,
+    required void Function(Habit habit) onDismiss,
+    Logging? logging,
+  })  : _tray = tray,
+        _platform = platform,
+        _onDismiss = onDismiss,
+        _logger = (logging ?? StandardLogging()).getLogger('ReminderReceiver');
+
+  final FlutterNotificationTray _tray;
+
+  final ActiveNotificationQuery _platform;
+
+  /// `ReminderController.onDismiss`.
+  final void Function(Habit habit) _onDismiss;
+
+  final Logger _logger;
+
+  Future<void> reconcile() async {
+    // Everything already queued has to reach the platform first, or a
+    // notification posted a moment ago would be read back as missing.
+    await _tray.settle();
+    final Map<int, Habit> believed = _tray.activeReminders;
+    if (believed.isEmpty) return;
+    final Set<int>? live;
+    try {
+      live = await _platform.activeNotificationIds();
+    } on Object catch (error) {
+      _logger.debug('Could not read the active notifications: $error');
+      return;
+    }
+    if (live == null) return;
+    for (final MapEntry<int, Habit> entry in believed.entries) {
+      if (live.contains(entry.key)) continue;
+      // The registry lets go first: onDismiss either re-posts the
+      // notification, which files it again, or cancels it, which is a no-op
+      // on a notification the user has already removed.
+      _tray.forgetNotification(entry.key);
+      _logger.debug('onDismiss habit=${entry.value.id}');
+      _onDismiss(entry.value);
+    }
   }
 }
 
@@ -588,7 +688,8 @@ class FlutterNotificationTray implements SystemTray {
 /// Never exercised by a widget test — the plugin's method channel has no
 /// implementation there. Everything worth asserting was pushed up into
 /// [ReminderNotificationBuilder] and [FlutterNotificationTray].
-class LocalNotificationsPresenter implements NotificationPresenter {
+class LocalNotificationsPresenter
+    implements NotificationPresenter, ActiveNotificationQuery {
   LocalNotificationsPresenter({
     required this.plugin,
     required ReminderNotificationBuilder builder,
@@ -766,6 +867,24 @@ class LocalNotificationsPresenter implements NotificationPresenter {
 
   @override
   Future<void> cancel(int id) => plugin.cancel(id);
+
+  /// `NotificationManagerCompat.getActiveNotifications()`.
+  ///
+  /// Only Android fills the id in — on Darwin `ActiveNotification.id` is null,
+  /// because the notifications it lists were not necessarily posted by this
+  /// plugin — so every other host answers "I cannot say" rather than "nothing
+  /// is posted". See [ActiveNotificationQuery].
+  @override
+  Future<Set<int>?> activeNotificationIds() async {
+    final android = plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (android == null) return null;
+    final active = await android.getActiveNotifications();
+    return <int>{
+      for (final notification in active)
+        if (notification.id != null) notification.id!,
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------

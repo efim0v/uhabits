@@ -31,10 +31,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart' as core;
-import 'package:uhabits_core/src/ui/views/ring.dart' as core_views;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
-import '../../core_view.dart';
+import '../../common/views/ring_view.dart';
 import 'entry_panel.dart';
 
 /// The geometry of HabitCardView, in logical pixels.
@@ -57,6 +56,11 @@ class _CardMetrics {
 
   /// `setThickness(dp(3f))`.
   static const double ringThickness = 3.0;
+
+  /// `scoreRing.setPrecision(1.0f / 16)`, the second half of the `score`
+  /// setter, which quantises the drawn sweep to 22.5-degree steps
+  /// (`list-habits.habit-card#2`, `verify.ring-not-quantised#1`).
+  static const double ringPrecision = 1.0 / 16;
 
   /// `elevation = dp(1f)` on the inner frame.
   static const double elevation = 1.0;
@@ -228,20 +232,42 @@ class _HabitCardState extends State<HabitCard> {
     );
   }
 
+  /// `scoreRing`, the `RingView` the Kotlin `init` block puts first in the
+  /// inner frame:
+  ///
+  /// ```kotlin
+  /// scoreRing = RingView(context).apply { … setThickness(dp(3f)) }
+  /// …
+  /// var score
+  ///     set(value) {
+  ///         scoreRing.setPercentage(value.toFloat())
+  ///         scoreRing.setPrecision(1.0f / 16)
+  ///     }
+  /// ```
+  ///
+  /// This is the Android widget, not the core `Ring` view: only the Android one
+  /// has a precision, and the card's is 1/16, so a score of 0.03 rounds down to
+  /// no arc at all and one of 0.97 rounds up to a closed ring
+  /// (`verify.ring-not-quantised#1`). Its two other colours come from `init()`:
+  /// the remainder is `?attr/contrast100` at 15% alpha and the hole is
+  /// `?attr/cardBgColor`, whatever the row's own selected background is.
   Widget _buildRing(core.Color color) {
+    final theme = widget.theme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: _CardMetrics.ringMargin),
       child: SizedBox(
         width: _CardMetrics.ringSize,
         height: _CardMetrics.ringSize,
-        child: CoreView(
-          view: core_views.Ring(
-            color: color,
-            percentage: widget.score,
-            thickness: _CardMetrics.ringThickness,
-            radius: _CardMetrics.ringSize / 2,
-            theme: widget.theme,
-          ),
+        child: RingView(
+          // `scoreRing.setColor(c)` in `copyAttributesFrom`: the label's colour,
+          // i.e. contrast60 for an archived habit.
+          color: _toFlutterColor(color),
+          percentage: widget.score,
+          precision: _CardMetrics.ringPrecision,
+          thickness: _CardMetrics.ringThickness,
+          backgroundColor: _toFlutterColor(theme.cardBgColor),
+          inactiveColor:
+              RingView.applyInactiveAlpha(_toFlutterColor(theme.contrast100)),
         ),
       ),
     );

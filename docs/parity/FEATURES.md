@@ -6364,7 +6364,7 @@ it, because tests construct these objects themselves.
 
 #### verify.notifications-never-initialised
 
-- [ ] `verify.notifications-never-initialised` — flutter_local_notifications is never initialised, so no reminder notification can ever be posted
+- [x] `verify.notifications-never-initialised` — flutter_local_notifications is never initialised, so no reminder notification can ever be posted
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt — showNotification / buildNotification (setSmallIcon(R.drawable.ic_notification)); createAndroidNotificationChannel`
 - **Where the port should do it:** `uhabits-flutter/app/lib/state/app_scope.dart:146-200 (`AppScope._startPlatformServices`) — it constructs `LocalNotificationsPresenter(plugin: plugin, builder: builder)` directly instead of awaiting `LocalNotificationsPresenter.initialize(...)` (uhabits-flutter/app/lib/platform/flutter_notification_tray.dart:620)`
@@ -6376,7 +6376,7 @@ it, because tests construct these objects themselves.
 
 #### verify.notification-actions-unrouted
 
-- [ ] `verify.notification-actions-unrouted` — Nothing routes a notification tap or action button: ReminderIntentReceiver, ReminderController and the snooze picker are never constructed
+- [x] `verify.notification-actions-unrouted` — Nothing routes a notification tap or action button: ReminderIntentReceiver, ReminderController and the snooze picker are never constructed
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderReceiver.kt (ACTION_DISMISS_REMINDER / ACTION_SNOOZE_REMINDER dispatch), receivers/ReminderController.kt (onSnoozePressed, onSnoozeDelayPicked, onSnoozeTimePicked, onDismiss), notifications/SnoozeDelayPickerActivity.kt, intents/PendingIntentFactory.kt (addCheckmark, removeRepetition, showNumberPicker, showHabit)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/main.dart (`_ThemedAppState`) and uhabits-flutter/app/lib/state/app_scope.dart — neither ever builds `ReminderIntentReceiver` (lib/state/intent_router.dart:270), a core `ReminderController`, or calls `showSnoozePickerDialog` (lib/ui/common/dialogs/snooze_picker_dialog.dart:99)`
@@ -6388,7 +6388,7 @@ it, because tests construct these objects themselves.
 
 #### verify.sticky-dismiss-unrouted
 
-- [ ] `verify.sticky-dismiss-unrouted` — Swiping a reminder away never reaches ReminderController.onDismiss, so 'Make notifications sticky' loses its Android-14 re-show
+- [x] `verify.sticky-dismiss-unrouted` — Swiping a reminder away never reaches ReminderController.onDismiss, so 'Make notifications sticky' loses its Android-14 re-show
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt — `.setDeleteIntent(pendingIntents.dismissNotification(habit))`; receivers/ReminderController.kt — `onDismiss` (notifications.sticky-and-dismiss#5, #6)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_notification_tray.dart — `ReminderNotificationBuilder.build` / `_actionsFor` produce a `NotificationSpec` with no dismiss/delete channel, and `LocalNotificationsPresenter.detailsFor` has no delete-intent equivalent`
@@ -6396,11 +6396,11 @@ it, because tests construct these objects themselves.
 - **Severity:** major
 
 1. `verify.sticky-dismiss-unrouted#1` — In the Kotlin app: Every reminder carries a delete intent addressed to ReminderReceiver with ACTION_DISMISS_REMINDER. When the user swipes the notification away, ReminderController.onDismiss runs: with `pref_sticky_notifications` on it calls notificationTray.reshow(habit) — the documented workaround that keeps sticky reminders non-dismissible on Android 14+ — and with it off it calls notificationTray.cancel(habit) so the core's `active` registry stays in step.
-2. `verify.sticky-dismiss-unrouted#2` — The port must do the same. Today: `ReminderActions.dismissReminder` is declared and `ReminderResponse.decode` maps it to `ReminderResponseKind.dismiss`, but no `NotificationSpec` ever lists a dismiss action and flutter_local_notifications 18.0.1 has no delete-intent / notification-dismissed callback at all (no `deleteIntent` or `setDeleteIntent` anywhere in its Android source). The dismiss branch can therefore never fire: with sticky on, a swiped reminder stays gone on Android 14+ instead of reappearing, and the core tray's `active` map keeps an entry for a notification that is no longer in the shade. The Dart tests that cover this (app/test/platform/notifications_test.dart:1156, packages/uhabits_core/test/ui/notification_tray_test.dart:1094) call `controller.onDismiss(...)` by hand and never exercise a real delivery path.
+2. `verify.sticky-dismiss-unrouted#2` — The port must do the same. Today: `ReminderActions.dismissReminder` is declared and `ReminderResponse.decode` maps it to `ReminderResponseKind.dismiss`, but no `NotificationSpec` ever lists a dismiss action and flutter_local_notifications 18.0.1 has no delete-intent / notification-dismissed callback at all (no `deleteIntent` or `setDeleteIntent` anywhere in its Android source). The dismiss branch can therefore never fire: with sticky on, a swiped reminder stays gone on Android 14+ instead of reappearing, and the core tray's `active` map keeps an entry for a notification that is no longer in the shade. The Dart tests that cover this (app/test/platform/notifications_test.dart:1156, packages/uhabits_core/test/ui/notification_tray_test.dart:1094) call `controller.onDismiss(...)` by hand and never exercise a real delivery path. — **не применимо к порту:** правило `#2` в этом домене фиксирует состояние порта *до* исправления, а не требование. После починки его нельзя процитировать, не утверждая, что дефект всё ещё на месте; требование несёт правило `#1`.
 
 #### verify.bug-report-log-empty
 
-- [ ] `verify.bug-report-log-empty` — BugReportLogging is never installed, so every generated bug report contains an empty log section
+- [x] `verify.bug-report-log-empty` — BugReportLogging is never installed, so every generated bug report contains an empty log section
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/io/AndroidLogging.kt (AndroidLogging/AndroidLogger writing to android.util.Log) plus AndroidBugReporter.getLogcat() (io.bug-report-dump#3, #4)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/state/app_scope.dart:270 — `final resolvedLogging = logging ?? StandardLogging();` should wrap the logging in `BugReportLogging(StandardLogging(), BugReportLog.instance)` (uhabits-flutter/app/lib/platform/bug_reporter.dart:111)`
@@ -6412,7 +6412,7 @@ it, because tests construct these objects themselves.
 
 #### verify.crash-handler-stubbed
 
-- [ ] `verify.crash-handler-stubbed` — The crash handler is wired to UnportedBugReporter, so a crash writes no log file even though FlutterBugReporter is finished
+- [x] `verify.crash-handler-stubbed` — The crash handler is wired to UnportedBugReporter, so a crash writes no log file even though FlutterBugReporter is finished
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/BaseExceptionHandler.kt — `AndroidBugReporter(activity).dumpBugReportToFile()` (platform-glue.crash-handler#4, io.bug-report-dump#8)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/main.dart:99 — `BaseExceptionHandler(const UnportedBugReporter(), hooks: FlutterCrashHandlerHooks())`; it should be handed the `FlutterBugReporter` that lib/ui/settings/data_actions.dart:150 already builds`
@@ -6424,7 +6424,7 @@ it, because tests construct these objects themselves.
 
 #### verify.intro-never-shown
 
-- [ ] `verify.intro-never-shown` — The first-run intro is never shown: HabitListModel.onShowIntroScreen is never assigned
+- [x] `verify.intro-never-shown` — The first-run intro is never shown: HabitListModel.onShowIntroScreen is never assigned
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-core/.../ui/screens/habits/list/ListHabitsBehavior.kt onStartup()/onFirstRun() -> screen.showIntroScreen(); uhabits-android/.../activities/habits/list/ListHabitsScreen.kt showIntroScreen(); uhabits-android/.../activities/intro/IntroActivity.kt`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart:186-213 (_HabitListViewState.initState, the block that installs every other ListHabitsBehavior.Screen handler on the model) — it never sets `_model.onShowIntroScreen`. Sink: lib/state/habit_list_model.dart:160 and :360; screen: lib/ui/intro/intro_screen.dart`
@@ -6436,7 +6436,7 @@ it, because tests construct these objects themselves.
 
 #### verify.snooze-picker-uncalled
 
-- [ ] `verify.snooze-picker-uncalled` — The snooze delay picker has no production caller
+- [x] `verify.snooze-picker-uncalled` — The snooze delay picker has no production caller
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/SnoozeDelayPickerActivity.kt; ReminderController.onSnoozePressed / onSnoozeDelayPicked / onSnoozeTimePicked`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/common/dialogs/snooze_picker_dialog.dart:99 (showSnoozePickerDialog) — the intended caller is the `onSnoozePressed` hook of ReminderIntentReceiver (lib/state/intent_router.dart:288-291), which is never constructed`
@@ -6444,11 +6444,11 @@ it, because tests construct these objects themselves.
 - **Severity:** major
 
 1. `verify.snooze-picker-uncalled#1` — In the Kotlin app: Tapping 'Later' on a reminder starts SnoozeDelayPickerActivity: a list of snooze delays plus 'Ask every time', which routes to a time picker; the choice calls reminderScheduler.snoozeReminder / scheduleAtTime and cancels the notification.
-2. `verify.snooze-picker-uncalled#2` — The port must do the same. Today: showSnoozePickerDialog is referenced exactly once in lib — its own definition (the only other hits are its unit test and a source-text assertion in test/platform/manifest_components_test.dart:248). ReminderIntentReceiver, which is the object that would call it through its `onSnoozePressed` callback, is constructed only in test/state/intent_router_test.dart. Even once the notification-response wiring above is fixed, nothing passes `onSnoozePressed`, so 'Later' would still lead nowhere. DEVIATIONS.md records the opposite — that the port deliberately keeps 'Later' visible on all versions 'потому что ответ на действие обрабатывается в Dart'.
+2. `verify.snooze-picker-uncalled#2` — The port must do the same. Today: showSnoozePickerDialog is referenced exactly once in lib — its own definition (the only other hits are its unit test and a source-text assertion in test/platform/manifest_components_test.dart:248). ReminderIntentReceiver, which is the object that would call it through its `onSnoozePressed` callback, is constructed only in test/state/intent_router_test.dart. Even once the notification-response wiring above is fixed, nothing passes `onSnoozePressed`, so 'Later' would still lead nowhere. DEVIATIONS.md records the opposite — that the port deliberately keeps 'Later' visible on all versions 'потому что ответ на действие обрабатывается в Dart'. — **не применимо к порту:** правило `#2` в этом домене фиксирует состояние порта *до* исправления, а не требование. После починки его нельзя процитировать, не утверждая, что дефект всё ещё на месте; требование несёт правило `#1`.
 
 #### verify.question-marks-filter
 
-- [ ] `verify.question-marks-filter` — Toggling 'Show question marks' in Settings does not re-apply the habit-list filter
+- [x] `verify.question-marks-filter` — Toggling 'Show question marks' in Settings does not re-apply the habit-list filter
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/.../activities/habits/list/ListHabitsActivity.kt — `prefs.addListener(this)` in onCreate and `override fun onQuestionMarksChanged() { invalidateOptionsMenu(); menu.behavior.onPreferencesChanged() }``
 - **Where the port should do it:** `uhabits-flutter/app/lib/state/habit_list_model.dart (attach()/detach(), which register with the adapter and the command runner but never with `scope.preferences`) — the sink it should drive is ListHabitsMenuBehavior.onPreferencesChanged() in packages/uhabits_core/lib/src/ui/screens/habits/list/list_habits_menu_behavior.dart:142`
@@ -6460,7 +6460,7 @@ it, because tests construct these objects themselves.
 
 #### verify.list-not-refreshed-on-resume
 
-- [ ] `verify.list-not-refreshed-on-resume` — The habit list is never refreshed when the app returns to the foreground
+- [x] `verify.list-not-refreshed-on-resume` — The habit list is never refreshed when the app returns to the foreground
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt — `onResume()` (`adapter.refresh()`, `screen.onAttached()`, `rootView.postInvalidate()`, `midnightTimer.onResume()`) and `onPause()` (`midnightTimer.onPause()`, `screen.onDetached()`, `adapter.cancelRefresh()`)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/main.dart — `_ThemedAppState.didChangeAppLifecycleState` / `_onResume()` / `_onPause()`; and uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart, whose state is not a `WidgetsBindingObserver``
@@ -6472,7 +6472,7 @@ it, because tests construct these objects themselves.
 
 #### verify.ios-localizations-missing
 
-- [ ] `verify.ios-localizations-missing` — The iOS bundle declares no supported localizations, so all 47 translations are unreachable on iOS
+- [x] `verify.ios-localizations-missing` — The iOS bundle declares no supported localizations, so all 47 translations are unreachable on iOS
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/res/xml/locales_config.xml (44 `<locale>` entries) together with the 47 `res/values-<lang>-r<REGION>/strings.xml` resource directories, wired by `android:localeConfig="@xml/locales_config"` in uhabits-android/src/main/AndroidManifest.xml`
 - **Where the port should do it:** `uhabits-flutter/app/ios/Runner/Info.plist — should declare `CFBundleLocalizations` (or ship per-locale `.lproj` directories under app/ios/Runner/); the Dart half is already correct in app/lib/main.dart:45-46 and :248-249 (`supportedLocales: L10n.supportedLocales`)`
@@ -6484,7 +6484,7 @@ it, because tests construct these objects themselves.
 
 #### verify.ios-icon-and-label
 
-- [ ] `verify.ios-icon-and-label` — iOS ships the stock Flutter app icon and the home-screen label "Uhabits" instead of the Loop icon and "Habits"
+- [x] `verify.ios-icon-and-label` — iOS ships the stock Flutter app icon and the home-screen label "Uhabits" instead of the Loop icon and "Habits"
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/res/mipmap-anydpi-v26/ic_launcher.xml (adaptive icon: background `@color/ic_launcher_background` #1976D2, foreground `@mipmap/ic_launcher_foreground`, monochrome `@mipmap/ic_launcher_monochrome`), the five density buckets of `mipmap-*/ic_launcher_foreground.png` and `ic_launcher_monochrome.png`, `res/values/colors.xml`, and `res/values/strings.xml` `main_activity_title` = `
 - **Where the port should do it:** `uhabits-flutter/app/ios/Runner/Assets.xcassets/AppIcon.appiconset/ (all sizes are the stock Flutter logo — Icon-App-1024x1024@1x.png is the blue Flutter mark) and uhabits-flutter/app/ios/Runner/Info.plist (`CFBundleDisplayName` = "Uhabits", `CFBundleName` = "uhabits")`
@@ -6496,7 +6496,7 @@ it, because tests construct these objects themselves.
 
 #### verify.widgets-not-refreshed-on-resume
 
-- [ ] `verify.widgets-not-refreshed-on-resume` — Home-screen widgets are not refreshed when the app resumes
+- [x] `verify.widgets-not-refreshed-on-resume` — Home-screen widgets are not refreshed when the app resumes
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt — `taskRunner.run { AutoBackup(this).run(); appComponent.widgetUpdater.updateWidgets() }` inside onResume (list-habits.startup-lifecycle#3, widgets.updater#10)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/main.dart:213 — `_runAutoBackup` executes only `AutoBackupTask`; the `scope.widgetSync?.updateWidgets()` that follows it upstream is missing`
@@ -6504,11 +6504,11 @@ it, because tests construct these objects themselves.
 - **Severity:** minor
 
 1. `verify.widgets-not-refreshed-on-resume#1` — In the Kotlin app: Every time the habit list resumes, the same background block runs the auto-backup and then pushes fresh data to all six widget providers, so returning to the app repaints the home-screen widgets even when nothing in this process ran a command.
-2. `verify.widgets-not-refreshed-on-resume#2` — The port must do the same. Today: `_runAutoBackup` builds and executes an `AutoBackupTask` and stops there. Widget data is republished only from app startup, from the command-runner listener, from the midnight rollover, from ShowHabit's refresh and from the opacity preference — never from a resume. `app/test/platform/home_widget_bridge_test.dart:650` quotes widgets.updater#10 including the phrase 'on ListHabitsActivity.onResume after AutoBackup runs' as the reason for a `sync.start()` assertion, but no test drives the resume path, and no code implements it.
+2. `verify.widgets-not-refreshed-on-resume#2` — The port must do the same. Today: `_runAutoBackup` builds and executes an `AutoBackupTask` and stops there. Widget data is republished only from app startup, from the command-runner listener, from the midnight rollover, from ShowHabit's refresh and from the opacity preference — never from a resume. `app/test/platform/home_widget_bridge_test.dart:650` quotes widgets.updater#10 including the phrase 'on ListHabitsActivity.onResume after AutoBackup runs' as the reason for a `sync.start()` assertion, but no test drives the resume path, and no code implements it. — **не применимо к порту:** правило `#2` в этом домене фиксирует состояние порта *до* исправления, а не требование. После починки его нельзя процитировать, не утверждая, что дефект всё ещё на месте; требование несёт правило `#1`.
 
 #### verify.hints-hardcoded-english
 
-- [ ] `verify.hints-hardcoded-english` — Startup hints are drawn from a hard-coded English list, so the shipped hint translations never render
+- [x] `verify.hints-hardcoded-english` — Startup hints are drawn from a hard-coded English list, so the shipped hint translations never render
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values/strings.xml — `<string-array name="hints">` (`@string/hint_drag`, `@string/hint_landscape`) plus the 47 `res/values-*/strings.xml` translations of both; consumed by `ListHabitsRootView.kt:82` (`resources.getStringArray(R.array.hints)`) and rendered by `activities/habits/list/views/HintView.kt``
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart:216-219 (constructs `core.HintList(prefs, core.listHabitsHints)`); the literals live in uhabits-flutter/packages/uhabits_core/lib/src/ui/screens/habits/list/hint_list.dart:17-21. The localized getters that should have been used are `L10n.hintDrag` / `L10n.hintLandscape` in app/lib/l10n/app_localizations.dart`
@@ -6520,7 +6520,7 @@ it, because tests construct these objects themselves.
 
 #### verify.ring-not-quantised
 
-- [ ] `verify.ring-not-quantised` — The habit-list score ring is not quantised to 1/16, so near-empty and near-full rings look different
+- [x] `verify.ring-not-quantised` — The habit-list score ring is not quantised to 1/16, so near-empty and near-full rings look different
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardView.kt — `var score` setter calls `scoreRing.setPrecision(1.0f / 16)`; uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/RingView.kt — `val angle = 360 * (percentage / precision).roundToLong() * precision``
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/habit_card.dart — `_buildRing()` hands the raw `widget.score` to `core_views.Ring`, whose `draw()` sweeps `-360 * percentage` with no precision at all (uhabits-flutter/packages/uhabits_core/lib/src/ui/views/ring.dart). The full `RingView` port exists at app/lib/ui/common/views/ring_view.dart and is used by nothing in `app/lib`.`
