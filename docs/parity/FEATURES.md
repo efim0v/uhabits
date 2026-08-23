@@ -1577,7 +1577,7 @@ written from the rules below.
 
 #### io.csv-archive-layout
 
-- [ ] `io.csv-archive-layout` — CSV export ZIP archive layout
+- [x] `io.csv-archive-layout` — CSV export ZIP archive layout
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`
@@ -1593,7 +1593,7 @@ written from the rules below.
 
 #### io.csv-habits-file
 
-- [ ] `io.csv-habits-file` — Habits.csv content (HabitList.writeCSV)
+- [x] `io.csv-habits-file` — Habits.csv content (HabitList.writeCSV)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/PaletteColor.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`
@@ -1616,7 +1616,7 @@ written from the rules below.
 
 #### io.csv-per-habit-scores
 
-- [ ] `io.csv-per-habit-scores` — Per-habit Scores.csv
+- [x] `io.csv-per-habit-scores` — Per-habit Scores.csv
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ScoreList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`
@@ -1632,7 +1632,7 @@ written from the rules below.
 
 #### io.csv-per-habit-checkmarks
 
-- [ ] `io.csv-per-habit-checkmarks` — Per-habit Checkmarks.csv
+- [x] `io.csv-per-habit-checkmarks` — Per-habit Checkmarks.csv
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Entry.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`
@@ -1650,7 +1650,7 @@ written from the rules below.
 
 #### io.csv-combined-scores
 
-- [ ] `io.csv-combined-scores` — Top-level Scores.csv (all selected habits)
+- [x] `io.csv-combined-scores` — Top-level Scores.csv (all selected habits)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`
@@ -1667,7 +1667,7 @@ written from the rules below.
 
 #### io.csv-combined-checkmarks
 
-- [ ] `io.csv-combined-checkmarks` — Top-level Checkmarks.csv (all selected habits)
+- [x] `io.csv-combined-checkmarks` — Top-level Checkmarks.csv (all selected habits)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`
@@ -1681,7 +1681,7 @@ written from the rules below.
 
 #### io.csv-habit-folder-naming
 
-- [ ] `io.csv-habit-folder-naming` — Per-habit folder naming and filename sanitization
+- [x] `io.csv-habit-folder-naming` — Per-habit folder naming and filename sanitization
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/HabitsCSVExporterTest.kt`
@@ -1755,7 +1755,7 @@ written from the rules below.
 
 #### io.export-csv-task
 
-- [ ] `io.export-csv-task` — ExportCSVTask: zip file naming and output location
+- [x] `io.export-csv-task` — ExportCSVTask: zip file naming and output location
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/ExportCSVTask.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Files.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenterTest.kt`
@@ -1784,7 +1784,7 @@ written from the rules below.
 
 #### io.importer-dispatch
 
-- [ ] `io.importer-dispatch` — GenericImporter dispatch across the four importers
+- [x] `io.importer-dispatch` — GenericImporter dispatch across the four importers
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/GenericImporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/AbstractImporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1798,7 +1798,7 @@ written from the rules below.
 
 #### io.sqlite-magic-detection
 
-- [ ] `io.sqlite-magic-detection` — SQLite file detection (isSQLite3File)
+- [x] `io.sqlite-magic-detection` — SQLite file detection (isSQLite3File)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/utils/FileExtensions.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/io/JavaFiles.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/utils/FileExtensionsTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/FilesTest.kt`
@@ -1810,7 +1810,7 @@ written from the rules below.
 
 #### io.loop-db-detection
 
-- [ ] `io.loop-db-detection` — Loop backup (.db) detection heuristics
+- [x] `io.loop-db-detection` — Loop backup (.db) detection heuristics
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/LoopDBImporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/Constants.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1823,7 +1823,7 @@ written from the rules below.
 
 #### io.loop-db-migration
 
-- [ ] `io.loop-db-migration` — Loop backup migration to the current schema before import
+- [x] `io.loop-db-migration` — Loop backup migration to the current schema before import
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/LoopDBImporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Database.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/SQLParser.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/MigrationTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1837,7 +1837,7 @@ written from the rules below.
 
 #### io.loop-db-habit-mapping
 
-- [ ] `io.loop-db-habit-mapping` — Loop backup habit rows: query, defaults, merge by UUID
+- [x] `io.loop-db-habit-mapping` — Loop backup habit rows: query, defaults, merge by UUID
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/LoopDBImporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/HabitRepository.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1854,7 +1854,7 @@ written from the rules below.
 
 #### io.loop-db-entry-mapping
 
-- [ ] `io.loop-db-entry-mapping` — Loop backup entries (Repetitions) mapping
+- [x] `io.loop-db-entry-mapping` — Loop backup entries (Repetitions) mapping
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/LoopDBImporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Entry.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1868,7 +1868,7 @@ written from the rules below.
 
 #### io.habitbull-detection
 
-- [ ] `io.habitbull-detection` — HabitBull CSV detection
+- [x] `io.habitbull-detection` — HabitBull CSV detection
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitBullCSVImporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1880,7 +1880,7 @@ written from the rules below.
 
 #### io.habitbull-mapping
 
-- [ ] `io.habitbull-mapping` — HabitBull CSV import mapping rules
+- [x] `io.habitbull-mapping` — HabitBull CSV import mapping rules
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitBullCSVImporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Strings.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1899,7 +1899,7 @@ written from the rules below.
 
 #### io.rewire-import
 
-- [ ] `io.rewire-import` — Rewire database import
+- [x] `io.rewire-import` — Rewire database import
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/RewireDBImporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1917,7 +1917,7 @@ written from the rules below.
 
 #### io.tickmate-import
 
-- [ ] `io.tickmate-import` — Tickmate database import
+- [x] `io.tickmate-import` — Tickmate database import
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/TickmateDBImporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -1932,7 +1932,7 @@ written from the rules below.
 
 #### io.import-task
 
-- [ ] `io.import-task` — ImportDataTask: transaction and result codes
+- [x] `io.import-task` — ImportDataTask: transaction and result codes
 - **Platform:** android-only · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/tasks/ImportDataTask.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/tasks/ImportDataTaskFactory.kt`
 - **Kotlin tests:** none — write Dart test from rules
