@@ -207,6 +207,29 @@ void main() {
           reason: '$rule singleTop is what makes a second widget tap reuse the '
               'running instance instead of stacking a new one '
               '(platform-glue.deep-link-edit-entry#5).');
+      // The guarantee above is only worth as much as the affinity that lets
+      // Android find the running task in the first place.
+      expect(main.containsKey('android:taskAffinity'), isFalse,
+          reason: 'audit8.mainactivity-declares-android-taskaffinity-so-a#1 — '
+              'In the Kotlin app: ListHabitsActivity keeps the application\'s '
+              'task affinity. A widget tap or the APPWIDGET_CONFIGURE '
+              'hand-off fires a PendingIntent with FLAG_ACTIVITY_NEW_TASK; '
+              'ActivityStarter.getReusableTask finds the app\'s existing task '
+              'by affinity, brings it to the front, and because launchMode is '
+              'singleTop the already-running ListHabitsActivity receives the '
+              'intent through onNewIntent(). android:taskAffinity="" — the '
+              'flutter create default — makes the task\'s rootAffinity null, '
+              'so no task is ever found and Android starts a second copy of '
+              'the app: two engines, two AppScope.boot() against one database '
+              'file, and the second boot takes the reminder response port '
+              'from the first.');
+      expect(withoutXmlComments(manifest), isNot(contains('taskAffinity')),
+          reason: 'audit8.mainactivity-declares-android-taskaffinity-so-a#1 — '
+              'Upstream declares android:taskAffinity="" on exactly one '
+              'component, the translucent SnoozeDelayPickerActivity, which is '
+              'a dialog here and not a manifest entry at all '
+              '(platform-glue.manifest-components#5). No component of this '
+              'port opts out of the app task.');
       expect(main['android:label'], '@string/main_activity_title',
           reason: rule);
       expect(

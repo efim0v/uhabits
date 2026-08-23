@@ -7250,3 +7250,117 @@ like. The remaining findings are all of this kind: correct in the large, wrong a
 - **Severity:** minor
 
 1. `audit7.after-a-background-round-trip-the#1` — In the Kotlin app: `ListHabitsScreen` is registered on the CommandRunner only while the list activity is resumed. Starting `EditHabitActivity` or `ShowHabitActivity` pauses the list and unregisters it, and nothing re-registers it until the list activity itself resumes — a background/foreground round trip performed while the editor or the detail screen is in front runs that activity's `onResume`, never the list's. So a command finished from the screen on top produces only that screen's own message, never the list's toast; that is what `commands.listener-list-habits-toasts#1` and `#6` pin.
+
+## Domain: Eighth audit pass (2026-08-24)
+
+Seven findings. The one that matters came in with `flutter create` on the first day and
+survived every pass since: `android:taskAffinity=""` on MainActivity, the Flutter template's
+default, which stops a widget deep link from finding the running task. Android then starts a
+second app instance — two engines, two `AppScope.boot()` against one database file, and the
+second boot takes the reminder response port away from the first.
+
+The test beside it defends `launchMode="singleTop"` with the comment that singleTop is what
+makes a widget tap reuse the running instance. The attribute that defeats that guarantee sits
+in the same element and nothing asserts it. Scaffolding is code too, and this is the first
+defect the project inherited rather than wrote.
+
+#### audit8.tapping-a-day-in-the-history
+
+- [x] `audit8.tapping-a-day-in-the-history` — Tapping a day in the history editor plays a click sound instead of the haptic buzz (and nothing at all on iOS) — the correct HapticFeedback call exists but is on a code path production never takes
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt — `inner class Screen.showFeedback()`; called from uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/HistoryCard.kt — `HistoryCardPresenter.onDateSho`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart:423 (`_ShowHabitViewState.showFeedback` → `Feedback.forTap(context)`); the correct-but-unreachable implementation is /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/comm`
+- **Severity:** minor
+
+1. `audit8.tapping-a-day-in-the-history#1` — In the Kotlin app: `HistoryCardPresenter` calls `screen.showFeedback()` as the first statement of both `onDateShortPress` and `onDateLongPress`. On Android that is `window.decorView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)` — a short vibration — fired before the entry popup opens or the direct toggle runs. This is the only tactile confirmation the habit-detail calendar editor gives, and it is what `show-habit.history-interaction#3`, `#13` and `history-editor.dialog#12` describe.
+
+#### audit8.habit-search-folds-case-differently-from
+
+- [x] `audit8.habit-search-folds-case-differently-from` — Habit search folds case differently from Kotlin: a Turkish dotless ı or a Greek final ς never matches its uppercase form, so those habits disappear from the search results
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitMatcher.kt — HabitMatcher.matches(), the three `habit.name.contains(q, ignoreCase = true)` / question / description calls`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/models/habit_matcher.dart — HabitMatcher.matches() via the private helper `static bool _containsIgnoreCase(String haystack, String needle) => haystack.toLowerCase().contains(needle.toLowerCase());``
+- **Severity:** minor
+
+1. `audit8.habit-search-folds-case-differently-from#1` — In the Kotlin app: Kotlin's `String.contains(other, ignoreCase = true)` compares CHARACTER BY CHARACTER through `Char.equals(other, ignoreCase = true)`, which is `toUpper(a) == toUpper(b) || toLower(toUpper(a)) == toLower(toUpper(b))`. Uppercasing is what makes the fold work for the characters whose lowercase forms are not unique: 'ı' (U+0131, Turkish dotless i) and 'i' both uppercase to 'I', and 'Σ', 'σ' and 'ς' (Greek final sigma) all uppercase to 'Σ'. So in the Kotlin app a habit named "Yazı" is found by the query "yazi", and a habit named "ΑΣΚΗΣΕΙΣ" is found by the query "ασκησεις" typed with the final sigma. This is exactly what ledger rule `models.habit-matcher#5` names — "Case-insensitivity uses Kotlin's ignoreCase String.contains" — but the rule's test only exercises the accent case ("mediter" vs "Méditer"), so the fold itself is never checked.
+
+#### audit8.entry-popups-paint-themselves-cardbgcolor-over
+
+- [x] `audit8.entry-popups-paint-themselves-cardbgcolor-over` — Entry popups paint themselves cardBgColor over lowContrast, not the ?attr/contrast0 / ?attr/contrast40 that checkmark_dialog_bg.xml declares
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/drawable/checkmark_dialog_bg.xml (solid ?attr/contrast0, 2dp stroke ?contrast40, 5dp corners) and res/drawable/checkmark_dialog_divider.xml (solid ?contrast40), applied by res/layout/checkmark_popup.xml's root LinearLayoutCompat (android:background, a`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/common/dialogs/checkmark_dialog.dart:200,203,233 and uhabits-flutter/app/lib/ui/common/dialogs/number_dialog.dart:334,337,367`
+- **Severity:** cosmetic
+
+1. `audit8.entry-popups-paint-themselves-cardbgcolor-over#1` — In the Kotlin app: The popup's fill is ?attr/contrast0 and its 2dp border and its two dividers are ?contrast40. Resolved: light #FFFFFF fill / #D8D8D8 border, dark #212121 fill / #525252 border, pure black #000000 fill / #424242 border.
+
+#### audit8.the-overview-card-ignores-its-own
+
+- [x] `audit8.the-overview-card-ignores-its-own` — The Overview card ignores its own paddingTop override, while the sibling cards that have one honour theirs
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/layout/show_habit.xml — <OverviewCardView style="@style/Card" android:paddingTop="12dp"/> (the same override the TargetCardView element carries, and the counterpart of historyCard's android:paddingBottom="0dp")`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart:692-697 (_Card, whose padding constant at line 775 is a fixed EdgeInsets.fromLTRB(16, 16, 4, 16))`
+- **Severity:** cosmetic
+
+1. `audit8.the-overview-card-ignores-its-own#1` — In the Kotlin app: The Overview card's top padding is 12dp, not the 16dp @style/CardCommon gives it, so the score ring sits 4dp closer to the card's top edge than on the Notes card above it.
+
+#### audit8.settings-screen-paints-appbackgroundcolor-where-settingsfragment
+
+- [x] `audit8.settings-screen-paints-appbackgroundcolor-where-settingsfragment` — Settings screen paints appBackgroundColor where SettingsFragment paints ?attr/contrast0, and the test that claims otherwise asserts a false equivalence
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.onViewCreated — view.setBackgroundColor(StyledResources(context).getColor(R.attr.contrast0)); ?attr/contrast0 is defined per theme in uhabits-android/src/main/res/values/styles.xml (@color/white`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/settings/settings_screen.dart:143 — Scaffold(backgroundColor: _toFlutterColor(theme.appBackgroundColor))`
+- **Severity:** cosmetic
+
+1. `audit8.settings-screen-paints-appbackgroundcolor-where-settingsfragment#1` — In the Kotlin app: Below the toolbar the whole preference list sits on ?attr/contrast0: pure white #FFFFFF in the light theme (#212121 dark, #000000 pure black).
+
+#### audit8.reminder-notification-action-buttons-are-built
+
+- [x] `audit8.reminder-notification-action-buttons-are-built` — Reminder notification action buttons are built with no icon, so the three icons `notifications.actions#1`–`#3` name never reach the platform
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt — `buildNotification()`: `Action(R.drawable.ic_action_check, getString(R.string.yes), …)`, `Action(R.drawable.ic_action_cancel, getString(R.string.no), …)`, `Action(R.drawable.ic_action_chec`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_notification_tray.dart — `LocalNotificationsPresenter.detailsFor` (the `AndroidNotificationAction(action.id, action.title, showsUserInterface: …, cancelNotification: false)` list) and `ReminderNotificationAction`, which is documented as "``
+- **Severity:** cosmetic
+
+1. `audit8.reminder-notification-action-buttons-are-built#1` — In the Kotlin app: Every reminder action carries a vector icon: a check for "Yes" and "Enter", a cross for "No", a clock for "Later". Android draws those icons wherever the platform still renders action icons — Wear OS (which the WearableExtender in the same method exists to serve), Android Auto, and Android 6 and below — so the buttons are identifiable as icons and not only as words.
+
+#### audit8.mainactivity-declares-android-taskaffinity-so-a
+
+- [x] `audit8.mainactivity-declares-android-taskaffinity-so-a` — MainActivity declares android:taskAffinity="", so a widget deep link into a running app opens a second copy of the app in its own task instead of reusing the running one
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/AndroidManifest.xml — `<activity android:name=".activities.habits.list.ListHabitsActivity" android:exported="true" android:launchMode="singleTop"/>` and the `<activity-alias android:name=".MainActivity" … android:launchMode="singleTop">` launcher entry. N`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/android/app/src/main/AndroidManifest.xml line 100 (`android:taskAffinity=""` on `.MainActivity`, two lines below the `android:launchMode="singleTop"` the port's own test defends). Reached from /Users/artemefimov/Desktop/uhabi`
+- **Severity:** major
+
+1. `audit8.mainactivity-declares-android-taskaffinity-so-a#1` — In the Kotlin app: ListHabitsActivity keeps the application's task affinity. A widget tap or the APPWIDGET_CONFIGURE hand-off fires a PendingIntent with FLAG_ACTIVITY_NEW_TASK; ActivityStarter.getReusableTask finds the app's existing task by affinity, brings it to the front, and because launchMode is singleTop the already-running ListHabitsActivity receives the intent through onNewIntent(). setIntent() stores it and the next onResume's parseIntents() acts on it. One app instance, one task, one Recents entry — this is exactly what `platform-glue.deep-link-edit-entry#5` states.
+
+## Domain: User feedback (iOS simulator, 2026-08-24)
+
+Three symptoms reported from a build running on the iPhone simulator: a
+permanent loading indicator on the habit list, pure black not applying to the
+list and the statistics screen, and the statistics not scrolling on the habit
+screen. The first two no longer reproduce on HEAD — they were fixed by later
+commits — so what is recorded here is the *mechanism* behind the first, which is
+still live and would make the symptom return, and the two blind spots that let
+the suite claim the third was covered when it never exercised the platform the
+report came from.
+
+#### feedback.the-task-progress-bar-never-hides-again
+
+- [x] `feedback.the-task-progress-bar-never-hides-again` — The task progress bar never hides again once any task's doInBackground throws, because the active-task counter is only decremented on the success path
+- **Platform:** core · **Port risk:** medium
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/CoroutineTaskRunner.kt:49-66 — the launch body increments activeCount, runs withContext(ioDispatcher) { task.doInBackground() }, and only then decrements it. A throw skips the decrement.`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/tasks/task_runner.dart — CoroutineTaskRunner.execute / _finish`
+- **Severity:** major
+
+1. `feedback.the-task-progress-bar-never-hides-again#1` — In the Kotlin app: a task whose `doInBackground` throws does not leave the app running with a stuck progress bar. The exception escapes the coroutine into Android's uncaught-exception path, which ends the process, so the leaked `activeCount` is never observed. Dart has no such backstop: the same exception becomes an unhandled asynchronous error, the app keeps running, and `ListHabitsRootView`'s progress bar — which is visible exactly while `activeTaskCount != 0` (`charts-canvas-theming.task-progress-bar#4`) — stays on screen for the rest of the session. The port must therefore keep the counter honest: whatever `doInBackground` does, `activeTaskCount` returns to what it was and every listener is told the task finished, while the exception still propagates rather than being swallowed. `onPostExecute` is the success epilogue and must not run for a task that threw.
+
+#### feedback.chart-scrolling-is-only-proven-on-android
+
+- [x] `feedback.chart-scrolling-is-only-proven-on-android` — Chart scrolling is only proven on Android and on a screen too tall to scroll, so neither the iOS page transition nor a real viewport is ever exercised
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/res/layout/show_habit.xml — a ScrollView whose child column carries the four scrollable chart cards; on a phone the page scrolls vertically while each chart scrolls horizontally.`
+- **Where the port should do it:** `uhabits-flutter/app/test/journeys/chart_scrolling_journey_test.dart`
+- **Severity:** major
+
+1. `feedback.chart-scrolling-is-only-proven-on-android#1` — In the Kotlin app: the habit screen's charts scroll horizontally while the page itself scrolls vertically, on every device the app runs on. The port's journey pins the horizontal drags on a 1000x4000 screen, where the page has no scroll range at all, and `flutter test` reports `TargetPlatform.android`, so `MaterialPageRoute` builds a Zoom transition with no back gesture. Two things therefore go untested: that a vertical drag *starting on a chart* scrolls the page rather than being swallowed by the chart's horizontal recogniser, and that on iOS — where the route is a Cupertino transition with an interactive back gesture — a horizontal drag on a chart scrolls the chart instead of popping the screen.

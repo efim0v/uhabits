@@ -330,11 +330,15 @@ class _NumberDialogState extends State<NumberDialog> {
           minHeight: EntryPopupMetrics.minHeight,
           maxWidth: EntryPopupMetrics.minWidth,
         ),
+        // The same `@drawable/checkmark_dialog_bg` the boolean popup uses —
+        // one layout, one drawable: `<solid ?attr/contrast0>` with a 2dp
+        // `<stroke ?contrast40>`
+        // (`audit8.entry-popups-paint-themselves-cardbgcolor-over#1`).
         decoration: BoxDecoration(
-          color: toFlutterColor(theme.cardBackgroundColor),
+          color: toFlutterColor(theme.contrast0),
           borderRadius: BorderRadius.circular(EntryPopupMetrics.cornerRadius),
           border: Border.all(
-            color: toFlutterColor(theme.lowContrastTextColor),
+            color: toFlutterColor(theme.contrast40),
             width: EntryPopupMetrics.borderWidth,
           ),
         ),
@@ -361,10 +365,12 @@ class _NumberDialogState extends State<NumberDialog> {
                 ),
               ),
             ),
+            // `@drawable/checkmark_dialog_divider`: `<solid ?contrast40>`
+            // (`audit8.entry-popups-paint-themselves-cardbgcolor-over#1`).
             Divider(
               height: EntryPopupMetrics.borderWidth,
               thickness: EntryPopupMetrics.borderWidth,
-              color: toFlutterColor(theme.lowContrastTextColor),
+              color: toFlutterColor(theme.contrast40),
             ),
             SizedBox(
               height: EntryPopupMetrics.buttonRowHeight,

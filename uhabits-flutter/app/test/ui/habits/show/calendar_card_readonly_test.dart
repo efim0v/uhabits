@@ -209,14 +209,20 @@ void main() {
           reason: 'show-habit.history-interaction#13 — HistoryCardPresenter '
               'is itself the OnDateClickedListener.');
 
-      // `Feedback.forTap` is the port of `showFeedback()`; on Android it is a
-      // SystemSound.play(click) on SystemChannels.platform.
+      // `showFeedback()` is `performHapticFeedback(VIRTUAL_KEY)`, which is a
+      // HapticFeedback.vibrate on SystemChannels.platform.
       platformCalls.clear();
       listener.onDateShortPress(getToday());
       await tester.pumpAndSettle();
-      expect(platformCalls.first.method, 'SystemSound.play',
+      expect(platformCalls.first.method, 'HapticFeedback.vibrate',
           reason: 'show-habit.history-interaction#13 — showFeedback() comes '
               'first, before the popup');
+      expect(platformCalls.first.arguments, 'HapticFeedbackType.lightImpact',
+          reason: 'show-habit.history-interaction#3 — every accepted press '
+              'first triggers haptic feedback '
+              '(HapticFeedbackConstants.VIRTUAL_KEY on the window decor '
+              'view), which is what Flutter\'s lightImpact maps to on '
+              'Android.');
       expect(find.byType(CheckmarkDialog), findsOneWidget,
           reason: 'show-habit.history-interaction#13');
     });
@@ -233,14 +239,70 @@ void main() {
       listener.onDateLongPress(getToday().minus(1));
       await tester.pumpAndSettle();
 
-      expect(platformCalls.first.method, 'SystemSound.play',
+      expect(platformCalls.first.method, 'HapticFeedback.vibrate',
           reason: 'show-habit.history-interaction#13 — showFeedback() comes '
               'first on a long press too, even though that one ends in a '
               'command rather than a popup');
+      expect(platformCalls.first.arguments, 'HapticFeedbackType.lightImpact',
+          reason: 'show-habit.history-interaction#3 — a long press buzzes '
+              'with the same VIRTUAL_KEY feedback as a short one.');
       expect(habit.computedEntries.get(getToday().minus(1)).value,
           isNot(Entry.unknown),
           reason: 'show-habit.history-interaction#13 — and the press it '
               'precedes is the one that writes the entry');
+    });
+
+    testWidgets(
+        'audit8.tapping-a-day-in-the-history#1 a real tap on a day in the '
+        'editor buzzes and makes no click sound', (tester) async {
+      const String feedbackRule =
+          'audit8.tapping-a-day-in-the-history#1 — In the Kotlin app: '
+          'HistoryCardPresenter calls screen.showFeedback() as the first '
+          'statement of both onDateShortPress and onDateLongPress. On Android '
+          'that is window.decorView.performHapticFeedback('
+          'HapticFeedbackConstants.VIRTUAL_KEY) — a short vibration — fired '
+          'before the entry popup opens or the direct toggle runs. This is '
+          'the only tactile confirmation the habit-detail calendar editor '
+          'gives. Feedback.forTap is a SystemSound.play(click) on Android and '
+          'nothing at all on iOS, so it is neither.';
+
+      await pumpScreen(tester);
+      await tester.tap(find.byKey(HistoryCardView.editButtonKey));
+      await tester.pumpAndSettle();
+
+      // The chart the user actually touches: the editor's, wired to the
+      // screen's own presenter, whose Screen is _ShowHabitViewState — the one
+      // implementation of showFeedback() production ever reaches.
+      final Finder chartFinder = find.descendant(
+        of: find.byType(HistoryEditorDialog),
+        matching: find.byType(CoreView),
+      );
+      const double padding = HistoryEditorDialog.chartPadding;
+      final double square =
+          ((tester.getSize(chartFinder).height - 2 * padding) / 8.0)
+              .roundToDouble();
+      // Column 0, row 1: the oldest day square of the grid, under the header
+      // row.
+      final Offset cell = tester.getTopLeft(chartFinder) +
+          Offset(padding + 0.5 * square, padding + 1.5 * square);
+
+      platformCalls.clear();
+      await tester.tapAt(cell);
+      await tester.pumpAndSettle();
+
+      expect(
+        platformCalls.map((MethodCall c) => c.method),
+        isNot(contains('SystemSound.play')),
+        reason: feedbackRule,
+      );
+      expect(
+        platformCalls
+            .where((MethodCall c) => c.method == 'HapticFeedback.vibrate')
+            .map((MethodCall c) => c.arguments)
+            .toList(),
+        <String>['HapticFeedbackType.lightImpact'],
+        reason: feedbackRule,
+      );
     });
   });
 }

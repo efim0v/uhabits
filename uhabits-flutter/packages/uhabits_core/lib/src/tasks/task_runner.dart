@@ -122,8 +122,15 @@ abstract interface class TaskRunnerListener {
 /// scope; the Dart equivalent is simply that [execute] keeps no state that a
 /// failure could poison, so the next [execute] behaves normally. As in Kotlin,
 /// a throwing task is not caught here: the exception escapes into the ambient
-/// uncaught-exception path, and neither `onPostExecute` nor the `activeCount`
-/// decrement is reached.
+/// uncaught-exception path, and `onPostExecute` is not reached.
+///
+/// The `activeCount` decrement is the one place this port deliberately parts
+/// company with Kotlin. Upstream a throw skips it too, but on Android the
+/// exception ends the process, so nothing observes the leak. In Dart it becomes
+/// an unhandled asynchronous error, the app carries on, and the leaked count
+/// keeps `TaskProgressBar` on screen for the rest of the session
+/// (`feedback.the-task-progress-bar-never-hides-again#1`). The counter is
+/// therefore released on every path.
 class CoroutineTaskRunner implements TaskRunner {
   CoroutineTaskRunner({
     required Dispatcher mainDispatcher,
@@ -164,15 +171,32 @@ class CoroutineTaskRunner implements TaskRunner {
       for (final l in _listeners) {
         l.onTaskStarted(task);
       }
-      task.onPreExecute();
-      if (!task.isCanceled()) {
+      // Whatever the task does, the bookkeeping below runs exactly once, so
+      // `activeTaskCount` always comes back down (`feedback.the-task-progress-
+      // bar-never-hides-again#1`). The exception itself is not caught: it goes
+      // on escaping, as it does in Kotlin.
+      var released = false;
+      void release() {
+        if (released) return;
+        released = true;
+        _release(task);
+      }
+
+      try {
+        task.onPreExecute();
+        if (task.isCanceled()) {
+          _finish(task, release);
+          return null;
+        }
         return _andThen(
           _ioDispatcher.dispatch(() => task.doInBackground()),
-          () => _finish(task),
+          () => _finish(task, release),
+          release,
         );
+      } catch (error, stack) {
+        release();
+        Error.throwWithStackTrace(error, stack);
       }
-      _finish(task);
-      return null;
     });
     if (job is Future<void>) {
       // `job.invokeOnCompletion { jobs.remove(job) }` followed by
@@ -183,8 +207,20 @@ class CoroutineTaskRunner implements TaskRunner {
     }
   }
 
-  void _finish(Task task) {
-    task.onPostExecute();
+  /// The success epilogue. `onPostExecute` publishes what the background step
+  /// produced, so it belongs to this path only; a task that threw produced
+  /// nothing to publish.
+  void _finish(Task task, void Function() release) {
+    try {
+      task.onPostExecute();
+    } finally {
+      release();
+    }
+  }
+
+  /// The half of the epilogue every outcome shares: the counter comes back
+  /// down and the listeners — `TaskProgressBar` among them — are told.
+  void _release(Task task) {
     _activeCount--;
     for (final l in _listeners) {
       l.onTaskFinished(task);
@@ -193,8 +229,23 @@ class CoroutineTaskRunner implements TaskRunner {
 
   /// `withContext(ioDispatcher) { ... }` followed by the epilogue: continues
   /// inline when the background step did not actually suspend.
-  static FutureOr<void> _andThen(FutureOr<void> value, void Function() block) {
-    if (value is Future<void>) return value.then((_) => block());
+  ///
+  /// [onError] runs instead of [block] when the background step fails, and the
+  /// failure is then re-thrown untouched.
+  static FutureOr<void> _andThen(
+    FutureOr<void> value,
+    void Function() block,
+    void Function() onError,
+  ) {
+    if (value is Future<void>) {
+      return value.then(
+        (_) => block(),
+        onError: (Object error, StackTrace stack) {
+          onError();
+          Error.throwWithStackTrace(error, stack);
+        },
+      );
+    }
     block();
     return null;
   }

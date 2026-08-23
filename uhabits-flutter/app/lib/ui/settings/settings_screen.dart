@@ -140,7 +140,12 @@ class _SettingsView extends StatelessWidget {
     );
 
     return Scaffold(
-      backgroundColor: _toFlutterColor(theme.appBackgroundColor),
+      // `SettingsFragment.onViewCreated`:
+      // `view.setBackgroundColor(StyledResources(context).getColor(R.attr.contrast0))`
+      // — the themed attribute, which is @color/white in the light theme where
+      // `appBackgroundColor` is #F4F4F4
+      // (`audit8.settings-screen-paints-appbackgroundcolor-where-settingsfragment#1`).
+      backgroundColor: _toFlutterColor(theme.contrast0),
       appBar: AppBar(
         title: Text(l10n.settings),
         backgroundColor: toolbarColor,

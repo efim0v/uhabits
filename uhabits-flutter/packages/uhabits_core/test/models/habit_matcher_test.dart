@@ -429,6 +429,56 @@ void main() {
       );
     });
 
+    test('case folding goes through uppercase, character by character', () {
+      const rule =
+          'audit8.habit-search-folds-case-differently-from#1 — In the Kotlin '
+          "app: Kotlin's String.contains(other, ignoreCase = true) compares "
+          'CHARACTER BY CHARACTER through Char.equals(other, ignoreCase = '
+          'true), which is toUpper(a) == toUpper(b) || '
+          'toLower(toUpper(a)) == toLower(toUpper(b)). Uppercasing is what '
+          'makes the fold work for the characters whose lowercase forms are '
+          'not unique.';
+
+      // 'ı' (U+0131, Turkish dotless i) and 'i' both uppercase to 'I', so a
+      // habit named "Yazı" is found by the query "yazi" — in either direction,
+      // since Char.equals(ignoreCase) is symmetric.
+      final turkish = buildHabit(name: 'Yazı', question: 'Bugün yazdın mı?');
+      expect(search([turkish], 'yazi'), {'Yazı'}, reason: rule);
+      expect(search([turkish], 'YAZI'), {'Yazı'}, reason: rule);
+      expect(search([turkish], 'Yazı'), {'Yazı'}, reason: rule);
+      expect(
+        search([buildHabit(name: 'Yazi')], 'yazı'),
+        {'Yazi'},
+        reason: rule,
+      );
+
+      // 'Σ', 'σ' and 'ς' (Greek final sigma) all uppercase to 'Σ', so
+      // "ΑΣΚΗΣΕΙΣ" is found by "ασκησεις" typed with the final sigma.
+      final greek = buildHabit(name: 'ΑΣΚΗΣΕΙΣ');
+      expect(search([greek], 'ασκησεις'), {'ΑΣΚΗΣΕΙΣ'}, reason: rule);
+      expect(search([greek], 'ασκησεισ'), {'ΑΣΚΗΣΕΙΣ'}, reason: rule);
+      expect(
+        search([buildHabit(name: 'ασκήσεις')], 'ΑΣΚΉΣΕΙΣ'),
+        {'ασκήσεις'},
+        reason: rule,
+      );
+
+      // The fold is per character and never per string, so it can neither
+      // grow nor shrink the text: 'ß' uppercases to itself for
+      // Char.uppercaseChar (the two-letter "SS" is a string mapping), and a
+      // ligature stays one character.
+      expect(search([buildHabit(name: 'Straße')], 'STRASSE'), <String>{},
+          reason: rule);
+      expect(search([buildHabit(name: 'STRASSE')], 'straße'), <String>{},
+          reason: rule);
+      expect(search([buildHabit(name: 'ﬁnd')], 'find'), <String>{},
+          reason: rule);
+
+      // The fold is still only a fold: accents survive it
+      // (models.habit-matcher#5).
+      expect(search([mediter], 'mediter'), <String>{}, reason: rule);
+    });
+
     test('emoji do not block matching and digits match', () {
       expect(
         search(habits, 'stretching'),

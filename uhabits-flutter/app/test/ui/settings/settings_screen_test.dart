@@ -225,11 +225,20 @@ void main() {
     });
 
     testWidgets(
-        'settings.screen.structure#5 — the screen paints its own background '
-        'from the theme', (tester) async {
+        'settings.screen.structure#5 and '
+        'audit8.settings-screen-paints-appbackgroundcolor-where-settingsfragment#1 '
+        '— the screen paints its own background in ?attr/contrast0',
+        (tester) async {
+      // This test used to assert `LightTheme().appBackgroundColor` on the claim
+      // that it "is what R.attr.contrast0 resolves to". It is not: contrast0 is
+      // @color/white (#FFFFFF) and appBackgroundColor is #F4F4F4. The
+      // equivalence held only in the two dark themes, which the test never
+      // exercised, so a #F4F4F4 preference list passed as if it were the
+      // #FFFFFF one SettingsFragment paints
+      // (`audit8.settings-screen-paints-appbackgroundcolor-where-settingsfragment#1`).
       await open(tester);
       final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).last);
-      final expected = core.LightTheme().appBackgroundColor;
+      final expected = core.LightTheme().contrast0;
       expect(
         scaffold.backgroundColor,
         Color.fromARGB(
@@ -239,9 +248,27 @@ void main() {
           (expected.blue * 255).round(),
         ),
         reason: 'settings.screen.structure#5 — SettingsFragment paints its '
-            'root view in onViewCreated instead of leaving it transparent; '
-            'the port paints the core theme background, which is what '
-            'R.attr.contrast0 resolves to',
+            'root view in onViewCreated with '
+            'StyledResources(context).getColor(R.attr.contrast0) instead of '
+            'leaving it transparent. '
+            'audit8.settings-screen-paints-appbackgroundcolor-where-settingsfragment#1 '
+            '— below the toolbar the whole preference list sits on pure white '
+            '#FFFFFF in the light theme',
+      );
+      expect(
+        scaffold.backgroundColor,
+        const Color(0xFFFFFFFF),
+        reason: 'audit8.settings-screen-paints-appbackgroundcolor-where-'
+            'settingsfragment#1 — the resolved value, spelled out: #FFFFFF, '
+            'not the #F4F4F4 of appBackgroundColor',
+      );
+      expect(
+        core.LightTheme().contrast0,
+        isNot(core.LightTheme().appBackgroundColor),
+        reason: 'audit8.settings-screen-paints-appbackgroundcolor-where-'
+            'settingsfragment#1 — the two tokens are different colours in the '
+            'light theme, which is why the old assertion was a false '
+            'equivalence',
       );
     });
 

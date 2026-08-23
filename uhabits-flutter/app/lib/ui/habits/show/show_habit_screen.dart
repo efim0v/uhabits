@@ -28,6 +28,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:provider/provider.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
@@ -417,10 +418,18 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     );
   }
 
-  /// `window.decorView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)`.
+  /// `window.decorView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)`
+  /// — a short vibration, which is what `HapticFeedback.lightImpact` maps to
+  /// on Android (`show-habit.history-interaction#3`, `#13`,
+  /// `history-editor.dialog#12`).
+  ///
+  /// Not `Feedback.forTap`: that is a `SystemSound.play(click)` on Android and
+  /// nothing at all on iOS, so the one tactile confirmation the calendar
+  /// editor gives would be a click sound on one platform and silence on the
+  /// other (`audit8.tapping-a-day-in-the-history#1`).
   @override
   void showFeedback() {
-    Feedback.forTap(context);
+    HapticFeedback.lightImpact();
   }
 
   @override
@@ -693,6 +702,10 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         return _Card(
           key: key,
           theme: state.theme,
+          // `<OverviewCardView style="@style/Card"
+          // android:paddingTop="12dp"/>`, the same inline override the target
+          // card carries (`audit8.the-overview-card-ignores-its-own#1`).
+          padding: _Card.defaultPadding.copyWith(top: 12),
           child: OverviewCardView(state: state.overview),
         );
       // The six chart cards bring their own `@style/Card` chrome with them.
@@ -767,12 +780,21 @@ void showShowHabitMessage(BuildContext context, String message) {
 /// margins, a 1dp bottom margin, 1dp of elevation and the ?cardBgColor
 /// background (`show-habit.card-order-and-visibility#5`).
 class _Card extends StatelessWidget {
-  const _Card({required this.theme, required this.child, super.key});
+  const _Card({
+    required this.theme,
+    required this.child,
+    this.padding = defaultPadding,
+    super.key,
+  });
 
   final core.Theme theme;
   final Widget child;
 
-  static const EdgeInsets padding = EdgeInsets.fromLTRB(16, 16, 4, 16);
+  /// The inline `android:padding*` override the card's element in
+  /// show_habit.xml carries, or [defaultPadding] when it carries none.
+  final EdgeInsets padding;
+
+  static const EdgeInsets defaultPadding = EdgeInsets.fromLTRB(16, 16, 4, 16);
   static const EdgeInsets margin = EdgeInsets.fromLTRB(3, 0, 3, 1);
   static const double elevation = 1.0;
 

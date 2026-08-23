@@ -92,12 +92,24 @@
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:icon="@mipmap/ic_launcher">
+        <!-- No android:taskAffinity="": the `flutter create` template
+             declares an empty affinity here, which makes the task's
+             rootAffinity null. A widget PendingIntent carries
+             FLAG_ACTIVITY_NEW_TASK, so ActivityStarter looks for the app's
+             existing task by affinity; with no affinity it finds none and
+             launches a second copy of the app in its own task — two
+             engines, two AppScope.boot() against one database file, and
+             the second boot steals the reminder response port from the
+             first. Upstream declares taskAffinity="" on exactly one
+             component, the translucent SnoozeDelayPickerActivity, and the
+             habit list keeps the application affinity
+             (audit8.mainactivity-declares-android-taskaffinity-so-a#1,
+             platform-glue.deep-link-edit-entry#5). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/main_activity_title"
             android:launchMode="singleTop"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"

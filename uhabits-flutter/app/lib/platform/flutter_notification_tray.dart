@@ -118,6 +118,30 @@ class ReminderActions {
   static const String edit = 'org.isoron.uhabits.ACTION_EDIT';
 }
 
+/// The drawable each reminder button is built with — the first argument of
+/// `NotificationCompat.Action`, which has no icon-less constructor
+/// (`audit8.reminder-notification-action-buttons-are-built#1`).
+///
+/// Android draws these wherever action icons still render — Wear OS (which the
+/// `WearableExtender` in `buildNotification()` exists to serve), Android Auto,
+/// and Android 6 and below — so the buttons are identifiable as icons and not
+/// only as words. Like the small icon, the plugin resolves them by *name* out
+/// of `android/app/src/main/res/drawable`, so each name here has to be a file
+/// there.
+class ReminderActionIcons {
+  ReminderActionIcons._();
+
+  /// `R.drawable.ic_action_check` — "Yes" (`notifications.actions#2`) and
+  /// "Enter" (`notifications.actions#1`).
+  static const String check = 'ic_action_check';
+
+  /// `R.drawable.ic_action_cancel` — "No" (`notifications.actions#2`).
+  static const String cancel = 'ic_action_cancel';
+
+  /// `R.drawable.ic_action_snooze` — "Later" (`notifications.actions#3`).
+  static const String snooze = 'ic_action_snooze';
+}
+
 /// The `UNNotificationCategory` identifiers. iOS needs the action buttons
 /// declared once, at initialisation, grouped into categories; a notification
 /// then names the category it belongs to. Android has no such indirection, so
@@ -253,26 +277,33 @@ class ReminderResponse {
 // The plugin-free description of a notification
 // ---------------------------------------------------------------------------
 
-/// One action button: `NotificationCompat.Action` without the icon resource.
+/// One action button: `NotificationCompat.Action(icon, title, pendingIntent)`,
+/// with the pending intent replaced by the [id] the plugin hands back.
 class ReminderNotificationAction {
-  const ReminderNotificationAction(this.id, this.title);
+  const ReminderNotificationAction(this.id, this.title, {required this.icon});
 
   /// One of [ReminderActions].
   final String id;
 
   final String title;
 
+  /// One of [ReminderActionIcons]: the drawable resource name Android draws
+  /// the button with (`audit8.reminder-notification-action-buttons-are-built#1`).
+  /// iOS has no per-action icon, so this reaches the Android side only.
+  final String icon;
+
   @override
   bool operator ==(Object other) =>
       other is ReminderNotificationAction &&
       other.id == id &&
-      other.title == title;
+      other.title == title &&
+      other.icon == icon;
 
   @override
-  int get hashCode => Object.hash(id, title);
+  int get hashCode => Object.hash(id, title, icon);
 
   @override
-  String toString() => 'ReminderNotificationAction($id, $title)';
+  String toString() => 'ReminderNotificationAction($id, $title, $icon)';
 }
 
 /// The set of buttons one kind of habit shows, as iOS wants them at
@@ -452,19 +483,38 @@ class ReminderNotificationBuilder {
 
   List<ReminderNotificationAction> _actionsFor(bool isNumerical) {
     final actions = <ReminderNotificationAction>[
-      // notifications.actions#1: a numerical habit gets exactly one action.
+      // notifications.actions#1: a numerical habit gets exactly one action,
+      // carrying the same check icon "Yes" does.
       if (isNumerical)
-        ReminderNotificationAction(ReminderActions.edit, _strings.enter)
+        ReminderNotificationAction(
+          ReminderActions.edit,
+          _strings.enter,
+          icon: ReminderActionIcons.check,
+        )
       else ...[
-        // notifications.actions#2: "Yes" then "No", in that order.
-        ReminderNotificationAction(ReminderActions.addRepetition, _strings.yes),
-        ReminderNotificationAction(ReminderActions.removeRepetition, _strings.no),
+        // notifications.actions#2: "Yes" then "No", in that order, with a
+        // check and a cross.
+        ReminderNotificationAction(
+          ReminderActions.addRepetition,
+          _strings.yes,
+          icon: ReminderActionIcons.check,
+        ),
+        ReminderNotificationAction(
+          ReminderActions.removeRepetition,
+          _strings.no,
+          icon: ReminderActionIcons.cancel,
+        ),
       ],
     ];
-    // notifications.actions#3: "Later" is appended after the others.
+    // notifications.actions#3: "Later" is appended after the others, with the
+    // clock.
     if (_snoozeActionEnabled) {
       actions.add(
-        ReminderNotificationAction(ReminderActions.snoozeReminder, _strings.snooze),
+        ReminderNotificationAction(
+          ReminderActions.snoozeReminder,
+          _strings.snooze,
+          icon: ReminderActionIcons.snooze,
+        ),
       );
     }
     return List<ReminderNotificationAction>.unmodifiable(actions);
@@ -876,6 +926,11 @@ class LocalNotificationsPresenter
               AndroidNotificationAction(
                 action.id,
                 action.title,
+                // `Action(R.drawable.…, title, pendingIntent)`: upstream has no
+                // icon-less button, and the plugin resolves the drawable by
+                // name out of the app's own resources
+                // (`audit8.reminder-notification-action-buttons-are-built#1`).
+                icon: DrawableResourceAndroidBitmap(action.icon),
                 // "Yes" and "No" write an entry without opening the app, the
                 // way the Android broadcast actions do; "Enter" and "Later"
                 // both need UI.

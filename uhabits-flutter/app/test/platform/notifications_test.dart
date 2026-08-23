@@ -1242,7 +1242,11 @@ void main() {
       expect(
         spec.actions.last,
         const ReminderNotificationAction(
-            'org.isoron.uhabits.ACTION_SNOOZE_REMINDER', 'Later'),
+            'org.isoron.uhabits.ACTION_SNOOZE_REMINDER', 'Later',
+            // `Action(R.drawable.ic_action_snooze, getString(R.string.snooze),
+            // …)`: the button is the label AND the clock icon
+            // (`audit8.reminder-notification-action-buttons-are-built#1`).
+            icon: ReminderActionIcons.snooze),
         reason: 'reminders.snooze-android12-gate#3: and that string is what '
             'labels the snooze action',
       );
