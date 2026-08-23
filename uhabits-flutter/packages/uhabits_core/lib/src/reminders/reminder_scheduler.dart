@@ -6,7 +6,7 @@ import '../models/habit.dart';
 import '../models/habit_list.dart';
 import '../models/habit_matcher.dart';
 import '../preferences/widget_preferences.dart';
-import 'date_utils.dart';
+import '../time/date_utils.dart';
 
 /// Port of
 /// uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt

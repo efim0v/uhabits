@@ -302,6 +302,41 @@ void main() {
             'second call');
   });
 
+  test('a NULL notes column reads back as the empty string', () {
+    final habitId = insertTestHabit(db);
+    // Written the way every pre-25 row was: no notes column at all.
+    db.run('insert into Repetitions(habit, timestamp, value) '
+        'values ($habitId, 1700000000000, 2)');
+    expect(
+      db.querySingle('select typeof(notes) from Repetitions', const <String>[],
+          (stmt) => stmt.getText(0)),
+      'null',
+      reason: 'persistence.migration-v25#3 — the stored column really is SQL '
+          'NULL, which is what migration 25 leaves behind',
+    );
+
+    final loaded = repo.findAllByHabitId(habitId).single;
+    expect(loaded.notes, '',
+        reason: 'persistence.migration-v25#3 — EntryRepository.'
+            'findAllByHabitId converts a NULL notes column to the empty '
+            'string when building EntryData');
+    expect(loaded.notes, isNotNull,
+        reason: 'persistence.migration-v25#3 — EntryData.notes is a '
+            'non-nullable String, so the coercion has to happen at read time');
+
+    // Writing it back stores '' rather than NULL, so the NULL only ever
+    // survives until the first rewrite.
+    repo.deleteByHabitIdAndTimestamp(habitId, 1700000000000);
+    repo.insert(loaded);
+    expect(
+      db.querySingle('select typeof(notes) from Repetitions', const <String>[],
+          (stmt) => stmt.getText(0)),
+      'text',
+      reason: 'persistence.migration-v25#3 — the empty string is written back '
+          'as TEXT, so the NULL only survives until the first rewrite',
+    );
+  });
+
   test('all fields survive a round trip', () {
     final habitId = insertTestHabit(db);
 

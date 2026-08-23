@@ -11,10 +11,19 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/commands/command_runner.dart';
+import 'package:uhabits_core/src/database/sqlite3_database.dart';
 import 'package:uhabits_core/src/io/files.dart';
+import 'package:uhabits_core/src/io/habit_bull_csv_importer.dart';
 import 'package:uhabits_core/src/io/logging.dart';
+import 'package:uhabits_core/src/io/loop_db_importer.dart';
 import 'package:uhabits_core/src/io/printf.dart';
+import 'package:uhabits_core/src/io/rewire_db_importer.dart';
+import 'package:uhabits_core/src/io/tickmate_db_importer.dart';
 import 'package:uhabits_core/src/io/zip.dart';
+import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
+import 'package:uhabits_core/src/tasks/task_runner.dart';
 
 void main() {
   // ---------------------------------------------------------------------
@@ -598,6 +607,46 @@ void main() {
               'StandardLogger');
     });
 
+    test('#4 only two of the four importers take a logger, under fixed names',
+        () {
+      final logging = _RecordingLogging();
+      final habitList = MemoryHabitList();
+      final modelFactory = MemoryModelFactory();
+
+      LoopDBImporter(
+        habitList: habitList,
+        modelFactory: modelFactory,
+        opener: const Sqlite3DatabaseOpener(),
+        runner: CommandRunner(CoroutineTaskRunner(
+          mainDispatcher: const UnconfinedTestDispatcher(),
+          ioDispatcher: const UnconfinedTestDispatcher(),
+        )),
+        logging: logging,
+        fileOpener: LocalFileOpener(userDataDir: Directory.systemTemp.path),
+      );
+      expect(logging.names, <String>['LoopDBImporter'],
+          reason: "io.logging#4 LoopDBImporter uses the logger name "
+              "'LoopDBImporter'");
+      expect(loopDBImporterLoggerName, 'LoopDBImporter',
+          reason: 'io.logging#4 and that name is the shared constant');
+
+      logging.names.clear();
+      HabitBullCSVImporter(habitList, modelFactory, logging);
+      expect(logging.names, <String>['HabitBullCSVImporter'],
+          reason: "io.logging#4 HabitBullCSVImporter uses the logger name "
+              "'HabitBullCSVImporter'");
+      expect(habitBullCSVImporterLoggerName, 'HabitBullCSVImporter',
+          reason: 'io.logging#4 and that name is the shared constant');
+
+      logging.names.clear();
+      RewireDBImporter(habitList, modelFactory, const Sqlite3DatabaseOpener());
+      TickmateDBImporter(
+          habitList, modelFactory, const Sqlite3DatabaseOpener());
+      expect(logging.names, isEmpty,
+          reason: 'io.logging#4 RewireDBImporter and TickmateDBImporter do not '
+              'log at all: neither constructor even takes a Logging');
+    });
+
     test('#5 preserves the import messages verbatim', () {
       final out = StringBuffer();
       final logger = StandardLogger('HabitBullCSVImporter', out: out);
@@ -621,4 +670,16 @@ void main() {
               'preserved verbatim');
     });
   });
+}
+
+/// A [Logging] that records the name of every logger asked for, so that "which
+/// importers log, and under what name" can be asserted without running one.
+class _RecordingLogging implements Logging {
+  final List<String> names = <String>[];
+
+  @override
+  Logger getLogger(String name) {
+    names.add(name);
+    return StandardLogger(name, out: StringBuffer(), err: StringBuffer());
+  }
 }

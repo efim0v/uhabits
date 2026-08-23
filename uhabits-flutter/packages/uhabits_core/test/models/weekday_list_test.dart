@@ -1,4 +1,8 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/database/habit_repository.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
+import 'package:uhabits_core/src/models/reminder.dart';
+import 'package:uhabits_core/src/models/sqlite/sqlite_habit_list.dart';
 import 'package:uhabits_core/src/models/weekday_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
 
@@ -217,6 +221,74 @@ void main() {
             date.dayOfWeek == DayOfWeek.sunday;
         expect(fires, isWeekend, reason: 'models.weekday-list#12');
       }
+    });
+
+    test('#11 the bit index is only meaningful through Reminder: index 0 is '
+        'the first slot of the reminder_days column', () {
+      final factory = MemoryModelFactory();
+
+      for (var i = 0; i <= 6; i++) {
+        final habit = factory.buildHabit()
+          ..reminder = Reminder(8, 30, WeekdayList(1 << i));
+        final row = SQLiteHabitList.copyFrom(habit);
+        expect(row.reminderDays, 1 << i, reason: 'models.weekday-list#11');
+
+        final reloaded = factory.buildHabit();
+        SQLiteHabitList.copyTo(row, reloaded);
+        final days = reloaded.reminder!.days.toArray();
+        expect(days[i], isTrue, reason: 'models.weekday-list#11');
+        expect(days.where((d) => d).length, 1,
+            reason: 'models.weekday-list#11');
+      }
+
+      // Index 0 is bit 0, which is the low bit of the stored integer.
+      final firstSlot = factory.buildHabit()
+        ..reminder = Reminder(8, 30, WeekdayList.fromArray(
+            const [true, false, false, false, false, false, false]));
+      expect(SQLiteHabitList.copyFrom(firstSlot).reminderDays, 1,
+          reason: 'models.weekday-list#11');
+
+      // The mask travels with the Reminder and nowhere else: with no reminder
+      // there is no weekday list on the habit at all, whatever the column says.
+      final noReminder = factory.buildHabit();
+      SQLiteHabitList.copyTo(HabitData(reminderDays: 127), noReminder);
+      expect(noReminder.reminder, isNull, reason: 'models.weekday-list#11');
+    });
+
+    test('#13 the habit column stores the packed integer, and 0 when there is '
+        'no reminder', () {
+      final factory = MemoryModelFactory();
+
+      for (final packed in <int>[0, 1, 3, 96, 124, 127]) {
+        final habit = factory.buildHabit()
+          ..reminder = Reminder(8, 30, WeekdayList(packed));
+        expect(SQLiteHabitList.copyFrom(habit).reminderDays, packed,
+            reason: 'models.weekday-list#13');
+      }
+
+      // toInteger() is exactly what is written.
+      final everyDay = factory.buildHabit()
+        ..reminder = Reminder(8, 30, WeekdayList.everyDay);
+      expect(SQLiteHabitList.copyFrom(everyDay).reminderDays,
+          WeekdayList.everyDay.toInteger(),
+          reason: 'models.weekday-list#13');
+      expect(SQLiteHabitList.copyFrom(everyDay).reminderDays, 127,
+          reason: 'models.weekday-list#13');
+
+      // No reminder at all: the column is 0, not NULL and not 127.
+      final plain = factory.buildHabit();
+      expect(plain.hasReminder(), isFalse, reason: 'models.weekday-list#13');
+      expect(SQLiteHabitList.copyFrom(plain).reminderDays, 0,
+          reason: 'models.weekday-list#13');
+
+      // A stored 0 loads back as the empty list when the times are present.
+      final loaded = factory.buildHabit();
+      SQLiteHabitList.copyTo(
+          HabitData(reminderHour: 8, reminderMin: 30, reminderDays: 0), loaded);
+      expect(loaded.reminder!.days, WeekdayList(0),
+          reason: 'models.weekday-list#13');
+      expect(loaded.reminder!.days.isEmpty, isTrue,
+          reason: 'models.weekday-list#13');
     });
   });
 }

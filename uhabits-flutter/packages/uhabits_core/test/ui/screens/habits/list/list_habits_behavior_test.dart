@@ -1018,6 +1018,76 @@ void main() {
       );
     });
 
+    test('onExportCSV is the all-habits entry point (io.export-csv-entry-points)',
+        () {
+      final archived = h.fixtures.createEmptyHabit(name: 'Archived');
+      archived.isArchived = true;
+      h.habitList.add(archived);
+      h.resetLog();
+
+      h.behavior.onExportCSV();
+
+      expect(
+        h.exportSelectedArg,
+        h.habitList.toList(),
+        reason: 'io.export-csv-entry-points#1 — ListHabitsBehavior.onExportCSV '
+            'exports habitList.toList() as the selected habits, i.e. the '
+            'full, currently filtered list',
+      );
+      expect(
+        h.exportListArg,
+        same(h.habitList),
+        reason: 'io.export-csv-entry-points#1 — the habit list handed to the '
+            'task is the injected one, which is what carries the filter',
+      );
+      expect(
+        h.exportOutputDirArg,
+        same(h.dirFinder.dir),
+        reason: 'io.export-csv-entry-points#1 — the destination is '
+            'dirFinder.getCSVOutputDir()',
+      );
+      expect(
+        h.taskLog.started.length,
+        1,
+        reason: 'io.export-csv-entry-points#3 — the export runs on the '
+            'TaskRunner, in the background',
+      );
+      expect(
+        h.log,
+        containsAllInOrder(<String>['export.background', 'showSendFileScreen']),
+        reason: 'io.export-csv-entry-points#3 — a non-null filename opens the '
+            'share-file screen, after the background work',
+      );
+      expect(
+        h.screen.sentFiles,
+        <String>['/tmp/uhabits-csv-out/Loop Habits CSV.zip'],
+        reason: 'io.export-csv-entry-points#3 — screen.showSendFileScreen is '
+            'called with the filename the task reported',
+      );
+      expect(
+        h.screen.messages,
+        isEmpty,
+        reason: 'io.export-csv-entry-points#3 — no message on success',
+      );
+
+      // The other half of #3: a null filename.
+      h.exportFilename = null;
+      h.screen.sentFiles.clear();
+      h.behavior.onExportCSV();
+      expect(
+        h.screen.sentFiles,
+        isEmpty,
+        reason: 'io.export-csv-entry-points#3 — a null filename opens no '
+            'share-file screen',
+      );
+      expect(
+        h.screen.messages,
+        <ListHabitsBehaviorMessage>[ListHabitsBehaviorMessage.couldNotExport],
+        reason: 'io.export-csv-entry-points#3 — on null the behavior calls '
+            'screen.showMessage(COULD_NOT_EXPORT)',
+      );
+    });
+
     test('onRepairDB repairs the list and then reports it', () {
       h.behavior.onRepairDB();
 
@@ -1025,7 +1095,20 @@ void main() {
         h.habitList.repairCount,
         1,
         reason: 'list-habits.data-io-actions#3 — onRepairDB runs '
-            'habitList.repair()',
+            'habitList.repair(); persistence.repair-db-action#1 — the '
+            '"Repair database" settings entry lands here (the preference row '
+            'itself is Android res/xml)',
+      );
+      expect(
+        h.log,
+        <String>['repair', 'message:databaseRepaired'],
+        reason: 'persistence.repair-db-action#1 — repair() runs on a '
+            'background task and DATABASE_REPAIRED is shown afterwards',
+      );
+      expect(
+        h.taskLog.started.length,
+        1,
+        reason: 'persistence.repair-db-action#1 — exactly one background task',
       );
       expect(
         h.log,
@@ -1049,8 +1132,10 @@ void main() {
       expect(
         h.log,
         <String>['bug.dump', 'bug.get', 'showSendBugReportToDeveloperScreen'],
-        reason: 'list-habits.data-io-actions#4 — the report is dumped to a '
-            'file first, then read, then handed to the send-email screen',
+        reason: 'list-habits.data-io-actions#4 and io.bug-report-dump#2 — '
+            'onSendBugReport() first calls bugReporter.dumpBugReportToFile(), '
+            'then bugReporter.getBugReport(), and on success opens the '
+            'send-email screen with that text',
       );
       expect(
         h.screen.bugReports,
@@ -1077,7 +1162,8 @@ void main() {
         <ListHabitsBehaviorMessage>[
           ListHabitsBehaviorMessage.couldNotGenerateBugReport,
         ],
-        reason: 'list-habits.data-io-actions#4 — a throwing getBugReport shows '
+        reason: 'list-habits.data-io-actions#4 and io.bug-report-dump#2 — on '
+            'Exception the behavior prints the stack trace and shows '
             'COULD_NOT_GENERATE_BUG_REPORT',
       );
       expect(

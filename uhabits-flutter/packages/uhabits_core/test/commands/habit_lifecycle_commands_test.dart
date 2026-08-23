@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:test/test.dart';
 import 'package:uhabits_core/src/commands/command.dart';
 import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/commands/create_habit_command.dart';
 import 'package:uhabits_core/src/commands/delete_habits_command.dart';
 import 'package:uhabits_core/src/commands/edit_habit_command.dart';
+import 'package:uhabits_core/src/database/database.dart';
+import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit.dart';
@@ -16,9 +20,16 @@ import 'package:uhabits_core/src/models/model_observable.dart';
 import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/models/reminder.dart';
 import 'package:uhabits_core/src/models/weekday_list.dart';
+import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
+import 'package:uhabits_core/src/models/sqlite/sqlite_entry_list.dart';
+import 'package:uhabits_core/src/models/sqlite/sqlite_habit_list.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_selection_menu_behavior.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/show_habit_menu_presenter.dart';
+
+import '../helpers/test_database.dart';
 
 /// Ported from
 /// uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/CreateHabitCommand.kt,
@@ -653,6 +664,80 @@ void main() {
         isEmpty,
         reason: 'commands.create-habit#11 — streaks exist and are empty for a '
             'habit with no entries',
+      );
+    });
+
+    test('SQLiteHabitList.add discards the copied position and assigns the '
+        'rowid', () {
+      final db = openMigratedDatabase();
+      addTearDown(db.close);
+      final sqlFactory = SQLModelFactory(db);
+      final SQLiteHabitList sqlList = sqlFactory.buildHabitList();
+      sqlList.add(sqlFactory.buildHabit()..name = 'First');
+
+      var notified = 0;
+      sqlList.observable.addListener(ModelObservableListener(() => notified++));
+
+      final template = sqlFactory.buildHabit()
+        ..name = 'Meditate'
+        ..position = 99;
+
+      CreateHabitCommand(sqlFactory, sqlList, template).run();
+
+      final stored = sqlList.getByPosition(1);
+      expect(
+        stored.name,
+        'Meditate',
+        reason: 'commands.create-habit#9 — the habit really went into the '
+            'SQLite-backed list',
+      );
+      expect(
+        stored.position,
+        1,
+        reason: 'commands.create-habit#9 — SQLiteHabitList.add OVERWRITES '
+            'habit.position with the current size(), so the copied position '
+            '99 is discarded',
+      );
+      expect(
+        stored.id,
+        isNotNull,
+        reason: 'commands.create-habit#9 — the rowid returned by the insert is '
+            'assigned to habit.id',
+      );
+      expect(
+        (stored.originalEntries as SQLiteEntryList).habitId,
+        stored.id,
+        reason: "commands.create-habit#9 — and is pushed into the "
+            "SQLiteEntryList's habitId",
+      );
+      expect(
+        sqlFactory.habitRepository
+            .findAll()
+            .map((r) => <Object?>[r.name, r.position, r.id])
+            .toList(),
+        <List<Object?>>[
+          <Object?>['First', 0, 1],
+          <Object?>['Meditate', 1, stored.id],
+        ],
+        reason: 'commands.create-habit#9 — the row is inserted, with the '
+            'overwritten position',
+      );
+      expect(
+        sqlList.size(),
+        2,
+        reason: 'commands.create-habit#9 — and the habit is added to the '
+            'in-memory list as well',
+      );
+      expect(
+        notified,
+        1,
+        reason: 'commands.create-habit#9 — add() ends by firing the list '
+            'observable, exactly once',
+      );
+      expect(
+        () => sqlList.add(stored),
+        throwsA(isA<ArgumentError>()),
+        reason: 'commands.create-habit#9 — add() requires indexOf(habit) < 0',
       );
     });
   });
@@ -1328,5 +1413,318 @@ void main() {
             'listeners afterwards',
       );
     });
+
+    test('SQLiteHabitList.remove wipes the repetitions, the row, and renumbers '
+        'the survivors', () {
+      final db = openMigratedDatabase();
+      addTearDown(db.close);
+      final sqlFactory = SQLModelFactory(db);
+      final SQLiteHabitList sqlList = sqlFactory.buildHabitList();
+      for (final name in <String>['A', 'B', 'C']) {
+        sqlList.add(sqlFactory.buildHabit()..name = name);
+      }
+      final doomed = sqlList.getByPosition(1);
+      final doomedId = doomed.id!;
+      doomed.originalEntries.add(Entry(getToday(), Entry.yesManual));
+      doomed.originalEntries.add(Entry(getToday().minus(1), Entry.yesManual));
+      final survivor = sqlList.getByPosition(2);
+      survivor.originalEntries.add(Entry(getToday(), Entry.yesManual));
+      expect(
+        _countRepetitions(db, doomedId),
+        2,
+        reason: 'commands.delete-habits#5 — precondition: the habit really has '
+            'repetition rows to lose',
+      );
+      var notified = 0;
+      sqlList.observable.addListener(ModelObservableListener(() => notified++));
+
+      DeleteHabitsCommand(sqlList, <Habit>[doomed]).run();
+
+      expect(
+        sqlList.map((h) => h.name).toList(),
+        <String>['A', 'C'],
+        reason: 'commands.delete-habits#5 — SQLiteHabitList.remove(h) removes '
+            'the habit from the in-memory list',
+      );
+      expect(
+        _countRepetitions(db, doomedId),
+        0,
+        reason: "commands.delete-habits#5 — h.originalEntries.clear() deletes "
+            "every repetition row for that habit id",
+      );
+      expect(
+        _countRepetitions(db, survivor.id!),
+        1,
+        reason: 'commands.delete-habits#5 — and only that habit id: the other '
+            "habits' repetitions survive",
+      );
+      expect(
+        sqlFactory.habitRepository
+            .findAll()
+            .map((r) => <Object?>[r.name, r.position])
+            .toList(),
+        <List<Object?>>[
+          <Object?>['A', 0],
+          <Object?>['C', 1],
+        ],
+        reason: 'commands.delete-habits#5 — the habit row is deleted via '
+            'repository.delete(h.id!!), then rebuildOrder() renumbers every '
+            'remaining position to 0,1,2,... in DB order',
+      );
+      expect(
+        notified,
+        1,
+        reason: 'commands.delete-habits#5 — remove() then fires the list '
+            'observable',
+      );
+    });
+
+    test('the multi-select UI empties the adapter cache before the command '
+        'runs', () {
+      final log = <String>[];
+      final list = _SpyHabitList(log);
+      final localFixtures = HabitFixtures(memoryModelFactory, list);
+      final a = localFixtures.createEmptyHabit(name: 'A');
+      final b = localFixtures.createEmptyHabit(name: 'B', position: 1);
+      list
+        ..add(a)
+        ..add(b);
+      log.clear();
+
+      final deferred = _DeferredTaskRunner();
+      final runner = CommandRunner(deferred)
+        ..addListener(
+          _RecordingCommandRunnerListener((_) => log.add('commandFinished')),
+        );
+      final adapter = _RecordingSelectionAdapter(
+        log,
+        <Habit>[a],
+        () => list.size(),
+      );
+      final behavior = ListHabitsSelectionMenuBehavior(
+        list,
+        _AutoConfirmSelectionScreen(log),
+        adapter,
+        runner,
+      );
+
+      behavior.onDeleteHabits();
+
+      expect(
+        log,
+        <String>[
+          'showDeleteConfirmationScreen(1)',
+          'performRemove(A) with habitList.size()==2',
+          'clearSelection',
+        ],
+        reason: 'commands.delete-habits#9 — adapter.performRemove(selected) '
+            'removes the rows from the cache only, not the DB, and it runs '
+            'BEFORE the command does',
+      );
+      expect(
+        list.removed,
+        isEmpty,
+        reason: 'commands.delete-habits#9 — the row disappears instantly while '
+            'the DB has not been touched at all yet',
+      );
+
+      deferred.drain();
+
+      expect(
+        log,
+        <String>[
+          'showDeleteConfirmationScreen(1)',
+          'performRemove(A) with habitList.size()==2',
+          'clearSelection',
+          'remove(A)',
+          'commandFinished',
+        ],
+        reason: 'commands.delete-habits#9 — the DB catches up asynchronously, '
+            'after the optimistic cache update',
+      );
+    });
+
+    test('the habit detail screen closes without waiting for the command', () {
+      final log = <String>[];
+      final list = _SpyHabitList(log);
+      final localFixtures = HabitFixtures(memoryModelFactory, list);
+      final habit = localFixtures.createEmptyHabit(name: 'A');
+      list.add(habit);
+      log.clear();
+
+      final deferred = _DeferredTaskRunner();
+      final runner = CommandRunner(deferred)
+        ..addListener(
+          _RecordingCommandRunnerListener((_) => log.add('commandFinished')),
+        );
+      final presenter = ShowHabitMenuPresenter(
+        commandRunner: runner,
+        habit: habit,
+        habitList: list,
+        screen: _AutoConfirmShowHabitScreen(log),
+        system: _UnusedShowHabitSystem(),
+        taskRunner: deferred,
+      );
+
+      presenter.onDeleteHabit();
+
+      expect(
+        log,
+        <String>['showDeleteConfirmationScreen', 'close'],
+        reason: 'commands.delete-habits#10 — in the single-habit detail screen '
+            'the command is run and then screen.close() is called '
+            'immediately, without waiting for the command to finish',
+      );
+      expect(
+        list.size(),
+        1,
+        reason: 'commands.delete-habits#10 — the habit is still there when the '
+            'screen closes',
+      );
+
+      deferred.drain();
+
+      expect(
+        log,
+        <String>[
+          'showDeleteConfirmationScreen',
+          'close',
+          'remove(A)',
+          'commandFinished',
+        ],
+        reason: 'commands.delete-habits#10 — the deletion lands afterwards',
+      );
+    });
   });
+}
+
+/// The number of `Repetitions` rows belonging to one habit id.
+int _countRepetitions(Database db, int habitId) =>
+    db.queryInt('SELECT count(*) FROM Repetitions WHERE habit = $habitId');
+
+/// A [TaskRunner] that only queues; [drain] runs the pipeline synchronously.
+///
+/// It is what makes "without waiting for the command to finish" observable: a
+/// command dispatched through a CommandRunner built on this runner has not run
+/// at all by the time `run()` returns.
+class _DeferredTaskRunner implements TaskRunner {
+  final List<Task> pending = <Task>[];
+
+  @override
+  void execute(Task task) {
+    task.onAttached(this);
+    pending.add(task);
+  }
+
+  void drain() {
+    while (pending.isNotEmpty) {
+      final task = pending.removeAt(0);
+      task.onPreExecute();
+      if (!task.isCanceled()) {
+        final FutureOr<void> result = task.doInBackground();
+        if (result is Future<void>) {
+          throw StateError('a command task must not suspend');
+        }
+      }
+      task.onPostExecute();
+    }
+  }
+
+  @override
+  void publishProgress(Task task, int progress) =>
+      task.onProgressUpdate(progress);
+
+  @override
+  void addListener(TaskRunnerListener listener) {}
+
+  @override
+  void removeListener(TaskRunnerListener listener) {}
+
+  @override
+  int get activeTaskCount => pending.length;
+
+  @override
+  Future<void> awaitAll() async => drain();
+}
+
+class _RecordingSelectionAdapter
+    implements ListHabitsSelectionMenuBehaviorAdapter {
+  _RecordingSelectionAdapter(this.log, this.selected, this.listSize);
+
+  final List<String> log;
+  final List<Habit> selected;
+  final int Function() listSize;
+
+  @override
+  void clearSelection() => log.add('clearSelection');
+
+  @override
+  List<Habit> getSelected() => List<Habit>.from(selected);
+
+  @override
+  void performRemove(List<Habit> habits) => log.add(
+        'performRemove(${habits.map((h) => h.name).join(',')}) '
+        'with habitList.size()==${listSize()}',
+      );
+}
+
+class _AutoConfirmSelectionScreen
+    implements ListHabitsSelectionMenuBehaviorScreen {
+  _AutoConfirmSelectionScreen(this.log);
+
+  final List<String> log;
+
+  @override
+  void showColorPicker(
+    PaletteColor defaultColor,
+    OnColorPickedCallback callback,
+  ) {
+    log.add('showColorPicker($defaultColor)');
+  }
+
+  @override
+  void showDeleteConfirmationScreen(
+    OnConfirmedCallback callback,
+    int quantity,
+  ) {
+    log.add('showDeleteConfirmationScreen($quantity)');
+    callback();
+  }
+
+  @override
+  void showEditHabitsScreen(List<Habit> selected) =>
+      log.add('showEditHabitsScreen');
+}
+
+class _AutoConfirmShowHabitScreen implements ShowHabitMenuPresenterScreen {
+  _AutoConfirmShowHabitScreen(this.log);
+
+  final List<String> log;
+
+  @override
+  void close() => log.add('close');
+
+  @override
+  void refresh() => log.add('refresh');
+
+  @override
+  void showDeleteConfirmationScreen(void Function() callback) {
+    log.add('showDeleteConfirmationScreen');
+    callback();
+  }
+
+  @override
+  void showEditHabitScreen(Habit habit) => log.add('showEditHabitScreen');
+
+  @override
+  void showMessage(ShowHabitMenuPresenterMessage? m) => log.add('showMessage');
+
+  @override
+  void showSendFileScreen(String filename) => log.add('showSendFileScreen');
+}
+
+class _UnusedShowHabitSystem implements ShowHabitMenuPresenterSystem {
+  @override
+  UserFile getCSVOutputDir() =>
+      throw StateError('no CSV export is dispatched by these rules');
 }

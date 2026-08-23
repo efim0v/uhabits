@@ -2,7 +2,9 @@ import 'package:test/test.dart';
 import 'package:uhabits_core/src/commands/archive_habits_command.dart';
 import 'package:uhabits_core/src/commands/change_habit_color_command.dart';
 import 'package:uhabits_core/src/commands/command.dart';
+import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/commands/unarchive_habits_command.dart';
+import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit.dart';
@@ -14,8 +16,14 @@ import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/models/reminder.dart';
 import 'package:uhabits_core/src/models/streak.dart';
 import 'package:uhabits_core/src/models/weekday_list.dart';
+import 'package:uhabits_core/src/preferences/memory_storage.dart';
+import 'package:uhabits_core/src/preferences/widget_preferences.dart';
+import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
+import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_selection_menu_behavior.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/show_habit_menu_presenter.dart';
 
 /// Ported from
 /// uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/ArchiveHabitsCommand.kt,
@@ -411,6 +419,103 @@ void main() {
         reason: 'commands.archive-habits#6 — and still notifies',
       );
     });
+
+    test('it is reachable from the selection menu and from the detail menu',
+        () {
+      final a = fixtures.createEmptyHabit(name: 'A');
+      final b = fixtures.createEmptyHabit(name: 'B', position: 1);
+      habitList
+        ..add(a)
+        ..add(b);
+      final harness = _MenuHarness(habitList, <Habit>[a, b]);
+
+      harness.selectionMenu.onArchiveHabits();
+
+      expect(
+        harness.dispatched.single,
+        isA<ArchiveHabitsCommand>()
+            .having((c) => c.habitList, 'habitList', same(habitList))
+            .having((c) => c.selected.map((h) => h.name).toList(), 'selected',
+                <String>['A', 'B']),
+        reason: 'commands.archive-habits#7 — '
+            'ListHabitsSelectionMenuBehavior.onArchiveHabits passes '
+            'adapter.getSelected()',
+      );
+      expect(
+        harness.log,
+        <String>['clearSelection'],
+        reason: 'commands.archive-habits#7 — and then clears the selection',
+      );
+      expect(
+        <bool>[a.isArchived, b.isArchived],
+        <bool>[true, true],
+        reason: 'commands.archive-habits#7 — the whole selection is archived',
+      );
+
+      harness.reset();
+      harness.detailMenu(a).onArchiveHabits();
+
+      expect(
+        harness.dispatched.single,
+        isA<ArchiveHabitsCommand>()
+            .having((c) => c.habitList, 'habitList', same(habitList))
+            .having((c) => c.selected, 'selected', <Habit>[a]),
+        reason: 'commands.archive-habits#7 — '
+            'ShowHabitMenuPresenter.onArchiveHabits passes listOf(habit)',
+      );
+      expect(
+        harness.log,
+        <String>['showMessage(habitArchived)'],
+        reason: 'commands.archive-habits#7 — and then shows '
+            'Message.HABIT_ARCHIVED',
+      );
+    });
+
+    test('the Archive action is enabled only when canArchive() is true', () {
+      final a = fixtures.createEmptyHabit(name: 'A');
+      final b = fixtures.createEmptyHabit(name: 'B', position: 1);
+      habitList
+        ..add(a)
+        ..add(b);
+      final harness = _MenuHarness(habitList, <Habit>[]);
+
+      expect(
+        harness.selectionMenu.canArchive(),
+        isTrue,
+        reason: 'commands.archive-habits#8 — vacuously true for an empty '
+            'selection',
+      );
+
+      harness.selected.addAll(<Habit>[a, b]);
+      expect(
+        harness.selectionMenu.canArchive(),
+        isTrue,
+        reason: 'commands.archive-habits#8 — true while no selected habit is '
+            'archived',
+      );
+
+      b.isArchived = true;
+      expect(
+        harness.selectionMenu.canArchive(),
+        isFalse,
+        reason: 'commands.archive-habits#8 — false as soon as one selected '
+            'habit is already archived',
+      );
+
+      final presenter = harness.detailMenu(a);
+      expect(
+        presenter.canArchive(),
+        isTrue,
+        reason: 'commands.archive-habits#8 — on the detail screen '
+            'canArchive() == !habit.isArchived',
+      );
+      a.isArchived = true;
+      expect(
+        presenter.canArchive(),
+        isFalse,
+        reason: 'commands.archive-habits#8 — and it is read fresh each time',
+      );
+    });
   });
 
   // ===========================================================================
@@ -625,6 +730,107 @@ void main() {
             'name are untouched',
       );
     });
+
+    test('it is reachable from the selection menu and from the detail menu',
+        () {
+      final a = fixtures.createEmptyHabit(name: 'A')..isArchived = true;
+      final b = fixtures.createEmptyHabit(name: 'B', position: 1)
+        ..isArchived = true;
+      habitList
+        ..add(a)
+        ..add(b);
+      final harness = _MenuHarness(habitList, <Habit>[a, b]);
+
+      harness.selectionMenu.onUnarchiveHabits();
+
+      expect(
+        harness.dispatched.single,
+        isA<UnarchiveHabitsCommand>()
+            .having((c) => c.habitList, 'habitList', same(habitList))
+            .having((c) => c.selected.map((h) => h.name).toList(), 'selected',
+                <String>['A', 'B']),
+        reason: 'commands.unarchive-habits#5 — '
+            'ListHabitsSelectionMenuBehavior.onUnarchiveHabits passes '
+            'adapter.getSelected()',
+      );
+      expect(
+        harness.log,
+        <String>['clearSelection'],
+        reason: 'commands.unarchive-habits#5 — then clears the selection',
+      );
+      expect(
+        <bool>[a.isArchived, b.isArchived],
+        <bool>[false, false],
+        reason: 'commands.unarchive-habits#5 — the whole selection is '
+            'unarchived',
+      );
+
+      harness.reset();
+      a.isArchived = true;
+      harness.detailMenu(a).onUnarchiveHabits();
+
+      expect(
+        harness.dispatched.single,
+        isA<UnarchiveHabitsCommand>()
+            .having((c) => c.habitList, 'habitList', same(habitList))
+            .having((c) => c.selected, 'selected', <Habit>[a]),
+        reason: 'commands.unarchive-habits#5 — '
+            'ShowHabitMenuPresenter.onUnarchiveHabits passes listOf(habit)',
+      );
+      expect(
+        harness.log,
+        <String>['showMessage(habitUnarchived)'],
+        reason: 'commands.unarchive-habits#5 — then shows '
+            'Message.HABIT_UNARCHIVED',
+      );
+    });
+
+    test('the Unarchive action is enabled only when canUnarchive() is true',
+        () {
+      final a = fixtures.createEmptyHabit(name: 'A')..isArchived = true;
+      final b = fixtures.createEmptyHabit(name: 'B', position: 1);
+      habitList
+        ..add(a)
+        ..add(b);
+      final harness = _MenuHarness(habitList, <Habit>[]);
+
+      expect(
+        harness.selectionMenu.canUnarchive(),
+        isTrue,
+        reason: 'commands.unarchive-habits#6 — vacuously true for an empty '
+            'selection',
+      );
+
+      harness.selected.add(a);
+      expect(
+        harness.selectionMenu.canUnarchive(),
+        isTrue,
+        reason: 'commands.unarchive-habits#6 — true while ALL selected habits '
+            'are archived',
+      );
+
+      harness.selected.add(b);
+      expect(
+        harness.selectionMenu.canUnarchive(),
+        isFalse,
+        reason: 'commands.unarchive-habits#6 — false as soon as one selected '
+            'habit is not archived',
+      );
+
+      final presenter = harness.detailMenu(a);
+      expect(
+        presenter.canUnarchive(),
+        isTrue,
+        reason: 'commands.unarchive-habits#6 — on the detail screen '
+            'canUnarchive() == habit.isArchived',
+      );
+      a.isArchived = false;
+      expect(
+        presenter.canUnarchive(),
+        isFalse,
+        reason: 'commands.unarchive-habits#6 — and it is read fresh each time',
+      );
+    });
   });
 
   // ===========================================================================
@@ -833,5 +1039,296 @@ void main() {
         reason: 'commands.change-habit-color#5 — archived state is untouched',
       );
     });
+
+    test('the picker is seeded with the first selection and re-reads the '
+        'selection at confirmation time', () {
+      final a =
+          fixtures.createEmptyHabit(name: 'A', color: const PaletteColor(3));
+      final b = fixtures.createEmptyHabit(
+          name: 'B', color: const PaletteColor(9), position: 1);
+      final c = fixtures.createEmptyHabit(
+          name: 'C', color: const PaletteColor(11), position: 2);
+      habitList
+        ..add(a)
+        ..add(b)
+        ..add(c);
+      final harness = _MenuHarness(habitList, <Habit>[a, b]);
+      // The selection changes while the picker is open; upstream re-reads
+      // getSelected() inside the callback, so the change is what counts.
+      harness.screen.onColorPickerOpened = () {
+        harness.selected
+          ..clear()
+          ..add(c);
+      };
+
+      harness.selectionMenu.onChangeColor();
+
+      expect(
+        harness.screen.pickerDefault,
+        const PaletteColor(3),
+        reason: "commands.change-habit-color#6 — the picker is opened with the "
+            "FIRST selected habit's colour (`val (color) = "
+            "adapter.getSelected()[0]`, component1 of Habit being color)",
+      );
+      expect(
+        harness.dispatched.single,
+        isA<ChangeHabitColorCommand>()
+            .having((cmd) => cmd.selected.map((h) => h.name).toList(),
+                'selected', <String>['C'])
+            .having((cmd) => cmd.newColor, 'newColor', const PaletteColor(30)),
+        reason: 'commands.change-habit-color#6 — getSelected() is re-read '
+            'inside the picker callback, so the command applies to whatever is '
+            'selected at confirmation time',
+      );
+      expect(
+        <PaletteColor>[a.color, b.color, c.color],
+        <PaletteColor>[
+          const PaletteColor(3),
+          const PaletteColor(9),
+          const PaletteColor(30),
+        ],
+        reason: 'commands.change-habit-color#6 — only the habits selected at '
+            'confirmation time are recoloured',
+      );
+      expect(
+        harness.log.last,
+        'clearSelection',
+        reason: 'commands.change-habit-color#6 — and the selection is cleared '
+            'afterwards',
+      );
+    });
+
+    test('onChangeColor with an empty selection throws before the picker '
+        'opens', () {
+      habitList.add(fixtures.createEmptyHabit(name: 'A'));
+      final harness = _MenuHarness(habitList, <Habit>[]);
+
+      expect(
+        harness.selectionMenu.onChangeColor,
+        throwsA(isA<RangeError>()),
+        reason: 'commands.change-habit-color#7 — calling onChangeColor with an '
+            'empty selection throws IndexOutOfBoundsException at '
+            'getSelected()[0] (RangeError in Dart)',
+      );
+      expect(
+        harness.screen.pickerDefault,
+        isNull,
+        reason: 'commands.change-habit-color#7 — the menu item is only shown '
+            'while a selection exists, and the picker is never reached',
+      );
+      expect(
+        harness.dispatched,
+        isEmpty,
+        reason: 'commands.change-habit-color#7 — no command is dispatched',
+      );
+    });
+
+    test('ReminderScheduler deliberately ignores this command', () {
+      final habit = fixtures.createEmptyHabit(name: 'A')
+        ..reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habitList.add(habit);
+      final harness = _MenuHarness(habitList, <Habit>[habit]);
+      final sys = _RecordingSystemScheduler();
+      final scheduler = ReminderScheduler(
+        harness.commandRunner,
+        habitList,
+        sys,
+        WidgetPreferences(MemoryStorage()),
+      );
+
+      scheduler.onCommandFinished(
+        ChangeHabitColorCommand(
+            habitList, <Habit>[habit], const PaletteColor(30)),
+      );
+
+      expect(
+        sys.calls,
+        isEmpty,
+        reason: 'commands.change-habit-color#9 — ReminderScheduler '
+            'deliberately ignores ChangeHabitColorCommand: recolouring cannot '
+            'move a reminder, so onCommandFinished returns before scheduleAll',
+      );
+
+      scheduler.onCommandFinished(
+        ArchiveHabitsCommand(habitList, <Habit>[habit]),
+      );
+
+      expect(
+        sys.calls,
+        isNotEmpty,
+        reason: 'commands.change-habit-color#9 — the scheduler is live: every '
+            'other command does reschedule, so the silence above is the '
+            'command type, not a dead listener',
+      );
+    });
   });
+}
+
+// ---------------------------------------------------------------------------
+// The two menu presenters that dispatch these commands
+// ---------------------------------------------------------------------------
+
+/// Wires a [ListHabitsSelectionMenuBehavior] and a [ShowHabitMenuPresenter]
+/// over one habit list, recording every command they dispatch and every call
+/// they make back into the UI.
+class _MenuHarness {
+  _MenuHarness(this._habitList, List<Habit> selected)
+      : selected = List<Habit>.from(selected) {
+    commandRunner = CommandRunner(CoroutineTaskRunner(
+      mainDispatcher: const UnconfinedTestDispatcher(),
+      ioDispatcher: const UnconfinedTestDispatcher(),
+    ));
+    commandRunner.addListener(_DispatchRecorder(dispatched));
+    screen = _RecordingMenuScreen(log);
+    selectionMenu = ListHabitsSelectionMenuBehavior(
+      _habitList,
+      screen,
+      _RecordingMenuAdapter(log, selected: this.selected),
+      commandRunner,
+    );
+  }
+
+  final MemoryHabitList _habitList;
+
+  final List<Habit> selected;
+
+  final List<String> log = <String>[];
+
+  final List<Command> dispatched = <Command>[];
+
+  late final CommandRunner commandRunner;
+
+  late final _RecordingMenuScreen screen;
+
+  late final ListHabitsSelectionMenuBehavior selectionMenu;
+
+  ShowHabitMenuPresenter detailMenu(Habit habit) => ShowHabitMenuPresenter(
+        commandRunner: commandRunner,
+        habit: habit,
+        habitList: _habitList,
+        screen: screen,
+        system: _UnusedMenuSystem(),
+        taskRunner: CoroutineTaskRunner(
+          mainDispatcher: const UnconfinedTestDispatcher(),
+          ioDispatcher: const UnconfinedTestDispatcher(),
+        ),
+      );
+
+  void reset() {
+    log.clear();
+    dispatched.clear();
+  }
+}
+
+class _DispatchRecorder implements CommandRunnerListener {
+  _DispatchRecorder(this.dispatched);
+
+  final List<Command> dispatched;
+
+  @override
+  void onCommandFinished(Command command) => dispatched.add(command);
+}
+
+class _RecordingMenuAdapter implements ListHabitsSelectionMenuBehaviorAdapter {
+  _RecordingMenuAdapter(this.log, {required this.selected});
+
+  final List<String> log;
+  final List<Habit> selected;
+
+  @override
+  void clearSelection() => log.add('clearSelection');
+
+  @override
+  List<Habit> getSelected() => List<Habit>.from(selected);
+
+  @override
+  void performRemove(List<Habit> habits) => log.add('performRemove');
+}
+
+/// One object standing in for both `ListHabitsSelectionMenuBehavior.Screen` and
+/// `ShowHabitMenuPresenter.Screen`, so a single log holds the whole story.
+class _RecordingMenuScreen
+    implements
+        ListHabitsSelectionMenuBehaviorScreen,
+        ShowHabitMenuPresenterScreen {
+  _RecordingMenuScreen(this.log);
+
+  final List<String> log;
+
+  /// The colour the picker was seeded with, or null if it never opened.
+  PaletteColor? pickerDefault;
+
+  /// Runs while the picker is "open", before it answers.
+  void Function()? onColorPickerOpened;
+
+  @override
+  void showColorPicker(
+    PaletteColor defaultColor,
+    OnColorPickedCallback callback,
+  ) {
+    pickerDefault = defaultColor;
+    log.add('showColorPicker($defaultColor)');
+    onColorPickerOpened?.call();
+    callback(const PaletteColor(30));
+  }
+
+  /// Both interfaces declare this name: the selection menu passes a quantity,
+  /// the detail menu does not. One optional parameter satisfies both.
+  @override
+  void showDeleteConfirmationScreen(
+    void Function() callback, [
+    int quantity = 1,
+  ]) {
+    log.add('showDeleteConfirmationScreen($quantity)');
+    callback();
+  }
+
+  @override
+  void showEditHabitsScreen(List<Habit> selected) =>
+      log.add('showEditHabitsScreen');
+
+  @override
+  void showEditHabitScreen(Habit habit) => log.add('showEditHabitScreen');
+
+  @override
+  void showMessage(ShowHabitMenuPresenterMessage? m) =>
+      log.add('showMessage(${m?.name})');
+
+  @override
+  void showSendFileScreen(String filename) => log.add('showSendFileScreen');
+
+  @override
+  void close() => log.add('close');
+
+  @override
+  void refresh() => log.add('refresh');
+}
+
+class _UnusedMenuSystem implements ShowHabitMenuPresenterSystem {
+  @override
+  UserFile getCSVOutputDir() =>
+      throw StateError('no CSV export is dispatched by these rules');
+}
+
+class _RecordingSystemScheduler implements SystemScheduler {
+  final List<String> calls = <String>[];
+
+  @override
+  SchedulerResult scheduleShowReminder(
+    int reminderTime,
+    Habit habit,
+    int timestamp,
+  ) {
+    calls.add('show:${habit.name}');
+    return SchedulerResult.ok;
+  }
+
+  @override
+  SchedulerResult? scheduleWidgetUpdate(int updateTime) {
+    calls.add('widget');
+    return SchedulerResult.ok;
+  }
+
+  @override
+  void log(String componentName, String msg) => calls.add('log:$msg');
 }

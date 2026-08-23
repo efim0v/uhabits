@@ -1,18 +1,22 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/gui/theme.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/streak.dart';
 import 'package:uhabits_core/src/models/streak_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/streak_card.dart';
 
 /// Ported from
 /// uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/StreakListTest.kt
 ///
 /// The Kotlin test drives StreakList through Habit.recompute() and the
-/// `createLongHabit` fixture. Neither Habit nor EntryList is ported yet, so the
-/// computed entries are produced here by [FakeComputedEntries], which
-/// reproduces EntryList.getByInterval() exactly: one entry per day in
-/// [from, to], ordered newest-first, with UNKNOWN for days that hold nothing.
+/// `createLongHabit` fixture. This file predates both, so the computed entries
+/// are produced here by [FakeComputedEntries], which reproduces
+/// EntryList.getByInterval() exactly: one entry per day in [from, to], ordered
+/// newest-first, with UNKNOWN for days that hold nothing. The one test that
+/// needs a real Habit — the Streak card call site — builds one directly.
 class FakeComputedEntries {
   FakeComputedEntries();
 
@@ -368,6 +372,31 @@ void main() {
       expect(best.length, 2, reason: 'models.streak-best#7');
       expect(best[0].length, 5, reason: 'models.streak-best#7');
       expect(best[1].length, 6, reason: 'models.streak-best#7');
+    });
+
+    test('#8 the Streak card asks for getBest(10)', () {
+      // Of the three call sites the rule lists, only this one lives in the
+      // shared core: the streak chart (getBest(5)) and the streak widget (a
+      // configurable count) are Android views and belong to the app package.
+      final habit = MemoryModelFactory().buildHabit();
+      // Sixteen one-day streaks, so the cap of ten actually bites.
+      for (var offset = 0; offset <= 30; offset += 2) {
+        habit.originalEntries.add(Entry(today.minus(offset), Entry.yesManual));
+      }
+      habit.recompute();
+      expect(habit.streaks.getBest(100).length, greaterThan(10),
+          reason: 'models.streak-best#8');
+
+      final state = StreakCartPresenter.buildState(habit, LightTheme());
+
+      expect(state.bestStreaks.length, 10, reason: 'models.streak-best#8');
+      expect(state.bestStreaks, habit.streaks.getBest(10),
+          reason: 'models.streak-best#8');
+      // Not the chart's five, and not everything either.
+      expect(state.bestStreaks, isNot(habit.streaks.getBest(5)),
+          reason: 'models.streak-best#8');
+      expect(state.bestStreaks, isNot(habit.streaks.getBest(100)),
+          reason: 'models.streak-best#8');
     });
   });
 }

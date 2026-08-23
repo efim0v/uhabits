@@ -1,8 +1,11 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/gui/theme.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/entry_list.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/frequency_card.dart';
 
 /// Ported from
 /// uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt
@@ -1345,6 +1348,56 @@ void main() {
         [0, 0, 0, 0, 0, 0, 0],
         reason: 'models.entry-weekday-frequency#3',
       );
+    });
+
+    test('#6 the only call site reads originalEntries, never computedEntries',
+        () {
+      setToday(LocalDate.ymd(2015, 1, 25));
+      addTearDown(resetToday);
+      final january = LocalDate.ymd(2015, 1, 1);
+      final habit = MemoryModelFactory().buildHabit();
+
+      // 2015-01-01 is a Thursday (bucket 5) and 2015-01-02 a Friday (bucket 6).
+      habit.originalEntries.add(Entry(january, Entry.yesManual));
+      habit.recompute();
+
+      // Plant a checkmark that only the computed list knows about. If the card
+      // read computedEntries, Friday would count.
+      habit.computedEntries.add(Entry(LocalDate.ymd(2015, 1, 2), Entry.yesManual));
+      expect(
+        habit.computedEntries.computeWeekdayFrequency(isNumerical: false)[
+            january]![6],
+        1,
+        reason: 'models.entry-weekday-frequency#6',
+      );
+
+      final state = FrequencyCardPresenter.buildState(
+        habit: habit,
+        firstWeekday: DayOfWeek.sunday,
+        theme: LightTheme(),
+      );
+
+      expect(
+        state.frequency,
+        habit.originalEntries.computeWeekdayFrequency(isNumerical: false),
+        reason: 'models.entry-weekday-frequency#6',
+      );
+      expect(state.frequency[january]![5], 1,
+          reason: 'models.entry-weekday-frequency#6');
+      expect(state.frequency[january]![6], 0,
+          reason: 'models.entry-weekday-frequency#6');
+
+      // An entry added to originalEntries alone — never recomputed — shows up
+      // immediately, which only the original list can explain.
+      habit.originalEntries.add(Entry(LocalDate.ymd(2015, 1, 3), Entry.yesManual));
+      final second = FrequencyCardPresenter.buildState(
+        habit: habit,
+        firstWeekday: DayOfWeek.sunday,
+        theme: LightTheme(),
+      );
+      // 2015-01-03 is a Saturday, bucket 0.
+      expect(second.frequency[january]![0], 1,
+          reason: 'models.entry-weekday-frequency#6');
     });
   });
 }

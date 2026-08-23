@@ -1057,6 +1057,163 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // persistence.repair-db-action
+  //
+  // Rule #1 lives with the presenter (`ListHabitsBehavior.onRepairDB`) and is
+  // cited from `test/ui/screens/habits/list/list_habits_behavior_test.dart`;
+  // everything below is the model half of the same action.
+  // -------------------------------------------------------------------------
+  group('persistence.repair-db-action', () {
+    test('#2 repair() = loadRecords + rebuildOrder + notifyListeners', () {
+      insertThreeRows();
+      final list = SQLiteHabitList(factory);
+      var notifications = 0;
+      final listener = ModelObservableListener(() => notifications++);
+      list.observable.addListener(listener);
+      db.clearLog();
+
+      list.repair();
+
+      // The rows are already contiguous, so nothing is rewritten and the two
+      // reads can only be loadRecords() followed by rebuildOrder().
+      expect(db.countResets(findAllSql), 2,
+          reason: 'persistence.repair-db-action#2 — repair() loads the records '
+              'first (this list had never been read) and then rebuilds the '
+              'order, so findAll runs exactly twice');
+      expect(db.countSteps(updateSql), 0,
+          reason: 'persistence.repair-db-action#2 — rebuildOrder writes '
+              'nothing when every position already matches its index');
+      expect(list.size(), 3,
+          reason: 'persistence.repair-db-action#2 — the load really happened: '
+              'the list is populated afterwards');
+      expect(notifications, 1,
+          reason: 'persistence.repair-db-action#2 — repair() ends with one '
+              'observable.notifyListeners()');
+
+      list.observable.removeListener(listener);
+    });
+
+    test('#3 rebuildOrder renumbers to the 0-based ORDER BY position index',
+        () {
+      insertRow(name: 'A', position: 10);
+      insertRow(name: 'B', position: 20);
+      insertRow(name: 'C', position: 30);
+
+      habitList.repair();
+
+      expect(storedPositions(), [0, 1, 2],
+          reason: 'persistence.repair-db-action#3 — every position becomes its '
+              '0-based index in the ORDER BY position result');
+      expect(repository.findAll().map((r) => r.name).toList(),
+          ['A', 'B', 'C'],
+          reason: 'persistence.repair-db-action#3 — the renumbering preserves '
+              'the order the rows already had');
+    });
+
+    test('#3 only the rows whose position changed are written', () {
+      insertRow(name: 'A', position: 0);
+      insertRow(name: 'B', position: 1);
+      insertRow(name: 'C', position: 2);
+      habitList.size(); // load; positions are contiguous, so nothing is fixed.
+
+      // Move one row behind the list's back, then repair.
+      db.run("update Habits set position = 5 where name = 'C'");
+      db.clearLog();
+
+      habitList.repair();
+
+      expect(db.countResets(findAllSql), 1,
+          reason: 'persistence.repair-db-action#3 — the list is already '
+              'loaded, so only rebuildOrder re-reads the rows');
+      expect(db.countSteps(updateSql), 1,
+          reason: 'persistence.repair-db-action#3 — exactly one UPDATE: the '
+              'two rows that already sat at their index are not rewritten');
+      expect(storedPositions(), [0, 1, 2],
+          reason: 'persistence.repair-db-action#3 — and the stray row lands at '
+              'index 2');
+
+      db.clearLog();
+      habitList.repair();
+      expect(db.countSteps(updateSql), 0,
+          reason: 'persistence.repair-db-action#3 — a second repair writes '
+              'nothing at all: repair is idempotent');
+    });
+
+    test('#4 repair changes nothing but position', () {
+      final habits = seedTenHabits();
+      entryRepository.insert(
+          EntryData(habitId: habits[0].id, timestamp: 1000, value: Entry.yesManual));
+      entryRepository.insert(
+          EntryData(habitId: habits[1].id, timestamp: 2000, value: Entry.skip));
+      db.run('update Habits set position = 40 where id = 1');
+      habitList.reload();
+      final before = rowsById();
+
+      habitList.repair();
+
+      final after = rowsById();
+      expect(after.keys.toSet(), before.keys.toSet(),
+          reason: 'persistence.repair-db-action#4 — repair() deletes nothing: '
+              'every habit row survives');
+      expect(db.queryInt('select count(*) from Repetitions'), 2,
+          reason: 'persistence.repair-db-action#4 — repair() never touches the '
+              'Repetitions table');
+      expect(countRepetitions(habits[0].id!), 1,
+          reason: 'persistence.repair-db-action#4 — the entries of the habit '
+              'that moved are left alone');
+      for (final id in before.keys) {
+        final b = before[id]!;
+        final a = after[id]!;
+        expect(
+          <Object?>[
+            a.name, a.description, a.question, a.freqNum, a.freqDen, a.color,
+            a.reminderHour, a.reminderMin, a.reminderDays, a.highlight,
+            a.archived, a.type, a.targetValue, a.targetType, a.unit, a.uuid,
+          ],
+          <Object?>[
+            b.name, b.description, b.question, b.freqNum, b.freqDen, b.color,
+            b.reminderHour, b.reminderMin, b.reminderDays, b.highlight,
+            b.archived, b.type, b.targetValue, b.targetType, b.unit, b.uuid,
+          ],
+          reason: 'persistence.repair-db-action#4 — no field other than '
+              'position changes, for habit $id',
+        );
+      }
+      expect(storedPositions(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'persistence.repair-db-action#4 — position is the one field '
+              'repair() does change');
+    });
+
+    test('#5 the base HabitList repair() is an empty no-op', () {
+      final memory = MemoryHabitList();
+      final a = factory.buildHabit()..name = 'A';
+      final b = factory.buildHabit()..name = 'B';
+      memory.add(a);
+      memory.add(b);
+      a.position = 40;
+      var notifications = 0;
+      final listener = ModelObservableListener(() => notifications++);
+      memory.observable.addListener(listener);
+      db.clearLog();
+
+      memory.repair();
+
+      expect(notifications, 0,
+          reason: 'persistence.repair-db-action#5 — MemoryHabitList inherits '
+              'the empty body, so it notifies nobody');
+      expect(a.position, 40,
+          reason: 'persistence.repair-db-action#5 — it renumbers nothing');
+      expect(memory.toList(), <Habit>[a, b],
+          reason: 'persistence.repair-db-action#5 — and reorders nothing');
+      expect(db.steps, isEmpty,
+          reason: 'persistence.repair-db-action#5 — no SQL is issued: the base '
+              'implementation has no body at all');
+
+      memory.observable.removeListener(listener);
+    });
+  });
+
   group('persistence.schema-habits', () {
     test('#8 row to model mapping', () {
       insertRow(
@@ -1206,6 +1363,116 @@ void main() {
         0,
         reason: 'persistence.schema-habits#11',
       );
+    });
+  });
+
+  // The two reorder rules that are specific to the SQLite list. The in-memory
+  // half of models.habit-list-reorder lives in test/models/habit_list_test.dart;
+  // these two need a database, so they are asserted here, against the same
+  // recording connection the rest of this file uses.
+  group('models.habit-list-reorder (SQLite)', () {
+    test('#9 reorder shifts the rows in between with one bulk update, then '
+        'writes the moved habit', () {
+      seedTenHabits();
+
+      // Moving up (toPos < fromPos): everything from toPos up to, but not
+      // including, fromPos slides one position later.
+      db.clearLog();
+      final movedUp = habitList.getById(6)!; // position 5
+      final targetUp = habitList.getById(3)!; // position 2
+      expect(movedUp.position, 5, reason: 'models.habit-list-reorder#9');
+      expect(targetUp.position, 2, reason: 'models.habit-list-reorder#9');
+
+      habitList.reorder(movedUp, targetUp);
+
+      expect(
+        db.preparedMatching('update habits set position'),
+        <String>[
+          'update habits set position = position + 1 '
+              'where position >= 2 and position < 5'
+        ],
+        reason: 'models.habit-list-reorder#9',
+      );
+      // Then the moved habit's own row is written with the target position.
+      final afterUp = rowsById();
+      expect(afterUp[6]!.position, 2, reason: 'models.habit-list-reorder#9');
+      expect(afterUp[3]!.position, 3, reason: 'models.habit-list-reorder#9');
+      expect(afterUp[4]!.position, 4, reason: 'models.habit-list-reorder#9');
+      expect(afterUp[5]!.position, 5, reason: 'models.habit-list-reorder#9');
+      expect(storedPositions(), <int>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'models.habit-list-reorder#9');
+
+      // Moving down (toPos > fromPos): everything after fromPos, up to and
+      // including toPos, slides one position earlier.
+      db.clearLog();
+      final movedDown = habitList.getById(1)!;
+      final targetDown = habitList.getById(5)!;
+      final fromPos = movedDown.position;
+      final toPos = targetDown.position;
+      expect(fromPos, 0, reason: 'models.habit-list-reorder#9');
+      expect(toPos, 5, reason: 'models.habit-list-reorder#9');
+
+      habitList.reorder(movedDown, targetDown);
+
+      expect(
+        db.preparedMatching('update habits set position'),
+        <String>[
+          'update habits set position = position - 1 '
+              'where position > $fromPos and position <= $toPos'
+        ],
+        reason: 'models.habit-list-reorder#9',
+      );
+      final afterDown = rowsById();
+      expect(afterDown[1]!.position, toPos,
+          reason: 'models.habit-list-reorder#9');
+      expect(afterDown[5]!.position, toPos - 1,
+          reason: 'models.habit-list-reorder#9');
+      expect(storedPositions(), <int>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'models.habit-list-reorder#9');
+    });
+
+    test('#10 repair and the load path renumber stored positions to 0..n-1, '
+        'writing only the rows that do not already match', () {
+      seedTenHabits();
+
+      // Corrupt the LAST row only, so findAll()'s order is unchanged and every
+      // other row already sits at its own index.
+      db.run('update Habits set position = 99 where id = 10');
+      habitList.reload();
+      db.clearLog();
+
+      // Reading the list is enough: the load path rebuilds the order itself.
+      expect(habitList.size(), 10, reason: 'models.habit-list-reorder#10');
+      expect(storedPositions(), <int>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'models.habit-list-reorder#10');
+      expect(rowsById()[10]!.position, 9,
+          reason: 'models.habit-list-reorder#10');
+      // Nine rows already matched their index and were left alone.
+      expect(db.countSteps(updateSql), 1,
+          reason: 'models.habit-list-reorder#10');
+
+      // repair() does the same thing on demand, and writes nothing at all when
+      // every stored position already matches its row index.
+      db.clearLog();
+      habitList.repair();
+      expect(db.countSteps(updateSql), 0,
+          reason: 'models.habit-list-reorder#10');
+      expect(storedPositions(), <int>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'models.habit-list-reorder#10');
+
+      // Pushing the FIRST row to the back shifts every index, so all ten rows
+      // are rewritten — and the result is still exactly 0..n-1.
+      db.run('update Habits set position = 40 where id = 1');
+      db.clearLog();
+      habitList.repair();
+      expect(db.countSteps(updateSql), 10,
+          reason: 'models.habit-list-reorder#10');
+      expect(storedPositions(), <int>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'models.habit-list-reorder#10');
+      expect(rowsById()[1]!.position, 9,
+          reason: 'models.habit-list-reorder#10');
+      expect(rowsById()[2]!.position, 0,
+          reason: 'models.habit-list-reorder#10');
     });
   });
 }

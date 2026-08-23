@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/score.dart';
 import 'package:uhabits_core/src/models/score_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
@@ -12,8 +13,8 @@ import 'package:uhabits_core/src/time/local_date.dart';
 /// uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt
 ///
 /// The Kotlin test drives ScoreList through Habit.recompute() and the
-/// HabitFixtures helpers. Neither Habit nor EntryList is ported yet, so this
-/// file supplies both: [FakeComputedEntries] reproduces
+/// HabitFixtures helpers. This file predates both, so it supplies its own:
+/// [FakeComputedEntries] reproduces
 /// EntryList.getByInterval() exactly (one entry per day in [from, to],
 /// newest-first, UNKNOWN for days that hold nothing), and the local
 /// `recompute` closure reproduces the [from, to] range Habit.recompute()
@@ -812,6 +813,51 @@ void main() {
       );
       expect(scores[today].value, closeTo(0.948077, e),
           reason: 'models.score-list-recompute-numerical-at-most#8');
+    });
+
+    test('#9 however good the score, isCompletedToday() is always false for a '
+        'numerical AT_MOST habit', () {
+      final factory = MemoryModelFactory();
+
+      // A perfect AT_MOST day — nothing logged against a target of 2.0 — still
+      // does not count as completed.
+      final untouched = factory.buildHabit()
+        ..type = HabitType.numerical
+        ..targetType = NumericalHabitType.atMost
+        ..targetValue = 2.0;
+      untouched.recompute();
+      expect(untouched.scores[today].value, closeTo(1.0, e),
+          reason: 'models.score-list-recompute-numerical-at-most#9');
+      expect(untouched.isCompletedToday(), isFalse,
+          reason: 'models.score-list-recompute-numerical-at-most#9');
+
+      // And neither does any other value: below, at, or above the target.
+      for (final value in <int>[Entry.unknown, 0, 1000, 2000, 5000]) {
+        final habit = factory.buildHabit()
+          ..type = HabitType.numerical
+          ..targetType = NumericalHabitType.atMost
+          ..targetValue = 2.0;
+        habit.originalEntries.add(Entry(today, value));
+        habit.recompute();
+        expect(habit.isCompletedToday(), isFalse,
+            reason:
+                'models.score-list-recompute-numerical-at-most#9 (value $value)');
+      }
+
+      // The same habit read as AT_LEAST does complete, which is what makes the
+      // AT_MOST answer a deliberate constant rather than an accident.
+      final atLeast = factory.buildHabit()
+        ..type = HabitType.numerical
+        ..targetType = NumericalHabitType.atLeast
+        ..targetValue = 2.0;
+      atLeast.originalEntries.add(Entry(today, 5000));
+      atLeast.recompute();
+      expect(atLeast.isCompletedToday(), isTrue,
+          reason: 'models.score-list-recompute-numerical-at-most#9');
+      atLeast.targetType = NumericalHabitType.atMost;
+      atLeast.recompute();
+      expect(atLeast.isCompletedToday(), isFalse,
+          reason: 'models.score-list-recompute-numerical-at-most#9');
     });
   });
 

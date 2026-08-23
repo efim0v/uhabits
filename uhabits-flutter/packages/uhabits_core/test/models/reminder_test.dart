@@ -1,5 +1,8 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/database/habit_repository.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/reminder.dart';
+import 'package:uhabits_core/src/models/sqlite/sqlite_habit_list.dart';
 import 'package:uhabits_core/src/models/weekday_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
 
@@ -198,6 +201,90 @@ void main() {
           reason: 'models.reminder#15');
       expect(WeekdayList(0), WeekdayList.fromArray(List.filled(7, false)),
           reason: 'models.reminder#15');
+    });
+
+    test('#3 #6 Habit.reminder is nullable and hasReminder() is exactly a '
+        'null check', () {
+      final factory = MemoryModelFactory();
+      final habit = factory.buildHabit();
+      expect(habit.reminder, isNull, reason: 'models.reminder#3');
+      expect(habit.hasReminder(), isFalse, reason: 'models.reminder#3');
+
+      habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      expect(habit.hasReminder(), isTrue, reason: 'models.reminder#6');
+      expect(habit.reminder, Reminder(8, 30, WeekdayList.everyDay),
+          reason: 'models.reminder#6');
+
+      // An 'empty' reminder — midnight, no weekdays — is still a reminder:
+      // hasReminder() looks at nothing but nullness.
+      habit.reminder = Reminder(0, 0, WeekdayList(0));
+      expect(habit.hasReminder(), isTrue, reason: 'models.reminder#6');
+      expect(habit.reminder!.days.isEmpty, isTrue, reason: 'models.reminder#6');
+
+      habit.reminder = null;
+      expect(habit.reminder, isNull, reason: 'models.reminder#6');
+      expect(habit.hasReminder(), isFalse, reason: 'models.reminder#6');
+
+      // copyFrom carries the field across in both directions, null included.
+      final donor = factory.buildHabit()
+        ..reminder = Reminder(6, 15, WeekdayList(3));
+      habit.copyFrom(donor);
+      expect(habit.hasReminder(), isTrue, reason: 'models.reminder#3');
+      expect(habit.reminder, Reminder(6, 15, WeekdayList(3)),
+          reason: 'models.reminder#3');
+      donor.reminder = null;
+      habit.copyFrom(donor);
+      expect(habit.reminder, isNull, reason: 'models.reminder#3');
+      expect(habit.hasReminder(), isFalse, reason: 'models.reminder#3');
+    });
+
+    test('#4 the habit row stores hour, minute and the packed days; a Reminder '
+        'is rebuilt only when BOTH hour and minute are non-null', () {
+      final factory = MemoryModelFactory();
+
+      final habit = factory.buildHabit()
+        ..reminder = Reminder(22, 15, WeekdayList(96));
+      final data = SQLiteHabitList.copyFrom(habit);
+      expect(data.reminderHour, 22, reason: 'models.reminder#4');
+      expect(data.reminderMin, 15, reason: 'models.reminder#4');
+      expect(data.reminderDays, habit.reminder!.days.toInteger(),
+          reason: 'models.reminder#4');
+      expect(data.reminderDays, 96, reason: 'models.reminder#4');
+
+      // No reminder: NULL hour, NULL minute, and a day mask of 0.
+      final plainData = SQLiteHabitList.copyFrom(factory.buildHabit());
+      expect(plainData.reminderHour, isNull, reason: 'models.reminder#4');
+      expect(plainData.reminderMin, isNull, reason: 'models.reminder#4');
+      expect(plainData.reminderDays, 0, reason: 'models.reminder#4');
+
+      // Round trip through the row.
+      final loaded = factory.buildHabit();
+      SQLiteHabitList.copyTo(data, loaded);
+      expect(loaded.reminder, Reminder(22, 15, WeekdayList(96)),
+          reason: 'models.reminder#4');
+      expect(loaded.hasReminder(), isTrue, reason: 'models.reminder#4');
+
+      // Either half missing leaves the habit's reminder alone — null on a
+      // freshly built habit — and reminder_days is ignored entirely.
+      final noHour = factory.buildHabit();
+      SQLiteHabitList.copyTo(
+          HabitData(reminderMin: 15, reminderDays: 127), noHour);
+      expect(noHour.reminder, isNull, reason: 'models.reminder#4');
+      final noMinute = factory.buildHabit();
+      SQLiteHabitList.copyTo(
+          HabitData(reminderHour: 22, reminderDays: 127), noMinute);
+      expect(noMinute.reminder, isNull, reason: 'models.reminder#4');
+      final neither = factory.buildHabit();
+      SQLiteHabitList.copyTo(HabitData(reminderDays: 127), neither);
+      expect(neither.reminder, isNull, reason: 'models.reminder#4');
+
+      // Zero is a value, not a missing half: midnight survives the load.
+      final midnight = factory.buildHabit();
+      SQLiteHabitList.copyTo(
+          HabitData(reminderHour: 0, reminderMin: 0, reminderDays: 0),
+          midnight);
+      expect(midnight.reminder, Reminder(0, 0, WeekdayList(0)),
+          reason: 'models.reminder#4');
     });
   });
 }

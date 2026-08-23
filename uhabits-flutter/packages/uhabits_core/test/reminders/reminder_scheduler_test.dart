@@ -17,7 +17,7 @@ import 'package:uhabits_core/src/models/reminder.dart';
 import 'package:uhabits_core/src/models/weekday_list.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
 import 'package:uhabits_core/src/preferences/widget_preferences.dart';
-import 'package:uhabits_core/src/reminders/date_utils.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';

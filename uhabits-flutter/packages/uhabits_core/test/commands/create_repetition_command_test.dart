@@ -16,6 +16,7 @@ import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/database/entry_repository.dart';
+import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/entry_list.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
@@ -26,11 +27,14 @@ import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/model_observable.dart';
 import 'package:uhabits_core/src/models/score_list.dart';
+import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
 import 'package:uhabits_core/src/models/sqlite/sqlite_entry_list.dart';
+import 'package:uhabits_core/src/models/sqlite/sqlite_habit_list.dart';
 import 'package:uhabits_core/src/models/streak_list.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_cache.dart';
 
 import '../helpers/test_database.dart';
 
@@ -677,6 +681,54 @@ void main() {
             'instance itself, which is how they reach component2 (habit)',
       );
     });
+
+    test('it is the only command listeners special-case for a targeted '
+        'refresh', () {
+      final other = fixtures.createShortHabit();
+      other.name = 'Other';
+      habitList.add(other);
+      final cache = HabitCardListCache(
+        habitList,
+        commandRunner,
+        taskRunner,
+        StandardLogging(out: StringBuffer(), err: StringBuffer()),
+      );
+      cache.onAttached();
+      final cachedOther = cache.getScore(other.id!);
+
+      // Both habits change behind the cache's back, so a full refresh and a
+      // targeted one are told apart by what the cache picks up.
+      habit.originalEntries.add(Entry(today.minus(1), Entry.yesManual));
+      habit.recompute();
+      other.originalEntries.add(Entry(today.minus(1), Entry.yesManual));
+      other.recompute();
+
+      commandRunner
+          .run(CreateRepetitionCommand(habitList, habit, today, 100, ''));
+
+      expect(
+        cache.getScore(habit.id!),
+        habit.scores[today].value,
+        reason: 'commands.create-repetition#11 — listeners special-case this '
+            "command and refresh only command.habit — the cache's entry for it "
+            'is up to date',
+      );
+      expect(
+        cache.getScore(other.id!),
+        cachedOther,
+        reason: 'commands.create-repetition#11 — the refresh is targeted at a '
+            'single habit, so every other habit keeps its stale cached data',
+      );
+
+      commandRunner.run(_NoOpCommand());
+
+      expect(
+        cache.getScore(other.id!),
+        other.scores[today].value,
+        reason: 'commands.create-repetition#11 — every OTHER command falls '
+            'through to a full refresh, which does pick the other habit up',
+      );
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -897,7 +949,71 @@ void main() {
             'through resort(), which filtered sublists do allow',
       );
     });
+
+    test('SQLiteHabitList.update notifies the inner list, then writes, then '
+        'notifies the outer one', () {
+      final db = openMigratedDatabase();
+      addTearDown(db.close);
+      final factory = SQLModelFactory(db);
+      final SQLiteHabitList list = factory.buildHabitList();
+      final a = factory.buildHabit()..name = 'A';
+      final b = factory.buildHabit()..name = 'B';
+      list
+        ..add(a)
+        ..add(b);
+      // Filtered sublists are exactly what listens to the INNER observable.
+      final sublist =
+          list.getFiltered(const HabitMatcher(isArchivedAllowed: true));
+
+      String storedNames() => factory.habitRepository
+          .findAll()
+          .map((r) => r.name)
+          .join(',');
+
+      final events = <String>[];
+      sublist.observable.addListener(
+        ModelObservableListener(() => events.add('inner(${storedNames()})')),
+      );
+      list.observable.addListener(
+        ModelObservableListener(() => events.add('outer(${storedNames()})')),
+      );
+
+      a.name = 'A2';
+      b.name = 'B2';
+      list.update(<Habit>[a, b]);
+
+      expect(
+        events,
+        <String>['inner(A,B)', 'outer(A2,B2)'],
+        reason: 'commands.list-mutations-triggered#3 — SQLiteHabitList.update '
+            'first runs list.update(habits) on the inner MemoryHabitList, '
+            'which resorts and fires the INNER observable that filtered '
+            'sublists listen to (the rows are still the old ones then); only '
+            'afterwards does it issue one repository.update(copyFrom(h)) per '
+            'habit and fire the OUTER observable',
+      );
+      expect(
+        events.length,
+        2,
+        reason: 'commands.list-mutations-triggered#3 — so one '
+            'Archive/Unarchive/ChangeColor command produces multiple '
+            'observable notifications, not one',
+      );
+      expect(
+        sublist.map((h) => h.name).toList(),
+        <String>['A2', 'B2'],
+        reason: 'commands.list-mutations-triggered#3 — the inner list holds '
+            'the very same Habit instances, so the sublist sees the edit',
+      );
+    });
   });
+}
+
+/// A command that does nothing at all, used to show what listeners do with
+/// anything that is not a CreateRepetitionCommand.
+class _NoOpCommand implements Command {
+  @override
+  void run() {}
 }
 
 /// Minimal [CommandRunnerListener] used by the dispatch test.

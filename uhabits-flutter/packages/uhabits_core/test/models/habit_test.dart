@@ -3,7 +3,10 @@ import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/entry_list.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit.dart';
+import 'package:uhabits_core/src/models/habit_list.dart';
+import 'package:uhabits_core/src/models/habit_matcher.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
 import 'package:uhabits_core/src/models/model_observable.dart';
 import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/models/reminder.dart';
@@ -843,6 +846,64 @@ void main() {
       h.recompute();
       expect(h.isCompletedToday(), isFalse,
           reason: 'models.habit-completed-entered#6');
+    });
+
+    test('the two predicates drive HabitMatcher and the BY_STATUS order', () {
+      Habit withToday(String name, int value) {
+        final habit = buildHabit()..name = name;
+        habit.computedEntries.add(Entry(today, value));
+        return habit;
+      }
+
+      final completed = withToday('completed', Entry.yesManual);
+      final refused = withToday('refused', Entry.no);
+      final blank = buildHabit()..name = 'blank';
+
+      expect(completed.isCompletedToday(), isTrue,
+          reason: 'models.habit-completed-entered#7');
+      expect(refused.isCompletedToday(), isFalse,
+          reason: 'models.habit-completed-entered#7');
+      expect(refused.isEnteredToday(), isTrue,
+          reason: 'models.habit-completed-entered#7');
+      expect(blank.isEnteredToday(), isFalse,
+          reason: 'models.habit-completed-entered#7');
+
+      // isCompletedAllowed filters on isCompletedToday()...
+      const everything = HabitMatcher();
+      const hideCompleted = HabitMatcher(isCompletedAllowed: false);
+      expect(everything.matches(completed), isTrue,
+          reason: 'models.habit-completed-entered#7');
+      expect(hideCompleted.matches(completed), isFalse,
+          reason: 'models.habit-completed-entered#7');
+      expect(hideCompleted.matches(refused), isTrue,
+          reason: 'models.habit-completed-entered#7');
+      expect(hideCompleted.matches(blank), isTrue,
+          reason: 'models.habit-completed-entered#7');
+
+      // ...and isEnteredAllowed on isEnteredToday(), which a NO satisfies.
+      const hideEntered = HabitMatcher(isEnteredAllowed: false);
+      expect(everything.matches(refused), isTrue,
+          reason: 'models.habit-completed-entered#7');
+      expect(hideEntered.matches(refused), isFalse,
+          reason: 'models.habit-completed-entered#7');
+      expect(hideEntered.matches(completed), isFalse,
+          reason: 'models.habit-completed-entered#7');
+      expect(hideEntered.matches(blank), isTrue,
+          reason: 'models.habit-completed-entered#7');
+
+      // BY_STATUS sorts completed habits first (descending) and last
+      // (ascending); isCompletedToday() is the comparator's first question.
+      final list = MemoryHabitList();
+      list.add(refused);
+      list.add(completed);
+      list.add(blank);
+
+      list.primaryOrder = HabitListOrder.byStatusDesc;
+      expect(list.getByPosition(0), same(completed),
+          reason: 'models.habit-completed-entered#7');
+      list.primaryOrder = HabitListOrder.byStatusAsc;
+      expect(list.map((h) => h.name).last, 'completed',
+          reason: 'models.habit-completed-entered#7');
     });
   });
 }

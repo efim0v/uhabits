@@ -1,5 +1,9 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/models/entry_list.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/model_observable.dart';
+import 'package:uhabits_core/src/models/score_list.dart';
+import 'package:uhabits_core/src/models/streak_list.dart';
 
 /// Written from the parity rules for `models.model-observable`.
 ///
@@ -182,6 +186,52 @@ void main() {
       log.clear();
       second.notifyListeners();
       expect(log, ['second'], reason: 'models.model-observable#5');
+    });
+
+    test('#6 Habit and HabitList own observables; ScoreList, StreakList and '
+        'EntryList do not', () {
+      final factory = MemoryModelFactory();
+      final habitList = factory.buildHabitList();
+      final first = factory.buildHabit();
+      final second = factory.buildHabit();
+
+      // One observable per habit, never shared.
+      expect(first.observable, isA<ModelObservable>(),
+          reason: 'models.model-observable#6');
+      expect(identical(first.observable, second.observable), isFalse,
+          reason: 'models.model-observable#6');
+
+      final log = <String>[];
+      first.observable.addListener(_RecordingListener('first', log));
+      second.observable.notifyListeners();
+      expect(log, isEmpty, reason: 'models.model-observable#6');
+      first.observable.notifyListeners();
+      expect(log, ['first'], reason: 'models.model-observable#6');
+
+      // The list has exactly one, and it is a different object again.
+      expect(habitList.observable, isA<ModelObservable>(),
+          reason: 'models.model-observable#6');
+      expect(identical(habitList.observable, first.observable), isFalse,
+          reason: 'models.model-observable#6');
+      log.clear();
+      habitList.observable.addListener(_RecordingListener('list', log));
+      habitList.add(first);
+      expect(log, ['list'], reason: 'models.model-observable#6');
+
+      // The three derived collections carry no observable at all: there is no
+      // such member to reach, even dynamically.
+      for (final model in <Object>[
+        first.scores,
+        first.streaks,
+        first.originalEntries,
+        first.computedEntries,
+        ScoreList(),
+        StreakList(),
+        EntryList(),
+      ]) {
+        expect(() => (model as dynamic).observable, throwsNoSuchMethodError,
+            reason: 'models.model-observable#6');
+      }
     });
   });
 }

@@ -10,9 +10,14 @@ import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/model_factory.dart';
 import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/models/score_list.dart';
+import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
+import 'package:uhabits_core/src/models/sqlite/sqlite_entry_list.dart';
+import 'package:uhabits_core/src/models/sqlite/sqlite_habit_list.dart';
 import 'package:uhabits_core/src/models/streak_list.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+
+import '../helpers/test_database.dart';
 
 /// The offsets and values baked into HabitFixtures.createLongNumericalHabit.
 const _longNumericalTimes = <int>[
@@ -215,6 +220,59 @@ void main() {
         isFalse,
         reason: 'models.model-factory#3',
       );
+    });
+
+    test('SQLModelFactory backs only the original entries with SQLite', () {
+      final db = openMigratedDatabase();
+      addTearDown(db.close);
+      final sqlFactory = SQLModelFactory(db);
+
+      // models.model-factory#4: originalEntries is a SQLiteEntryList wired to
+      // the factory's one entry repository...
+      final original = sqlFactory.buildOriginalEntries();
+      expect(original.runtimeType, SQLiteEntryList,
+          reason: 'models.model-factory#4');
+      expect(
+        identical(
+            (original as SQLiteEntryList).repository, sqlFactory.entryRepository),
+        isTrue,
+        reason: 'models.model-factory#4',
+      );
+      // ...and every original list shares that single repository.
+      final second = sqlFactory.buildOriginalEntries() as SQLiteEntryList;
+      expect(identical(second, original), isFalse,
+          reason: 'models.model-factory#4');
+      expect(identical(second.repository, original.repository), isTrue,
+          reason: 'models.model-factory#4');
+
+      // computedEntries is a plain in-memory EntryList, never database backed.
+      final computed = sqlFactory.buildComputedEntries();
+      expect(computed.runtimeType, EntryList,
+          reason: 'models.model-factory#4');
+      expect(computed, isNot(isA<SQLiteEntryList>()),
+          reason: 'models.model-factory#4');
+
+      // buildHabit() wires exactly that pair onto the habit.
+      final habit = sqlFactory.buildHabit();
+      expect(habit.originalEntries.runtimeType, SQLiteEntryList,
+          reason: 'models.model-factory#4');
+      expect(habit.computedEntries.runtimeType, EntryList,
+          reason: 'models.model-factory#4');
+      expect(
+        identical((habit.originalEntries as SQLiteEntryList).repository,
+            sqlFactory.entryRepository),
+        isTrue,
+        reason: 'models.model-factory#4',
+      );
+
+      // The rest of the factory is unchanged from the in-memory one, except
+      // the habit list, which reads the Habits table.
+      expect(sqlFactory.buildScoreList().runtimeType, ScoreList,
+          reason: 'models.model-factory#4');
+      expect(sqlFactory.buildStreakList().runtimeType, StreakList,
+          reason: 'models.model-factory#4');
+      expect(sqlFactory.buildHabitList().runtimeType, SQLiteHabitList,
+          reason: 'models.model-factory#4');
     });
   });
 

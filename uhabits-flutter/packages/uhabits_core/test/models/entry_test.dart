@@ -1,5 +1,53 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/commands/command_runner.dart';
+import 'package:uhabits_core/src/commands/create_repetition_command.dart';
+import 'package:uhabits_core/src/preferences/memory_storage.dart';
+import 'package:uhabits_core/src/preferences/preferences.dart';
+import 'package:uhabits_core/src/tasks/task_runner.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart';
+import 'package:uhabits_core/src/ui/views/history_chart.dart';
 import 'package:uhabits_core/uhabits_core.dart';
+
+/// A [HistoryCardScreen] that records every dialog the presenter asks for and
+/// keeps the callback it was handed, so the test can answer as the dialog.
+class _RecordingHistoryScreen implements HistoryCardScreen {
+  final List<String> log = <String>[];
+
+  int? checkmarkValue;
+  String? checkmarkNotes;
+  PaletteColor? checkmarkColor;
+  CheckMarkDialogCallback? checkmarkCallback;
+
+  @override
+  void showHistoryEditorDialog(OnDateClickedListener listener) =>
+      log.add('editor');
+
+  @override
+  void showFeedback() => log.add('feedback');
+
+  @override
+  void showNumberPopup(
+    double value,
+    String notes,
+    NumberPickerCallback callback,
+  ) =>
+      log.add('number');
+
+  @override
+  void showCheckmarkPopup(
+    int selectedValue,
+    String notes,
+    PaletteColor color,
+    CheckMarkDialogCallback callback,
+  ) {
+    log.add('checkmark');
+    checkmarkValue = selectedValue;
+    checkmarkNotes = notes;
+    checkmarkColor = color;
+    checkmarkCallback = callback;
+  }
+}
 
 /// Ported from uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryTest.kt
 void main() {
@@ -67,6 +115,91 @@ void main() {
       // before changing this.
       expect(Entry(LocalDate(0), 3).formattedValue, 'SKIP',
           reason: 'models.entry-values#6');
+    });
+
+    test('#10 the checkmark dialog writes an end state directly; the cycle only '
+        'runs when the short-toggle preference bypasses the dialog', () {
+      // The dialog itself is an Android view; what is ported — and what this
+      // asserts — is the presenter seam it talks to.
+      setToday(LocalDate.ymd(2015, 1, 25));
+      addTearDown(resetToday);
+      final today = getToday();
+
+      final factory = MemoryModelFactory();
+      final habitList = factory.buildHabitList();
+      final habit = factory.buildHabit()..name = 'Meditate';
+      habitList.add(habit);
+
+      final storage = MemoryStorage();
+      final prefs = Preferences(storage)
+        ..isSkipEnabled = true
+        ..areQuestionMarksEnabled = true;
+      final commandRunner = CommandRunner(CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      ));
+      final screen = _RecordingHistoryScreen();
+      final presenter = HistoryCardPresenter(
+        commandRunner: commandRunner,
+        habit: habit,
+        habitList: habitList,
+        preferences: prefs,
+        screen: screen,
+      );
+
+      // Short toggle off (the default): a press opens the dialog instead of
+      // cycling, pre-filled with the current value.
+      expect(prefs.isShortToggleEnabled, isFalse,
+          reason: 'models.entry-values#10');
+      presenter.onDateShortPress(today);
+      expect(screen.log, ['feedback', 'checkmark'],
+          reason: 'models.entry-values#10');
+      expect(screen.checkmarkValue, Entry.unknown,
+          reason: 'models.entry-values#10');
+
+      // Every one of the four end states the dialog offers is stored verbatim.
+      // Cycling from UNKNOWN would have produced YES_MANUAL for all four.
+      for (final chosen in <int>[
+        Entry.yesManual,
+        Entry.skip,
+        Entry.no,
+        Entry.unknown,
+      ]) {
+        screen.checkmarkCallback!.onNotesSaved(chosen, 'note');
+        expect(habit.originalEntries.get(today).value, chosen,
+            reason: 'models.entry-values#10 (chose $chosen)');
+        expect(habit.originalEntries.get(today).notes, 'note',
+            reason: 'models.entry-values#10 (chose $chosen)');
+      }
+
+      // Turning the preference on swaps the two gestures: the short press now
+      // bypasses the dialog and runs nextToggleValue instead.
+      prefs.isShortToggleEnabled = true;
+      commandRunner.run(
+          CreateRepetitionCommand(habitList, habit, today, Entry.yesManual, ''));
+      screen.log.clear();
+
+      presenter.onDateShortPress(today);
+      expect(screen.log, ['feedback'], reason: 'models.entry-values#10');
+      expect(
+        habit.originalEntries.get(today).value,
+        Entry.nextToggleValue(
+          Entry.yesManual,
+          isSkipEnabled: true,
+          areQuestionMarksEnabled: true,
+        ),
+        reason: 'models.entry-values#10',
+      );
+      expect(habit.originalEntries.get(today).value, Entry.skip,
+          reason: 'models.entry-values#10');
+
+      // ...and the long press is the one that now opens the dialog.
+      screen.log.clear();
+      presenter.onDateLongPress(today);
+      expect(screen.log, ['feedback', 'checkmark'],
+          reason: 'models.entry-values#10');
+      expect(screen.checkmarkValue, Entry.skip,
+          reason: 'models.entry-values#10');
     });
   });
 
@@ -139,6 +272,61 @@ void main() {
           reason: 'models.entry-toggle-cycle#9');
       expect(next(Entry.no), Entry.yesManual,
           reason: 'models.entry-toggle-cycle#9');
+    });
+
+    test('#10 the two flags are the pref_skip_enabled and pref_unknown_enabled '
+        'preferences, both defaulting to false', () {
+      final storage = MemoryStorage();
+      final prefs = Preferences(storage);
+
+      // Nothing stored: both default to false, so the cycle is the short one.
+      expect(prefs.isSkipEnabled, isFalse,
+          reason: 'models.entry-toggle-cycle#10');
+      expect(prefs.areQuestionMarksEnabled, isFalse,
+          reason: 'models.entry-toggle-cycle#10');
+      expect(
+        next(Entry.yesManual,
+            skip: prefs.isSkipEnabled,
+            unknown: prefs.areQuestionMarksEnabled),
+        Entry.no,
+        reason: 'models.entry-toggle-cycle#10',
+      );
+
+      // Those exact key strings are what the getters read.
+      storage.putBoolean('pref_skip_enabled', true);
+      expect(prefs.isSkipEnabled, isTrue,
+          reason: 'models.entry-toggle-cycle#10');
+      storage.putBoolean('pref_unknown_enabled', true);
+      expect(prefs.areQuestionMarksEnabled, isTrue,
+          reason: 'models.entry-toggle-cycle#10');
+      expect(
+        next(Entry.yesManual,
+            skip: prefs.isSkipEnabled,
+            unknown: prefs.areQuestionMarksEnabled),
+        Entry.skip,
+        reason: 'models.entry-toggle-cycle#10',
+      );
+      expect(
+        next(Entry.no,
+            skip: prefs.isSkipEnabled,
+            unknown: prefs.areQuestionMarksEnabled),
+        Entry.unknown,
+        reason: 'models.entry-toggle-cycle#10',
+      );
+
+      // ...and what the setters write back to.
+      final writeStorage = MemoryStorage();
+      final writePrefs = Preferences(writeStorage)
+        ..isSkipEnabled = true
+        ..areQuestionMarksEnabled = true;
+      expect(writeStorage.getBoolean('pref_skip_enabled', false), isTrue,
+          reason: 'models.entry-toggle-cycle#10');
+      expect(writeStorage.getBoolean('pref_unknown_enabled', false), isTrue,
+          reason: 'models.entry-toggle-cycle#10');
+      expect(writePrefs.isSkipEnabled, isTrue,
+          reason: 'models.entry-toggle-cycle#10');
+      expect(writePrefs.areQuestionMarksEnabled, isTrue,
+          reason: 'models.entry-toggle-cycle#10');
     });
   });
 }

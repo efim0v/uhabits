@@ -1,6 +1,9 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/palette_color.dart';
+import 'package:uhabits_core/src/time/local_date.dart';
 
 /// Rules from docs/parity/FEATURES.md: models.palette-color, models.habit-type-enums.
 /// No Kotlin unit tests exist for these classes; the cases below come from the
@@ -127,6 +130,18 @@ void main() {
           throwsRangeError,
           reason: 'models.palette-color#7');
     });
+
+    test('#5 the default habit color is PaletteColor(8), teal', () {
+      final habit = MemoryModelFactory().buildHabit();
+      expect(habit.color, const PaletteColor(8),
+          reason: 'models.palette-color#5');
+      expect(habit.color.paletteIndex, 8, reason: 'models.palette-color#5');
+      expect(habit.color.toCsvColor(), '#00897B',
+          reason: 'models.palette-color#5');
+      // Every freshly built habit starts there; nothing else supplies a color.
+      expect(MemoryModelFactory().buildHabit().color, const PaletteColor(8),
+          reason: 'models.palette-color#5');
+    });
   });
 
   group('models.habit-type-enums', () {
@@ -187,6 +202,48 @@ void main() {
           reason: 'models.habit-type-enums#5');
       expect(NumericalHabitType.atMost.csvName, 'AT_MOST',
           reason: 'models.habit-type-enums#5');
+    });
+
+    test('#6 targetType only matters for NUMERICAL habits; a boolean habit '
+        'still carries AT_LEAST', () {
+      setToday(LocalDate.ymd(2015, 1, 25));
+      addTearDown(resetToday);
+      final today = getToday();
+      final factory = MemoryModelFactory();
+
+      // The stored default, on a habit that is YES_NO by default.
+      final boolean = factory.buildHabit();
+      expect(boolean.type, HabitType.yesNo,
+          reason: 'models.habit-type-enums#6');
+      expect(boolean.targetType, NumericalHabitType.atLeast,
+          reason: 'models.habit-type-enums#6');
+      expect(boolean.targetType.value, 0,
+          reason: 'models.habit-type-enums#6');
+
+      // Flipping targetType on a boolean habit changes nothing: the boolean
+      // branch of isCompletedToday never consults it.
+      boolean.computedEntries.add(Entry(today, Entry.yesManual));
+      expect(boolean.isCompletedToday(), isTrue,
+          reason: 'models.habit-type-enums#6');
+      boolean.targetType = NumericalHabitType.atMost;
+      expect(boolean.isCompletedToday(), isTrue,
+          reason: 'models.habit-type-enums#6');
+      boolean.targetValue = 0.0;
+      expect(boolean.isCompletedToday(), isTrue,
+          reason: 'models.habit-type-enums#6');
+
+      // On a NUMERICAL habit the very same flip is decisive.
+      final numerical = factory.buildHabit()
+        ..type = HabitType.numerical
+        ..targetValue = 1.0;
+      numerical.computedEntries.add(Entry(today, 2000));
+      expect(numerical.targetType, NumericalHabitType.atLeast,
+          reason: 'models.habit-type-enums#6');
+      expect(numerical.isCompletedToday(), isTrue,
+          reason: 'models.habit-type-enums#6');
+      numerical.targetType = NumericalHabitType.atMost;
+      expect(numerical.isCompletedToday(), isFalse,
+          reason: 'models.habit-type-enums#6');
     });
   });
 }

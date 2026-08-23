@@ -85,4 +85,29 @@ class CreateRepetitionCommand implements Command {
     habit.recompute();
     habitList.resort();
   }
+
+  /// Kotlin's `data class` generates equals/hashCode/toString over the five
+  /// constructor properties. `habitList` compares by identity, since HabitList
+  /// does not override equals; everything else compares structurally.
+  @override
+  bool operator ==(Object other) =>
+      other is CreateRepetitionCommand &&
+      identical(other.habitList, habitList) &&
+      other.habit == habit &&
+      other.date == date &&
+      other.value == value &&
+      other.notes == notes;
+
+  @override
+  int get hashCode => Object.hash(
+        identityHashCode(habitList),
+        habit,
+        date,
+        value,
+        notes,
+      );
+
+  @override
+  String toString() => 'CreateRepetitionCommand(habitList=$habitList, '
+      'habit=$habit, date=$date, value=$value, notes=$notes)';
 }

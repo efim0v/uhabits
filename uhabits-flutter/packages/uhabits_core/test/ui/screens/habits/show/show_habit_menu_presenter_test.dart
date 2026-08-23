@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:uhabits_core/src/commands/archive_habits_command.dart';
@@ -7,6 +9,7 @@ import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/commands/delete_habits_command.dart';
 import 'package:uhabits_core/src/commands/unarchive_habits_command.dart';
 import 'package:uhabits_core/src/io/files.dart';
+import 'package:uhabits_core/src/io/zip.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
@@ -120,12 +123,22 @@ class _FakeScreen implements ShowHabitMenuPresenterScreen {
 
 /// Stands in for `mock<ShowHabitMenuPresenter.System>()`.
 ///
-/// Only `onExportCSV` ever calls it, and the CSV export rules belong to
-/// another slice, so nothing in this file drives it.
+/// Only `onExportCSV` calls it. [dir] is null unless a test sets it, so every
+/// other test still fails loudly if it reaches the export path by accident.
 class _FakeSystem implements ShowHabitMenuPresenterSystem {
+  UserFile? dir;
+
+  int callCount = 0;
+
   @override
-  UserFile getCSVOutputDir() =>
+  UserFile getCSVOutputDir() {
+    callCount++;
+    final d = dir;
+    if (d == null) {
       throw UnsupportedError('CSV export is not exercised by this test');
+    }
+    return d;
+  }
 }
 
 /// A real [CommandRunner] — the commands genuinely run, as they do in
@@ -155,6 +168,43 @@ class _RecordingHabitList extends MemoryHabitList {
     updateCalls.add(habits);
     super.update(habits);
   }
+}
+
+/// A [UserFile] whose `writeBytes` always fails, so `ExportCSVTask` swallows
+/// the exception and reports a null filename — the only way the presenter's
+/// COULD_NOT_EXPORT branch can be reached.
+class _UnwritableUserFile implements UserFile {
+  @override
+  String get pathString => '/nonexistent';
+
+  @override
+  UserFile resolve(String child) => this;
+
+  @override
+  Future<void> writeBytes(List<int> bytes) async {
+    throw const FileSystemException('cannot write');
+  }
+
+  @override
+  Future<void> delete() => throw UnimplementedError();
+
+  @override
+  Future<bool> exists() => throw UnimplementedError();
+
+  @override
+  Future<List<String>> lines() => throw UnimplementedError();
+
+  @override
+  Future<List<UserFile>?> listFiles() => throw UnimplementedError();
+
+  @override
+  Future<void> mkdirs() => throw UnimplementedError();
+
+  @override
+  Future<Uint8List> readBytes(int limit) => throw UnimplementedError();
+
+  @override
+  Future<void> writeString(String content) => throw UnimplementedError();
 }
 
 /// Records every command the runner announces as finished.
@@ -412,6 +462,85 @@ void main() {
         reason: 'show-habit.archive-unarchive#1 and '
             'show-habit.archive-unarchive#2 — HABIT_ARCHIVED and '
             'HABIT_UNARCHIVED are the two messages these actions can show');
+  });
+
+  // -------------------------------------------------------------------------
+  // Export CSV — the single-habit entry point of io.export-csv-entry-points
+  // -------------------------------------------------------------------------
+
+  test('onExportCSV exports this one habit into system.getCSVOutputDir()',
+      () async {
+    final tempDir = Directory.systemTemp.createTempSync('uhabits-show-export-');
+    addTearDown(() {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    });
+    final other = fixtures.createEmptyHabit(name: 'Other habit');
+    habitList.add(other);
+    system.dir = LocalUserFile(tempDir.path);
+
+    menu.onExportCSV();
+    await taskRunner.awaitAll();
+
+    expect(system.callCount, 1,
+        reason: 'io.export-csv-entry-points#2 — the destination is '
+            'system.getCSVOutputDir()');
+    final path = '${tempDir.path}/Loop Habits CSV 2015-01-25.zip';
+    expect(File(path).existsSync(), isTrue,
+        reason: 'io.export-csv-entry-points#2 — the archive lands in the '
+            'directory the system handed back');
+
+    final entries = await ZipReader(
+            Uint8List.fromList(File(path).readAsBytesSync()))
+        .entries();
+    final names = entries.map((e) => e.name).toList();
+    expect(
+      names.where((n) => n.endsWith('Checkmarks.csv') && n.contains('/')),
+      hasLength(1),
+      reason: 'io.export-csv-entry-points#2 — onExportCSV exports '
+          'listOf(habit): exactly ONE per-habit folder, even though the list '
+          'holds two habits',
+    );
+    expect(
+      names.singleWhere((n) => n.endsWith('Checkmarks.csv') && n.contains('/')),
+      endsWith('Wake up early/Checkmarks.csv'),
+      reason: 'io.export-csv-entry-points#2 — and the folder is the habit the '
+          'menu was opened on',
+    );
+    expect(names.where((n) => n.contains('Other habit')), isEmpty,
+        reason: 'io.export-csv-entry-points#2 — the other habit gets no '
+            'folder of its own');
+
+    final habitsCsv =
+        entries.firstWhere((e) => e.name == 'Habits.csv').content;
+    expect(habitsCsv, contains('Wake up early'),
+        reason: 'io.export-csv-entry-points#2 — Habits.csv is written from '
+            'allHabits, not from the selection');
+    expect(habitsCsv, contains('Other habit'),
+        reason: 'io.export-csv-entry-points#2 — so it still contains EVERY '
+            'habit');
+
+    expect(screen.sendFileCalls, <String>[path],
+        reason: 'io.export-csv-entry-points#3 — a non-null filename opens the '
+            'share-file screen');
+    expect(screen.messages, isEmpty,
+        reason: 'io.export-csv-entry-points#3 — and shows no message');
+  });
+
+  test('onExportCSV shows COULD_NOT_EXPORT when the export produces nothing',
+      () async {
+    system.dir = _UnwritableUserFile();
+
+    menu.onExportCSV();
+    await taskRunner.awaitAll();
+
+    expect(screen.sendFileCalls, isEmpty,
+        reason: 'io.export-csv-entry-points#3 — a null filename opens no '
+            'share-file screen');
+    expect(screen.messages, <ShowHabitMenuPresenterMessage>[
+      ShowHabitMenuPresenterMessage.couldNotExport,
+    ],
+        reason: 'io.export-csv-entry-points#3 — on null the presenter calls '
+            'screen.showMessage(COULD_NOT_EXPORT)');
   });
 
   // -------------------------------------------------------------------------

@@ -1,16 +1,36 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/commands/archive_habits_command.dart';
+import 'package:uhabits_core/src/commands/change_habit_color_command.dart';
 import 'package:uhabits_core/src/commands/command.dart';
 import 'package:uhabits_core/src/commands/command_runner.dart';
+import 'package:uhabits_core/src/commands/create_habit_command.dart';
+import 'package:uhabits_core/src/commands/create_repetition_command.dart';
+import 'package:uhabits_core/src/commands/delete_habits_command.dart';
+import 'package:uhabits_core/src/commands/edit_habit_command.dart';
+import 'package:uhabits_core/src/commands/unarchive_habits_command.dart';
+import 'package:uhabits_core/src/database/database.dart';
+import 'package:uhabits_core/src/database/habit_repository.dart';
 import 'package:uhabits_core/src/gui/font_awesome.dart';
+import 'package:uhabits_core/src/io/files.dart';
+import 'package:uhabits_core/src/io/logging.dart';
+import 'package:uhabits_core/src/io/loop_db_importer.dart';
+import 'package:uhabits_core/src/models/entry.dart';
+import 'package:uhabits_core/src/models/entry_list.dart';
+import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_list.dart';
 import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/model_factory.dart';
+import 'package:uhabits_core/src/models/model_observable.dart';
+import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_cache.dart';
+
+import '../helpers/test_database.dart';
 
 /// Ported from
 /// uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/Command.kt,
@@ -408,6 +428,316 @@ void main() {
               'not stored in any history list',
         );
       }
+    });
+
+    test('there are exactly seven concrete Command implementations', () {
+      final habit = fixtures.createEmptyHabit();
+      habitList.add(habit);
+      final selected = <Habit>[habit];
+
+      final concrete = <String, Command>{
+        'ArchiveHabitsCommand': ArchiveHabitsCommand(habitList, selected),
+        'ChangeHabitColorCommand': ChangeHabitColorCommand(
+          habitList,
+          selected,
+          const PaletteColor(30),
+        ),
+        'CreateHabitCommand': CreateHabitCommand(
+          modelFactory,
+          habitList,
+          modelFactory.buildHabit(),
+        ),
+        'CreateRepetitionCommand': CreateRepetitionCommand(
+          habitList,
+          habit,
+          getToday(),
+          Entry.yesManual,
+          '',
+        ),
+        'DeleteHabitsCommand': DeleteHabitsCommand(habitList, selected),
+        'EditHabitCommand': EditHabitCommand(
+          habitList,
+          habit.id!,
+          modelFactory.buildHabit(),
+        ),
+        'UnarchiveHabitsCommand': UnarchiveHabitsCommand(habitList, selected),
+      };
+
+      expect(
+        concrete.keys.toList(),
+        <String>[
+          'ArchiveHabitsCommand',
+          'ChangeHabitColorCommand',
+          'CreateHabitCommand',
+          'CreateRepetitionCommand',
+          'DeleteHabitsCommand',
+          'EditHabitCommand',
+          'UnarchiveHabitsCommand',
+        ],
+        reason: 'commands.command-interface#3 — there are exactly 7 concrete '
+            'Command implementations in the codebase',
+      );
+      concrete.forEach((name, command) {
+        expect(
+          command,
+          isA<Command>(),
+          reason: 'commands.command-interface#3 — $name implements Command',
+        );
+        expect(
+          command.runtimeType.toString(),
+          name,
+          reason: 'commands.command-interface#3 — the seventh-and-last name '
+              'list is exhaustive: $name is a concrete class, not an alias',
+        );
+      });
+    });
+
+    test('every command is a data class: structural equality and field order',
+        () {
+      final habit = fixtures.createEmptyHabit(name: 'A');
+      habitList.add(habit);
+      final other = fixtures.createEmptyHabit(name: 'B', position: 1);
+      habitList.add(other);
+      final model = modelFactory.buildHabit()..name = 'template';
+      final today = getToday();
+
+      final equal = <String, List<Command>>{
+        'ArchiveHabitsCommand': <Command>[
+          ArchiveHabitsCommand(habitList, <Habit>[habit]),
+          ArchiveHabitsCommand(habitList, <Habit>[habit]),
+        ],
+        'ChangeHabitColorCommand': <Command>[
+          ChangeHabitColorCommand(
+              habitList, <Habit>[habit], const PaletteColor(30)),
+          ChangeHabitColorCommand(
+              habitList, <Habit>[habit], const PaletteColor(30)),
+        ],
+        'CreateHabitCommand': <Command>[
+          CreateHabitCommand(modelFactory, habitList, model),
+          CreateHabitCommand(modelFactory, habitList, model),
+        ],
+        'CreateRepetitionCommand': <Command>[
+          CreateRepetitionCommand(habitList, habit, today, Entry.yesManual, 'n'),
+          CreateRepetitionCommand(habitList, habit, today, Entry.yesManual, 'n'),
+        ],
+        'DeleteHabitsCommand': <Command>[
+          DeleteHabitsCommand(habitList, <Habit>[habit]),
+          DeleteHabitsCommand(habitList, <Habit>[habit]),
+        ],
+        'EditHabitCommand': <Command>[
+          EditHabitCommand(habitList, habit.id!, model),
+          EditHabitCommand(habitList, habit.id!, model),
+        ],
+        'UnarchiveHabitsCommand': <Command>[
+          UnarchiveHabitsCommand(habitList, <Habit>[habit]),
+          UnarchiveHabitsCommand(habitList, <Habit>[habit]),
+        ],
+      };
+      equal.forEach((name, pair) {
+        expect(
+          pair[0],
+          pair[1],
+          reason: 'commands.command-interface#4 — $name is a data class, so '
+              'two instances built from equal constructor properties are equal',
+        );
+        expect(
+          pair[0].hashCode,
+          pair[1].hashCode,
+          reason: 'commands.command-interface#4 — $name has hashCode over its '
+              'constructor properties',
+        );
+      });
+
+      final different = <String, List<Command>>{
+        'ArchiveHabitsCommand': <Command>[
+          ArchiveHabitsCommand(habitList, <Habit>[habit]),
+          ArchiveHabitsCommand(habitList, <Habit>[other]),
+        ],
+        'ChangeHabitColorCommand': <Command>[
+          ChangeHabitColorCommand(
+              habitList, <Habit>[habit], const PaletteColor(30)),
+          ChangeHabitColorCommand(
+              habitList, <Habit>[habit], const PaletteColor(4)),
+        ],
+        'CreateRepetitionCommand': <Command>[
+          CreateRepetitionCommand(habitList, habit, today, Entry.yesManual, 'n'),
+          CreateRepetitionCommand(habitList, habit, today, Entry.yesManual, ''),
+        ],
+        'DeleteHabitsCommand': <Command>[
+          DeleteHabitsCommand(habitList, <Habit>[habit]),
+          DeleteHabitsCommand(habitList, <Habit>[habit, other]),
+        ],
+        'EditHabitCommand': <Command>[
+          EditHabitCommand(habitList, habit.id!, model),
+          EditHabitCommand(habitList, other.id!, model),
+        ],
+        'UnarchiveHabitsCommand': <Command>[
+          UnarchiveHabitsCommand(habitList, <Habit>[habit]),
+          UnarchiveHabitsCommand(habitList, <Habit>[other]),
+        ],
+      };
+      different.forEach((name, pair) {
+        expect(
+          pair[0],
+          isNot(pair[1]),
+          reason: 'commands.command-interface#4 — $name compares structurally '
+              'over every constructor property, so a differing one separates '
+              'the two instances',
+        );
+      });
+
+      // Positional destructuring: component1..componentN, in declaration order.
+      final createRepetition =
+          CreateRepetitionCommand(habitList, habit, today, Entry.yesManual, 'n');
+      expect(
+        createRepetition.habitList,
+        same(habitList),
+        reason: 'commands.command-interface#4 — component1 of '
+            'CreateRepetitionCommand is habitList: `val (_, habit) = '
+            'createRepetitionCommand` yields habitList then habit',
+      );
+      expect(
+        createRepetition.habit,
+        same(habit),
+        reason: 'commands.command-interface#4 — component2 of '
+            'CreateRepetitionCommand is habit, which is what the listeners '
+            'destructure to refresh a single habit',
+      );
+      expect(
+        <Object?>[
+          createRepetition.date,
+          createRepetition.value,
+          createRepetition.notes,
+        ],
+        <Object?>[today, Entry.yesManual, 'n'],
+        reason: 'commands.command-interface#4 — components 3..5 are date, '
+            'value, notes, in that order',
+      );
+
+      final selected = <Habit>[habit, other];
+      final delete = DeleteHabitsCommand(habitList, selected);
+      expect(
+        delete.habitList,
+        same(habitList),
+        reason: 'commands.command-interface#4 — component1 of '
+            'DeleteHabitsCommand is habitList',
+      );
+      expect(
+        delete.selected,
+        same(selected),
+        reason: 'commands.command-interface#4 — component2 is the selected '
+            'list: `val (_, deleted) = deleteHabitsCommand` yields habitList '
+            'then the selected list',
+      );
+
+      final create = CreateHabitCommand(modelFactory, habitList, model);
+      expect(
+        <Object?>[create.modelFactory, create.habitList, create.model],
+        <Object?>[same(modelFactory), same(habitList), same(model)],
+        reason: 'commands.command-interface#4 — CreateHabitCommand exposes '
+            'modelFactory, habitList, model in that order',
+      );
+
+      final edit = EditHabitCommand(habitList, habit.id!, model);
+      expect(
+        <Object?>[edit.habitList, edit.habitId, edit.modified],
+        <Object?>[same(habitList), habit.id, same(model)],
+        reason: 'commands.command-interface#4 — EditHabitCommand exposes '
+            'habitList, habitId, modified in that order',
+      );
+
+      final color =
+          ChangeHabitColorCommand(habitList, selected, const PaletteColor(30));
+      expect(
+        <Object?>[color.habitList, color.selected, color.newColor],
+        <Object?>[same(habitList), same(selected), const PaletteColor(30)],
+        reason: 'commands.command-interface#4 — ChangeHabitColorCommand '
+            'exposes habitList, selected, newColor in that order',
+      );
+
+      final archive = ArchiveHabitsCommand(habitList, selected);
+      expect(
+        <Object?>[archive.habitList, archive.selected],
+        <Object?>[same(habitList), same(selected)],
+        reason: 'commands.command-interface#4 — ArchiveHabitsCommand exposes '
+            'habitList, selected in that order',
+      );
+
+      final unarchive = UnarchiveHabitsCommand(habitList, selected);
+      expect(
+        <Object?>[unarchive.habitList, unarchive.selected],
+        <Object?>[same(habitList), same(selected)],
+        reason: 'commands.command-interface#4 — UnarchiveHabitsCommand exposes '
+            'habitList, selected in that order',
+      );
+    });
+
+    test('commands hold the mutable HabitList and mutate it in place', () {
+      final habit = fixtures.createEmptyHabit(name: 'A');
+      habitList.add(habit);
+      final archive = ArchiveHabitsCommand(habitList, <Habit>[habit]);
+
+      expect(
+        archive.habitList,
+        same(habitList),
+        reason: 'commands.command-interface#5 — every command holds a direct '
+            'reference to the mutable HabitList',
+      );
+      expect(
+        archive.selected.single,
+        same(habit),
+        reason: 'commands.command-interface#5 — and, where relevant, to live '
+            'Habit instances',
+      );
+
+      final dynamic probe = archive;
+      final Object? result = probe.run();
+      expect(
+        result,
+        isNull,
+        reason: 'commands.command-interface#5 — commands mutate those objects '
+            'in place rather than returning new state',
+      );
+      expect(
+        habit.isArchived,
+        isTrue,
+        reason: 'commands.command-interface#5 — the live Habit instance the '
+            'command was handed is the one that changed',
+      );
+      expect(
+        habitList.getByPosition(0),
+        same(habit),
+        reason: 'commands.command-interface#5 — no copy is made: the list '
+            'still holds the very same instance',
+      );
+
+      CreateHabitCommand(
+        modelFactory,
+        habitList,
+        modelFactory.buildHabit()..name = 'B',
+      ).run();
+      expect(
+        habitList.size(),
+        2,
+        reason: 'commands.command-interface#5 — CreateHabitCommand mutates the '
+            'very list it holds; it returns no new list',
+      );
+
+      final entries = habit.originalEntries;
+      CreateRepetitionCommand(habitList, habit, getToday(), Entry.yesManual, '')
+          .run();
+      expect(
+        habit.originalEntries,
+        same(entries),
+        reason: 'commands.command-interface#5 — CreateRepetitionCommand writes '
+            'into the live EntryList instance, in place',
+      );
+      expect(
+        habit.originalEntries.get(getToday()).value,
+        Entry.yesManual,
+        reason: 'commands.command-interface#5 — the mutation is visible '
+            'through the object the caller already held',
+      );
     });
   });
 
@@ -907,6 +1237,52 @@ void main() {
         );
       }
     });
+
+    test('HabitCardListCache registers via onAttached and unregisters via '
+        'onDetached', () {
+      final cache = HabitCardListCache(
+        habitList,
+        commandRunner,
+        taskRunner,
+        StandardLogging(out: StringBuffer(), err: StringBuffer()),
+      );
+      habitList.add(fixtures.createEmptyHabit(name: 'A'));
+
+      commandRunner.run(_MinimalCommand());
+      expect(
+        cache.habitCount,
+        0,
+        reason: 'commands.command-runner-listeners#7 — before onAttached() the '
+            'cache is not registered, so a finished command does not reach it',
+      );
+
+      cache.onAttached();
+      expect(
+        cache.habitCount,
+        1,
+        reason: 'commands.command-runner-listeners#7 — onAttached() (called '
+            'from HabitCardListAdapter.onAttached) refreshes and registers',
+      );
+
+      habitList.add(fixtures.createEmptyHabit(name: 'B', position: 1));
+      commandRunner.run(_MinimalCommand());
+      expect(
+        cache.habitCount,
+        2,
+        reason: 'commands.command-runner-listeners#7 — while registered the '
+            'cache is notified of every finished command',
+      );
+
+      cache.onDetached();
+      habitList.add(fixtures.createEmptyHabit(name: 'C', position: 2));
+      commandRunner.run(_MinimalCommand());
+      expect(
+        cache.habitCount,
+        2,
+        reason: 'commands.command-runner-listeners#7 — onDetached() '
+            'unregisters it again, so later commands are not heard',
+      );
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1247,6 +1623,229 @@ void main() {
             'rescheduling, no toast, no list-cache refresh',
       );
     });
+
+    test('LoopDBImporter creates unknown habits and edits known ones, running '
+        'both commands directly', () async {
+      final harness = _ImportHarness(commandRunner);
+      final rowId = harness.insertHabit(name: 'Meditate', uuid: 'uuid-a');
+      final listener = _MinimalCommandListener();
+      commandRunner.addListener(listener);
+
+      await harness.import();
+
+      final created = harness.habitList.getByUUID('uuid-a')!;
+      expect(
+        harness.habitList.size(),
+        1,
+        reason: 'commands.direct-run-bypass#2 — getByUUID(habitData.uuid) '
+            'returned null, so the habit was built from the record and handed '
+            'to CreateHabitCommand(modelFactory, habitList, habit).run()',
+      );
+      expect(
+        created.id,
+        isNotNull,
+        reason: 'commands.direct-run-bypass#2 — the record was built with '
+            'id = null, and habitList.add assigned the id',
+      );
+      expect(
+        harness.log.take(3).toList(),
+        <String>['add(Meditate)', 'resort', 'recompute(Meditate)'],
+        reason: 'commands.direct-run-bypass#2 — CreateHabitCommand.run() adds '
+            'the habit and then recomputes it',
+      );
+      expect(
+        listener.received,
+        isEmpty,
+        reason: 'commands.direct-run-bypass#2 — the command is run directly, '
+            'not dispatched, so no listener hears about the new habit',
+      );
+
+      var habitNotified = 0;
+      created.observable
+          .addListener(ModelObservableListener(() => habitNotified++));
+      harness.renameHabit(rowId, 'Meditate more', uuid: 'uuid-a');
+      harness.log.clear();
+
+      await harness.import();
+
+      expect(
+        harness.habitList.size(),
+        1,
+        reason: 'commands.direct-run-bypass#2 — the second pass finds the '
+            'habit by uuid, so it edits instead of creating',
+      );
+      expect(
+        harness.habitList.getByUUID('uuid-a'),
+        same(created),
+        reason: 'commands.direct-run-bypass#2 — EditHabitCommand(habitList, '
+            'habit.id!!, modified).run() edits the stored instance in place',
+      );
+      expect(
+        created.name,
+        'Meditate more',
+        reason: 'commands.direct-run-bypass#2 — the `modified` habit is built '
+            'from the record with id = habit.id and copied onto it',
+      );
+      expect(
+        habitNotified,
+        greaterThanOrEqualTo(1),
+        reason: 'commands.direct-run-bypass#2 — EditHabitCommand notifies '
+            'habit.observable, which CreateHabitCommand never does',
+      );
+      expect(
+        harness.log.where((e) => e.startsWith('add(')),
+        isEmpty,
+        reason: 'commands.direct-run-bypass#2 — nothing is added on the edit '
+            'path',
+      );
+      expect(
+        listener.received,
+        isEmpty,
+        reason: 'commands.direct-run-bypass#2 — the edit is run directly too',
+      );
+    });
+
+    test('the CommandRunner injected into LoopDBImporter is a dead field',
+        () async {
+      final harness = _ImportHarness(commandRunner);
+      harness.insertHabit(name: 'Meditate', uuid: 'uuid-a');
+      final listener = _MinimalCommandListener();
+      commandRunner.addListener(listener);
+
+      expect(
+        harness.importer.runner,
+        same(commandRunner),
+        reason: 'commands.direct-run-bypass#3 — LoopDBImporter is injected '
+            'with a CommandRunner (`val runner: CommandRunner`)',
+      );
+
+      await harness.import();
+      await harness.import();
+
+      expect(
+        listener.received,
+        isEmpty,
+        reason: 'commands.direct-run-bypass#3 — but it never uses it: the '
+            'field is dead, so not one command reaches the runner',
+      );
+      expect(
+        harness.habitList.size(),
+        1,
+        reason: 'commands.direct-run-bypass#3 — the import itself did happen; '
+            'only the dispatcher was bypassed',
+      );
+    });
+
+    test('repetitions are copied one by one and equal rows are skipped',
+        () async {
+      final harness = _ImportHarness(commandRunner);
+      final rowId = harness.insertHabit(name: 'Meditate', uuid: 'uuid-a');
+      harness.insertEntry(rowId, day: 10, value: Entry.yesManual, notes: 'a');
+      harness.insertEntry(rowId, day: 11, value: Entry.yesManual);
+      harness.insertEntry(rowId, day: 12, value: Entry.skip);
+
+      await harness.import();
+
+      expect(
+        harness.log.where((e) => e.startsWith('entry.add')).toList(),
+        <String>[
+          'entry.add(12,${Entry.skip},)',
+          'entry.add(11,${Entry.yesManual},)',
+          'entry.add(10,${Entry.yesManual},a)',
+        ],
+        reason: 'commands.direct-run-bypass#4 — the importer re-fetches the '
+            'habit by uuid and copies repetitions one by one, reading '
+            'timestamp/value/notes and converting with LocalDate.fromUnixTime, '
+            'in the ORDER BY timestamp DESC the query asks for',
+      );
+      final habit = harness.habitList.getByUUID('uuid-a')!;
+      expect(
+        habit.originalEntries.get(LocalDate(10)).notes,
+        'a',
+        reason: 'commands.direct-run-bypass#4 — entries.add(Entry(date, value, '
+            'notes)) carries the notes across',
+      );
+
+      harness.log.clear();
+      await harness.import();
+
+      expect(
+        harness.log.where((e) => e.startsWith('entry.add')),
+        isEmpty,
+        reason: 'commands.direct-run-bypass#4 — a row whose value and notes '
+            'both match the existing entry is skipped entirely',
+      );
+
+      harness.updateEntry(rowId, day: 11, value: Entry.no);
+      harness.updateEntry(rowId, day: 10, value: Entry.yesManual, notes: 'b');
+      harness.log.clear();
+
+      await harness.import();
+
+      expect(
+        harness.log.where((e) => e.startsWith('entry.add')).toList(),
+        <String>[
+          'entry.add(11,${Entry.no},)',
+          'entry.add(10,${Entry.yesManual},b)',
+        ],
+        reason: 'commands.direct-run-bypass#4 — only the rows whose value or '
+            'whose notes differ are written; the untouched row is still '
+            'skipped',
+      );
+      expect(
+        harness.log.where((e) => e.startsWith('add(')),
+        isEmpty,
+        reason: 'commands.direct-run-bypass#4 — this bypasses '
+            'CreateRepetitionCommand entirely',
+      );
+    });
+
+    test('recompute() runs once per habit and resort() exactly once, at the '
+        'end', () async {
+      final harness = _ImportHarness(commandRunner);
+      final alpha = harness.insertHabit(name: 'Alpha', uuid: 'uuid-a');
+      final beta = harness.insertHabit(name: 'Beta', uuid: 'uuid-b', position: 1);
+      harness.insertEntry(alpha, day: 10, value: Entry.yesManual);
+      harness.insertEntry(alpha, day: 11, value: Entry.yesManual);
+      harness.insertEntry(beta, day: 12, value: Entry.yesManual);
+
+      await harness.import();
+
+      expect(
+        harness.log,
+        <String>[
+          'add(Alpha)',
+          'resort',
+          'recompute(Alpha)',
+          'entry.add(11,${Entry.yesManual},)',
+          'entry.add(10,${Entry.yesManual},)',
+          'recompute(Alpha)',
+          'add(Beta)',
+          'resort',
+          'recompute(Beta)',
+          'entry.add(12,${Entry.yesManual},)',
+          'recompute(Beta)',
+          'resort',
+        ],
+        reason: 'commands.direct-run-bypass#5 — the importer calls '
+            'habit.recompute() once per habit after all its entries are '
+            'copied (the earlier recompute of each pair is the one '
+            'CreateHabitCommand makes), and habitList.resort() exactly once '
+            'after all habits are processed',
+      );
+      expect(
+        harness.log.last,
+        'resort',
+        reason: 'commands.direct-run-bypass#5 — the single trailing resort() '
+            'comes after the last habit, not once per habit',
+      );
+      expect(
+        harness.log.sublist(harness.log.lastIndexOf('recompute(Beta)')),
+        <String>['recompute(Beta)', 'resort'],
+        reason: 'commands.direct-run-bypass#5 — exactly one resort() follows '
+            'the final recompute()',
+      );
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1383,4 +1982,216 @@ void main() {
       );
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// LoopDBImporter harness (commands.direct-run-bypass)
+// ---------------------------------------------------------------------------
+
+/// Builds a Loop backup in memory and imports it into a spied-on
+/// MemoryHabitList, so that the exact sequence of model mutations the importer
+/// performs — while bypassing CommandRunner — can be read off a log.
+class _ImportHarness {
+  _ImportHarness(CommandRunner runner) {
+    source = openMigratedDatabase();
+    addTearDown(source.close);
+    repository = HabitRepository(source);
+    habitList = _ImportSpyHabitList(log);
+    importer = LoopDBImporter(
+      habitList: habitList,
+      modelFactory: _ImportSpyFactory(log),
+      opener: _FixedDatabaseOpener(source),
+      runner: runner,
+      logging: StandardLogging(out: StringBuffer(), err: StringBuffer()),
+      fileOpener: _UnusedFileOpener(),
+    );
+  }
+
+  final List<String> log = <String>[];
+
+  late final Database source;
+  late final HabitRepository repository;
+  late final _ImportSpyHabitList habitList;
+  late final LoopDBImporter importer;
+
+  /// The importer only ever reads `file.pathString`, and [_FixedDatabaseOpener]
+  /// ignores it, so the path need not exist.
+  Future<void> import() =>
+      importer.importHabitsFromFile(LocalUserFile('/loop.db'));
+
+  int insertHabit({
+    required String name,
+    required String uuid,
+    int position = 0,
+  }) {
+    return repository.insert(_habitData(
+      name: name,
+      uuid: uuid,
+      position: position,
+    ));
+  }
+
+  void renameHabit(int id, String name, {required String uuid}) {
+    repository.update(_habitData(id: id, name: name, uuid: uuid));
+  }
+
+  void insertEntry(
+    int habitId, {
+    required int day,
+    required int value,
+    String notes = '',
+  }) {
+    source.run(
+      'INSERT INTO Repetitions(habit, timestamp, value, notes) '
+      'VALUES (?, ?, ?, ?)',
+      (stmt) => stmt
+        ..bindLong(1, habitId)
+        ..bindLong(2, LocalDate(day).unixTime)
+        ..bindInt(3, value)
+        ..bindText(4, notes),
+    );
+  }
+
+  void updateEntry(
+    int habitId, {
+    required int day,
+    required int value,
+    String notes = '',
+  }) {
+    source.run(
+      'UPDATE Repetitions SET value = ?, notes = ? '
+      'WHERE habit = ? AND timestamp = ?',
+      (stmt) => stmt
+        ..bindInt(1, value)
+        ..bindText(2, notes)
+        ..bindLong(3, habitId)
+        ..bindLong(4, LocalDate(day).unixTime),
+    );
+  }
+
+  static HabitData _habitData({
+    int? id,
+    required String name,
+    required String uuid,
+    int position = 0,
+  }) =>
+      HabitData(
+        id: id,
+        name: name,
+        description: 'desc',
+        question: 'question',
+        color: 3,
+        position: position,
+        uuid: uuid,
+      );
+}
+
+/// Hands back the one in-memory source database whatever path it is given, and
+/// survives the `db.close()` the importer makes at the end of every import so
+/// the same source can be imported twice.
+class _FixedDatabaseOpener implements DatabaseOpener {
+  _FixedDatabaseOpener(this._db);
+
+  final Database _db;
+
+  @override
+  Database open(String path) => _NonClosingDatabase(_db);
+}
+
+class _NonClosingDatabase implements Database {
+  _NonClosingDatabase(this._inner);
+
+  final Database _inner;
+
+  @override
+  PreparedStatement prepareStatement(String sql) =>
+      _inner.prepareStatement(sql);
+
+  @override
+  void close() {}
+}
+
+/// The source database is already stamped at the current schema version, so
+/// `migrateToAsync` must return before loading a single migration script.
+class _UnusedFileOpener implements FileOpener {
+  @override
+  ResourceFile openResourceFile(String path) =>
+      throw StateError('no migration script should be loaded');
+
+  @override
+  UserFile openUserFile(String path) =>
+      throw StateError('no user file should be opened');
+}
+
+class _ImportSpyHabitList extends MemoryHabitList {
+  _ImportSpyHabitList(this.log);
+
+  final List<String> log;
+
+  @override
+  void add(Habit habit) {
+    log.add('add(${habit.name})');
+    super.add(habit);
+  }
+
+  @override
+  void update(List<Habit> habits) {
+    log.add('update');
+    super.update(habits);
+  }
+
+  @override
+  void resort() {
+    log.add('resort');
+    super.resort();
+  }
+}
+
+class _ImportSpyFactory extends MemoryModelFactory {
+  _ImportSpyFactory(this.log);
+
+  final List<String> log;
+
+  @override
+  EntryList buildOriginalEntries() => _ImportSpyEntryList(log);
+
+  @override
+  Habit buildHabit() => _ImportSpyHabit(
+        log,
+        scores: buildScoreList(),
+        streaks: buildStreakList(),
+        originalEntries: buildOriginalEntries(),
+        computedEntries: buildComputedEntries(),
+      );
+}
+
+class _ImportSpyEntryList extends EntryList {
+  _ImportSpyEntryList(this.log);
+
+  final List<String> log;
+
+  @override
+  void add(Entry entry) {
+    log.add('entry.add(${entry.date.daysSince2000},'
+        '${entry.value},${entry.notes})');
+    super.add(entry);
+  }
+}
+
+class _ImportSpyHabit extends Habit {
+  _ImportSpyHabit(
+    this.log, {
+    required super.scores,
+    required super.streaks,
+    required super.originalEntries,
+    required super.computedEntries,
+  });
+
+  final List<String> log;
+
+  @override
+  void recompute() {
+    log.add('recompute($name)');
+    super.recompute();
+  }
 }

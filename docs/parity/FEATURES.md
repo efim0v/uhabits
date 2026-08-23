@@ -45,7 +45,7 @@ written from the rules below.
 
 #### models.entry-values
 
-- [ ] `models.entry-values` — Entry value constants and semantics
+- [x] `models.entry-values` — Entry value constants and semantics
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Entry.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/HistoryCard.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/regression/ListHabitsRegressionTest.kt`
@@ -64,7 +64,7 @@ written from the rules below.
 
 #### models.entry-toggle-cycle
 
-- [ ] `models.entry-toggle-cycle` — Checkmark toggle cycle (nextToggleValue)
+- [x] `models.entry-toggle-cycle` — Checkmark toggle cycle (nextToggleValue)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Entry.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryTest.kt`
@@ -190,7 +190,7 @@ written from the rules below.
 
 #### models.entry-weekday-frequency
 
-- [ ] `models.entry-weekday-frequency` — Weekday-vs-month frequency histogram
+- [x] `models.entry-weekday-frequency` — Weekday-vs-month frequency histogram
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`
@@ -259,7 +259,7 @@ written from the rules below.
 
 #### models.score-list-recompute-numerical-at-most
 
-- [ ] `models.score-list-recompute-numerical-at-most` — Score recomputation for numerical AT_MOST habits
+- [x] `models.score-list-recompute-numerical-at-most` — Score recomputation for numerical AT_MOST habits
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ScoreList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt`
@@ -303,7 +303,7 @@ written from the rules below.
 
 #### models.streak-best
 
-- [ ] `models.streak-best` — Best streaks selection and ordering
+- [x] `models.streak-best` — Best streaks selection and ordering
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/StreakList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Streak.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/StreakListTest.kt`
@@ -354,7 +354,7 @@ written from the rules below.
 
 #### models.habit-completed-entered
 
-- [ ] `models.habit-completed-entered` — isCompletedToday and isEnteredToday
+- [x] `models.habit-completed-entered` — isCompletedToday and isEnteredToday
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitTest.kt`
@@ -369,7 +369,7 @@ written from the rules below.
 
 #### models.frequency
 
-- [ ] `models.frequency` — Frequency (x times per y days)
+- [x] `models.frequency` — Frequency (x times per y days)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Frequency.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/ScoreListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/EditHabitCommandTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -391,7 +391,7 @@ written from the rules below.
 
 #### models.habit-type-enums
 
-- [ ] `models.habit-type-enums` — HabitType and NumericalHabitType enums
+- [x] `models.habit-type-enums` — HabitType and NumericalHabitType enums
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitType.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/NumericalHabitType.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`
@@ -405,7 +405,7 @@ written from the rules below.
 
 #### models.weekday-list
 
-- [ ] `models.weekday-list` — WeekdayList bit-packing
+- [x] `models.weekday-list` — WeekdayList bit-packing
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/WeekdayList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/WeekdayListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -427,7 +427,7 @@ written from the rules below.
 
 #### models.reminder
 
-- [ ] `models.reminder` — Reminder value object and weekday set
+- [x] `models.reminder` — Reminder value object and weekday set
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Reminder.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/WeekdayList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/WeekdayListTest.kt`
@@ -470,7 +470,7 @@ written from the rules below.
 
 #### models.model-observable
 
-- [ ] `models.model-observable` — ModelObservable listener notification
+- [x] `models.model-observable` — ModelObservable listener notification
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ModelObservable.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitListTest.kt`
@@ -484,7 +484,7 @@ written from the rules below.
 
 #### models.model-factory
 
-- [ ] `models.model-factory` — ModelFactory / MemoryModelFactory
+- [x] `models.model-factory` — ModelFactory / MemoryModelFactory
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/ModelFactory.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryModelFactory.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLModelFactory.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitTest.kt`
@@ -536,7 +536,7 @@ written from the rules below.
 
 #### models.habit-list-reorder
 
-- [ ] `models.habit-list-reorder` — Manual reordering and position renumbering
+- [x] `models.habit-list-reorder` — Manual reordering and position renumbering
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryHabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitListTest.kt`
@@ -703,7 +703,7 @@ written from the rules below.
 
 #### commands.command-interface
 
-- [ ] `commands.command-interface` — Command interface
+- [x] `commands.command-interface` — Command interface
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/Command.kt`, `.../ArchiveHabitsCommand.kt`, `.../ChangeHabitColorCommand.kt`, `.../CreateHabitCommand.kt`, `.../CreateRepetitionCommand.kt`, `.../DeleteHabitsCommand.kt`, `.../EditHabitCommand.kt`, `.../UnarchiveHabitsCommand.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -782,7 +782,7 @@ written from the rules below.
 
 #### commands.create-habit
 
-- [ ] `commands.create-habit` — CreateHabitCommand
+- [x] `commands.create-habit` — CreateHabitCommand
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/CreateHabitCommand.kt`, `.../models/ModelFactory.kt`, `.../models/Habit.kt`, `.../models/memory/MemoryHabitList.kt`, `.../models/sqlite/SQLiteHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/CreateHabitCommandTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/performance/PerformanceTest.kt`
@@ -821,7 +821,7 @@ written from the rules below.
 
 #### commands.delete-habits
 
-- [ ] `commands.delete-habits` — DeleteHabitsCommand
+- [x] `commands.delete-habits` — DeleteHabitsCommand
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/DeleteHabitsCommand.kt`, `.../models/memory/MemoryHabitList.kt`, `.../models/sqlite/SQLiteHabitList.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehavior.kt`, `.../ui/screens/habits/show/ShowHabitMenuPresenter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/DeleteHabitsCommandTest.kt`, `.../ui/screens/habits/list/HabitCardListCacheTest.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehaviorTest.kt`
@@ -888,7 +888,7 @@ written from the rules below.
 
 #### commands.create-repetition
 
-- [ ] `commands.create-repetition` — CreateRepetitionCommand
+- [x] `commands.create-repetition` — CreateRepetitionCommand
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/CreateRepetitionCommand.kt`, `.../models/Entry.kt`, `.../models/EntryList.kt`, `.../models/sqlite/SQLiteEntryList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/CreateRepetitionCommandTest.kt`, `.../ui/widgets/WidgetBehaviorTest.kt`, `.../ui/screens/habits/list/HabitCardListCacheTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/performance/PerformanceTest.kt`
@@ -936,7 +936,7 @@ written from the rules below.
 
 #### commands.dispatch-show-habit-menu
 
-- [ ] `commands.dispatch-show-habit-menu` — Habit detail menu dispatches commands
+- [x] `commands.dispatch-show-habit-menu` — Habit detail menu dispatches commands
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenterTest.kt`
@@ -968,7 +968,7 @@ written from the rules below.
 
 #### commands.list-mutations-triggered
 
-- [ ] `commands.list-mutations-triggered` — HabitList side effects triggered by commands
+- [x] `commands.list-mutations-triggered` — HabitList side effects triggered by commands
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`, `.../models/memory/MemoryHabitList.kt`, `.../models/sqlite/SQLiteHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/ArchiveHabitsCommandTest.kt`, `.../ChangeHabitColorCommandTest.kt`, `.../DeleteHabitsCommandTest.kt`
@@ -1246,7 +1246,7 @@ written from the rules below.
 
 #### persistence.migration-v25
 
-- [ ] `persistence.migration-v25` — Migration 25 — repetition notes
+- [x] `persistence.migration-v25` — Migration 25 — repetition notes
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/assets/main/migrations/25.sql`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/EntryRepository.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/database/EntryRepositoryTest.kt`
@@ -1424,7 +1424,7 @@ written from the rules below.
 
 #### persistence.model-factory
 
-- [ ] `persistence.model-factory` — SQLModelFactory wiring
+- [x] `persistence.model-factory` — SQLModelFactory wiring
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLModelFactory.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/inject/HabitsApplicationComponent.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteEntryListTest.kt`
@@ -1542,7 +1542,7 @@ written from the rules below.
 
 #### persistence.loop-db-import
 
-- [ ] `persistence.loop-db-import` — Importing a Loop database file (DB-side view)
+- [x] `persistence.loop-db-import` — Importing a Loop database file (DB-side view)
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/LoopDBImporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/utils/FileExtensions.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/utils/FileExtensionsTest.kt`
@@ -1562,7 +1562,7 @@ written from the rules below.
 
 #### persistence.repair-db-action
 
-- [ ] `persistence.repair-db-action` — Repair database action
+- [x] `persistence.repair-db-action` — Repair database action
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/sqlite/SQLiteHabitList.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`
@@ -2165,7 +2165,7 @@ written from the rules below.
 
 #### list-habits.adapter
 
-- [ ] `list-habits.adapter` — List adapter: item binding, stable ids, selection storage
+- [x] `list-habits.adapter` — List adapter: item binding, stable ids, selection storage
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardListAdapter.kt`, `.../HabitCardListView.kt`, `.../HabitCardViewHolder.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4352,7 +4352,7 @@ written from the rules below.
 
 #### reminders.upcoming-time
 
-- [ ] `reminders.upcoming-time` — Computing the next occurrence of a wall-clock reminder time
+- [x] `reminders.upcoming-time` — Computing the next occurrence of a wall-clock reminder time
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/platform/time/DateUtilsTest.kt`
@@ -4373,7 +4373,7 @@ written from the rules below.
 
 #### reminders.schedule-one-habit
 
-- [ ] `reminders.schedule-one-habit` — Scheduling the alarm for a single habit
+- [x] `reminders.schedule-one-habit` — Scheduling the alarm for a single habit
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/WidgetPreferences.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4390,7 +4390,7 @@ written from the rules below.
 
 #### reminders.schedule-at-time
 
-- [ ] `reminders.schedule-at-time` — scheduleAtTime and the derived checkmark timestamp
+- [x] `reminders.schedule-at-time` — scheduleAtTime and the derived checkmark timestamp
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4405,7 +4405,7 @@ written from the rules below.
 
 #### reminders.schedule-all
 
-- [ ] `reminders.schedule-all` — Scheduling all reminders / WITH_ALARM filter
+- [x] `reminders.schedule-all` — Scheduling all reminders / WITH_ALARM filter
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitMatcher.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitMatcherTest.kt`
@@ -4437,7 +4437,7 @@ written from the rules below.
 
 #### reminders.snooze-storage
 
-- [ ] `reminders.snooze-storage` — Snooze time persistence
+- [x] `reminders.snooze-storage` — Snooze time persistence
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/WidgetPreferences.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4465,7 +4465,7 @@ written from the rules below.
 
 #### reminders.snooze-custom-time
 
-- [ ] `reminders.snooze-custom-time` — Snoozing until a custom wall-clock time
+- [x] `reminders.snooze-custom-time` — Snoozing until a custom wall-clock time
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderController.kt`, `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4511,7 +4511,7 @@ written from the rules below.
 
 #### notifications.show-gating
 
-- [ ] `notifications.show-gating` — Deciding whether a reminder notification is actually shown
+- [x] `notifications.show-gating` — Deciding whether a reminder notification is actually shown
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/CoroutineTaskRunner.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4769,7 +4769,7 @@ written from the rules below.
 
 #### intents.parser-validation
 
-- [ ] `intents.parser-validation` — Intent parsing and timestamp validation
+- [x] `intents.parser-validation` — Intent parsing and timestamp validation
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentParser.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4826,7 +4826,7 @@ written from the rules below.
 
 #### time.midnight-timer
 
-- [ ] `time.midnight-timer` — MidnightTimer day-rollover scheduler
+- [x] `time.midnight-timer` — MidnightTimer day-rollover scheduler
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/utils/MidnightTimer.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/utils/MidnightTimerTest.kt`
