@@ -4352,7 +4352,7 @@ written from the rules below.
 
 #### reminders.upcoming-time
 
-- [x] `reminders.upcoming-time` — Computing the next occurrence of a wall-clock reminder time
+- [ ] `reminders.upcoming-time` — Computing the next occurrence of a wall-clock reminder time
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/platform/time/DateUtilsTest.kt`
@@ -4373,7 +4373,7 @@ written from the rules below.
 
 #### reminders.schedule-one-habit
 
-- [x] `reminders.schedule-one-habit` — Scheduling the alarm for a single habit
+- [ ] `reminders.schedule-one-habit` — Scheduling the alarm for a single habit
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/WidgetPreferences.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4390,7 +4390,7 @@ written from the rules below.
 
 #### reminders.schedule-at-time
 
-- [x] `reminders.schedule-at-time` — scheduleAtTime and the derived checkmark timestamp
+- [ ] `reminders.schedule-at-time` — scheduleAtTime and the derived checkmark timestamp
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4405,7 +4405,7 @@ written from the rules below.
 
 #### reminders.schedule-all
 
-- [x] `reminders.schedule-all` — Scheduling all reminders / WITH_ALARM filter
+- [ ] `reminders.schedule-all` — Scheduling all reminders / WITH_ALARM filter
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitMatcher.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitMatcherTest.kt`
@@ -4437,7 +4437,7 @@ written from the rules below.
 
 #### reminders.snooze-storage
 
-- [x] `reminders.snooze-storage` — Snooze time persistence
+- [ ] `reminders.snooze-storage` — Snooze time persistence
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/WidgetPreferences.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4465,7 +4465,7 @@ written from the rules below.
 
 #### reminders.snooze-custom-time
 
-- [x] `reminders.snooze-custom-time` — Snoozing until a custom wall-clock time
+- [ ] `reminders.snooze-custom-time` — Snoozing until a custom wall-clock time
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderController.kt`, `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4511,7 +4511,7 @@ written from the rules below.
 
 #### notifications.show-gating
 
-- [x] `notifications.show-gating` — Deciding whether a reminder notification is actually shown
+- [ ] `notifications.show-gating` — Deciding whether a reminder notification is actually shown
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/CoroutineTaskRunner.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4769,7 +4769,7 @@ written from the rules below.
 
 #### intents.parser-validation
 
-- [x] `intents.parser-validation` — Intent parsing and timestamp validation
+- [ ] `intents.parser-validation` — Intent parsing and timestamp validation
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentParser.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4826,7 +4826,7 @@ written from the rules below.
 
 #### time.midnight-timer
 
-- [x] `time.midnight-timer` — MidnightTimer day-rollover scheduler
+- [ ] `time.midnight-timer` — MidnightTimer day-rollover scheduler
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/utils/MidnightTimer.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/utils/MidnightTimerTest.kt`
