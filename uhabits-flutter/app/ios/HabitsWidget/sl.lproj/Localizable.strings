@@ -29,3 +29,8 @@
 "habit_not_found" = "Izbrisana navada / ni najdena";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Danes";
+"week" = "Teden";
+"month" = "Mesec";
+"quarter" = "Četrtletje";
+"year" = "Leto";

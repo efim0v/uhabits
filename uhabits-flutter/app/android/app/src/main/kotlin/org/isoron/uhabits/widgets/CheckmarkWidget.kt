@@ -36,6 +36,16 @@ class CheckmarkWidget(
     private val habit: HabitData,
     private val today: LocalDate,
     /**
+     * `Preferences.areQuestionMarksEnabled`, off the document
+     * (`audit5.checkmark-widget-always-draws-for-an#1`).
+     *
+     * Upstream the view resolves the app's `Preferences` itself and re-reads
+     * this every redraw; here the preference lives one process away, so it is
+     * construction data — read off the document once, by whoever built this
+     * widget, and pushed into the view in [refreshData].
+     */
+    private val areQuestionMarksEnabled: Boolean = false,
+    /**
      * `widgets.stack#9`: true when this widget is one page of a StackWidget,
      * which forces it opaque (`widgets.card-chrome#5`).
      */
@@ -76,6 +86,12 @@ class CheckmarkWidget(
             // build that predates the field draws an empty ring rather than a
             // guessed one — the score cannot be recomputed here.
             percentage = (habit.score ?: 0.0).toFloat()
+            // `widgets.checkmark-view#6`: the glyph for an UNKNOWN entry is
+            // `fa_question` when the user turned question marks on and
+            // `fa_times` otherwise. Upstream the view asks `Preferences`; here
+            // it has to be told, and told before `refresh()` reads it
+            // (`audit5.checkmark-widget-always-draws-for-an#1`).
+            areQuestionMarksEnabled = this@CheckmarkWidget.areQuestionMarksEnabled
             refresh()
         }
     }

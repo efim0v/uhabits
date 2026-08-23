@@ -26,4 +26,9 @@
     <string name="streaks">Серії</string>
     <string name="frequency">Частота</string>
     <string name="target">Мета</string>
+    <string name="today">Сьогодні</string>
+    <string name="week">Тиждень</string>
+    <string name="month">Місяць</string>
+    <string name="quarter">Квартал</string>
+    <string name="year">Рік</string>
 </resources>

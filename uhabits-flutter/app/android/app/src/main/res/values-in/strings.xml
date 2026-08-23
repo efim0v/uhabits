@@ -26,4 +26,9 @@
     <string name="streaks">Rentetan</string>
     <string name="frequency">Frekuensi</string>
     <string name="target">Target</string>
+    <string name="today">Hari ini</string>
+    <string name="week">Minggu</string>
+    <string name="month">Bulan</string>
+    <string name="quarter">Kuartal</string>
+    <string name="year">Tahun</string>
 </resources>

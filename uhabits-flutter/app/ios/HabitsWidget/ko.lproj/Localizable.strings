@@ -29,3 +29,8 @@
 "habit_not_found" = "습관 삭제 / 찾을 수 없음";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "오늘";
+"week" = "주";
+"month" = "월";
+"quarter" = "분기";
+"year" = "년";

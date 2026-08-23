@@ -29,3 +29,8 @@
 "habit_not_found" = "ההרגל נמחק / לא נמצא";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "היום";
+"week" = "שבוע";
+"month" = "חודש";
+"quarter" = "רבעון";
+"year" = "שנה";

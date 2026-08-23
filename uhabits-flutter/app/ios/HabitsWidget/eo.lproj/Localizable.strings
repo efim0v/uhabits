@@ -29,3 +29,8 @@
 "habit_not_found" = "Kutimo forigita / ne trovita";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Today";
+"week" = "Semajno";
+"month" = "Monato";
+"quarter" = "Jarkvarono";
+"year" = "Jaro";

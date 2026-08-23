@@ -29,3 +29,8 @@
 "habit_not_found" = "Vane slettet / ikke fundet";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "I dag";
+"week" = "Uge";
+"month" = "Måned";
+"quarter" = "Kvartal";
+"year" = "År";

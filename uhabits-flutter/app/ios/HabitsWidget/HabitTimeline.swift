@@ -45,6 +45,17 @@ struct HabitTimelineEntry: TimelineEntry {
     /// today, not on the day this process would compute.
     let todayText: String
 
+    /// `Preferences.areQuestionMarksEnabled` — the Interface row "Show question
+    /// marks for missing data".
+    ///
+    /// It rides here for the same reason [today] does: it is app state, an
+    /// extension has no `Preferences` to read, and the card cannot draw an
+    /// unanswered day correctly without it
+    /// (`audit5.checkmark-home-screen-widget-never-draws#1`). Not defaulted: an
+    /// entry built without it would silently draw every unanswered day as a
+    /// lapse, which is the defect this field closes.
+    let areQuestionMarksEnabled: Bool
+
     var habit: WidgetHabit? {
         if case .habit(let habit) = state { return habit }
         return nil
@@ -122,7 +133,8 @@ struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
                 date: Date(),
                 state: .habit(habit),
                 today: today,
-                todayText: todayText
+                todayText: todayText,
+                areQuestionMarksEnabled: store.areQuestionMarksEnabled()
             )
         }
         // A habit that was picked and then deleted is a different failure from
@@ -133,7 +145,8 @@ struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
             date: Date(),
             state: state,
             today: today,
-            todayText: todayText
+            todayText: todayText,
+            areQuestionMarksEnabled: store.areQuestionMarksEnabled()
         )
     }
 

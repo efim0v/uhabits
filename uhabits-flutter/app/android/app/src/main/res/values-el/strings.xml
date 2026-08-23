@@ -21,4 +21,9 @@
     <string name="streaks">Σερί</string>
     <string name="frequency">Συχνότητα</string>
     <string name="target">Στόχος</string>
+    <string name="today">Σήμερα</string>
+    <string name="week">Εβδομάδα</string>
+    <string name="month">Μήνας</string>
+    <string name="quarter">Τρίμηνο</string>
+    <string name="year">Έτος</string>
 </resources>

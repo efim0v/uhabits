@@ -21,4 +21,9 @@
     <string name="streaks">استمرارها</string>
     <string name="frequency">تناوب‌</string>
     <string name="target">هدف</string>
+    <string name="today">امروز</string>
+    <string name="week">هفته</string>
+    <string name="month">ماه</string>
+    <string name="quarter">فصل</string>
+    <string name="year">سال</string>
 </resources>

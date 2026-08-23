@@ -29,3 +29,8 @@
 "habit_not_found" = "Obicei șters / negăsit";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Astăzi";
+"week" = "Săptămână";
+"month" = "Lună";
+"quarter" = "Trimestru";
+"year" = "An";

@@ -21,4 +21,9 @@
     <string name="streaks">Niz</string>
     <string name="frequency">Učestalost</string>
     <string name="target">Cilj</string>
+    <string name="today">Danas</string>
+    <string name="week">Tjedan</string>
+    <string name="month">Mjesec</string>
+    <string name="quarter">Četvrtina</string>
+    <string name="year">Godina</string>
 </resources>

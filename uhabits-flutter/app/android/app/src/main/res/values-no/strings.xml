@@ -20,4 +20,8 @@
     <string name="score">Poengsum</string>
     <string name="streaks">Gjentakelser</string>
     <string name="frequency">Hyppighet</string>
+    <string name="week">Uke</string>
+    <string name="month">Måned</string>
+    <string name="quarter">Kvarter</string>
+    <string name="year">År</string>
 </resources>

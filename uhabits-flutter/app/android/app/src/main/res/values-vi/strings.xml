@@ -21,4 +21,9 @@
     <string name="streaks">Mức độ</string>
     <string name="frequency">Tần suất</string>
     <string name="target">Mục tiêu</string>
+    <string name="today">Hôm nay</string>
+    <string name="week">Tuần</string>
+    <string name="month">Tháng</string>
+    <string name="quarter">Quý</string>
+    <string name="year">Năm</string>
 </resources>

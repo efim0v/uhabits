@@ -21,4 +21,8 @@
     <string name="streaks">Strioj</string>
     <string name="frequency">Frekvenco</string>
     <string name="target">Celo</string>
+    <string name="week">Semajno</string>
+    <string name="month">Monato</string>
+    <string name="quarter">Jarkvarono</string>
+    <string name="year">Jaro</string>
 </resources>

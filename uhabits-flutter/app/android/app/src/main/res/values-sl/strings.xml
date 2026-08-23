@@ -21,4 +21,9 @@
     <string name="streaks">Serije</string>
     <string name="frequency">Pogostost</string>
     <string name="target">Cilj</string>
+    <string name="today">Danes</string>
+    <string name="week">Teden</string>
+    <string name="month">Mesec</string>
+    <string name="quarter">Četrtletje</string>
+    <string name="year">Leto</string>
 </resources>

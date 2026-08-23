@@ -21,4 +21,9 @@
     <string name="streaks">连续完成次数</string>
     <string name="frequency">频率</string>
     <string name="target">目标</string>
+    <string name="today">今日</string>
+    <string name="week">周</string>
+    <string name="month">月</string>
+    <string name="quarter">季度</string>
+    <string name="year">年</string>
 </resources>

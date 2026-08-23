@@ -193,6 +193,16 @@ class HomeWidgetBridge {
   ///
   /// Their defaults are the preference's own, so a host that publishes no
   /// preferences describes a user who has changed neither.
+  ///
+  /// The second one is read twice over. It predicts the value a tap will write
+  /// — that is the `nextToggleValue` half, and the reason it started life in
+  /// the index — and it decides the glyph an unanswered day is *drawn* with:
+  /// `CheckmarkWidgetView`'s `text` getter is `if
+  /// (preferences.areQuestionMarksEnabled) fa_question else fa_times` for an
+  /// UNKNOWN entry. Only the first half was ever published, so the Interface
+  /// row "Show question marks for missing data" changed nothing on the home
+  /// screen (`audit5.checkmark-home-screen-widget-never-draws#1`,
+  /// `audit5.checkmark-widget-always-draws-for-an#1`).
   bool get isSkipEnabled => _preferences?.isSkipEnabled ?? false;
 
   bool get areQuestionMarksEnabled =>
@@ -360,6 +370,17 @@ class HomeWidgetBridge {
       // `audit4.history-and-frequency-home-screen-widgets#1`: the History grid
       // and the Frequency grid both start on the weekday the user chose.
       'firstWeekday': firstWeekday,
+      // `audit5.checkmark-home-screen-widget-never-draws#1`: upstream
+      // `CheckmarkWidgetView` holds a live `Preferences` and reads
+      // `areQuestionMarksEnabled` on every redraw, so an UNKNOWN entry is "?"
+      // rather than "✗" for a user who turned the Interface row on. A widget
+      // process cannot read `Preferences`, and this document is the only thing
+      // it can read — so the flag rides here, next to the other two
+      // preferences a widget draws with. It was published in the index (for
+      // `Entry.nextToggleValue` on iOS) and nowhere else, which left the flag
+      // reachable by the toggle that predicts the next value and unreachable by
+      // the glyph that draws the current one.
+      'areQuestionMarksEnabled': areQuestionMarksEnabled,
       'habits': habits,
       'missingHabitIds': missing,
     };

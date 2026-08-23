@@ -21,4 +21,9 @@
     <string name="streaks">Pisimmät toistot</string>
     <string name="frequency">Toistuvuus</string>
     <string name="target">Tavoite</string>
+    <string name="today">Tänään</string>
+    <string name="week">Viikko</string>
+    <string name="month">Kuukausi</string>
+    <string name="quarter">Kvartaali</string>
+    <string name="year">Vuosi</string>
 </resources>

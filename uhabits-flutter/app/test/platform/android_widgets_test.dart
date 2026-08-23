@@ -169,6 +169,16 @@ String withoutComments(String source) => source
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
     .replaceAll(RegExp(r'//[^\n]*'), '');
 
+/// [source] with every run of whitespace collapsed to one space and the
+/// padding a wrapped argument list leaves behind removed, so that an assertion
+/// about a call is about its arguments and not about where the formatter chose
+/// to break the line.
+String squashed(String source) => withoutComments(source)
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .replaceAll('( ', '(')
+    .replaceAll(' )', ')')
+    .replaceAll(' ,', ',');
+
 /// The value of `<string name="[name]">` in `res/values/strings.xml`.
 ///
 /// The widget chrome text used to be Kotlin `const val`s and inline
@@ -1240,8 +1250,14 @@ void main() {
             '(stacked == true), and otherwise returns Preferences.widgetOpacity.',
       );
       expect(
-        widgetKotlin('StackWidgetService.kt'),
-        contains('CheckmarkWidget(context, widgetId, habit, today, true)'),
+        // Whitespace-normalised: the argument list is the claim, not how the
+        // formatter wraps it. `areQuestionMarksEnabled` joined it when the
+        // Interface preference finally reached the widget
+        // (`audit5.checkmark-widget-always-draws-for-an#1`); `true` is still
+        // the last argument, and `true` is what this test is about.
+        squashed(widgetKotlin('StackWidgetService.kt')),
+        contains('CheckmarkWidget(context, widgetId, habit, today, '
+            'areQuestionMarksEnabled, true)'),
         reason: 'widgets.card-chrome#5: a stack page passes stacked = true, '
             'which is the only way that branch is ever taken',
       );
@@ -2234,7 +2250,7 @@ void main() {
               'Dart side knows that offset, so the widget is handed the answer '
               'in its document instead of computing one.');
       expect(
-        widgetKotlin('CheckmarkWidgetProvider.kt'),
+        squashed(widgetKotlin('CheckmarkWidgetProvider.kt')),
         contains('document.singleHabit(), document.today'),
         reason: 'widgets.checkmark#5: the provider passes the document\'s today',
       );
@@ -3311,8 +3327,14 @@ void main() {
               'presenter is Dart and stays there: the bridge runs it and '
               'publishes its rows (`audit4.target-widget-shows-the-wrong-rows'
               '#1`), so there is nothing to block on and no runBlocking.');
-      expect(body, contains('labels = rows.map { intervalToLabel(it.interval) }'),
-          reason: 'widgets.target#3: labels, one per published row');
+      expect(
+          body,
+          contains('labels = rows.map { intervalToLabel(context.resources, '
+              'it.interval) }'),
+          reason: 'widgets.target#3: labels, one per published row — resolved '
+              'against the widget\'s own Resources, which is what makes them '
+              'the device language '
+              '(`audit5.target-widget-s-interval-labels-are#1`)');
       expect(body, contains('values = rows.map { it.value }'),
           reason: 'widgets.target#3: values');
       expect(body, contains('targets = rows.map { it.target }'),
@@ -3322,31 +3344,62 @@ void main() {
               'output rather than being re-derived here from the entry window');
     });
 
+    // CORRECTED: this test used to assert the English literals `1 -> "Today"`
+    // … `else -> "Year"`, on the reasoning that "a widget provider has no
+    // access to the Flutter ARB bundle". That reasoning is wrong, and the test
+    // was pinning the defect `audit5.target-widget-s-interval-labels-are#1` in
+    // place: a provider has no ARB bundle but it does have a resource table,
+    // Android resolves that table for the launcher's locale — Android 13's
+    // per-app language included — before any code runs, and this project has
+    // mirrored ARB into `res/values*/strings.xml` since
+    // `audit.android-widget-chrome-text-is-hard`. The rule's own words are
+    // "resolves R.string.today, R.string.week, …", which is what is asserted
+    // now. The mirror itself is
+    // app/test/platform/widget_interval_labels_test.dart.
     test('the interval labels are today / week / month / quarter / year', () {
-      final String body = widget.substring(widget.indexOf('private fun intervalToLabel'));
+      final String body = withoutComments(
+          widget.substring(widget.indexOf('private fun intervalToLabel')));
 
       expect(
         <String, String>{
-          '1': capture(body, RegExp(r'1 -> "([^"]*)"')),
-          '7': capture(body, RegExp(r'7 -> "([^"]*)"')),
-          '30': capture(body, RegExp(r'30 -> "([^"]*)"')),
-          '91': capture(body, RegExp(r'91 -> "([^"]*)"')),
-          'else': capture(body, RegExp(r'else -> "([^"]*)"')),
+          '1': capture(body, RegExp(r'(?<![0-9])1 -> \S+\(R\.string\.(\w+)\)')),
+          '7': capture(body, RegExp(r'(?<![0-9])7 -> \S+\(R\.string\.(\w+)\)')),
+          '30': capture(body, RegExp(r'30 -> \S+\(R\.string\.(\w+)\)')),
+          '91': capture(body, RegExp(r'91 -> \S+\(R\.string\.(\w+)\)')),
+          'else': capture(body, RegExp(r'else -> \S+\(R\.string\.(\w+)\)')),
         },
         <String, String>{
-          '1': 'Today',
-          '7': 'Week',
-          '30': 'Month',
-          '91': 'Quarter',
-          'else': 'Year',
+          '1': 'today',
+          '7': 'week',
+          '30': 'month',
+          '91': 'quarter',
+          'else': 'year',
         },
         reason: 'widgets.target#4 — Interval labels come from '
             'TargetCardView.intervalToLabel: 1 -> R.string.today, 7 -> '
             'R.string.week, 30 -> R.string.month, 91 -> R.string.quarter, '
-            'anything else -> R.string.year. The strings are literals here '
-            'because a widget provider has no access to the Flutter ARB '
-            'bundle.',
+            'anything else -> R.string.year.',
       );
+      expect(
+        body,
+        contains('resources.getString('),
+        reason: 'widgets.target#4: a resource id only becomes the device '
+            'language when something resolves it '
+            '(`audit5.target-widget-s-interval-labels-are#1`)',
+      );
+      for (final String literal in <String>[
+        '"Today"',
+        '"Week"',
+        '"Month"',
+        '"Quarter"',
+        '"Year"',
+      ]) {
+        expect(body, isNot(contains(literal)),
+            reason: 'widgets.target#4: and no English literal is left behind, '
+                'which is what made every non-English home screen read '
+                '"Today / Week / Month / Quarter / Year" '
+                '(`audit5.target-widget-s-interval-labels-are#1`)');
+      }
     });
 
     test('the interval list is whatever the document says it is', () {
@@ -3939,8 +3992,9 @@ void main() {
             'regardless of the user\'s widgetOpacity preference.',
       );
       expect(
-        widgetKotlin('StackWidgetService.kt'),
-        contains('CheckmarkWidget(context, widgetId, habit, today, true)'),
+        squashed(widgetKotlin('StackWidgetService.kt')),
+        contains('CheckmarkWidget(context, widgetId, habit, today, '
+            'areQuestionMarksEnabled, true)'),
         reason: 'widgets.stack#9: and every child is built with stacked = true',
       );
     });
@@ -4212,14 +4266,11 @@ void main() {
             'a missing habit',
       );
 
-      final String construct = service.substring(
+      final String construct = squashed(service.substring(
         service.indexOf('private fun constructWidget'),
         service.indexOf('override fun getLoadingView'),
-      );
-      // The two grid widgets take the document's first weekday as well, so
-      // their argument list is one longer.
+      ));
       for (final MapEntry<String, String> entry in <String, String>{
-        'CHECKMARK': 'CheckmarkWidget',
         'SCORE': 'ScoreWidget',
         'STREAKS': 'StreakWidget',
         'TARGET': 'TargetWidget',
@@ -4232,6 +4283,20 @@ void main() {
               '${entry.value}, stacked',
         );
       }
+      // Three of the six take a preference off the document as well, so their
+      // argument list is one longer: the two grid widgets take the first
+      // weekday (`audit4.history-and-frequency-home-screen-widgets#1`) and the
+      // Checkmark page takes the question-mark flag
+      // (`audit5.checkmark-widget-always-draws-for-an#1`) — without it a page
+      // of a Checkmark stack would draw '✗' on an unanswered day while the
+      // standalone widget beside it drew '?'.
+      expect(
+        construct,
+        contains('StackWidgetType.CHECKMARK -> CheckmarkWidget(context, '
+            'widgetId, habit, today, areQuestionMarksEnabled, true)'),
+        reason: 'widgets.stack-service#5: CHECKMARK builds a CheckmarkWidget, '
+            'stacked, and drawing the glyph the user asked for',
+      );
       for (final MapEntry<String, String> entry in <String, String>{
         'FREQUENCY': 'FrequencyWidget',
         'HISTORY': 'HistoryWidget',
@@ -4246,10 +4311,13 @@ void main() {
         );
       }
       expect(
-        body,
-        contains('constructWidget(h, document.today, document.firstWeekday)'),
+        squashed(body),
+        contains('constructWidget(h, document.today, document.firstWeekday, '
+            'document.areQuestionMarksEnabled)'),
         reason: 'widgets.stack-service#5: and that weekday comes off the '
-            'document, which is the only thing this process can read',
+            'document, which is the only thing this process can read — as does '
+            'the question-mark preference beside it '
+            '(`audit5.checkmark-widget-always-draws-for-an#1`)',
       );
     });
 

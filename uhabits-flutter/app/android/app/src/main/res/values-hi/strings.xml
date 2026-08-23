@@ -21,4 +21,9 @@
     <string name="streaks">सिलसीला</string>
     <string name="frequency">आवृत्ति</string>
     <string name="target">लक्ष्य</string>
+    <string name="today">आज</string>
+    <string name="week">हफ्ते</string>
+    <string name="month">माह</string>
+    <string name="quarter">तिमाही</string>
+    <string name="year">साल</string>
 </resources>

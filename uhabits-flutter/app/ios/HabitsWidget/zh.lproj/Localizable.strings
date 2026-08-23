@@ -29,3 +29,8 @@
 "habit_not_found" = "习惯已删/找不到";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "今日";
+"week" = "周";
+"month" = "月";
+"quarter" = "季度";
+"year" = "年";

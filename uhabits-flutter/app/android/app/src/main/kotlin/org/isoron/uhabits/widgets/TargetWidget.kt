@@ -20,8 +20,10 @@ package org.isoron.uhabits.widgets
 
 import android.app.PendingIntent
 import android.content.Context
+import android.content.res.Resources
 import android.view.View
 import android.view.ViewGroup
+import org.isoron.uhabits.R
 import org.isoron.uhabits.widgets.views.GraphWidgetView
 import org.isoron.uhabits.widgets.views.TargetChartView
 import kotlin.math.max
@@ -80,11 +82,11 @@ class TargetWidget(
                 color = WidgetTheme.color(habit.color)
                 val rows = habit.targetRows
                 if (rows != null) {
-                    labels = rows.map { intervalToLabel(it.interval) }
+                    labels = rows.map { intervalToLabel(context.resources, it.interval) }
                     values = rows.map { it.value }
                     targets = rows.map { it.target }
                 } else {
-                    labels = INTERVALS.map { intervalToLabel(it) }
+                    labels = INTERVALS.map { intervalToLabel(context.resources, it) }
                     values = INTERVALS.map { windowSum(it) }
                     targets = INTERVALS.map { windowTarget(it) }
                 }
@@ -132,12 +134,30 @@ class TargetWidget(
          */
         private val INTERVALS = listOf(1, 7, 30, 91, 365)
 
-        private fun intervalToLabel(interval: Int) = when (interval) {
-            1 -> "Today"
-            7 -> "Week"
-            30 -> "Month"
-            91 -> "Quarter"
-            else -> "Year"
+        /**
+         * Port of `TargetCardView.intervalToLabel(resources, interval)`.
+         *
+         * The five words are string resources, not Kotlin literals
+         * (`audit5.target-widget-s-interval-labels-are#1`). A widget is
+         * inflated in the launcher's process, where the Flutter ARB bundle is
+         * unreachable, so the resource table is the only thing that speaks the
+         * user's language — and Android has already picked the right table,
+         * Android 13's per-app language included, before any of this runs. The
+         * `res/values-<locale>/strings.xml` files are generated from the
+         * ARB catalogue; see
+         * app/test/platform/widget_interval_labels_test.dart.
+         *
+         * They cannot ride on the published document instead: the label would
+         * then be frozen at publish time, and a user who changed their phone's
+         * language would keep the old words on the home screen until the app
+         * next ran.
+         */
+        private fun intervalToLabel(resources: Resources, interval: Int) = when (interval) {
+            1 -> resources.getString(R.string.today)
+            7 -> resources.getString(R.string.week)
+            30 -> resources.getString(R.string.month)
+            91 -> resources.getString(R.string.quarter)
+            else -> resources.getString(R.string.year)
         }
     }
 }

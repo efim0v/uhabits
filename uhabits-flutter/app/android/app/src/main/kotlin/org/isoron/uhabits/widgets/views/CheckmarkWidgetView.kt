@@ -48,12 +48,17 @@ class CheckmarkWidgetView(context: Context) : HabitWidgetView(context) {
      * `widgets.checkmark-view#6`: with question marks enabled an UNKNOWN entry
      * shows `fa_question` rather than `fa_times`.
      *
-     * `pref_unknown_enabled` is not part of the published document, so this
-     * stays at the preference's own default (false) and the UNKNOWN glyph is
-     * always `fa_times`. The branch is kept so that publishing the preference is
-     * the only change needed.
+     * Upstream this is not a field at all — the view holds a live `Preferences`
+     * and its `text` getter reads `areQuestionMarksEnabled` on every redraw.
+     * There is no `Preferences` in the launcher's process, so the value arrives
+     * on the published document and [CheckmarkWidget.refreshData] sets it here
+     * before calling [refresh] (`audit5.checkmark-widget-always-draws-for-an#1`,
+     * `audit5.checkmark-home-screen-widget-never-draws#1`).
+     *
+     * It starts false, the preference's own default, which is also what the
+     * layout editor's preview gets: `isInEditMode` has no document behind it.
      */
-    var areQuestionMarksEnabled = false
+    var areQuestionMarksEnabled: Boolean = false
 
     private lateinit var ring: RingView
     private lateinit var label: TextView

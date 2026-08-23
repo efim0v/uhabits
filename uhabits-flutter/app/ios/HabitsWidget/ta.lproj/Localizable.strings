@@ -29,3 +29,8 @@
 "habit_not_found" = "பழக்கம் நீக்கப்பட்டுவிட்டது / காணவில்லை";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "இன்று";
+"week" = "வாரம்";
+"month" = "மாதம்";
+"quarter" = "காற் பங்கு";
+"year" = "வருடம்";

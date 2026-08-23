@@ -21,4 +21,9 @@
     <string name="streaks">الإنجازات</string>
     <string name="frequency">تردد</string>
     <string name="target">الهدف</string>
+    <string name="today">اليوم</string>
+    <string name="week">أسبوع.</string>
+    <string name="month">شهر.</string>
+    <string name="quarter">ربع سنه.</string>
+    <string name="year">عام</string>
 </resources>

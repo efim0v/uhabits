@@ -21,4 +21,9 @@
     <string name="streaks">Correntes</string>
     <string name="frequency">Frequência</string>
     <string name="target">Alvo</string>
+    <string name="today">Hoje</string>
+    <string name="week">Semana</string>
+    <string name="month">Mês</string>
+    <string name="quarter">Trimestre</string>
+    <string name="year">Ano</string>
 </resources>

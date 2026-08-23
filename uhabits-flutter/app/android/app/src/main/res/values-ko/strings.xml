@@ -21,4 +21,9 @@
     <string name="streaks">연속</string>
     <string name="frequency">빈도</string>
     <string name="target">목표</string>
+    <string name="today">오늘</string>
+    <string name="week">주</string>
+    <string name="month">월</string>
+    <string name="quarter">분기</string>
+    <string name="year">년</string>
 </resources>

@@ -21,4 +21,9 @@
     <string name="streaks">Zile consecutive</string>
     <string name="frequency">Frecvență</string>
     <string name="target">Obiectiv</string>
+    <string name="today">Astăzi</string>
+    <string name="week">Săptămână</string>
+    <string name="month">Lună</string>
+    <string name="quarter">Trimestru</string>
+    <string name="year">An</string>
 </resources>

@@ -21,4 +21,9 @@
     <string name="streaks">Рекорды</string>
     <string name="frequency">Частота</string>
     <string name="target">Цель</string>
+    <string name="today">Сегодня</string>
+    <string name="week">Неделя</string>
+    <string name="month">Месяц</string>
+    <string name="quarter">Квартал</string>
+    <string name="year">Год</string>
 </resources>

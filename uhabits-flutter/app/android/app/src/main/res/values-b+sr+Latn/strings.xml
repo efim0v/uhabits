@@ -21,4 +21,9 @@
     <string name="streaks">Rekordi</string>
     <string name="frequency">Učestalost</string>
     <string name="target">Cilj</string>
+    <string name="today">Danas</string>
+    <string name="week">nedelja</string>
+    <string name="month">mesec</string>
+    <string name="quarter">tromesečje</string>
+    <string name="year">godina</string>
 </resources>

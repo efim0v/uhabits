@@ -29,3 +29,8 @@
 "habit_not_found" = "Tapa on poistettu tai sitä ei löydy";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Tänään";
+"week" = "Viikko";
+"month" = "Kuukausi";
+"quarter" = "Kvartaali";
+"year" = "Vuosi";

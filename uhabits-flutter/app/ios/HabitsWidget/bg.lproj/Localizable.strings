@@ -29,3 +29,8 @@
 "habit_not_found" = "Навикът е изтрит / не е намерен";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Днес";
+"week" = "Седмица";
+"month" = "Месец";
+"quarter" = "Тримесечие";
+"year" = "Година";

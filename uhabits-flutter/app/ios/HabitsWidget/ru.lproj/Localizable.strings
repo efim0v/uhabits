@@ -29,3 +29,8 @@
 "habit_not_found" = "Привычка удалена / не найдена";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Сегодня";
+"week" = "Неделя";
+"month" = "Месяц";
+"quarter" = "Квартал";
+"year" = "Год";

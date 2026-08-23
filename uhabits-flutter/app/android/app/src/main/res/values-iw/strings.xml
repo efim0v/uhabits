@@ -21,4 +21,9 @@
     <string name="streaks">שיאים</string>
     <string name="frequency">תדירות</string>
     <string name="target">יעד</string>
+    <string name="today">היום</string>
+    <string name="week">שבוע</string>
+    <string name="month">חודש</string>
+    <string name="quarter">רבעון</string>
+    <string name="year">שנה</string>
 </resources>

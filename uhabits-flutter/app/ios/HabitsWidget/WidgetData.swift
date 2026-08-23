@@ -340,6 +340,21 @@ struct WidgetStore {
     /// date back to the app.
     func todayText() -> String? { index()?.today }
 
+    /// `Preferences.areQuestionMarksEnabled`, as the app published it.
+    ///
+    /// Upstream `CheckmarkWidgetView` holds a live `Preferences` and reads this
+    /// on every redraw, so a boolean habit with no entry for today draws `?`
+    /// rather than `✗` (`audit5.checkmark-widget-always-draws-for-an#1`). An
+    /// extension has no `Preferences`, so the flag arrives on the index — the
+    /// same value `stageToggle` already reads for `Entry.nextToggleValue`, read
+    /// through one accessor so the two halves cannot disagree.
+    ///
+    /// False when nothing has been published, which is the preference's own
+    /// default.
+    func areQuestionMarksEnabled() -> Bool {
+        index()?.areQuestionMarksEnabled ?? false
+    }
+
     func habit(id: Int) -> WidgetHabit? {
         allHabits().first { $0.id == id }
     }

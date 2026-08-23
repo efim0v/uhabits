@@ -29,3 +29,8 @@
 "habit_not_found" = "عادت حذف شده / پیدا نشد";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "امروز";
+"week" = "هفته";
+"month" = "ماه";
+"quarter" = "فصل";
+"year" = "سال";

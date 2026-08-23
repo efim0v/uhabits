@@ -21,4 +21,9 @@
     <string name="streaks">Ratxa</string>
     <string name="frequency">Freqüència</string>
     <string name="target">Objectiu</string>
+    <string name="today">Avui</string>
+    <string name="week">Setmana</string>
+    <string name="month">Mes</string>
+    <string name="quarter">Trimestre</string>
+    <string name="year">Any</string>
 </resources>

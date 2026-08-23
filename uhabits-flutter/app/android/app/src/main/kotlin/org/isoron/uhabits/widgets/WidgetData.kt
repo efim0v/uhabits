@@ -172,7 +172,23 @@ class WidgetDocument(
      * than on [HabitData]. Read defensively: a document written before the
      * field existed carries no key, and Sunday is what both charts default to.
      */
-    val firstWeekday: Int = DEFAULT_FIRST_WEEKDAY
+    val firstWeekday: Int = DEFAULT_FIRST_WEEKDAY,
+    /**
+     * `Preferences.areQuestionMarksEnabled`, the `pref_unknown_enabled`
+     * Interface row ("Show question marks for missing data" / "Differentiate
+     * days without data from actual lapses").
+     *
+     * Upstream `CheckmarkWidgetView` resolves the app's `Preferences` in
+     * `init()` and its `text` getter reads this on every redraw, so a boolean
+     * habit whose entry for today is UNKNOWN draws `fa_question` rather than
+     * `fa_times` (`audit5.checkmark-widget-always-draws-for-an#1`). Nothing in
+     * the launcher's process can read `Preferences`, so — like [widgetOpacity]
+     * and [firstWeekday] — it rides on the document.
+     *
+     * Read defensively: a document written before the field existed carries no
+     * key, and false is what the preference itself defaults to.
+     */
+    val areQuestionMarksEnabled: Boolean = DEFAULT_QUESTION_MARKS_ENABLED
 ) {
     /**
      * `widgets.stack#1`: upstream returns a single-habit widget only when
@@ -201,6 +217,9 @@ class WidgetDocument(
         /** Sunday, the default of `HistoryChartView.firstWeekday`. */
         const val DEFAULT_FIRST_WEEKDAY = 0
 
+        /** `pref_unknown_enabled`'s own default: question marks off. */
+        const val DEFAULT_QUESTION_MARKS_ENABLED = false
+
         fun parse(json: JSONObject): WidgetDocument {
             val habits = json.optJSONArray("habits") ?: JSONArray()
             val missing = json.optJSONArray("missingHabitIds") ?: JSONArray()
@@ -212,7 +231,11 @@ class WidgetDocument(
                 },
                 missingHabitIds = (0 until missing.length()).map { missing.getLong(it) },
                 widgetOpacity = json.optInt("widgetOpacity", DEFAULT_WIDGET_OPACITY),
-                firstWeekday = json.optInt("firstWeekday", DEFAULT_FIRST_WEEKDAY)
+                firstWeekday = json.optInt("firstWeekday", DEFAULT_FIRST_WEEKDAY),
+                areQuestionMarksEnabled = json.optBoolean(
+                    "areQuestionMarksEnabled",
+                    DEFAULT_QUESTION_MARKS_ENABLED
+                )
             )
         }
     }

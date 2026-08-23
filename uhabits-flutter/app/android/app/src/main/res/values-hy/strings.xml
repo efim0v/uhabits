@@ -16,4 +16,8 @@
     <string name="main_activity_title">Սովորություններ</string>
     <string name="history">Պատմություն</string>
     <string name="frequency">Հաճախություն</string>
+    <string name="today">Այսօր</string>
+    <string name="week">Շաբաթ</string>
+    <string name="month">Ամիս</string>
+    <string name="year">Տարի</string>
 </resources>

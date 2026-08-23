@@ -21,4 +21,9 @@
     <string name="streaks">Séries</string>
     <string name="frequency">Fréquence</string>
     <string name="target">Cible</string>
+    <string name="today">Aujourd\'hui</string>
+    <string name="week">Semaine</string>
+    <string name="month">Mois</string>
+    <string name="quarter">Trimestre</string>
+    <string name="year">Année</string>
 </resources>

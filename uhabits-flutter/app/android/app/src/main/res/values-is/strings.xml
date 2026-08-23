@@ -18,4 +18,9 @@
     <string name="score">Árangur</string>
     <string name="frequency">Tíðni</string>
     <string name="target">Markmið</string>
+    <string name="today">Í dag</string>
+    <string name="week">Vika</string>
+    <string name="month">Mánuður</string>
+    <string name="quarter">3 mánuðir</string>
+    <string name="year">Ár</string>
 </resources>

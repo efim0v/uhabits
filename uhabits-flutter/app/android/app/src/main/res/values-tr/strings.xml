@@ -21,4 +21,9 @@
     <string name="streaks">Seriler</string>
     <string name="frequency">Sıklık</string>
     <string name="target">Hedef</string>
+    <string name="today">Bugün</string>
+    <string name="week">Hafta</string>
+    <string name="month">Ay</string>
+    <string name="quarter">3 Ay</string>
+    <string name="year">Yıl</string>
 </resources>

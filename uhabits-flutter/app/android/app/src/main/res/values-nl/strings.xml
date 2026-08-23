@@ -21,4 +21,9 @@
     <string name="streaks">Reeksen</string>
     <string name="frequency">Frequentie</string>
     <string name="target">Doel</string>
+    <string name="today">Vandaag</string>
+    <string name="week">Week</string>
+    <string name="month">Maand</string>
+    <string name="quarter">Kwartaal</string>
+    <string name="year">Jaar</string>
 </resources>

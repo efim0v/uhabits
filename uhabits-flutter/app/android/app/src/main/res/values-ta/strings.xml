@@ -21,4 +21,9 @@
     <string name="streaks">சாதனைகள்</string>
     <string name="frequency">கால இடைவெளி</string>
     <string name="target">இலக்கு</string>
+    <string name="today">இன்று</string>
+    <string name="week">வாரம்</string>
+    <string name="month">மாதம்</string>
+    <string name="quarter">காற் பங்கு</string>
+    <string name="year">வருடம்</string>
 </resources>

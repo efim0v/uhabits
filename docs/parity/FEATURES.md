@@ -7023,7 +7023,7 @@ green while reminders did not work at all.
 
 #### audit5.home-screen-widgets-never-roll-over
 
-- [ ] `audit5.home-screen-widgets-never-roll-over` — Home-screen widgets never roll over to the new day unless the app is in the foreground at midnight
+- [x] `audit5.home-screen-widgets-never-roll-over` — Home-screen widgets never roll over to the new day unless the app is in the foreground at midnight
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/WidgetUpdater.kt (`scheduleStartDayWidgetUpdate`), uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentScheduler.kt (`scheduleWidgetUpdate`), uhabits-android/src/main/java/org/isoron/uhabits/receivers/WidgetReceiver.kt (`ACTION_UPDA`
 - **Where the port should do it:** `uhabits-flutter/app/lib/state/widget_sync.dart (`scheduleStartDayWidgetUpdate`, `_onMidnight`), uhabits-flutter/app/lib/main.dart (`_onPause`), uhabits-flutter/packages/uhabits_core/lib/src/utils/midnight_timer.dart (`onPause`)`
@@ -7033,7 +7033,7 @@ green while reminders did not work at all.
 
 #### audit5.checkmark-home-screen-widget-never-draws
 
-- [ ] `audit5.checkmark-home-screen-widget-never-draws` — Checkmark home-screen widget never draws the question-mark glyph — the "Show question marks for missing data" preference is not published to the widget, on either platform
+- [x] `audit5.checkmark-home-screen-widget-never-draws` — Checkmark home-screen widget never draws the question-mark glyph — the "Show question marks for missing data" preference is not published to the widget, on either platform
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/views/CheckmarkWidgetView.kt (`private val text` getter, lines 104-125; `init()` line 157 `preferences = appComponent.preferences`), driven by uhabits-android/src/main/res/values/fontawesome.xml (`fa_question` = U+F128), uhabits-android/src/ma`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart — `buildWidgetDocument` (lines 341-367) and `_habitDocument` (lines 462-...) never put `areQuestionMarksEnabled` in the per-widget document, although `buildIndexDocument` (line 332) already publishes it for i`
@@ -7043,7 +7043,7 @@ green while reminders did not work at all.
 
 #### audit5.target-widget-s-interval-labels-are
 
-- [ ] `audit5.target-widget-s-interval-labels-are` — Target widget's interval labels are hard-coded English instead of localized resources
+- [x] `audit5.target-widget-s-interval-labels-are` — Target widget's interval labels are hard-coded English instead of localized resources
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/TargetWidget.kt (`refreshData` → `chart.setLabels(data.intervals.map { intervalToLabel(context.resources, it) })`) and uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/TargetCardView.kt:44 (`intervalToLabel`)`
 - **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/TargetWidget.kt:136-140 (`intervalToLabel`), mirrored in uhabits-flutter/app/ios/HabitsWidget/TargetWidget.swift:274-278`
@@ -7053,7 +7053,7 @@ green while reminders did not work at all.
 
 #### audit5.checkmark-widget-always-draws-for-an
 
-- [ ] `audit5.checkmark-widget-always-draws-for-an` — Checkmark widget always draws ✗ for an unanswered day, never the ? glyph, even with question marks enabled
+- [x] `audit5.checkmark-widget-always-draws-for-an` — Checkmark widget always draws ✗ for an unanswered day, never the ? glyph, even with question marks enabled
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/views/CheckmarkWidgetView.kt (the `text` getter: `UNKNOWN -> if (preferences.areQuestionMarksEnabled) R.string.fa_question else R.string.fa_times`)`
 - **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/views/CheckmarkWidgetView.kt:56 (`var areQuestionMarksEnabled = false`, never assigned) and .../widgets/CheckmarkWidget.kt (`refreshData` never sets it); the flag is also missing from the per-widget document written by uhabit`

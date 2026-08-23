@@ -26,4 +26,9 @@
     <string name="streaks">Szériák</string>
     <string name="frequency">Gyakoriság</string>
     <string name="target">Cél</string>
+    <string name="today">Ma</string>
+    <string name="week">Hét</string>
+    <string name="month">Hónap</string>
+    <string name="quarter">Negyedév</string>
+    <string name="year">Év</string>
 </resources>

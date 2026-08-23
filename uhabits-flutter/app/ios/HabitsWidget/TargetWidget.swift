@@ -17,6 +17,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import Foundation
 import SwiftUI
 import WidgetKit
 
@@ -265,17 +266,25 @@ struct TargetCardState {
     /// `TargetCardView.intervalToLabel` (`widgets.target#4`). Every interval
     /// that is not one of the first four — 365 included — is "Year".
     ///
-    /// The five strings are English literals here, as every other string in
-    /// this extension is: the widget bundle ships no `.lproj` of its own, and
-    /// giving it one is a slice of its own.
+    /// The five words are keys into the extension's own `.lproj` tables, not
+    /// English literals (`audit5.target-widget-s-interval-labels-are#1`). The
+    /// tables are mirrored from `app/lib/l10n/app_*.arb` and carry the same
+    /// five names Android's `res/values*/strings.xml` does, so the two home
+    /// screens read alike; see app/test/platform/widget_interval_labels_test
+    /// .dart.
+    ///
+    /// `NSLocalizedString` rather than `LocalizedStringKey`, because a label
+    /// here is measured before it is drawn and the Canvas is handed a `String`:
+    /// `Text(String)` renders verbatim, so a key that reached it unresolved
+    /// would be painted as "quarter".
     var labels: [String] {
         intervals.map { interval in
             switch interval {
-            case 1: return "Today"
-            case 7: return "Week"
-            case 30: return "Month"
-            case 91: return "Quarter"
-            default: return "Year"
+            case 1: return NSLocalizedString("today", comment: "Target row")
+            case 7: return NSLocalizedString("week", comment: "Target row")
+            case 30: return NSLocalizedString("month", comment: "Target row")
+            case 91: return NSLocalizedString("quarter", comment: "Target row")
+            default: return NSLocalizedString("year", comment: "Target row")
             }
         }
     }

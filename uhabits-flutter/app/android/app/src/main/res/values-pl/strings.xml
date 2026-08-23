@@ -21,4 +21,9 @@
     <string name="streaks">Serie</string>
     <string name="frequency">Częstotliwość</string>
     <string name="target">Cel</string>
+    <string name="today">Dzisiaj</string>
+    <string name="week">Tydzień</string>
+    <string name="month">Miesiąc</string>
+    <string name="quarter">Kwartał</string>
+    <string name="year">Rok</string>
 </resources>

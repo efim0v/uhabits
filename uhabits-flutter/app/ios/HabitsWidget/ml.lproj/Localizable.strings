@@ -29,3 +29,8 @@
 "habit_not_found" = "ശീലം ഇല്ലാതാക്കി / കണ്ടെത്തിയില്ല";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "ഇന്ന്";
+"week" = "ആഴ്ച";
+"month" = "മാസം";
+"quarter" = "ക്വാർട്ടർ";
+"year" = "വർഷം";

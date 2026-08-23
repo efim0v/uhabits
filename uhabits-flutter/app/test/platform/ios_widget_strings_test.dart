@@ -160,6 +160,17 @@ const Map<String, String?> tableKeys = <String, String?>{
   'widget_description_target': null,
   'widget_not_configured': null,
   'widget_error_drawing': null,
+  // The Target card's five row labels. Upstream they are
+  // `R.string.today`/`week`/`month`/`quarter`/`year`, resolved by
+  // `TargetCardView.intervalToLabel(resources, interval)`; the iOS widget had
+  // them as Swift literals until
+  // `audit5.target-widget-s-interval-labels-are#1`. They keep Android's own
+  // resource names, so the two mirrors of one ARB entry are spelled alike.
+  'today': 'today',
+  'week': 'week',
+  'month': 'month',
+  'quarter': 'quarter',
+  'year': 'year',
 };
 
 const String rule =

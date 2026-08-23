@@ -26,4 +26,9 @@
     <string name="streaks">Streaks</string>
     <string name="frequency">Frekvens</string>
     <string name="target">Mål</string>
+    <string name="today">Idag</string>
+    <string name="week">Vecka</string>
+    <string name="month">Månad</string>
+    <string name="quarter">Kvartal</string>
+    <string name="year">År</string>
 </resources>

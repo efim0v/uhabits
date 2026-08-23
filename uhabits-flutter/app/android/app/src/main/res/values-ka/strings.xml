@@ -21,4 +21,9 @@
     <string name="streaks">სერიები</string>
     <string name="frequency">სიხშირე</string>
     <string name="target">მიზანი</string>
+    <string name="today">დღეს</string>
+    <string name="week">კვირა</string>
+    <string name="month">თვე</string>
+    <string name="quarter">კვარტალი</string>
+    <string name="year">წელი</string>
 </resources>

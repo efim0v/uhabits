@@ -21,4 +21,9 @@
     <string name="streaks">Série</string>
     <string name="frequency">Frekvencia</string>
     <string name="target">Cieľ</string>
+    <string name="today">Dnes</string>
+    <string name="week">Týždeň</string>
+    <string name="month">Mesiac</string>
+    <string name="quarter">Štvrťrok</string>
+    <string name="year">Rok</string>
 </resources>

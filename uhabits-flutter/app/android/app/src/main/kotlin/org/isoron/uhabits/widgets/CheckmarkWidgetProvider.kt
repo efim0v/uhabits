@@ -30,5 +30,13 @@ class CheckmarkWidgetProvider : BaseWidgetProvider() {
         widgetId: Int,
         document: WidgetDocument
     ) =
-        CheckmarkWidget(context, widgetId, document.singleHabit(), document.today)
+        CheckmarkWidget(
+            context,
+            widgetId,
+            document.singleHabit(),
+            document.today,
+            // `audit5.checkmark-widget-always-draws-for-an#1`: the Interface
+            // preference that turns an unanswered day from '✗' into '?'.
+            document.areQuestionMarksEnabled
+        )
 }

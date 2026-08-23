@@ -29,3 +29,8 @@
 "habit_not_found" = "Szokás törölve / nem található";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Ma";
+"week" = "Hét";
+"month" = "Hónap";
+"quarter" = "Negyedév";
+"year" = "Év";

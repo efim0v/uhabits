@@ -29,3 +29,8 @@
 "habit_not_found" = "Abitudine cancellata / non trovata";
 "widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
 "widget_error_drawing" = "Error drawing widget";
+"today" = "Oggi";
+"week" = "Settimana";
+"month" = "Mese";
+"quarter" = "Trimestre";
+"year" = "Anno";

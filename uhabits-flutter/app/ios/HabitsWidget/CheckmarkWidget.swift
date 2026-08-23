@@ -71,7 +71,10 @@ struct CheckmarkWidgetView: View {
             if habit.isNumerical {
                 // The value picker is an app screen and always was, so this
                 // half is a link.
-                CheckmarkContent(habit: habit)
+                CheckmarkContent(
+                    habit: habit,
+                    areQuestionMarksEnabled: entry.areQuestionMarksEnabled
+                )
                     .widgetCard(Self.cardColor(habit))
                     .widgetURL(WidgetLink.edit(habit, date: entry.todayText))
             } else {
@@ -80,7 +83,10 @@ struct CheckmarkWidgetView: View {
                 // card and records the tap for the app to apply
                 // (`audit4.tapping-a-boolean-checkmark-widget-now#1`).
                 Button(intent: ToggleHabitIntent(habitId: habit.id)) {
-                    CheckmarkContent(habit: habit)
+                    CheckmarkContent(
+                        habit: habit,
+                        areQuestionMarksEnabled: entry.areQuestionMarksEnabled
+                    )
                 }
                 .buttonStyle(.plain)
                 .widgetCard(Self.cardColor(habit))
@@ -108,6 +114,11 @@ private struct CheckmarkContent: View {
 
     let habit: WidgetHabit
 
+    /// `Preferences.areQuestionMarksEnabled`, as the app published it. There is
+    /// no `Preferences` in an extension, so it rides on the timeline entry next
+    /// to `today` (`audit5.checkmark-home-screen-widget-never-draws#1`).
+    let areQuestionMarksEnabled: Bool
+
     var body: some View {
         GeometryReader { geometry in
             let box = CheckmarkState.contentSize(geometry.size)
@@ -120,7 +131,10 @@ private struct CheckmarkContent: View {
                     // the measured width.
                     thickness: 0.03 * box.width,
                     color: CheckmarkState.foregroundColor(habit),
-                    glyph: CheckmarkState.glyph(habit),
+                    glyph: CheckmarkState.glyph(
+                        habit,
+                        areQuestionMarksEnabled: areQuestionMarksEnabled
+                    ),
                     // ...and the numerical ring text is set at 90% of the
                     // label size, the glyph at 100%.
                     glyphSize: habit.isNumerical
@@ -252,7 +266,10 @@ enum CheckmarkState {
     /// `fa_skipped` (f068, a minus sign) by `minus` and `fa_question` (f128)
     /// by `questionmark`. Shipping the FontAwesome face in the extension would
     /// reproduce the glyphs exactly, at the cost of carrying the font twice.
-    static func glyph(_ habit: WidgetHabit) -> CheckmarkGlyph {
+    static func glyph(
+        _ habit: WidgetHabit,
+        areQuestionMarksEnabled: Bool = false
+    ) -> CheckmarkGlyph {
         if habit.isNumerical {
             return .text(shortString(Double(max(0, habit.value)) / 1000.0))
         }
@@ -261,11 +278,19 @@ enum CheckmarkState {
             return .symbol("checkmark")
         case EntryValue.skip:
             return .symbol("minus")
+        case EntryValue.unknown:
+            // A day the user never answered. Upstream this is `fa_question`
+            // when `Preferences.areQuestionMarksEnabled` and `fa_times`
+            // otherwise, which is the whole point of the Interface row
+            // "Differentiate days without data from actual lapses"
+            // (`audit5.checkmark-widget-always-draws-for-an#1`). The preference
+            // reaches this process on the published index, exactly as
+            // `isSkipEnabled` already did for `ToggleHabitIntent`.
+            return areQuestionMarksEnabled
+                ? .symbol("questionmark")
+                : .symbol("xmark")
         default:
-            // NO, UNKNOWN and anything else. Upstream UNKNOWN draws
-            // `fa_question` when `Preferences.areQuestionMarksEnabled`, but
-            // that preference is not part of the published contract, so the
-            // widget always takes the `fa_times` branch.
+            // NO, and anything else.
             return .symbol("xmark")
         }
     }

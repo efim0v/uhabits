@@ -21,4 +21,9 @@
     <string name="streaks">Поредици</string>
     <string name="frequency">Честота</string>
     <string name="target">Цел</string>
+    <string name="today">Днес</string>
+    <string name="week">Седмица</string>
+    <string name="month">Месец</string>
+    <string name="quarter">Тримесечие</string>
+    <string name="year">Година</string>
 </resources>

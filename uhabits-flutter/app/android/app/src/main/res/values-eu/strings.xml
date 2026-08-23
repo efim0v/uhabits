@@ -21,4 +21,9 @@
     <string name="streaks">Boladak</string>
     <string name="frequency">Maiztasuna</string>
     <string name="target">Helburua</string>
+    <string name="today">Gaur</string>
+    <string name="week">Astea</string>
+    <string name="month">Hilabetea</string>
+    <string name="quarter">Hiruhilekoa</string>
+    <string name="year">Urtea</string>
 </resources>

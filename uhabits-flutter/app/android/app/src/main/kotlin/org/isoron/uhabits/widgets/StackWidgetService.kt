@@ -114,7 +114,12 @@ internal class StackRemoteViewsFactory(private val context: Context, intent: Int
             document.habits.firstOrNull { it.id == habitId } ?: throw HabitNotFoundException()
         }
         val h = habits[position]
-        val widget = constructWidget(h, document.today, document.firstWeekday)
+        val widget = constructWidget(
+            h,
+            document.today,
+            document.firstWeekday,
+            document.areQuestionMarksEnabled
+        )
         widget.setDimensions(getDimensionsFromOptions(context, options))
         val landscapeViews = widget.landscapeRemoteViews
         val portraitViews = widget.portraitRemoteViews
@@ -132,17 +137,27 @@ internal class StackRemoteViewsFactory(private val context: Context, intent: Int
      * forces it opaque (`widgets.card-chrome#5`).
      *
      * Upstream hands `FrequencyWidget` and `HistoryWidget` the
-     * `prefs.firstWeekday` preference; here it rides on the document
-     * (`audit4.history-and-frequency-home-screen-widgets#1`) and a page of a
-     * stack gets the same one a standalone widget does.
+     * `prefs.firstWeekday` preference and lets `CheckmarkWidgetView` read
+     * `areQuestionMarksEnabled` off the app's `Preferences`; here both ride on
+     * the document (`audit4.history-and-frequency-home-screen-widgets#1`,
+     * `audit5.checkmark-widget-always-draws-for-an#1`) and a page of a stack
+     * gets the same ones a standalone widget does.
      */
     private fun constructWidget(
         habit: HabitData,
         today: LocalDate,
-        firstWeekday: Int
+        firstWeekday: Int,
+        areQuestionMarksEnabled: Boolean
     ): BaseWidget {
         return when (widgetType) {
-            StackWidgetType.CHECKMARK -> CheckmarkWidget(context, widgetId, habit, today, true)
+            StackWidgetType.CHECKMARK -> CheckmarkWidget(
+                context,
+                widgetId,
+                habit,
+                today,
+                areQuestionMarksEnabled,
+                true
+            )
             StackWidgetType.FREQUENCY -> FrequencyWidget(context, widgetId, habit, today, firstWeekday, true)
             StackWidgetType.SCORE -> ScoreWidget(context, widgetId, habit, today, true)
             StackWidgetType.HISTORY -> HistoryWidget(context, widgetId, habit, today, firstWeekday, true)

@@ -21,4 +21,9 @@
     <string name="streaks">സ്ട്രീക്ക്</string>
     <string name="frequency">ആവൃത്തി</string>
     <string name="target">ലക്ഷ്യം</string>
+    <string name="today">ഇന്ന്</string>
+    <string name="week">ആഴ്ച</string>
+    <string name="month">മാസം</string>
+    <string name="quarter">ക്വാർട്ടർ</string>
+    <string name="year">വർഷം</string>
 </resources>
