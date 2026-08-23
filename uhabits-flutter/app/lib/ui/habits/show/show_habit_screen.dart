@@ -34,6 +34,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 // The presenter callbacks and the chart listener are still reached by their
 // `src` path.
 // ignore_for_file: implementation_imports
+import 'package:uhabits_core/src/io/files.dart' show UserFile;
 import 'package:uhabits_core/src/ui/intent_parser.dart' show parseContentUriId;
 import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dart'
     show CheckMarkDialogCallback, NumberPickerCallback;
@@ -41,6 +42,8 @@ import 'package:uhabits_core/src/ui/views/history_chart.dart'
     show OnDateClickedListener;
 
 import '../../../l10n/app_localizations.dart';
+import '../../../platform/flutter_files.dart'
+    show AppDirectories, FileSharer, HabitsDirFinder, PlatformFileSharer;
 import '../../../state/app_scope.dart';
 import '../../../state/show_habit_model.dart';
 import '../../common/dialogs/checkmark_dialog.dart';
@@ -67,7 +70,12 @@ export 'show_habit_menu.dart' show ShowHabitMenu, ShowHabitMenuItem;
 /// The habit detail screen. Owns the [ShowHabitModel] for as long as it is
 /// mounted.
 class ShowHabitScreen extends StatelessWidget {
-  const ShowHabitScreen({required this.habit, this.system, super.key});
+  const ShowHabitScreen({
+    required this.habit,
+    this.system,
+    this.fileSharer = const PlatformFileSharer(),
+    super.key,
+  });
 
   /// The habit `ShowHabitActivity` would have resolved from the intent's
   /// `content://org.isoron.uhabits/habit/<id>` URI. The Flutter list hands the
@@ -75,9 +83,18 @@ class ShowHabitScreen extends StatelessWidget {
   final core.Habit habit;
 
   /// `HabitsDirFinder(AndroidDirFinder(this))`, the CSV export's output
-  /// directory. Optional because it needs directories the app resolves
-  /// asynchronously at startup.
+  /// directory. [route] supplies the real one; left null the model falls back
+  /// to a `getCSVOutputDir()` that throws, which is what a screen built
+  /// directly in a test gets.
   final ShowHabitMenuPresenterSystem? system;
+
+  /// The `ACTION_SEND` half of `Activity.showSendFileScreen(filename)`, behind
+  /// a seam because share_plus is a plugin and a plugin cannot run in a widget
+  /// test — the same seam `DataActions` takes for the list screen's export.
+  final FileSharer fileSharer;
+
+  /// `type = "application/zip"` in `showSendFileScreen`.
+  static const String shareMimeType = 'application/zip';
 
   /// `habit = habitList.getById(ContentUris.parseId(intent.data!!))!!` —
   /// the first three statements of `onCreate` (`show-habit.screen-scaffold#1`).
@@ -92,15 +109,21 @@ class ShowHabitScreen extends StatelessWidget {
   ///
   /// The scope has to be captured by the caller: `MaterialApp.home` provides
   /// it *below* the navigator, so a pushed route sits outside it.
+  ///
+  /// [system] is `onCreate`'s `system = HabitsDirFinder(AndroidDirFinder(this))`
+  /// — the Export item's output directory. It defaults to the real one, which
+  /// starts resolving as the route is built.
   static Route<void> route({
     required AppScope scope,
     required core.Habit habit,
+    ShowHabitMenuPresenterSystem? system,
   }) {
+    final resolvedSystem = system ?? ShowHabitCSVOutputDir();
     return MaterialPageRoute<void>(
       settings: RouteSettings(name: habit.uriString),
       builder: (context) => Provider<AppScope>.value(
         value: scope,
-        child: ShowHabitScreen(habit: habit),
+        child: ShowHabitScreen(habit: habit, system: resolvedSystem),
       ),
     );
   }
@@ -136,6 +159,55 @@ class ShowHabitScreen extends StatelessWidget {
       habit: habit,
       theme: coreThemeOf(context),
       system: system,
+      fileSharer: fileSharer,
+    );
+  }
+}
+
+/// `HabitsDirFinder(AndroidDirFinder(this))` — the `system` argument
+/// `ShowHabitActivity.onCreate` hands its menu presenter, whose one job is to
+/// name the directory `ExportCSVTask` writes the archive into.
+///
+/// Android builds it from the Context, synchronously. path_provider only
+/// answers asynchronously, so the resolution starts when the route is built —
+/// well before the overflow menu can be opened and its Export item tapped —
+/// and the finder is installed underneath as soon as it lands.
+class ShowHabitCSVOutputDir implements ShowHabitMenuPresenterSystem {
+  ShowHabitCSVOutputDir({Future<AppDirectories> Function()? resolve})
+      : _resolve = resolve ?? AppDirectories.resolve {
+    ready = _install();
+  }
+
+  final Future<AppDirectories> Function() _resolve;
+
+  /// Completes once [getCSVOutputDir] can answer — or once it is settled that
+  /// it never will. Exposed so that a test can wait for the resolution the
+  /// screen kicks off instead of racing it.
+  late final Future<void> ready;
+
+  HabitsDirFinder? _dirFinder;
+
+  Object? _failure;
+
+  Future<void> _install() async {
+    try {
+      _dirFinder = HabitsDirFinder.of(await _resolve());
+    } on Object catch (error) {
+      // A Context always knows its directories; a host without path_provider
+      // does not. Remembered rather than thrown, so that a screen on such a
+      // host still opens and only Export fails — which is also what Android
+      // does when no external files directory is writable.
+      _failure = error;
+    }
+  }
+
+  @override
+  UserFile getCSVOutputDir() {
+    final dirFinder = _dirFinder;
+    if (dirFinder != null) return dirFinder.getCSVOutputDir();
+    throw StateError(
+      'No CSV output directory: ${_failure ?? 'the app directories are still '
+          'being resolved'}',
     );
   }
 }
@@ -146,6 +218,7 @@ class _ShowHabitView extends StatefulWidget {
     required this.habit,
     required this.theme,
     required this.system,
+    required this.fileSharer,
   });
 
   final AppScope scope;
@@ -155,6 +228,8 @@ class _ShowHabitView extends StatefulWidget {
   final core.Theme theme;
 
   final ShowHabitMenuPresenterSystem? system;
+
+  final FileSharer fileSharer;
 
   @override
   State<_ShowHabitView> createState() => _ShowHabitViewState();
@@ -364,9 +439,51 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     showShowHabitMessage(context, text);
   }
 
+  /// `Activity.showSendFileScreen(archiveFilename)`, the second half of
+  /// `onExportCSV()`:
+  ///
+  /// ```kotlin
+  /// val uri = Uri.parse(archiveFilename)
+  /// val fileUri = if (uri.scheme == "content") uri
+  ///               else FileProvider.getUriForFile(this, "org.isoron.uhabits",
+  ///                        if (uri.scheme == "file") File(uri.path!!)
+  ///                        else File(archiveFilename))
+  /// startActivitySafely(Intent().apply {
+  ///     action = ACTION_SEND
+  ///     type = "application/zip"
+  ///     putExtra(EXTRA_STREAM, fileUri)
+  ///     flags = FLAG_GRANT_READ_URI_PERMISSION
+  /// })
+  /// ```
+  ///
+  /// share_plus wraps the file in a `FileProvider` URI and grants read
+  /// permission on it by itself, so what is left here is the scheme handling
+  /// and `startActivitySafely`'s catch (`show-habit.export-csv#4`,
+  /// `io.share-file-screen#1`).
   @override
-  void showSendFileScreen(String filename) =>
-      throw UnsupportedError('The send file screen is not ported yet');
+  Future<void> showSendFileScreen(String filename) async {
+    final uri = Uri.tryParse(filename);
+    final String target;
+    if (uri != null && uri.scheme == 'content') {
+      target = filename;
+    } else if (uri != null && uri.scheme == 'file') {
+      target = uri.path;
+    } else {
+      target = filename;
+    }
+    try {
+      await widget.fileSharer.shareFile(
+        target,
+        mimeType: ShowHabitScreen.shareMimeType,
+      );
+    } on Object {
+      // `startActivitySafely` catches ActivityNotFoundException and shows
+      // R.string.activity_not_found through the same `showMessage` helper
+      // every other message on this screen goes through.
+      if (!mounted) return;
+      showShowHabitMessage(context, L10n.of(context).activityNotFound);
+    }
+  }
 
   /// `ConfirmDeleteDialog(this, callback, 1).dismissCurrentAndShow()`
   /// (`show-habit.delete#4`, `show-habit.delete#5`).

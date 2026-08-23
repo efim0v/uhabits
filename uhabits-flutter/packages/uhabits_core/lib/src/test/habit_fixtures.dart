@@ -6,6 +6,7 @@ import '../models/habit_list.dart';
 import '../models/habit_type.dart';
 import '../models/model_factory.dart';
 import '../models/palette_color.dart';
+import '../models/sqlite/sqlite_entry_list.dart';
 import '../time/local_date.dart';
 
 /// Port of
@@ -171,8 +172,10 @@ class HabitFixtures {
     _habitList.add(habit);
   }
 
-  /// SQLiteEntryList has not been ported yet, so no fixture is ever
-  /// database-backed and [_saveIfSqlite] is currently a no-op. When the SQLite
-  /// slice lands this becomes `entries is SQLiteEntryList`.
-  bool _isSqliteBacked(EntryList entries) => false;
+  /// Kotlin: `habit.originalEntries !is SQLiteEntryList`, negated.
+  ///
+  /// A habit built by `SQLModelFactory` gets an [SQLiteEntryList] for its
+  /// original entries; a habit built by `MemoryModelFactory` gets a plain
+  /// [EntryList].
+  bool _isSqliteBacked(EntryList entries) => entries is SQLiteEntryList;
 }

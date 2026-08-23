@@ -696,9 +696,10 @@ void main() {
             'onExportDB()',
       );
 
-      // RESULT_BUG_REPORT and RESULT_REPAIR_DB belong to onSendBugReport() and
-      // onRepairDB() on the list screen's presenter; neither is reachable from
-      // this object, and neither may do anything here.
+      // RESULT_BUG_REPORT and RESULT_REPAIR_DB are the other two arms.
+      // Neither shares a file and neither opens a picker; repair reports the
+      // same message `ListHabitsBehavior.onRepairDB` posts once
+      // `habitList.repair()` finishes.
       final int sharesBefore = sharer.paths.length;
       await actions.onSettingsResult(SettingsResult.bugReport);
       await actions.onSettingsResult(SettingsResult.repairDb);
@@ -709,9 +710,10 @@ void main() {
       expect(chooser.calls, 1,
           reason: 'settings.screen.database-category#5: the settings screen '
               'never performs the work itself');
-      expect(messages, isEmpty,
-          reason: 'settings.screen.database-category#5: and nothing is '
-              'reported for a code this object does not own');
+      expect(messages, <DataActionMessage>[DataActionMessage.databaseRepaired],
+          reason: 'settings.screen.database-category#5: RESULT_REPAIR_DB goes '
+              'to onRepairDB(), which shows Message.DATABASE_REPAIRED when the '
+              'repair task finishes');
     });
 
     test('#5 the five result codes are exactly the five settings actions', () {

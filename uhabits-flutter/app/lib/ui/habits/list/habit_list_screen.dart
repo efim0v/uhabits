@@ -20,6 +20,7 @@
 /// floating action button for it.
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -33,9 +34,12 @@ import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_selection_me
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../l10n/app_localizations.dart';
+import '../../../platform/external_links.dart';
+import '../../../platform/flutter_files.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/habit_list_model.dart';
 import '../../../state/intent_router.dart' as intents;
+import '../../../state/settings_model.dart' show SettingsResult;
 import '../../../state/theme_model.dart';
 import '../../../state/widget_link.dart';
 import '../../about/about_screen.dart';
@@ -43,7 +47,9 @@ import '../../common/dialogs/checkmark_dialog.dart';
 import '../../common/dialogs/color_picker_dialog.dart';
 import '../../common/dialogs/confirm_delete_dialog.dart';
 import '../../common/dialogs/number_dialog.dart';
+import '../../settings/data_actions.dart';
 import '../../settings/settings_screen.dart';
+import '../../theme/app_theme.dart' show coreThemeOf;
 import '../edit/edit_habit_screen.dart';
 import '../show/show_habit_screen.dart';
 import 'habit_card.dart';
@@ -63,8 +69,12 @@ class HabitListScreen extends StatelessWidget {
   static const Key habitCardListKey = ValueKey<String>('habitCardList');
 
   /// `Activity.startActivitySafely(Intent(ACTION_VIEW, uri))`, which the
-  /// 'Help & FAQ' menu item goes through. Null degrades to the no-op Android
-  /// falls back to when nothing can handle the intent.
+  /// 'Help & FAQ' menu item and the settings screen's Help and
+  /// 'Rate this app' rows go through.
+  ///
+  /// Null is the app's own case: the screen then opens the link itself,
+  /// through `platform/external_links.dart`. A test supplies its own so that
+  /// no plugin is reached.
   final void Function(String url)? onOpenUrl;
 
   /// The app-level receiver for `uhabits://widget/...`.
@@ -138,6 +148,20 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
   /// `ListHabitsActivity.menu`.
   final GlobalKey<ListHabitsMenuState> _menuKey =
       GlobalKey<ListHabitsMenuState>();
+
+  /// The habit list's own scroll position, shared by the list and the
+  /// [Scrollbar] drawn over it.
+  ///
+  /// `HabitCardListView` is built with `R.attr.scrollableRecyclerViewStyle`,
+  /// whose one declaration is `android:scrollbars="vertical"`
+  /// (`audit.the-habit-list-has-no-vertical#1`). Flutter draws no scrollbar on
+  /// Android or iOS by default, so the port asks for one — and a scrollbar the
+  /// user can drag needs the same controller the list scrolls with, which is
+  /// why this is held here rather than left to the ambient
+  /// `PrimaryScrollController`: the list is rebuilt as a `ListView` or a
+  /// `ReorderableListView` depending on the sort order, and the position has to
+  /// survive that swap.
+  final ScrollController _listScrollController = ScrollController();
 
   /// `component.themeSwitcher`. The app installs one above this screen; the
   /// widget tests pump the screen on its own, so a local one stands in.
@@ -245,6 +269,7 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
       ..onShowDeleteConfirmationScreen = null
       ..onShowEditHabitsScreen = null;
     widget.widgetLinks?.detachListScreen(_onDeepLinkIntent);
+    _listScrollController.dispose();
     super.dispose();
   }
 
@@ -332,10 +357,14 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
     );
   }
 
-  core.Theme _coreThemeOf(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-          ? core.DarkTheme()
-          : core.LightTheme();
+  /// `AndroidThemeSwitcher.currentTheme()`, which `ListHabitsRootView` and
+  /// `HabitCardView.copyAttributesFrom` both read.
+  ///
+  /// It has to come from the shared [coreThemeOf] rather than from
+  /// [Brightness]: `DarkTheme` and `PureBlackTheme` are both dark, so deriving
+  /// the theme from the brightness alone can never return the pure-black one
+  /// and the whole list body stays grey under a black toolbar.
+  core.Theme _coreThemeOf(BuildContext context) => coreThemeOf(context);
 
   @override
   Widget build(BuildContext context) {
@@ -405,13 +434,6 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
               model: model,
               backgroundColor: toolbarColor,
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _createHabit,
-        tooltip: l10n.addHabit,
-        backgroundColor: toolbarColor,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.add),
-      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final buttonCount = _checkmarkCount(constraints.maxWidth);
@@ -542,15 +564,19 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
     // up while the adapter is sortable, i.e. while the primary order is
     // BY_POSITION (`list-habits.drag-reorder#1`).
     if (!model.isSortable) {
-      return ListView.builder(
-        key: HabitListScreen.habitCardListKey,
-        padding: padding,
-        itemCount: model.itemCount,
-        itemBuilder: buildRow,
+      return _withScrollbar(
+        ListView.builder(
+          key: HabitListScreen.habitCardListKey,
+          controller: _listScrollController,
+          padding: padding,
+          itemCount: model.itemCount,
+          itemBuilder: buildRow,
+        ),
       );
     }
-    return ReorderableListView.builder(
+    return _withScrollbar(ReorderableListView.builder(
       key: HabitListScreen.habitCardListKey,
+      scrollController: _listScrollController,
       padding: padding,
       itemCount: model.itemCount,
       // `isLongPressDragEnabled() == false`: the helper never starts a drag by
@@ -575,8 +601,20 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
         index: index,
         child: buildRow(context, index, ownLongPress: false),
       ),
-    );
+    ));
   }
+
+  /// `HabitCardListView(context, null, R.attr.scrollableRecyclerViewStyle)`.
+  ///
+  /// The style that constructor names declares exactly one thing —
+  /// `<item name="android:scrollbars">vertical</item>` — so the habit list is
+  /// the app's one deliberate scrollbar and every other scrolling view,
+  /// including this screen's own horizontal header, keeps none
+  /// (`audit.the-habit-list-has-no-vertical#1`). Left at its defaults the
+  /// [Scrollbar] is the platform's fading thumb, which is what
+  /// `android:scrollbars` turns on: visible while the list moves, gone after.
+  Widget _withScrollbar(Widget list) =>
+      Scrollbar(controller: _listScrollController, child: list);
 
   Widget _buildCard({
     required HabitListModel model,
@@ -629,26 +667,100 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
   /// the type it stands for (`habit-type-dialog.select-type#1`, `#6`).
   Future<void> _createHabit() => EditHabitScreen.selectTypeAndOpen(context);
 
-  /// `res/menu/list_habits.xml` -> `SettingsActivity`.
-  Future<void> _openSettings() {
+  /// `res/menu/list_habits.xml` -> `SettingsActivity`, started with
+  /// `startActivityForResult(intent, REQUEST_SETTINGS)`.
+  ///
+  /// The settings screen does none of the work its database and troubleshooting
+  /// rows stand for: each one calls `setResult(code); finish()`
+  /// (`SettingsFragment.setResultOnPreferenceClick`) and the list activity acts
+  /// on the code in `onActivityResult`. The Flutter screen pops with a
+  /// [SettingsResult] instead, so awaiting the route is `onActivityResult`, and
+  /// [DataActions.onSettingsResult] is `ListHabitsScreen.onSettingsResult`'s
+  /// `when (resultCode)`.
+  ///
+  /// A screen dismissed with the back button answers null — `RESULT_CANCELED`,
+  /// which `when` has no arm for — and nothing runs.
+  Future<void> _openSettings() async {
     final scope = context.read<AppScope>();
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final result = await Navigator.of(context).push<SettingsResult>(
+      MaterialPageRoute<SettingsResult>(
         builder: (_) => Provider<AppScope>.value(
           value: scope,
           child: SettingsScreen(
             storage: scope.preferencesStorage,
+            onOpenUrl: _openUrl,
             onShowAbout: () => _openAbout(),
           ),
         ),
       ),
+    );
+    if (result == null || !mounted) return;
+    final actions = await _dataActions(scope);
+    if (actions == null) return;
+    await actions.onSettingsResult(result);
+  }
+
+  /// The collaborators `ListHabitsScreen` is `@Inject`ed with to do the work
+  /// behind those result codes — the export tasks, the importer, the bug
+  /// reporter, the file picker and the share sheet.
+  ///
+  /// Built when a result actually arrives rather than at startup, because
+  /// resolving the app directories is a platform call. A host that cannot
+  /// answer it has no `getExternalFilesDirs` either, so there is nowhere to
+  /// export to; the actions are simply unavailable, rather than taking the
+  /// screen down with them.
+  Future<DataActions?> _dataActions(AppScope scope) async {
+    final AppDirectories directories;
+    try {
+      directories = await AppDirectories.resolve();
+    } on Object catch (error, stackTrace) {
+      scope.logging.getLogger('ListHabitsScreen').error(error, stackTrace);
+      return null;
+    }
+    if (!mounted) return null;
+    return DataActions.create(
+      scope: scope,
+      directories: directories,
+      // `activity.showMessage(...)`: the snackbar belongs to the list screen,
+      // which is what the settings screen has just closed back onto.
+      showMessage: (message) {
+        if (mounted) showDataActionMessage(context, message);
+      },
     );
   }
 
   /// `ListHabitsScreen.showFAQScreen()`:
   /// `activity.showSendEmailScreen`'s sibling, `startActivitySafely(
   /// Intent(ACTION_VIEW, Uri.parse(getString(R.string.helpURL))))`.
-  void _openFAQ() => widget.onOpenUrl?.call(SettingsScreen.helpUrl);
+  void _openFAQ() => _openUrl(SettingsScreen.helpUrl);
+
+  /// `Activity.startActivitySafely(Intent(ACTION_VIEW, Uri.parse(url)))`.
+  ///
+  /// [HabitListScreen.onOpenUrl] replaces it when the caller supplies one;
+  /// otherwise the link goes to the system.
+  void _openUrl(String url) {
+    final override = widget.onOpenUrl;
+    if (override != null) {
+      override(url);
+      return;
+    }
+    // `startActivity` is fire and forget; nothing waits for the other app.
+    unawaited(_openLink(Uri.parse(url)));
+  }
+
+  /// `startActivitySafely`'s `catch (e: ActivityNotFoundException)`: a link
+  /// nothing can open raises "No app was found to support this action".
+  ///
+  /// Handed to the About screen as `onOpenLink`, which reports the same
+  /// failure itself, so this only reports for the callers that cannot —
+  /// the FAQ menu item and the settings screen's two link rows.
+  Future<bool> _openLink(Uri uri) async {
+    final handled = await openExternalUri(uri);
+    if (!handled && mounted) {
+      showListHabitsMessage(context, L10n.of(context).activityNotFound);
+    }
+    return handled;
+  }
 
   /// `res/menu/list_habits.xml` -> `AboutActivity`.
   Future<void> _openAbout() {
@@ -657,7 +769,14 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
       MaterialPageRoute<void>(
         builder: (_) => Provider<AppScope>.value(
           value: scope,
-          child: AboutScreen(preferences: scope.preferences),
+          child: AboutScreen(
+            preferences: scope.preferences,
+            // `AboutScreen`'s six rows are each
+            // `activity.startActivitySafely(intents.<link>(activity))`; the
+            // screen shows the "no app found" message on a false answer, so it
+            // is handed the opener bare.
+            onOpenLink: openExternalUri,
+          ),
         ),
       ),
     );

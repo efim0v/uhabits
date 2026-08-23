@@ -228,15 +228,27 @@ void main() {
       expect(backupDir.listSync(), hasLength(1),
           reason: 'list-habits.data-io-actions#1: 103 exports the database');
 
-      // …and 104 / 105 are accepted without a crash, though the bug report and
-      // the repair themselves belong to the troubleshooting slice.
+      // …104 goes to the bug reporter, which this fixture has none of, so it
+      // reports nothing and — like every other arm — never touches the picker…
       await actions.onSettingsResult(SettingsResult.bugReport);
-      await actions.onSettingsResult(SettingsResult.repairDb);
       expect((actions.fileChooser as _FakeChooser).calls, 1,
           reason: 'list-habits.data-io-actions#1: 104 and 105 are not the '
               'import picker');
       expect(built.messages, isEmpty,
           reason: 'list-habits.data-io-actions#1');
+
+      // …and 105 repairs the database and reports it, which is
+      // `behavior.onRepairDB()` -> `showMessage(DATABASE_REPAIRED)`
+      // (`audit.every-data-troubleshooting-row-in-settings#1`).
+      await actions.onSettingsResult(SettingsResult.repairDb);
+      expect((actions.fileChooser as _FakeChooser).calls, 1,
+          reason: 'list-habits.data-io-actions#1: 105 is not the import '
+              'picker');
+      expect(built.messages, <DataActionMessage>[
+        DataActionMessage.databaseRepaired,
+      ], reason: 'list-habits.data-io-actions#1: 105 -> repair; '
+          'audit.every-data-troubleshooting-row-in-settings#1 — onRepairDB() '
+          'toasts R.string.database_repaired');
     });
 
     test('platform-glue.time-and-date-formatting#3 — the backup filename is '

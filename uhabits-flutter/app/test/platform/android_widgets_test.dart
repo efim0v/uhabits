@@ -169,6 +169,37 @@ String withoutComments(String source) => source
     .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
     .replaceAll(RegExp(r'//[^\n]*'), '');
 
+/// The value of `<string name="[name]">` in `res/values/strings.xml`.
+///
+/// The widget chrome text used to be Kotlin `const val`s and inline
+/// `android:text` literals; it is now translatable string resources generated
+/// from `app/lib/l10n/app_*.arb`
+/// (`audit.android-widget-chrome-text-is-hard#1`, `#2`, whose own contract is
+/// app/test/platform/widget_strings_test.dart). The assertions below therefore
+/// resolve the reference and compare the text upstream ships, which is strictly
+/// more than the literal comparison they replaced: the reference has to exist
+/// *and* the resource has to say the right thing.
+String androidString(String name) => _unescapeAndroid(capture(
+      androidSource('res/values/strings.xml'),
+      RegExp('<string\\s+name="$name"[^>]*>(.*?)</string>', dotAll: true),
+    ));
+
+String _unescapeAndroid(String value) => value
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
+    .replaceAllMapped(RegExp(r'\\(.)'), (Match m) => m.group(1)!);
+
+/// The text a layout's `TextView` shows, following an `@string/...` reference
+/// into `res/values/strings.xml`.
+String resolvedText(String layout, String tag) {
+  final String text = xmlRoot(androidSource('res/layout/$layout'), tag)[
+      'android:text']!;
+  return text.startsWith('@string/')
+      ? androidString(text.substring('@string/'.length))
+      : text;
+}
+
 /// A multi-line Kotlin argument list, one argument per entry.
 ///
 /// Splitting on commas would cut `max(1, view.measuredWidth)` in half; the
@@ -1493,7 +1524,7 @@ void main() {
 
     test('a missing habit relabels the error widget', () {
       expect(
-        capture(provider, RegExp(r'const val HABIT_NOT_FOUND = "([^"]*)"')),
+        androidString('habit_not_found'),
         'Habit deleted / not found',
         reason: 'widgets.provider-lifecycle#6 — If the caught exception is a '
             'HabitNotFoundException, the error widget label text is replaced '
@@ -1501,13 +1532,17 @@ void main() {
       );
       expect(
         provider,
-        contains('is HabitNotFoundException -> HABIT_NOT_FOUND'),
-        reason: 'widgets.provider-lifecycle#6: the exception picks the label',
+        contains('is HabitNotFoundException -> R.string.habit_not_found'),
+        reason: 'widgets.provider-lifecycle#6: the exception picks the label, '
+            'and picks it by resource id — the label is translated, exactly as '
+            'upstream\'s (audit.android-widget-chrome-text-is-hard#1)',
       );
       expect(
         provider,
-        contains('errorView.setCharSequence(R.id.label, "setText", label)'),
-        reason: 'widgets.provider-lifecycle#6: written onto the error layout',
+        contains(
+            'errorView.setCharSequence(R.id.label, "setText", context.getString(label))'),
+        reason: 'widgets.provider-lifecycle#6: resolved against the widget\'s '
+            'Context and written onto the error layout',
       );
     });
 
@@ -1605,14 +1640,16 @@ void main() {
 
       expect(
         provider,
-        contains('is HabitNotFoundException -> HABIT_NOT_FOUND'),
+        contains('is HabitNotFoundException -> R.string.habit_not_found'),
         reason: 'widgets.error-states#1 — If a widget\'s stored habit id no '
             'longer resolves to a habit, the widget is replaced by the '
             'widget_error layout showing \'Habit deleted / not found\'.',
       );
-      expect(capture(provider, RegExp(r'const val HABIT_NOT_FOUND = "([^"]*)"')),
-          'Habit deleted / not found',
-          reason: 'widgets.error-states#1: that exact label');
+      expect(androidString('habit_not_found'), 'Habit deleted / not found',
+          reason: 'widgets.error-states#1: that exact label — now the value of '
+              'the resource the provider names, which is also what every '
+              'translation overrides '
+              '(audit.android-widget-chrome-text-is-hard#1)');
     });
 
     test('any other RuntimeException keeps the layout\'s default text', () {
@@ -1624,7 +1661,7 @@ void main() {
           reason: 'widgets.error-states#2 — Any other RuntimeException during '
               'widget construction or rendering produces the same error layout '
               'with its default text \'Error drawing widget\'.');
-      expect(body, contains('if (label != null) errorView.setCharSequence'),
+      expect(body, contains('if (label != null) {\n            errorView.setCharSequence'),
           reason: 'widgets.error-states#2: a null label leaves the XML default '
               'in place');
       expect(
@@ -1683,10 +1720,11 @@ void main() {
             '\'Checkmark Stack Widget\') instead of any habit content.',
       );
       expect(
-        xmlRoot(androidSource('res/layout/checkmark_stackview_widget.xml'),
-            'TextView')['android:text'],
+        resolvedText('checkmark_stackview_widget.xml', 'TextView'),
         'Checkmark Stack Widget',
-        reason: 'widgets.error-states#4: which is the label in the layout',
+        reason: 'widgets.error-states#4: which is the label in the layout — '
+            'reached through @string/checkmark_stack_widget, so the empty state '
+            'is translated (audit.android-widget-chrome-text-is-hard#1)',
       );
       expect(
         widgetKotlin('StackWidgetService.kt'),
@@ -3629,8 +3667,7 @@ void main() {
       expect(
         <String, String?>{
           for (final MapEntry<String, String> entry in stackLayouts().entries)
-            entry.key: xmlRoot(androidSource('res/layout/${entry.value}.xml'),
-                'TextView')['android:text'],
+            entry.key: resolvedText('${entry.value}.xml', 'TextView'),
         },
         <String, String>{
           'CHECKMARK': 'Checkmark Stack Widget',
@@ -3647,8 +3684,9 @@ void main() {
             '\'History Stack Widget\', \'Streaks Stack Widget\'; the target '
             'layout has a bug and reuses R.string.streaks_stack_widget '
             '(\'Streaks Stack Widget\') instead of a target-specific string. '
-            'The port has no strings.xml, so the labels are literals — the bug '
-            'travels with them.',
+            'The port names the same six resources, generated from ARB, so the '
+            'bug travels with them and is translated with them '
+            '(audit.android-widget-chrome-text-is-hard#1).',
       );
     });
 

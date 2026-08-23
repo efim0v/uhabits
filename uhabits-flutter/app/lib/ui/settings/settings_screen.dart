@@ -35,6 +35,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 import '../../l10n/app_localizations.dart';
 import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
+import '../theme/app_theme.dart' show coreThemeOf;
 
 /// The settings screen.
 ///
@@ -125,9 +126,12 @@ class _SettingsView extends StatelessWidget {
             ? SettingsModel.themeDark
             : SettingsModel.themeLight;
     final theme = model.currentTheme(systemTheme);
-    // `setupToolbar(..., color = PaletteColor(11))`.
+    // `setupToolbar(..., color = PaletteColor(11))`, whose own branch decides
+    // whether that colour is used at all: the light theme sets
+    // `?attr/useHabitColorAsPrimary` true, both dark ones set it false and take
+    // `?attr/colorPrimary` — #101010 dark, #000000 pure black — instead.
     final toolbarColor = _toFlutterColor(
-      theme.colorOf(const core.PaletteColor(11)),
+      theme.toolbarColorFor(theme.colorOf(const core.PaletteColor(11))),
     );
 
     return Scaffold(
@@ -537,6 +541,12 @@ class _SettingsView extends StatelessWidget {
 }
 
 /// Port of `<PreferenceCategory>`: a title above the rows it groups.
+///
+/// The app shadows androidx's `Preference.Category.Material` style so that every
+/// category header is inflated from `res/layout/preference_category_custom.xml`,
+/// whose `TextView` is `android:textColor="?aboutScreenColor"` — the blue accent
+/// the About screen's card headers use as well. It is a theme attribute, not a
+/// Material colour-scheme role, so it comes off the core theme.
 class SettingsCategoryHeader extends StatelessWidget {
   const SettingsCategoryHeader({super.key, required this.title});
 
@@ -544,7 +554,7 @@ class SettingsCategoryHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final color = _toFlutterColor(coreThemeOf(context).aboutScreenColor);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Text(

@@ -205,6 +205,16 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
      * states: a widget the Flutter side has never published for
      * ([WidgetNotConfiguredException]) and a document from a schema this build
      * does not know ([UnknownSchemaException]).
+     *
+     * `audit.android-widget-chrome-text-is-hard#1`: all three are string
+     * resources rather than Kotlin literals, and are resolved against the
+     * widget's own [Context], so the launcher's locale — and the Android 13
+     * per-app language — decides the wording. They cannot travel in the
+     * published document instead: two of the three are drawn precisely because
+     * there is no readable document (`WidgetNotConfiguredException` *is* "no
+     * document", `UnknownSchemaException` is "a document this build cannot
+     * parse"). the `res/values-<locale>/strings.xml` files are generated from
+     * `app/lib/l10n/app_*.arb`; see app/test/platform/widget_strings_test.dart.
      */
     private fun drawErrorWidget(
         context: Context,
@@ -214,23 +224,18 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
     ) {
         val errorView = RemoteViews(context.packageName, R.layout.widget_error)
         val label = when (e) {
-            is HabitNotFoundException -> HABIT_NOT_FOUND
-            is WidgetNotConfiguredException -> NOT_CONFIGURED
-            is UnknownSchemaException -> UPDATE_REQUIRED
+            is HabitNotFoundException -> R.string.habit_not_found
+            is WidgetNotConfiguredException -> R.string.widget_not_configured
+            is UnknownSchemaException -> R.string.widget_update_required
             else -> null
         }
-        if (label != null) errorView.setCharSequence(R.id.label, "setText", label)
+        if (label != null) {
+            errorView.setCharSequence(R.id.label, "setText", context.getString(label))
+        }
         manager.updateAppWidget(widgetId, errorView)
     }
 
     companion object {
-        /** `R.string.habit_not_found`. */
-        const val HABIT_NOT_FOUND = "Habit deleted / not found"
-
-        const val NOT_CONFIGURED = "Open Loop Habit Tracker to set up this widget"
-
-        const val UPDATE_REQUIRED = "Update Loop Habit Tracker to show this widget"
-
         /**
          * `widgets.provider-lifecycle#3`: build landscape first, then portrait,
          * combine them, and push the pair.

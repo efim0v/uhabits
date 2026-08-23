@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 /// The bridge between the ported [core.Theme] and Flutter's [ThemeData].
@@ -81,6 +82,39 @@ core.Theme coreThemeOf(BuildContext context) {
   return data.brightness == Brightness.dark
       ? core.DarkTheme()
       : core.LightTheme();
+}
+
+/// `AppBaseTheme`'s `colorPrimary`, the literal `#363636` in
+/// `res/values/styles.xml`.
+///
+/// It is not one of the core `Theme` tokens: `Themes.kt` never names it, and
+/// the closest neighbours — `statusBarBackgroundColor` (#333333) and
+/// `toolbarColor` (#ffffff) — are a different pair of values used for a
+/// different surface. The Android light theme points
+/// `android:navigationBarColor` at it and nothing else does, so it lives here
+/// as the constant it is upstream.
+const Color navigationBarColorLight = Color(0xFF363636);
+
+/// The system-UI overlay style a core [theme] installs, or null when it
+/// installs none.
+///
+/// `AppBaseTheme` declares the `android:navigationBarColor` item as
+/// `?attr/colorPrimary`; `AppBaseThemeDark` and `AppBaseThemeDark.PureBlack`
+/// deliberately do not, leaving the platform default in place
+/// (`audit.the-light-theme-s-navigation-bar#1`). Null here is that same
+/// silence, and so are the null fields of the style itself: the Android
+/// embedding only touches a system-bar property the style actually names, so
+/// the status bar, the divider and the icon brightness stay where the platform
+/// put them, exactly as an undeclared attribute leaves them.
+///
+/// Applied by `ThemeModel._install`, which is where the port installs a theme —
+/// `AndroidThemeSwitcher.applyLightTheme()`'s `setTheme(R.style.AppBaseTheme)`.
+SystemUiOverlayStyle? systemUiOverlayStyleFor(core.Theme theme) {
+  // PureBlackTheme extends DarkTheme, so the one check covers both dark styles.
+  if (theme is core.DarkTheme) return null;
+  return const SystemUiOverlayStyle(
+    systemNavigationBarColor: navigationBarColorLight,
+  );
 }
 
 /// Builds the Material theme for a core [theme].

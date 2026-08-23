@@ -16,6 +16,7 @@ import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
+import 'package:uhabits/ui/habits/list/list_habits_menu.dart';
 import 'package:uhabits/ui/habits/list/list_habits_root_view.dart';
 import 'package:uhabits/ui/habits/list/list_header.dart';
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
@@ -261,8 +262,13 @@ void main() {
       await tester.pumpWidget(wrap(scope));
       await tester.pumpAndSettle();
 
-      expect(find.byType(FloatingActionButton), findsOneWidget);
-      await tester.tap(find.byType(FloatingActionButton));
+      // Adding a habit is a toolbar item with showAsAction="always", as in
+      // res/menu/list_habits.xml. The Android app has no floating action
+      // button at all.
+      final addHabit =
+          find.byKey(ListHabitsMenuItems.keyOf(ListHabitsMenuItems.createHabit));
+      expect(addHabit, findsOneWidget);
+      await tester.tap(addHabit);
       await tester.pumpAndSettle();
 
       // The button opens the habit type chooser first, exactly as

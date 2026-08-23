@@ -340,11 +340,12 @@ class ShowHabitModel extends ChangeNotifier
   void close() => delegate?.close();
 }
 
-/// `HabitsDirFinder(AndroidDirFinder(this))` needs the app's external files
-/// directories, which are resolved asynchronously at startup and are not
-/// threaded into this screen yet — the same gap the habit list's own Export
-/// action has. Selecting Export without one throws rather than silently
-/// exporting nowhere.
+/// The stand-in for a model built without a `system` at all.
+///
+/// `ShowHabitScreen.route` always supplies the real
+/// `HabitsDirFinder(AndroidDirFinder(this))`, so this is only what a model
+/// constructed straight from a test gets: selecting Export without an output
+/// directory throws rather than silently exporting nowhere.
 class _UnresolvedCSVOutputDir implements ShowHabitMenuPresenterSystem {
   const _UnresolvedCSVOutputDir();
 

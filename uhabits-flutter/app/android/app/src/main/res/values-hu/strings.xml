@@ -1,11 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Generated from app/lib/l10n/app_hu.arb by
-  app/test/platform/launcher_icon_test.dart's contract: the launcher
-  label is an Android string resource, because the launcher reads it long
-  before any Dart runs (app-identity.launcher-icon#1).
+  Generated from app/lib/l10n/app_hu.arb. Two contracts mirror ARB strings
+  into Android resources, because the code that reads them runs before — or
+  outside — any Dart:
+
+    * the launcher label, which the system launcher reads long before the app
+      starts (app-identity.launcher-icon#1, app/test/platform/launcher_icon_test.dart);
+    * the widget chrome text, which AppWidgetProviders draw in the launcher's
+      process, where the ARB files are not reachable at all
+      (audit.android-widget-chrome-text-is-hard#1,
+      app/test/platform/widget_strings_test.dart).
 -->
 <resources>
     <string name="app_name">Loop Szokásrögzítő</string>
     <string name="main_activity_title">Szokások</string>
+    <string name="habit_not_found">Szokás törölve / nem található</string>
+    <string name="checkmark_stack_widget">Pipa Stack Widget</string>
+    <string name="frequency_stack_widget">Gyakoriság Stack-widget</string>
+    <string name="score_stack_widget">Pontszám stack-widget</string>
+    <string name="history_stack_widget">Előzmények stack-widget</string>
+    <string name="streaks_stack_widget">Sorozat Stack Widget</string>
 </resources>

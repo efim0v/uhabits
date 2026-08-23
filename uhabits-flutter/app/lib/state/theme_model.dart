@@ -3,6 +3,7 @@
 // ignore_for_file: implementation_imports
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
@@ -30,6 +31,13 @@ import '../ui/theme/app_theme.dart';
 ///    with it goes the quirk where a pure-black change only restarted the
 ///    activity while `theme == THEME_DARK`.
 ///
+/// Installing a theme also re-declares the system chrome the Android style
+/// declared: `AppBaseTheme` paints `android:navigationBarColor` #363636 and the
+/// two dark styles leave it alone (`audit.the-light-theme-s-navigation-bar#1`).
+/// That is [systemUiOverlayStyleFor], written through
+/// [setSystemUiOverlayStyle] from [_install] — the point that corresponds to
+/// `AndroidThemeSwitcher.applyLightTheme()`'s `setTheme(R.style.AppBaseTheme)`.
+///
 /// Wiring, for `main.dart`:
 ///
 /// ```dart
@@ -51,11 +59,16 @@ import '../ui/theme/app_theme.dart';
 /// follow-the-system case is then handled by `MaterialApp` itself, on the very
 /// first frame. [currentTheme] is the same decision made explicitly, for the
 /// charts and for the menu's "Dark theme" checkbox.
+typedef SystemUiOverlayStyleSetter = void Function(SystemUiOverlayStyle style);
+
 class ThemeModel extends ChangeNotifier {
   ThemeModel(
     this.preferences, {
     Brightness systemBrightness = Brightness.light,
-  }) : _systemBrightness = systemBrightness;
+    SystemUiOverlayStyleSetter? setSystemUiOverlayStyle,
+  })  : _systemBrightness = systemBrightness,
+        setSystemUiOverlayStyle =
+            setSystemUiOverlayStyle ?? SystemChrome.setSystemUIOverlayStyle;
 
   /// `ThemeSwitcher.THEME_AUTOMATIC` — follow the system dark-mode setting.
   /// This is the default of `pref_theme`.
@@ -68,6 +81,13 @@ class ThemeModel extends ChangeNotifier {
   static const int themeLight = 2;
 
   final Preferences preferences;
+
+  /// How the chosen [SystemUiOverlayStyle] reaches the platform.
+  ///
+  /// `SystemChrome.setSystemUIOverlayStyle` in the app; a test passes its own,
+  /// because the SDK call keeps a static `_latestStyle` and silently drops a
+  /// repeat, which would make the order of the tests decide what they observe.
+  final SystemUiOverlayStyleSetter setSystemUiOverlayStyle;
 
   Brightness _systemBrightness;
 
@@ -143,8 +163,12 @@ class ThemeModel extends ChangeNotifier {
     }
   }
 
-  /// `AndroidThemeSwitcher.applyLightTheme()`, minus the Android style and the
-  /// navigation bar colour, which [appThemeData] and the platform handle.
+  /// `AndroidThemeSwitcher.applyLightTheme()` — `setTheme(R.style.AppBaseTheme)`
+  /// plus `currentTheme = LightTheme()`.
+  ///
+  /// The Android style is [appThemeData]; the one thing it declares that a
+  /// `ThemeData` cannot carry is `android:navigationBarColor`, and [_install]
+  /// writes that (`audit.the-light-theme-s-navigation-bar#1`).
   void applyLightTheme() => _install(core.LightTheme());
 
   /// `AndroidThemeSwitcher.applyDarkTheme()`.
@@ -156,6 +180,11 @@ class ThemeModel extends ChangeNotifier {
   void _install(core.Theme theme) {
     _currentTheme = theme;
     _hasApplied = true;
+    // `setTheme(R.style.AppBaseTheme)`'s `android:navigationBarColor`. Null for
+    // the two dark styles, which declare no such attribute and therefore leave
+    // the platform default in place (`audit.the-light-theme-s-navigation-bar#1`).
+    final style = systemUiOverlayStyleFor(theme);
+    if (style != null) setSystemUiOverlayStyle(style);
     notifyListeners();
   }
 

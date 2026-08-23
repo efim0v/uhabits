@@ -4,8 +4,12 @@
   ~
   ~ widgets.stack#4: a FrameLayout holding a looping StackView over a full-bleed
   ~ empty-state TextView (white, bold, 16sp, centred).
-  ~ widgets.stack#5: the label is upstream's @string/history_stack_widget, inlined
-  ~ because this project has no strings.xml.
+  ~ widgets.stack#5: the label is upstream's @string/history_stack_widget, kept as a
+  ~ string resource so the launcher resolves it in the device language
+  ~ (audit.android-widget-chrome-text-is-hard#1). res/values*/strings.xml
+  ~ is generated from app/lib/l10n/app_*.arb; android:text takes a
+  ~ resource or a literal and nothing else, which is why this label
+  ~ cannot travel in the published widget document.
   -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -22,7 +26,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
-        android:text="History Stack Widget"
+        android:text="@string/history_stack_widget"
         android:textColor="#ffffff"
         android:textSize="16sp"
         android:textStyle="bold" />

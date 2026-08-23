@@ -27,6 +27,7 @@ import 'package:uhabits/ui/common/dialogs/current_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/weekday_picker_dialog.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
+import 'package:uhabits/ui/habits/list/list_habits_menu.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
 import 'package:uhabits/ui/theme/app_theme.dart' show toFlutterColor;
 import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
@@ -1265,7 +1266,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find
+          .byKey(ListHabitsMenuItems.keyOf(ListHabitsMenuItems.createHabit)));
       await tester.pumpAndSettle();
       expect(find.byType(HabitTypeDialog), findsOneWidget,
           reason: 'habit-type-dialog.select-type#1');
@@ -1302,7 +1304,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(FloatingActionButton));
+      await tester.tap(find
+          .byKey(ListHabitsMenuItems.keyOf(ListHabitsMenuItems.createHabit)));
       await tester.pumpAndSettle();
       // The very top of the scrim, well clear of both cards.
       await tester.tapAt(const Offset(400, 8));

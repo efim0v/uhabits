@@ -191,12 +191,13 @@ class _HabitCardState extends State<HabitCard> {
       child: Material(
         // res/drawable/ripple.xml is `?attr/cardBgColor` under a ripple;
         // res/drawable/selected_box.xml is `?highlightedBackgroundColor` under
-        // a 2dp grey_500 stroke. The ported Theme has no token for
-        // highlightedBackgroundColor (grey_100), so the selected fill uses
-        // headerBackgroundColor, the closest one it does have.
+        // a 2dp grey_500 stroke — grey_100 (#F5F5F5) in the light theme,
+        // grey_800 (#424242) in the dark one and black in pure black, so a
+        // selected row lightens against its card except in pure black, where
+        // the stroke carries the selection on its own.
         color: _toFlutterColor(
           widget.isSelected
-              ? theme.headerBackgroundColor
+              ? theme.highlightedBackgroundColor
               : theme.cardBackgroundColor,
         ),
         elevation: _CardMetrics.elevation,

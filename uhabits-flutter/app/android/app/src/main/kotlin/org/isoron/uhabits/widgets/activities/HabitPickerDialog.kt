@@ -95,7 +95,12 @@ open class HabitPickerDialog : Activity() {
         setResult(RESULT_CANCELED)
 
         setContentView(R.layout.widget_configure_activity)
-        findViewById<TextView>(R.id.label).text = PROMPT
+        // `audit.android-widget-chrome-text-is-hard#1`: a string resource, not a
+        // Kotlin literal, so this activity — which the launcher starts before
+        // any Dart runs — speaks the device language like every other piece of
+        // widget chrome. See app/test/platform/widget_strings_test.dart.
+        findViewById<TextView>(R.id.label).text =
+            getString(R.string.widget_picker_prompt)
 
         launched = savedInstanceState?.getBoolean(STATE_LAUNCHED) ?: false
 
@@ -141,8 +146,6 @@ open class HabitPickerDialog : Activity() {
 
     companion object {
         private const val STATE_LAUNCHED = "launched"
-
-        private const val PROMPT = "Choose a habit in Loop Habit Tracker…"
 
         /**
          * `HomeWidgetLaunchIntent.HOME_WIDGET_LAUNCH_ACTION`, spelled out rather

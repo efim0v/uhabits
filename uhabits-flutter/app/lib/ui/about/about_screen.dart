@@ -34,6 +34,7 @@ import '../../l10n/app_localizations.dart';
 import '../../state/app_scope.dart';
 import '../common/window_insets.dart';
 import '../intro/intro_screen.dart';
+import '../theme/app_theme.dart' show coreThemeOf;
 
 /// `Context.startActivitySafely(intent)`: true when something handled the
 /// intent, false when nothing did.
@@ -405,9 +406,12 @@ class _AboutScreenState extends State<AboutScreen> {
   Preferences get _preferences =>
       widget.preferences ?? context.read<AppScope>().preferences;
 
-  core.Theme get _coreTheme => Theme.of(context).brightness == Brightness.dark
-      ? core.DarkTheme()
-      : core.LightTheme();
+  /// `AboutView.init` reads `currentTheme()`, so the About screen picks up
+  /// `PureBlackTheme` along with everything else. [Brightness] cannot make that
+  /// distinction — both dark variants report `Brightness.dark` — so this goes
+  /// through the shared [coreThemeOf], which reads the theme the `ThemeData`
+  /// was built from.
+  core.Theme get _coreTheme => coreThemeOf(context);
 
   Color get _aboutScreenColor => Theme.of(context).brightness == Brightness.dark
       ? AboutScreen.aboutScreenColorDark
@@ -447,9 +451,12 @@ class _AboutScreenState extends State<AboutScreen> {
       backgroundColor: _toFlutterColor(theme.appBackgroundColor),
       appBar: AppBar(
         title: Text(l10n.about),
-        // `setupToolbar(..., color = PaletteColor(11), ...)`
-        backgroundColor:
-            _toFlutterColor(theme.colorOf(const core.PaletteColor(11))),
+        // `setupToolbar(..., color = PaletteColor(11), ...)`, including the
+        // branch it makes on `?attr/useHabitColorAsPrimary`: the palette blue
+        // only in the light theme, `?attr/colorPrimary` in the dark ones.
+        backgroundColor: _toFlutterColor(
+          theme.toolbarColorFor(theme.colorOf(const core.PaletteColor(11))),
+        ),
         foregroundColor: Colors.white,
         elevation: 2,
       ),

@@ -1,11 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Generated from app/lib/l10n/app_en.arb by
-  app/test/platform/launcher_icon_test.dart's contract: the launcher
-  label is an Android string resource, because the launcher reads it long
-  before any Dart runs (app-identity.launcher-icon#1).
+  Generated from app/lib/l10n/app_en.arb. Two contracts mirror ARB strings
+  into Android resources, because the code that reads them runs before — or
+  outside — any Dart:
+
+    * the launcher label, which the system launcher reads long before the app
+      starts (app-identity.launcher-icon#1, app/test/platform/launcher_icon_test.dart);
+    * the widget chrome text, which AppWidgetProviders draw in the launcher's
+      process, where the ARB files are not reachable at all
+      (audit.android-widget-chrome-text-is-hard#1,
+      app/test/platform/widget_strings_test.dart).
 -->
 <resources>
     <string name="app_name">Loop Habit Tracker</string>
     <string name="main_activity_title">Habits</string>
+    <string name="habit_not_found">Habit deleted / not found</string>
+    <string name="checkmark_stack_widget">Checkmark Stack Widget</string>
+    <string name="frequency_stack_widget">Frequency Stack Widget</string>
+    <string name="score_stack_widget">Score Stack Widget</string>
+    <string name="history_stack_widget">History Stack Widget</string>
+    <string name="streaks_stack_widget">Streaks Stack Widget</string>
+    <string name="widget_not_configured">Open Loop Habit Tracker to set up this widget</string>
+    <string name="widget_update_required">Update Loop Habit Tracker to show this widget</string>
+    <string name="widget_picker_prompt">Choose a habit in Loop Habit Tracker…</string>
 </resources>

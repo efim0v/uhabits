@@ -283,7 +283,8 @@ void main() {
         seed.modelFactory,
         seed.habitList,
       ).createEmptyHabit(name: 'Meditate');
-      seed.habitList.add(habit);
+      // HabitFixtures.saveIfSQLite already registered it: the entry list
+      // an SQLModelFactory hands out is SQLite-backed.
       habit.originalEntries.add(Entry(getToday(), Entry.yesManual));
       habit.originalEntries.add(Entry(getToday().minus(1), Entry.yesManual));
       closeScope(seed);
@@ -401,11 +402,12 @@ void main() {
 
       // Every read goes to the same connection: a write through the habit list
       // is visible through the raw database.
-      final Habit habit = HabitFixtures(
+      // HabitFixtures.saveIfSQLite registers the habit itself: the entry list
+      // an SQLModelFactory hands out is SQLite-backed.
+      HabitFixtures(
         scope.modelFactory,
         scope.habitList,
       ).createEmptyHabit(name: 'Meditate');
-      scope.habitList.add(habit);
       final List<int> counted = <int>[];
       scope.database.query(
         'select count(*) from habits',
@@ -502,8 +504,9 @@ void main() {
         scope.modelFactory,
         scope.habitList,
       ).createEmptyHabit(name: 'Meditate');
+      // HabitFixtures.saveIfSQLite already registered it: the entry list
+      // an SQLModelFactory hands out is SQLite-backed.
       habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
-      scope.habitList.add(habit);
       scheduler.scheduleAll();
       expect(sys.scheduled, isNotEmpty,
           reason: 'platform-glue.di-app-component#6: the third argument is the '
@@ -531,7 +534,8 @@ void main() {
         scope.modelFactory,
         scope.habitList,
       ).createEmptyHabit(name: 'Meditate');
-      scope.habitList.add(habit);
+      // HabitFixtures.saveIfSQLite already registered it: the entry list
+      // an SQLModelFactory hands out is SQLite-backed.
       tray.cancel(habit);
       expect(systemTray.cancelled, <int?>[habit.id],
           reason: 'platform-glue.di-app-component#7: the fourth argument is the '

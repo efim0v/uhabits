@@ -1893,7 +1893,8 @@ void main() {
       final listener = _MinimalCommandListener();
       commandRunner.addListener(listener);
       final habit = HabitFixtures(factory, list).createEmptyHabit();
-      list.add(habit);
+      // HabitFixtures.saveIfSQLite already registered it: the entry list an
+      // SQLModelFactory hands out is SQLite-backed.
 
       db.begin();
       var date = LocalDate.ymd(2000, 1, 1);

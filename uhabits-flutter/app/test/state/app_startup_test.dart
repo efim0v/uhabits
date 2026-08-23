@@ -408,7 +408,8 @@ void main() {
     for (int i = 0; i < count; i++) {
       final Habit habit =
           HabitFixtures(factory, list).createEmptyHabit(name: 'Habit $i');
-      list.add(habit);
+      // HabitFixtures.saveIfSQLite already registered it: the entry list an
+      // SQLModelFactory hands out is SQLite-backed.
       habit.originalEntries.add(Entry(getToday(), Entry.yesManual));
       habit.originalEntries.add(Entry(getToday().minus(1), Entry.yesManual));
     }
@@ -586,9 +587,10 @@ void main() {
               'production one.');
 
       final AppScope first = await boot();
-      final Habit habit = HabitFixtures(first.modelFactory, first.habitList)
+      // HabitFixtures.saveIfSQLite registers the habit itself: the entry list
+      // an SQLModelFactory hands out is SQLite-backed.
+      HabitFixtures(first.modelFactory, first.habitList)
           .createEmptyHabit(name: 'Meditate');
-      first.habitList.add(habit);
       await pumpEventQueue();
       first.close();
       scopes.remove(first);

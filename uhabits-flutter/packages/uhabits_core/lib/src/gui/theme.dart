@@ -95,6 +95,15 @@ abstract class Theme {
   /// attribute and the KMP `HabitListHeader` reads the token.
   Color get attrHeaderBackgroundColor => const Color.fromRgb(0xEEEEEE);
 
+  /// `?attr/aboutScreenColor` — @color/blue_800 (#1565C0) in `AppBaseTheme`.
+  ///
+  /// The blue accent `about.xml` and `about_translators.xml` write their card
+  /// headers in, and — through the app's own `Preference.Category.Material`
+  /// style, which points every `<PreferenceCategory>` at
+  /// `res/layout/preference_category_custom.xml` — the colour of every settings
+  /// category title as well. `AppBaseTheme` also aliases `colorAccent` to it.
+  Color get aboutScreenColor => const Color.fromRgb(0x1565C0);
+
   /// `?attr/widgetShadowAlpha`, a float rather than a colour.
   double get widgetShadowAlpha => 0.25;
 
@@ -228,6 +237,12 @@ class DarkTheme extends Theme {
 
   @override
   Color get attrHeaderBackgroundColor => const Color.fromRgb(0x212121);
+
+  /// `<item name="aboutScreenColor">@color/blue_300</item>` — #64B5F6, the
+  /// lighter blue the dark styles accent with. `AppBaseThemeDark.PureBlack`
+  /// restates no `aboutScreenColor`, so it inherits this one.
+  @override
+  Color get aboutScreenColor => const Color.fromRgb(0x64B5F6);
 
   /// `AppBaseThemeDark` sets useHabitColorAsPrimary=false, so the toolbar is
   /// grey_950 rather than the habit's colour.
@@ -431,6 +446,12 @@ class WidgetTheme extends LightTheme {
 
   @override
   Color get attrHeaderBackgroundColor => const Color.fromRgb(0x212121);
+
+  /// Not restated by the style either, so blue_300 comes down from
+  /// AppBaseThemeDark. No widget layout reads it; it is here so that the
+  /// class keeps saying what its Android parent says.
+  @override
+  Color get aboutScreenColor => const Color.fromRgb(0x64B5F6);
 
   @override
   bool get useHabitColorAsPrimary => false;

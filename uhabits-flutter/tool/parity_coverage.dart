@@ -15,6 +15,9 @@ final _featureLine = RegExp(r'^- \[( |x|~)\] `([a-zA-Z0-9._-]+)`');
 final _ruleLine = RegExp(r'^\d+\. `([a-zA-Z0-9._-]+#\d+)`');
 final _citation = RegExp(r'[a-zA-Z0-9._-]+#\d+');
 
+/// Marks a single rule as dispositioned, with its reason written beside it.
+const _notApplicable = '**не применимо к порту:**';
+
 void main(List<String> args) {
   final repoRoot = Directory.current.path.endsWith('uhabits-flutter')
       ? Directory.current.parent.path
@@ -26,6 +29,7 @@ void main(List<String> args) {
   }
 
   final rulesByFeature = <String, List<String>>{};
+  final notApplicableRules = <String>{};
   final checkedFeatures = <String>{};
   final supersededFeatures = <String>{};
   String? currentFeature;
@@ -41,7 +45,16 @@ void main(List<String> args) {
     }
     final ruleMatch = _ruleLine.firstMatch(line);
     if (ruleMatch != null && currentFeature != null) {
-      rulesByFeature[currentFeature]!.add(ruleMatch.group(1)!);
+      // A rule can be dispositioned on its own, without its whole feature: it
+      // may contradict the source it was extracted from, or describe a
+      // platform mechanism the port has no counterpart for. Such a rule is
+      // annotated in the ledger and carries its reason inline, and it must not
+      // hold an otherwise finished feature open for ever.
+      if (line.contains(_notApplicable)) {
+        notApplicableRules.add(ruleMatch.group(1)!);
+      } else {
+        rulesByFeature[currentFeature]!.add(ruleMatch.group(1)!);
+      }
     }
   }
 
@@ -92,6 +105,7 @@ void main(List<String> args) {
   stdout.writeln('  rules uncited:       ${uncited.difference(supersededRules).length}');
   stdout.writeln('  superseded features: ${supersededFeatures.length} '
       '(${supersededRules.length} rules, excluded above)');
+  stdout.writeln('  rules not applicable:${notApplicableRules.length}');
   stdout.writeln('  outstanding features:'
       '${rulesByFeature.length - checkedFeatures.length - supersededFeatures.length}');
 

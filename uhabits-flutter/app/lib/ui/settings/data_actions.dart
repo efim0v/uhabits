@@ -6,8 +6,9 @@
 /// `onOpenDocumentResult`, `onImportData` and `onExportDB` — together with
 /// `uhabits-android/.../tasks/ExportDBTask.kt`, the `showSendFileScreen` and
 /// `startActivitySafely` extensions of
-/// uhabits-android/.../utils/ViewExtensions.kt, and the CSV export entry point
-/// of `ListHabitsBehavior.onExportCSV`.
+/// uhabits-android/.../utils/ViewExtensions.kt, and the two presenter entry
+/// points those rows reach, `ListHabitsBehavior.onExportCSV` and
+/// `ListHabitsBehavior.onRepairDB`.
 ///
 /// The Android settings screen never does the work: each row calls
 /// `setResult(code); finish()` and the list screen acts on the code. The
@@ -46,11 +47,12 @@ import 'package:uhabits_core/src/io/rewire_db_importer.dart'
 import 'package:uhabits_core/src/io/tickmate_db_importer.dart'
     show TickmateDBImporter;
 import 'package:uhabits_core/src/tasks/task_runner.dart';
-import 'package:uhabits_core/uhabits_core.dart' show Sqlite3DatabaseOpener;
-import 'package:url_launcher/url_launcher.dart';
+import 'package:uhabits_core/uhabits_core.dart'
+    show HabitList, Sqlite3DatabaseOpener;
 
 import '../../l10n/app_localizations.dart';
 import '../../platform/bug_reporter.dart';
+import '../../platform/external_links.dart';
 import '../../platform/flutter_files.dart';
 import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
@@ -80,6 +82,10 @@ enum DataActionMessage {
   /// `ListHabitsBehavior.Message.COULD_NOT_GENERATE_BUG_REPORT`,
   /// `R.string.bug_report_failed` — "Failed to generate bug report."
   couldNotGenerateBugReport,
+
+  /// `ListHabitsBehavior.Message.DATABASE_REPAIRED`,
+  /// `R.string.database_repaired` — "Database repaired."
+  databaseRepaired,
 }
 
 /// `Activity.startActivitySafely(Intent(ACTION_VIEW, Uri.parse(url)))`.
@@ -91,16 +97,17 @@ abstract interface class UrlOpener {
   Future<bool> open(String url);
 }
 
-/// [UrlOpener] over url_launcher.
+/// [UrlOpener] over `platform/external_links.dart`, which is the one place
+/// url_launcher is called from.
 class PlatformUrlOpener implements UrlOpener {
   const PlatformUrlOpener();
 
   @override
-  Future<bool> open(String url) =>
-      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  Future<bool> open(String url) => openExternalUrl(url);
 }
 
-/// The export, import, share and link actions the settings screen triggers.
+/// The export, import, repair, share and link actions the settings screen
+/// triggers.
 class DataActions {
   DataActions({
     required this.scope,
@@ -187,11 +194,20 @@ class DataActions {
 
   TaskRunner get _taskRunner => scope.taskRunner;
 
-  /// `ListHabitsScreen.onSettingsResult(resultCode)`.
+  /// `ListHabitsScreen.onSettingsResult(resultCode)`:
   ///
-  /// `RESULT_BUG_REPORT` (104) and `RESULT_REPAIR_DB` (105) belong to the
-  /// troubleshooting slice; they are accepted and ignored here rather than
-  /// throwing, so that a tap on those rows cannot crash the app.
+  /// ```kotlin
+  /// when (resultCode) {
+  ///     RESULT_IMPORT_DATA -> showImportScreen()
+  ///     RESULT_EXPORT_CSV -> behavior.value.onExportCSV()
+  ///     RESULT_EXPORT_DB -> onExportDB()
+  ///     RESULT_BUG_REPORT -> behavior.value.onSendBugReport()
+  ///     RESULT_REPAIR_DB -> behavior.value.onRepairDB()
+  /// }
+  /// ```
+  ///
+  /// All five arms do their work; the `when` has no `else`, so a code the
+  /// settings screen never sets cannot reach it.
   Future<void> onSettingsResult(SettingsResult result) async {
     switch (result) {
       case SettingsResult.importData:
@@ -203,8 +219,29 @@ class DataActions {
       case SettingsResult.bugReport:
         return sendBugReport();
       case SettingsResult.repairDb:
-        return;
+        return repairDb();
     }
+  }
+
+  // -------------------------------------------------------------------
+  // Repair database
+  // -------------------------------------------------------------------
+
+  /// `ListHabitsBehavior.onRepairDB()`, ported here for the same reason
+  /// [exportCsv] is: this is the object the settings row hands its work to.
+  ///
+  /// The Kotlin body is an anonymous `object : Task` whose `doInBackground`
+  /// repairs the list and whose `onPostExecute` reports it, which is why the
+  /// message always follows the repair. It bypasses the command runner
+  /// entirely, so nothing listening for commands is notified.
+  Future<void> repairDb() async {
+    _taskRunner.execute(
+      _RepairDBTask(
+        habitList: scope.habitList,
+        listener: () => showMessage(DataActionMessage.databaseRepaired),
+      ),
+    );
+    await _taskRunner.awaitAll();
   }
 
   // -------------------------------------------------------------------
@@ -450,6 +487,21 @@ class _ExportDBTask extends Task {
   void onPostExecute() => listener(_filename);
 }
 
+/// The anonymous `object : Task` of `ListHabitsBehavior.onRepairDB()`.
+class _RepairDBTask extends Task {
+  _RepairDBTask({required this.habitList, required this.listener});
+
+  final HabitList habitList;
+
+  final void Function() listener;
+
+  @override
+  void doInBackground() => habitList.repair();
+
+  @override
+  void onPostExecute() => listener();
+}
+
 /// `ExportCSVTask`'s `fun interface` listener, as a lambda.
 class _ExportCsvListener implements ExportCSVListener {
   _ExportCsvListener(this._onFinished);
@@ -536,6 +588,8 @@ String dataActionMessageText(L10n l10n, DataActionMessage message) {
       return l10n.activityNotFound;
     case DataActionMessage.couldNotGenerateBugReport:
       return l10n.bugReportFailed;
+    case DataActionMessage.databaseRepaired:
+      return l10n.databaseRepaired;
   }
 }
 

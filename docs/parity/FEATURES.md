@@ -1975,7 +1975,8 @@ written from the rules below.
 
 #### io.export-db-backup
 
-- [ ] `io.export-db-backup` — Export full backup (.db) and its file naming
+- [~] `io.export-db-backup` — Export full backup (.db) and its file naming
+- **Disposition:** superseded — Storage Access Framework: ACTION_OPEN_DOCUMENT_TREE, персистентные разрешения на URI и DocumentFile не имеют кроссплатформенного аналога. Портирована вся логика, которая от них не зависит; строка выбора публичной папки показана отключённой
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/tasks/ExportDBTask.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/tasks/ExportDBTaskFactory.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DatabaseUtils.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateFormats.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/Constants.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-android/src/main/res/xml/preferences.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/BackupTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/BackupSteps.kt`
@@ -2000,7 +2001,8 @@ written from the rules below.
 
 #### io.auto-backup
 
-- [ ] `io.auto-backup` — Automatic daily backup with rotation
+- [~] `io.auto-backup` — Automatic daily backup with rotation
+- **Disposition:** superseded — Storage Access Framework: ACTION_OPEN_DOCUMENT_TREE, персистентные разрешения на URI и DocumentFile не имеют кроссплатформенного аналога. Портирована вся логика, которая от них не зависит; строка выбора публичной папки показана отключённой
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/database/AutoBackup.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DatabaseUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/AndroidDirFinder.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/FileUtils.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateFormats.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/tasks/ExportDBTask.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/database/AutoBackupTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/BackupTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/BackupSteps.kt`
@@ -2025,7 +2027,8 @@ written from the rules below.
 
 #### io.public-backup-folder-pref
 
-- [ ] `io.public-backup-folder-pref` — Public backup folder preference
+- [~] `io.public-backup-folder-pref` — Public backup folder preference
+- **Disposition:** superseded — Storage Access Framework: ACTION_OPEN_DOCUMENT_TREE, персистентные разрешения на URI и DocumentFile не имеют кроссплатформенного аналога. Портирована вся логика, которая от них не зависит; строка выбора публичной папки показана отключённой
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/BackupTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/BackupSteps.kt`
@@ -2041,7 +2044,8 @@ written from the rules below.
 
 #### io.share-file-screen
 
-- [ ] `io.share-file-screen` — Sharing the exported file
+- [~] `io.share-file-screen` — Sharing the exported file
+- **Disposition:** superseded — манифестный FileProvider и res/xml/file_paths.xml: во Flutter шаринг идёт через share_plus, который объявляет собственный провайдер и собственные корни, поэтому в приложении нет ни authority, ни файла путей, из которых можно было бы прочитать значение
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-android/src/main/res/xml/file_paths.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -2702,7 +2706,7 @@ written from the rules below.
 
 #### show-habit.target-card
 
-- [ ] `show-habit.target-card` — Target card (numerical habits only)
+- [x] `show-habit.target-card` — Target card (numerical habits only)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/TargetCard.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/TargetCardView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/TargetChart.kt`, `uhabits-android/src/main/res/layout/show_habit_target.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -2725,7 +2729,7 @@ written from the rules below.
 16. `show-habit.target-card#16` — A non-zero fill narrower than 2 * 2dp is widened to 2 * 2dp so it stays visible.
 17. `show-habit.target-card#17` — The completed value text = value.toShortString() drawn centred in the filled part, and only if the filled width exceeds the text width + 8dp; the remaining text = (target - value).toShortString() drawn centred in the empty part under the same width condition. Remaining may be negative (e.g. "-3.5").
 18. `show-habit.target-card#18` — The card title is "Target"; the title and the filled bar use theme.color(habit.color); the empty bar uses contrast20 and labels use contrast60.
-19. `show-habit.target-card#19` — The chart is 300dp tall and rows split that height evenly (baseSize = height / rowCount).
+19. `show-habit.target-card#19` — The chart is 300dp tall and rows split that height evenly (baseSize = height / rowCount). — **не применимо к порту:** правило противоречит собственному источнику (`TargetChart.onMeasure` читает спецификацию высоты только при `MATCH_PARENT`, а разметка задаёт фиксированные 300dp), поэтому порт следует коду и правилу `charts-canvas-theming.target-chart#3`. См. раздел «Ошибки самого реестра» в DEVIATIONS.md.
 20. `show-habit.target-card#20` — The card is hidden for boolean habits.
 
 #### show-habit.score-card
@@ -3389,7 +3393,7 @@ written from the rules below.
 
 #### number-dialog.popup
 
-- [ ] `number-dialog.popup` — NumberDialog (numerical entry popup with notes)
+- [x] `number-dialog.popup` — NumberDialog (numerical entry popup with notes)
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/NumberDialog.kt`, `uhabits-android/src/main/res/layout/checkmark_popup.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Entry.kt`, `.../ui/screens/habits/list/ListHabitsBehavior.kt`, `.../ui/screens/habits/show/views/HistoryCard.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`
@@ -3400,7 +3404,7 @@ written from the rules below.
 3. `number-dialog.popup#3` — The "Skip" button is GONE unless Preferences.isSkipEnabled; the question-mark button is GONE unless Preferences.areQuestionMarksEnabled.
 4. `number-dialog.popup#4` — Initial text of the value field: if value < 0.01 the literal "0", otherwise DecimalFormat("#.##").format(value) using the default locale — e.g. 0.5 -> "0.5", 12.345 -> "12.35", 15.0 -> "15". Because UNKNOWN (-0.001) and SKIP (0.003) are both < 0.01 they are displayed as "0".
 5. `number-dialog.popup#5` — The value field's key listener is restricted to the digits 0-9 plus the locale's decimal separator (DecimalFormatSymbols.getInstance().decimalSeparator).
-6. `number-dialog.popup#6` — Workaround: if the default input method id contains "swiftkey" or "samsung", the value field's inputType is switched to TYPE_CLASS_TEXT so the decimal separator key appears.
+6. `number-dialog.popup#6` — Workaround: if the default input method id contains "swiftkey" or "samsung", the value field's inputType is switched to TYPE_CLASS_TEXT so the decimal separator key appears. — **не применимо к порту:** обход конкретных Android-клавиатур через подмену inputType; во Flutter десятичный разделитель задаётся `TextInputFormatter` и локалью, отдельного класса ввода нет, поэтому подменять нечего.
 7. `number-dialog.popup#7` — The value field requests focus and forces the soft keyboard open by dispatching a synthetic ACTION_DOWN/ACTION_UP touch pair 250ms after creation.
 8. `number-dialog.popup#8` — Pressing the hardware/soft ENTER key inside the value field triggers Save. Pressing the IME action inside the notes field also triggers Save.
 9. `number-dialog.popup#9` — "Skip" sets the value text to DecimalFormat("#.###").format(Entry.SKIP/1000.0) = "0.003" and then saves, so the entry ends up with the raw value 3 (SKIP).
@@ -3858,7 +3862,8 @@ written from the rules below.
 
 #### settings.screen.reminder-category
 
-- [ ] `settings.screen.reminder-category` — Reminder settings rows
+- [~] `settings.screen.reminder-category` — Reminder settings rows
+- **Disposition:** superseded — RingtoneManager и каналы уведомлений Android: строка выбора звука в оригинале принудительно скрыта и недостижима, порт использует системный звук по умолчанию
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/notifications/RingtoneManager.kt`, `.../notifications/AndroidNotificationTray.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3877,7 +3882,8 @@ written from the rules below.
 
 #### settings.screen.database-category
 
-- [ ] `settings.screen.database-category` — Database settings rows (export, import, public backup folder) and result codes
+- [~] `settings.screen.database-category` — Database settings rows (export, import, public backup folder) and result codes
+- **Disposition:** superseded — Storage Access Framework: ACTION_OPEN_DOCUMENT_TREE, персистентные разрешения на URI и DocumentFile не имеют кроссплатформенного аналога. Портирована вся логика, которая от них не зависит; строка выбора публичной папки показана отключённой
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/database/AutoBackup.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/tasks/ExportDBTask.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/BackupTest.kt`, `.../acceptance/steps/BackupSteps.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`
@@ -4293,7 +4299,8 @@ written from the rules below.
 
 #### widgets.updater
 
-- [ ] `widgets.updater` — WidgetUpdater: pushing updates when data changes
+- [~] `widgets.updater` — WidgetUpdater: pushing updates when data changes
+- **Disposition:** superseded — AlarmManager.setExactAndAllowWhileIdle и broadcast PendingIntent заменены на MidnightTimer внутри изолята: у него нет ни типа будильника, ни разрешения на точные будильники, ни результата IGNORED
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/WidgetUpdater.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentScheduler.kt`, `.../HabitsApplication.kt`, `.../activities/habits/list/ListHabitsActivity.kt`, `.../activities/habits/show/ShowHabitActivity.kt`, `.../activities/settings/SettingsFragment.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4316,7 +4323,8 @@ written from the rules below.
 
 #### widgets.day-rollover
 
-- [ ] `widgets.day-rollover` — Widgets redraw at the start of the next logical day
+- [~] `widgets.day-rollover` — Widgets redraw at the start of the next logical day
+- **Disposition:** superseded — AlarmManager.setExactAndAllowWhileIdle и broadcast PendingIntent заменены на MidnightTimer внутри изолята: у него нет ни типа будильника, ни разрешения на точные будильники, ни результата IGNORED
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/WidgetReceiver.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/widgets/WidgetUpdater.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentScheduler.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/intents/IntentSchedulerTest.kt`
@@ -4496,7 +4504,8 @@ written from the rules below.
 
 #### reminders.snooze-picker-ui
 
-- [ ] `reminders.snooze-picker-ui` — Snooze delay picker dialog
+- [~] `reminders.snooze-picker-ui` — Snooze delay picker dialog
+- **Disposition:** superseded — прозрачная активити поверх экрана блокировки: FLAG_ACTIVITY_NEW_TASK, ACTION_CLOSE_SYSTEM_DIALOGS, requestDismissKeyguard и Theme.Translucent во Flutter невыразимы; пикер отсрочки портирован как обычный диалог
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/SnoozeDelayPickerActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderController.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/SystemUtils.kt`, `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-android/src/main/res/values/constants.xml`
 - **Kotlin tests:** `uhabits-android/src/test/java/org/isoron/uhabits/receivers/ReminderControllerTest.kt`
@@ -5502,7 +5511,8 @@ written from the rules below.
 
 #### charts-canvas-theming.chart-host-contracts
 
-- [ ] `charts-canvas-theming.chart-host-contracts` — Chart hosting, sizing and refresh contracts
+- [~] `charts-canvas-theming.chart-host-contracts` — Chart hosting, sizing and refresh contracts
+- **Disposition:** superseded — интерфейс HabitChart не имеет ни одной реализации в оригинале, а карточки порта — stateless-виджеты, перестраиваемые из объекта состояния: добавлять интерфейс ради цитаты значило бы писать мёртвый код
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/HabitChart.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/HistoryEditorDialog.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/widgets/HistoryWidget.kt`, `.../widgets/views/GraphWidgetView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/BarCardView.kt`, `uhabits-android/src/main/res/layout/show_habit_score.xml`, `.../show_habit_history.xml`, `.../show_habit_bar.xml`, `.../show_habit_frequency.xml`, `.../show_habit_streak.xml`, `.../show_habit_target.xml`, `uhabits-android/src/main/res/values/constants.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/widgets/HistoryWidgetTest.kt`, `.../ScoreWidgetTest.kt`, `.../FrequencyWidgetTest.kt`, `.../StreakWidgetTest.kt`, `.../TargetWidgetTest.kt`
@@ -5847,7 +5857,8 @@ written from the rules below.
 
 #### platform-glue.localized-arrays
 
-- [ ] `platform-glue.localized-arrays` — Localizable string arrays and their index contracts
+- [~] `platform-glue.localized-arrays` — Localizable string arrays and their index contracts
+- **Disposition:** superseded — массивы actions_yes_no и actions_numerical читает только экран настройки Tasker-плагина, а сам плагин исключён из паритета решением владельца проекта
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values/constants.xml`, `uhabits-android/src/main/res/values/strings.xml`, `uhabits-android/src/main/res/xml/preferences.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6202,7 +6213,7 @@ not see it because they pass the callback themselves.
 
 #### audit.every-data-troubleshooting-row-in-settings
 
-- [ ] `audit.every-data-troubleshooting-row-in-settings` — Every data / troubleshooting row in Settings is a dead end — the popped SettingsResult is thrown away and DataActions is never constructed
+- [x] `audit.every-data-troubleshooting-row-in-settings` — Every data / troubleshooting row in Settings is a dead end — the popped SettingsResult is thrown away and DataActions is never constructed
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt — `showSettingsScreen()` (startActivityForResult(intent, REQUEST_SETTINGS)) and `onSettingsResult(resultCode)`; uhabits-android/.../activities/settings/SettingsFragment.kt — `setResultOnPreferenceClick("importData"/"exportCSV"/"exportDB"/"repairDB"/"bugReport", …)``
 - **Kotlin tests:** none — write Dart test from rules
@@ -6213,7 +6224,7 @@ not see it because they pass the callback themselves.
 
 #### audit.all-six-about-screen-links-do
 
-- [ ] `audit.all-six-about-screen-links-do` — All six About-screen links do nothing — AboutScreen.onOpenLink is never supplied
+- [x] `audit.all-six-about-screen-links-do` — All six About-screen links do nothing — AboutScreen.onOpenLink is never supplied
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/about/AboutScreen.kt — `showRateAppWebsite()`, `showSendFeedbackScreen()`, `showTranslationWebsite()`, `showSourceCodeWebsite()`, `showPrivacyPolicyWebsite()`, `showCodeContributorsWebsite()`, all wired in `AboutView.init``
 - **Kotlin tests:** none — write Dart test from rules
@@ -6224,7 +6235,7 @@ not see it because they pass the callback themselves.
 
 #### audit.overflow-menu-help-faq-does-nothing
 
-- [ ] `audit.overflow-menu-help-faq-does-nothing` — Overflow menu "Help & FAQ" does nothing, and the Settings Help / Rate-this-app rows render permanently disabled — HabitListScreen.onOpenUrl is never supplied
+- [x] `audit.overflow-menu-help-faq-does-nothing` — Overflow menu "Help & FAQ" does nothing, and the Settings Help / Rate-this-app rows render permanently disabled — HabitListScreen.onOpenUrl is never supplied
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt — `onItemSelected` case `R.id.actionFAQ` -> `ListHabitsMenuBehavior.onViewFAQ()` -> `ListHabitsScreen.showFAQScreen()`; uhabits-android/src/main/res/xml/preferences.xml — the `<intent>` on the Help row and `SettingsFragment.onPreferenceTreeClick("rateApp")``
 - **Kotlin tests:** none — write Dart test from rules
@@ -6235,7 +6246,7 @@ not see it because they pass the callback themselves.
 
 #### audit.export-from-the-show-habit-overflow
 
-- [ ] `audit.export-from-the-show-habit-overflow` — Export from the Show Habit overflow menu throws instead of exporting
+- [x] `audit.export-from-the-show-habit-overflow` — Export from the Show Habit overflow menu throws instead of exporting
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt — `ShowHabitMenuPresenter(system = HabitsDirFinder(AndroidDirFinder(this)), …)`, reached from `ShowHabitMenu.onOptionsItemSelected` case `R.id.export``
 - **Kotlin tests:** none — write Dart test from rules
@@ -6246,7 +6257,7 @@ not see it because they pass the callback themselves.
 
 #### audit.settings-and-about-toolbars-ignore-the
 
-- [ ] `audit.settings-and-about-toolbars-ignore-the` — Settings and About toolbars ignore the dark themes' useHabitColorAsPrimary=false, so they render light blue in dark mode
+- [x] `audit.settings-and-about-toolbars-ignore-the` — Settings and About toolbars ignore the dark themes' useHabitColorAsPrimary=false, so they render light blue in dark mode
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/res/values/styles.xml — `<style name="AppBaseThemeDark">` / `AppBaseThemeDark.PureBlack`, `<item name="useHabitColorAsPrimary">false</item>` and `<item name="colorPrimary">@color/grey_950</item>` (#101010) / `@color/black`; consumed by `View.setupToolbar` in uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt:186-191`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6257,7 +6268,7 @@ not see it because they pass the callback themselves.
 
 #### audit.settings-category-headers-lose-the-aboutscreencolor
 
-- [ ] `audit.settings-category-headers-lose-the-aboutscreencolor` — Settings category headers lose the ?aboutScreenColor blue and become near-invisible in the dark themes
+- [x] `audit.settings-category-headers-lose-the-aboutscreencolor` — Settings category headers lose the ?aboutScreenColor blue and become near-invisible in the dark themes
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/res/layout/preference_category_custom.xml (`android:textColor="?aboutScreenColor"`), wired in via uhabits-android/src/main/res/values/styles.xml `<style name="Preference.Category.Material"><item name="android:layout">@layout/preference_category_custom</item></style>` plus `<item name="aboutScreenColor">@color/blue_800</item>` in AppBaseTheme and `@color/blue_300` in AppBaseThemeDark`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6268,7 +6279,7 @@ not see it because they pass the callback themselves.
 
 #### audit.habitfixtures-saveifsqlite-is-permanently-disabled-by
 
-- [ ] `audit.habitfixtures-saveifsqlite-is-permanently-disabled-by` — HabitFixtures.saveIfSQLite is permanently disabled by a stale port stub
+- [x] `audit.habitfixtures-saveifsqlite-is-permanently-disabled-by` — HabitFixtures.saveIfSQLite is permanently disabled by a stale port stub
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/test/HabitFixtures.kt — private fun saveIfSQLite(habit: Habit)`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6279,7 +6290,7 @@ not see it because they pass the callback themselves.
 
 #### audit.reminder-notifications-are-auto-cancelled-when
 
-- [ ] `audit.reminder-notifications-are-auto-cancelled-when` — Reminder notifications are auto-cancelled when the user taps them
+- [x] `audit.reminder-notifications-are-auto-cancelled-when` — Reminder notifications are auto-cancelled when the user taps them
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt — buildNotification()`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6290,7 +6301,7 @@ not see it because they pass the callback themselves.
 
 #### audit.pure-black-amoled-theme-is-ignored
 
-- [ ] `audit.pure-black-amoled-theme-is-ignored` — Pure-black (AMOLED) theme is ignored by the habit list screen and the About screen
+- [x] `audit.pure-black-amoled-theme-is-ignored` — Pure-black (AMOLED) theme is ignored by the habit list screen and the About screen
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/AndroidThemeSwitcher.kt — `applyPureBlackTheme()`; consumed by `ListHabitsRootView` / `HabitCardView.copyAttributesFrom` / `AboutView.init` through `currentTheme()``
 - **Kotlin tests:** none — write Dart test from rules
@@ -6301,7 +6312,7 @@ not see it because they pass the callback themselves.
 
 #### audit.a-selected-habit-row-is-filled
 
-- [ ] `audit.a-selected-habit-row-is-filled` — A selected habit row is filled with headerBackgroundColor instead of highlightedBackgroundColor
+- [x] `audit.a-selected-habit-row-is-filled` — A selected habit row is filled with headerBackgroundColor instead of highlightedBackgroundColor
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/drawable/selected_box.xml — `<solid android:color="?highlightedBackgroundColor"/>` with a 2dp `@color/grey_500` stroke; applied by `HabitCardView.updateBackground` (uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardView.kt:311-322), and the attribute is `@color/grey_100` (#F5F5F5) in AppBaseTheme, `@color/grey_800` (#424242) in AppBaseThemeDark and `@color/black` in AppBaseThemeDark.PureBlack`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6312,7 +6323,7 @@ not see it because they pass the callback themselves.
 
 #### audit.android-widget-chrome-text-is-hard
 
-- [ ] `audit.android-widget-chrome-text-is-hard` — Android widget chrome text is hard-coded English, dropping translations that ship upstream
+- [x] `audit.android-widget-chrome-text-is-hard` — Android widget chrome text is hard-coded English, dropping translations that ship upstream
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values/strings.xml — `habit_not_found` ("Habit deleted / not found"), `checkmark_stack_widget`, `frequency_stack_widget`, `score_stack_widget`, `history_stack_widget`, `streaks_stack_widget`; referenced from BaseWidgetProvider.kt:137 and from uhabits-android/src/main/res/layout/*_stackview_widget.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6323,7 +6334,7 @@ not see it because they pass the callback themselves.
 
 #### audit.the-habit-list-has-no-vertical
 
-- [ ] `audit.the-habit-list-has-no-vertical` — The habit list has no vertical scrollbar
+- [x] `audit.the-habit-list-has-no-vertical` — The habit list has no vertical scrollbar
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values/attrs.xml `<attr name="scrollableRecyclerViewStyle">` + uhabits-android/src/main/res/values/styles.xml `<style name="ScrollableRecyclerViewStyle" parent="android:Widget"><item name="android:scrollbars">vertical</item></style>`, consumed by `HabitCardListView(context, null, R.attr.scrollableRecyclerViewStyle)` in uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardListView.kt:59`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6334,7 +6345,7 @@ not see it because they pass the callback themselves.
 
 #### audit.the-light-theme-s-navigation-bar
 
-- [ ] `audit.the-light-theme-s-navigation-bar` — The light theme's navigation-bar tint is not applied
+- [x] `audit.the-light-theme-s-navigation-bar` — The light theme's navigation-bar tint is not applied
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values/styles.xml — `<style name="AppBaseTheme">` sets `<item name="android:navigationBarColor">?attr/colorPrimary</item>` (colorPrimary = #363636); AppBaseThemeDark deliberately does not set it`
 - **Kotlin tests:** none — write Dart test from rules

@@ -719,6 +719,13 @@ class LocalNotificationsPresenter implements NotificationPresenter {
           spec.channelName,
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
+          // `buildNotification()` never calls `setAutoCancel(...)`, so the
+          // reminder is posted without FLAG_AUTO_CANCEL: tapping the body opens
+          // the habit and the reminder stays in the shade until the entry is
+          // recorded, until it is swiped away, or until it is snoozed. The
+          // plugin defaults this to true, which would defeat `ongoing` with a
+          // single tap and leave the core tray's `active` map out of step.
+          autoCancel: false,
           when: spec.whenMillis,
           showWhen: spec.showWhen,
           ongoing: spec.ongoing,
