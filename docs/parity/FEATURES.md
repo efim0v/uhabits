@@ -6529,3 +6529,220 @@ it, because tests construct these objects themselves.
 
 1. `verify.ring-not-quantised#1` — In the Kotlin app: The list card's 15dp ring snaps to 22.5-degree steps: a score of 0.03 rounds to 0 and draws no arc at all, and a score of 0.97 rounds to 16/16 and draws a complete ring.
 2. `verify.ring-not-quantised#2` — The port must do the same. Today: The port draws the exact angle, so 0.03 shows a thin visible wedge and 0.97 shows a ring with a visible gap. The rule is spelled out in the ledger as `list-habits.habit-card#2` ("its precision is 1/16, so the drawn sweep angle is 360 * round(percentage / (1/16)) * (1/16)") and the test that cites it, app/test/ui/habits/list/habit_card_test.dart:792-803, is titled "the ring sweep is the cached score, quantised to 1/16" but pumps `score: 0.5` — exactly 8/16, the one value at which quantised and unquantised agree — so it passes either way.
+
+## Domain: Third audit pass (2026-08-23)
+
+The third adversarial pass, run after the second one's findings were all fixed. It found the
+same failure mode a third time: code that is implemented, tested and never wired. That
+repetition is itself the finding — the port's tests construct their own subjects, so nothing
+exercises the wiring. The countermeasure is `verify.integration-harness` below.
+
+#### audit3.charts-on-the-habit-detail-screen
+
+- [ ] `audit3.charts-on-the-habit-detail-screen` — Charts on the habit detail screen and in the history editor cannot be scrolled into the past — the port's ScrollableChart replacement is never wired to any card
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/platform/gui/AndroidDataView.kt (onScroll/onFling/updateDataOffset/resetDataOffset); uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/ScrollableChart.kt; ScoreChart.kt:44 and FrequencyChart.kt:42 (`class X : ScrollableChart`); res/layout/show_habit_bar.xml and show_habit_history.xml h`
+- **Where the port should do it:** `app/lib/ui/habits/show/cards/bar_card_view.dart:110, history_card_view.dart:92, score_card_view.dart:598, frequency_card_view.dart:356, app/lib/ui/common/dialogs/history_editor_dialog.dart:345 — all use bare `CoreView` (app/lib/ui/core_view.dart, which registers only onTapUp/onLongPressStart). app/lib/ui/common/scrollable_chart.dart exists, is the `
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** blocker
+
+1. `audit3.charts-on-the-habit-detail-screen#1` — In the Kotlin app: On the habit detail screen a horizontal drag or fling on the History (bar), Calendar (history), Score or Frequency chart advances the chart's dataOffset, so the user walks backwards through weeks/months/years of data; the same is true of the calendar inside the history-editor dialog, which is how past days are edited at all. Score/Frequency use ScrollableChart (clamped to maxDataOffset = 12*200), History/Bar use AndroidDataView's Scroller, and both refuse to scroll into the future.
+
+#### audit3.a-habit-already-completed-today-still
+
+- [ ] `audit3.a-habit-already-completed-today-still` — A habit already completed today still gets its reminder — gate 1 of NotificationTray is never reached on the port's alarm path
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt — ShowNotificationTask.doInBackground/onPostExecute (`if (isCompleted && habit.targetType != NumericalHabitType.AT_MOST) return`), reached from uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderReceiver.kt (ACTION_SHOW_REMINDER) via ReminderController`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart — FlutterAlarmScheduler.scheduleShowReminder / _advanceToReminderDay (should apply the completion gate here); re-armed unconditionally from uhabits-flutter/app/lib/state/reminder_permission_gate.dart:154-176 (ReminderPermissionGate.onResume -> scheduler.scheduleAll())`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.a-habit-already-completed-today-still#1` — In the Kotlin app: On Android the alarm only fires a broadcast. At fire time NotificationTray runs four gates before anything is posted; gate 1 computes habit.isCompletedToday() and drops the notification when the habit is done for the day (unless targetType is AT_MOST). Check a habit off in the morning and its evening reminder never appears, no matter how many times the app is opened in between.
+
+#### audit3.recording-a-non-completing-entry-silently
+
+- [ ] `audit3.recording-a-non-completing-entry-silently` — Recording a non-completing entry silently destroys that day's pending reminder
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt — onCommandFinished -> cancel(habit) -> SystemTray.removeNotification (only removes a posted notification; the AlarmManager alarm set by uhabits-android/.../intents/IntentScheduler.kt is untouched), plus ReminderScheduler.onCommandFinished which returns early for Crea`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_notification_tray.dart — FlutterNotificationTray.removeNotification -> LocalNotificationsPresenter.cancel -> FlutterLocalNotificationsPlugin.cancel(id); the id is the same reminderNotificationId the alarm was filed under in app/lib/platform/flutter_alarm_scheduler.dart`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.recording-a-non-completing-entry-silently#1` — In the Kotlin app: Entering a value cancels the notification currently in the shade and nothing else. If the entry does not complete the habit — 'No' on a yes/no habit (isCompletedToday is false for Entry.NO), a numeric value below an AT_LEAST target, or any entry at all on an AT_MOST habit, which rule notifications.show-gating#11 says is never 'completed' — the alarm still fires later that day and the reminder is still shown.
+
+#### audit3.settings-customize-notification-is-permanently-disabled
+
+- [ ] `audit3.settings-customize-notification-is-permanently-disabled` — Settings > "Customize notification" is permanently disabled although the whole Android integration behind it is implemented and tested
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt — `onPreferenceTreeClick`, key "reminderCustomize": `createAndroidNotificationChannel(requireContext())` then `startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS))` with EXTRA_APP_PACKAGE and EXTRA_CHANNEL_ID = "REMINDERS" (ledger rule `notifica`
+- **Where the port should do it:** `app/lib/ui/settings/settings_screen.dart:303-310 renders the row with `note: l10n.activityNotFound, enabled: false` and no onTap. The working implementation sits unused in app/lib/platform/flutter_notification_tray.dart:960-1003 (`PlatformNotificationChannelSettings.openReminderChannelSettings`, plus `LocalNotificationsChannelCreator`) with its nat`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.settings-customize-notification-is-permanently-disabled#1` — In the Kotlin app: Tapping the row creates the REMINDERS channel and opens the system's per-channel notification settings, where the user changes the reminder sound, vibration and importance.
+
+#### audit3.the-android-system-back-button-does
+
+- [ ] `audit3.the-android-system-back-button-does` — The Android system Back button does not cancel habit-list selection mode; it closes the app instead
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsSelectionMenu.kt — `onDestroyActionMode(mode)` -> `listController.value.onSelectionFinished()`; the contextual ActionMode is destroyed by the system Back key (ledger rule `list-habits.selection-mode#6`, "e.g. system back")`
+- **Where the port should do it:** `app/lib/ui/habits/list/habit_list_screen.dart (the Scaffold that swaps in `ListHabitsSelectionMenu` when `!model.isSelectionEmpty`) — there is no PopScope/WillPopScope anywhere in app/lib, and app/lib/main.dart mounts HabitListScreen as `MaterialApp.home`, i.e. the root route.`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.the-android-system-back-button-does#1` — In the Kotlin app: With one or more habits selected, pressing Back destroys the contextual action bar, which clears the selection, returns the controller to NormalMode and restores the normal toolbar. The user stays in the app.
+
+#### audit3.customize-notifications-settings-row-is-hard
+
+- [ ] `audit3.customize-notifications-settings-row-is-hard` — "Customize notifications" settings row is hard-disabled although the whole implementation behind it ships and is tested
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt — onPreferenceTreeClick, case "reminderCustomize" (calls createAndroidNotificationChannel(context) then startActivity(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS with EXTRA_APP_PACKAGE / EXTRA_CHANNEL_ID="REMINDERS"))`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/settings/settings_screen.dart:304-310 (SettingsRow preferenceKey 'reminderCustomize', enabled: false)`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.customize-notifications-settings-row-is-hard#1` — In the Kotlin app: Tapping the row in the Reminder category creates the REMINDERS channel and opens Android's per-channel notification settings, where the user changes the reminder sound, vibration and importance. This is notifications.channel#3, a rule in the closed feature `notifications.channel`.
+
+#### audit3.toggling-use-pure-black-background-in
+
+- [ ] `audit3.toggling-use-pure-black-background-in` — Toggling "Use pure black background" in Settings never repaints the app
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt — onCreate captures `pureBlack = prefs.isPureBlackEnabled`, onResume calls restartWithFade(ListHabitsActivity::class.java) when prefs.theme == THEME_DARK and the flag changed (settings.theme.pure-black#6)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/state/settings_model.dart:236-239 (SettingsModel.isPureBlackEnabled setter) and uhabits-flutter/app/lib/state/theme_model.dart (ThemeModel, the object that actually paints the app)`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.toggling-use-pure-black-background-in#1` — In the Kotlin app: With the theme set to Dark, flipping the switch restarts the list activity with a fade and the whole app — list, detail screen, editor, toolbars — comes back painted in PureBlackTheme.
+
+#### audit3.an-unusable-database-file-is-no
+
+- [ ] `audit3.an-unusable-database-file-is-no` — An unusable database file is no longer renamed to .invalid — startup throws before runApp instead of recovering
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt — onCreate's try/catch(UnsupportedDatabaseVersionException) around DatabaseUtils.initializeDatabase, plus HabitsDatabaseOpener.onUpgrade (throws when db.version < 8) and onDowngrade (always throws)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/app_database.dart:33-50 (AppDatabase.openAndMigrate) and uhabits-flutter/app/lib/state/app_scope.dart (AppScope.boot, no try/catch) / app/lib/main.dart:29-31`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.an-unusable-database-file-is-no#1` — In the Kotlin app: A database file the app cannot use — user_version below 8, or newer than the app's 25 — makes the opener throw; HabitsApplication catches it, renames the file to `<absolutePath>.invalid`, and re-initialises, so the user gets a fresh empty app instead of a permanent crash loop. This is platform-glue.app-startup-order#3 and persistence.android-opener#5/#7.
+
+#### audit3.ios-ships-only-three-of-the
+
+- [ ] `audit3.ios-ships-only-three-of-the` — iOS ships only three of the six widget types; Streaks, Frequency and Target are missing and undocumented
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/res/xml/widget_streak_info.xml, widget_frequency_info.xml, widget_target_info.xml (and their three <receiver> declarations in uhabits-android/src/main/AndroidManifest.xml)`
+- **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/HabitsWidgetBundle.swift — the WidgetBundle body lists only CheckmarkWidget(), HistoryWidget(), ScoreWidget(); there is no StreakWidget.swift, FrequencyWidget.swift or TargetWidget.swift in app/ios/HabitsWidget/`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** major
+
+1. `audit3.ios-ships-only-three-of-the#1` — In the Kotlin app: Six widget providers are registered and user-installable, each with its own preview image and its own configure activity (BooleanHabitPickerDialog for Streaks, NumericalHabitPickerDialog for Target). A user can place a Streaks, Frequency or Target widget on the home screen.
+
+#### audit3.toggling-make-notifications-sticky-does-not
+
+- [ ] `audit3.toggling-make-notifications-sticky-does-not` — Toggling 'Make notifications sticky' does not affect reminders that are already scheduled
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt — buildNotification's setOngoing(preferences.shouldMakeNotificationsSticky()), evaluated at fire time`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_notification_tray.dart — ReminderNotificationBuilder.build sets NotificationSpec.ongoing from _preferences.shouldMakeNotificationsSticky(), and app/lib/platform/flutter_alarm_scheduler.dart calls it at schedule time`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** minor
+
+1. `audit3.toggling-make-notifications-sticky-does-not#1` — In the Kotlin app: The ongoing flag is read when the notification is built, which is when the alarm fires. Flipping the setting in Settings applies to the very next reminder.
+
+#### audit3.toggling-a-check-mark-on-the
+
+- [ ] `audit3.toggling-a-check-mark-on-the` — Toggling a check-mark on the habit list produces no haptic feedback
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/CheckmarkButtonView.kt — `performToggle()` calls `performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)` after `onToggle(value, notes)` (ledger rules `list-habits.checkmark-button#4`, `list-habits.checkmark-button-rendering#11`)`
+- **Where the port should do it:** `app/lib/ui/habits/list/entry_panel.dart:256-271 (`void toggle()`) — computes the next value, records it optimistically and calls `onToggle`, with no HapticFeedback call; the host app/lib/ui/core_view.dart uses a plain GestureDetector, which emits no platform feedback.`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** minor
+
+1. `audit3.toggling-a-check-mark-on-the#1` — In the Kotlin app: Every completed toggle of a boolean check-mark buzzes with the LONG_PRESS haptic constant, which is the app's confirmation that a press landed on the right cell.
+
+#### audit3.the-calendar-card-on-the-habit
+
+- [ ] `audit3.the-calendar-card-on-the-habit` — The Calendar card on the habit detail screen is editable in the port; upstream it is read-only
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/HistoryCardView.kt — `setState` builds `HistoryChart(...)` without an `onDateClickedListener`, so it keeps the no-op default declared at uhabits-core/.../ui/views/HistoryChart.kt:49; `setListener(presenter)` wires only the Edit button. ShowHabitView.setListener passes the`
+- **Where the port should do it:** `app/lib/ui/habits/show/show_habit_screen.dart (the `ShowHabitCard.history` branch) passes `listener: model.presenter.historyCardPresenter`, and app/lib/ui/habits/show/cards/history_card_view.dart:78 assigns it to `chart.onDateClickedListener`.`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** minor
+
+1. `audit3.the-calendar-card-on-the-habit#1` — In the Kotlin app: Tapping or long-pressing a day square in the Calendar card does nothing at all. The only way to change past entries from this screen is the "Edit" button, which opens the history-editor dialog, and only that dialog's chart gets the presenter as its listener (ShowHabitActivity.Screen.showHistoryEditorDialog).
+
+#### audit3.flipping-reverse-order-of-days-leaves
+
+- [ ] `audit3.flipping-reverse-order-of-days-leaves` — Flipping "Reverse order of days" leaves the date header out of step with the buttons it labels
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HeaderView.kt:43-80 — HeaderView implements Preferences.Listener, registers in onAttachedToWindow, and onCheckmarkSequenceChanged() calls updateScrollDirection() + postInvalidate()`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_header.dart (ListHeader takes isCheckmarkSequenceReversed as a constructor argument and registers no listener); fed from app/lib/ui/habits/list/habit_list_screen.dart:588`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** minor
+
+1. `audit3.flipping-reverse-order-of-days-leaves#1` — In the Kotlin app: Both halves of the row react to the same notification: ButtonPanelView re-inflates its buttons and HeaderView recomputes its scroll direction and repaints, so labels and buttons always agree.
+
+#### audit3.streak-chart-date-labels-are-hard
+
+- [ ] `audit3.streak-chart-date-labels-are-hard` — Streak-chart date labels are hard-coded to the US medium-date shape in every locale — JavaLocalDateFormatter.longFormat has no counterpart and the dateLabel seam is never supplied
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt:86 — JavaLocalDateFormatter.longFormat(date), consumed by uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/StreakChart.kt:180-181 and :239-240`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/time/local_date.dart:247-253 (abstract LocalDateFormatter — five methods, no longFormat); uhabits-flutter/app/lib/ui/habits/show/cards/streak_card_view.dart:87-91 (_label / the unsupplied dateLabel callback); never passed at uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart:652; the same def`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** minor
+
+1. `audit3.streak-chart-date-labels-are-hard#1` — In the Kotlin app: StreakChart flanks each bar with df.longFormat(streak.start) and df.longFormat(streak.end), where longFormat is DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault()) with the formatter's timezone forced to UTC. The label therefore follows the device locale's medium date pattern. I confirmed the concrete outputs for 2015-01-25 on a JDK: en "Jan 25, 2015", de "25.01.2015", fr "25 janv. 2015", ru "25 янв. 2015 г.", hu "2015. jan. 25.", ja "2015/01/25", ko "2015. 1. 25.", zh "2015年1月25日", vi "25 thg 1, 2015". The same measured width drives #7/#12 (bar width and whether labels are shown at all).
+
+#### audit3.home-screen-widget-names-in-the
+
+- [ ] `audit3.home-screen-widget-names-in-the` — Home-screen widget names in the launcher's widget gallery are hard-coded English, losing 43 translations
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/AndroidManifest.xml (the six <receiver> blocks: android:label="@string/checkmark", "@string/history", "@string/score", "@string/streaks", "@string/frequency", "@string/target") + uhabits-android/src/main/res/values/strings.xml and all 44 values-*/strings.xml, which translate every one of those six names`
+- **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (android:label="Checkmark" / "History" / "Score" / "Streaks" / "Frequency" / "Target" as literals) and uhabits-flutter/app/android/app/src/main/res/values/strings.xml (which mirrors app_name, main_activity_title, habit_not_found and the five *_stack_widget names, but not these six); also `
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** minor
+
+1. `audit3.home-screen-widget-names-in-the#1` — In the Kotlin app: Each widget provider's launcher label is a localized string resource, so on a German device the widget picker lists "Häkchen, Verlauf, Wertung, Serien, Häufigkeit, Ziel"; Russian gets "Галочка, История, Результат, Рекорды, Частота, Цель"; Japanese "チェック, 履歴, スコア, 連続記録, 頻度, 目標". The names change with the Android 13 per-app language setting like every other label.
+
+#### audit3.the-loop-logo-and-the-two
+
+- [ ] `audit3.the-loop-logo-and-the-two` — The Loop logo and the two intro illustrations are hand-drawn approximations; the actual drawables were never shipped
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/drawable/intro_icon_1.png, intro_icon_2.png, intro_icon_4.png — referenced by uhabits-android/src/main/res/layout/about.xml (<ImageView android:src="@drawable/intro_icon_1" 100dp x 100dp) and by the three intro slides`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/intro/intro_screen.dart — _LoopLogoPainter (used by IntroIcon1, which about_screen.dart also renders), _IntroIcon2 and _IntroIcon4; uhabits-flutter/app/pubspec.yaml ships no image assets at all (app/assets contains only three .ttf files)`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** minor
+
+1. `audit3.the-loop-logo-and-the-two#1` — In the Kotlin app: The About screen's first card shows the real Loop app artwork at 100x100, and intro slides 2 and 3 show the shipped illustrations of a habit card and of a score graph.
+
+#### audit3.one-light-themed-frame-on-every
+
+- [ ] `audit3.one-light-themed-frame-on-every` — One light-themed frame on every launch for users whose theme is Dark
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt — onCreate calls component.themeSwitcher.apply() before setContentView`
+- **Where the port should do it:** `uhabits-flutter/app/lib/main.dart:117-124 and 330-334 (_pushSystemBrightness is only run from a post-frame callback)`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** cosmetic
+
+1. `audit3.one-light-themed-frame-on-every#1` — In the Kotlin app: The theme is applied before the first layout, so the window is already dark on the very first frame.
+
+#### audit3.shortmonthname-drops-the-use-the-long
+
+- [ ] `audit3.shortmonthname-drops-the-use-the-long` — shortMonthName drops the "use the long name when it is three characters or shorter" rule, so Simplified-Chinese chart month labels change
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt:55-63 — JavaLocalDateFormatter.shortMonthName`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_header.dart:612-613 (IntlLocalDateFormatter.shortMonthName, the single implementation the whole app uses); and uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/views/WidgetCanvas.kt:130 for the widget charts`
+- **Kotlin tests:** none — write Dart test from rules
+- **Severity:** cosmetic
+
+1. `audit3.shortmonthname-drops-the-use-the-long#1` — In the Kotlin app: shortMonthName reads BOTH cal.getDisplayName(MONTH, LONG, locale) and cal.getDisplayName(MONTH, SHORT, locale) and returns the LONG one when its length is <= 3, otherwise the SHORT one — the code comment says "For some locales, such as Japan, SHORT name is exceedingly short". I ran the branch on a JDK for the locales this app ships: it changes the answer for zh-CN, where LONG is "一月" (2 chars, chosen) and SHORT is "1月". For en/de/fr/ru/th/hu/vi/el the long name is longer than 3 and the short name wins, so nothing changes; ja/ko/zh-TW give the same string either way.
+
+#### verify.integration-harness
+
+- [ ] `verify.integration-harness` — Nothing exercises the app's own wiring
+- **Platform:** ui · **Port risk:** high
+- **Source:** `three audit passes, 48 findings, all of one shape`
+- **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/`
+- **Severity:** blocker
+
+1. `verify.integration-harness#1` — Every widget test in this port builds its subject and passes it the collaborators it needs, so a capability that is never constructed, or constructed without its callback, passes every test and does nothing on a device. Three audits found 48 such defects, including reminders that never fired and a Settings screen whose every row was a dead end.
+2. `verify.integration-harness#2` — The port needs tests that start from the application entry point — `AppScope.boot()` and `UhabitsApp` with nothing supplied — and drive real user journeys through the real widget tree, the way `uhabits-android/src/androidTest/.../acceptance/` does upstream. A journey must fail when a capability is unreachable, not when a class is wrong.
+3. `verify.integration-harness#3` — At minimum the journeys must cover: first run through the intro to an empty list; create a habit and see it listed; tick a checkmark and see the entry persist; open the habit screen and its cards; edit and delete a habit; open settings and change a preference that repaints the app; export data; and receive a reminder response.
