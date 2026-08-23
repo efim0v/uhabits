@@ -13,6 +13,12 @@ rules — not the prose around them — are what the port must reproduce.
 - **A box may only be checked when both are true:**
   1. A Dart test asserts that feature's behavior rules (cite the rule ids, e.g. `expect(..., reason: 'models.score-formula#4')`), and
   2. the feature actually runs on **both iOS and Android** (or, for `android-only` features, the port has an explicit, recorded decision to keep it native-Android-only or to drop it — recorded in the High-risk section below).
+- **Three states, not two.** `- [ ]` is outstanding work, `- [x]` is done, and `- [~]` is
+  **superseded**: the port replaces what the rules describe rather than reproducing it, or the
+  project decided to drop it. Every superseded feature carries a `**Disposition:**` line saying
+  why. Superseded features are excluded from the outstanding counts — counting them as done
+  would overstate the port, and counting them as work would mean the ledger never closes.
+  `dart tool/parity_coverage.dart` reports all three separately.
 - **Rule ids are stable.** Every rule is prefixed `<feature-id>#<n>`. Cite them from Dart tests, commit messages and PR descriptions so coverage can be traced mechanically.
 - **Do not "fix" rules while porting.** Several rules describe upstream bugs or naming inversions (e.g. `models.habit-list-ordering#8`, `settings.preferences.habit-list-orders#4`, `charts-canvas-theming.color-model#7`). They are marked as such; deviating is a product decision, not a porting detail, and must be recorded.
 - **`Kotlin tests: none — write Dart test from rules`** means there is no existing executable spec: the Dart test is the first one, and the rules are the only source of truth.
@@ -1439,7 +1445,8 @@ written from the rules below.
 
 #### persistence.android-opener
 
-- [ ] `persistence.android-opener` — Android database opener, creation, version guard and file bootstrap
+- [~] `persistence.android-opener` — Android database opener, creation, version guard and file bootstrap
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsDatabaseOpener.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/database/UnsupportedDatabaseVersionException.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/database/AndroidDatabaseOpener.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DatabaseUtils.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/Constants.kt`, `uhabits-android/build.gradle.kts`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/database/AndroidDatabaseTest.kt`
@@ -1462,7 +1469,8 @@ written from the rules below.
 
 #### persistence.android-prepared-statement
 
-- [ ] `persistence.android-prepared-statement` — AndroidDatabase PreparedStatement adapter
+- [~] `persistence.android-prepared-statement` — AndroidDatabase PreparedStatement adapter
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/database/AndroidDatabase.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/database/AndroidDatabaseTest.kt`
@@ -1481,7 +1489,8 @@ written from the rules below.
 
 #### persistence.jvm-database
 
-- [ ] `persistence.jvm-database` — JVM/JDBC database adapter and transaction emulation
+- [~] `persistence.jvm-database` — JVM/JDBC database adapter and transaction emulation
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/io/JavaDatabase.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/DatabaseTest.kt`, `uhabits-core/src/jvmTest/java/org/isoron/platform/io/TestDatabaseHelper.kt`
@@ -1499,7 +1508,8 @@ written from the rules below.
 
 #### persistence.js-database
 
-- [ ] `persistence.js-database` — JS/sql.js database adapter
+- [~] `persistence.js-database` — JS/sql.js database adapter
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/jsMain/kotlin/org/isoron/platform/io/JsDatabase.kt`, `uhabits-core/src/jsMain/kotlin/org/isoron/platform/io/JsFiles.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/DatabaseTest.kt`
@@ -1527,7 +1537,8 @@ written from the rules below.
 
 #### persistence.android-backup-agent
 
-- [ ] `persistence.android-backup-agent` — Android system backup agent
+- [~] `persistence.android-backup-agent` — Android system backup agent
+- **Disposition:** superseded — Android-only интеграция, исключённая из паритета решением владельца проекта (см. спек, раздел «Вне области»)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsBackupAgent.kt`, `uhabits-android/src/main/AndroidManifest.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5002,7 +5013,8 @@ written from the rules below.
 
 #### charts-canvas-theming.android-canvas-impl
 
-- [ ] `charts-canvas-theming.android-canvas-impl` — AndroidCanvas backend semantics
+- [~] `charts-canvas-theming.android-canvas-impl` — AndroidCanvas backend semantics
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/platform/gui/AndroidCanvas.kt`, `.../AndroidImage.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/platform/gui/AndroidCanvasTest.kt`
@@ -5024,7 +5036,8 @@ written from the rules below.
 
 #### charts-canvas-theming.jvm-canvas-impl
 
-- [ ] `charts-canvas-theming.jvm-canvas-impl` — JavaCanvas golden renderer
+- [~] `charts-canvas-theming.jvm-canvas-impl` — JavaCanvas golden renderer
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** needs-native-per-platform · **Port risk:** medium
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/gui/JavaCanvas.kt`, `uhabits-core/src/jvmTest/java/org/isoron/platform/io/TestPlatformHelper.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/CanvasTest.kt`, `.../ui/views/BarChartTest.kt`, `.../ui/views/HistoryChartTest.kt`
@@ -5043,7 +5056,8 @@ written from the rules below.
 
 #### charts-canvas-theming.js-canvas-impl
 
-- [ ] `charts-canvas-theming.js-canvas-impl` — JsCanvas backend semantics
+- [~] `charts-canvas-theming.js-canvas-impl` — JsCanvas backend semantics
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** needs-native-per-platform · **Port risk:** low
 - **Source:** `uhabits-core/src/jsMain/kotlin/org/isoron/platform/gui/JsCanvas.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5060,7 +5074,8 @@ written from the rules below.
 
 #### charts-canvas-theming.android-view-host
 
-- [ ] `charts-canvas-theming.android-view-host` — AndroidView chart host
+- [~] `charts-canvas-theming.android-view-host` — AndroidView chart host
+- **Disposition:** superseded — порт реализует этот шов сам, поверх dart:ui и package:sqlite3; правила описывают заменяемый движок, а не пользовательское поведение
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/platform/gui/AndroidView.kt`, `.../AndroidTestView.kt`, `uhabits-android/src/main/res/layout/canvas_test.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5620,7 +5635,8 @@ written from the rules below.
 
 #### platform-glue.tasker-action-constants
 
-- [ ] `platform-glue.tasker-action-constants` — Tasker/Locale plugin action constants and extras contract
+- [~] `platform-glue.tasker-action-constants` — Tasker/Locale plugin action constants and extras contract
+- **Disposition:** superseded — Android-only интеграция, исключённая из паритета решением владельца проекта (см. спек, раздел «Вне области»)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/automation/FireSettingReceiver.kt`, `uhabits-android/src/main/AndroidManifest.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5650,7 +5666,8 @@ written from the rules below.
 
 #### platform-glue.tasker-edit-setting-screen
 
-- [ ] `platform-glue.tasker-edit-setting-screen` — Tasker plugin edit screen (EditSettingActivity / EditSettingRootView)
+- [~] `platform-glue.tasker-edit-setting-screen` — Tasker plugin edit screen (EditSettingActivity / EditSettingRootView)
+- **Disposition:** superseded — Android-only интеграция, исключённая из паритета решением владельца проекта (см. спек, раздел «Вне области»)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/automation/EditSettingActivity.kt`, `.../automation/EditSettingRootView.kt`, `uhabits-android/src/main/res/layout/automation.xml`, `uhabits-android/src/main/res/values/constants.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5669,7 +5686,8 @@ written from the rules below.
 
 #### platform-glue.tasker-edit-setting-result
 
-- [ ] `platform-glue.tasker-edit-setting-result` — Tasker plugin edit result (EditSettingController.onSave)
+- [~] `platform-glue.tasker-edit-setting-result` — Tasker plugin edit result (EditSettingController.onSave)
+- **Disposition:** superseded — Android-only интеграция, исключённая из паритета решением владельца проекта (см. спек, раздел «Вне области»)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/automation/EditSettingController.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5682,7 +5700,8 @@ written from the rules below.
 
 #### platform-glue.tasker-fire-setting
 
-- [ ] `platform-glue.tasker-fire-setting` — Tasker plugin execution (FireSettingReceiver)
+- [~] `platform-glue.tasker-fire-setting` — Tasker plugin execution (FireSettingReceiver)
+- **Disposition:** superseded — Android-only интеграция, исключённая из паритета решением владельца проекта (см. спек, раздел «Вне области»)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/automation/FireSettingReceiver.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/widgets/WidgetBehavior.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/widgets/WidgetBehaviorTest.kt`

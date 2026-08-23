@@ -45,3 +45,4 @@
 | 2026-08-23 | — | `reminders.boot-reschedule`, `reminders.on-show-reminder` | — | — | BLOCKED: нужен нативный BroadcastReceiver и фоновый изолят |
 | 2026-08-23 | — | `io.auto-backup`, `io.public-backup-folder-pref` | — | — | BLOCKED: Storage Access Framework, нет кроссплатформенного аналога |
 | 2026-08-23 | зачистка | закрыты правила, ставшие проверяемыми после появления UI | 28 фич | +298 правил | ✅ |
+| 2026-08-23 | учёт | введён статус `- [~]` superseded с обязательной причиной | 13 фич | — | ✅ 165 сделано / 13 снято / 174 осталось |

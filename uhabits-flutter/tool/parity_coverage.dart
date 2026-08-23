@@ -11,7 +11,7 @@
 //   dart tool/parity_coverage.dart --verify     # exit 1 if a checked feature has uncited rules
 import 'dart:io';
 
-final _featureLine = RegExp(r'^- \[( |x)\] `([a-zA-Z0-9._-]+)`');
+final _featureLine = RegExp(r'^- \[( |x|~)\] `([a-zA-Z0-9._-]+)`');
 final _ruleLine = RegExp(r'^\d+\. `([a-zA-Z0-9._-]+#\d+)`');
 final _citation = RegExp(r'[a-zA-Z0-9._-]+#\d+');
 
@@ -27,6 +27,7 @@ void main(List<String> args) {
 
   final rulesByFeature = <String, List<String>>{};
   final checkedFeatures = <String>{};
+  final supersededFeatures = <String>{};
   String? currentFeature;
 
   for (final line in ledgerFile.readAsLinesSync()) {
@@ -35,6 +36,7 @@ void main(List<String> args) {
       currentFeature = featureMatch.group(2)!;
       rulesByFeature.putIfAbsent(currentFeature, () => <String>[]);
       if (featureMatch.group(1) == 'x') checkedFeatures.add(currentFeature);
+      if (featureMatch.group(1) == '~') supersededFeatures.add(currentFeature);
       continue;
     }
     final ruleMatch = _ruleLine.firstMatch(line);
@@ -59,6 +61,14 @@ void main(List<String> args) {
   final citedRules = cited.intersection(allRules);
   final uncited = allRules.difference(cited);
 
+  // Superseded features are dispositioned, not outstanding: their rules
+  // describe an implementation this port replaces by design, or something the
+  // project decided to drop. They are excluded from the outstanding counts and
+  // reported on their own line.
+  final supersededRules = supersededFeatures
+      .expand((f) => rulesByFeature[f] ?? const <String>[])
+      .toSet();
+
   final brokenPromises = <String, List<String>>{};
   for (final feature in checkedFeatures) {
     final missing =
@@ -67,7 +77,10 @@ void main(List<String> args) {
   }
 
   final featuresFullyCited = rulesByFeature.entries
-      .where((e) => e.value.isNotEmpty && e.value.every(cited.contains))
+      .where((e) =>
+          e.value.isNotEmpty &&
+          e.value.every(cited.contains) &&
+          !supersededFeatures.contains(e.key))
       .length;
 
   stdout.writeln('Parity coverage');
@@ -76,14 +89,19 @@ void main(List<String> args) {
   stdout.writeln('  features fully cited:$featuresFullyCited');
   stdout.writeln('  rules:               ${allRules.length}');
   stdout.writeln('  rules cited by tests:${citedRules.length}');
-  stdout.writeln('  rules uncited:       ${uncited.length}');
+  stdout.writeln('  rules uncited:       ${uncited.difference(supersededRules).length}');
+  stdout.writeln('  superseded features: ${supersededFeatures.length} '
+      '(${supersededRules.length} rules, excluded above)');
+  stdout.writeln('  outstanding features:'
+      '${rulesByFeature.length - checkedFeatures.length - supersededFeatures.length}');
 
   if (args.contains('--fully-cited')) {
     final ready = rulesByFeature.entries
         .where((e) =>
             e.value.isNotEmpty &&
             e.value.every(cited.contains) &&
-            !checkedFeatures.contains(e.key))
+            !checkedFeatures.contains(e.key) &&
+            !supersededFeatures.contains(e.key))
         .map((e) => e.key)
         .toList()
       ..sort();
@@ -95,6 +113,7 @@ void main(List<String> args) {
 
   if (args.contains('--uncited')) {
     for (final entry in rulesByFeature.entries) {
+      if (supersededFeatures.contains(entry.key)) continue;
       final missing = entry.value.where((r) => !cited.contains(r)).toList();
       if (missing.isEmpty) continue;
       stdout.writeln('\n${entry.key} (${missing.length}/${entry.value.length} uncited)');
