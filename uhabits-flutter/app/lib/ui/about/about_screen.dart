@@ -32,6 +32,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../l10n/app_localizations.dart';
 import '../../state/app_scope.dart';
+import '../common/window_insets.dart';
 import '../intro/intro_screen.dart';
 
 /// `Context.startActivitySafely(intent)`: true when something handled the
@@ -452,115 +453,120 @@ class _AboutScreenState extends State<AboutScreen> {
         foregroundColor: Colors.white,
         elevation: 2,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _Card(
-              theme: theme,
-              children: <Widget>[
-                // `android:layout_width="100dp" android:layout_height="100dp"`
-                // — a fixed square, not stretched by the card around it.
-                const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Center(
-                    child: SizedBox(
-                      key: AboutScreen.appIconKey,
-                      width: 100,
-                      height: 100,
-                      child: IntroIcon1(size: 100),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Text(
-                    l10n.appName,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: accent,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  key: AboutScreen.versionKey,
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _onPressDeveloperCountdown,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      l10n.versionN(widget.version),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _toFlutterColor(theme.mediumContrastTextColor),
+      // `applyBottomInset` on the About screen's inner layout
+      // (`platform-glue.window-insets#5`): the last card has to clear the
+      // navigation bar, which the scroll view alone does not do.
+      body: BottomInset(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _Card(
+                theme: theme,
+                children: <Widget>[
+                  // `android:layout_width="100dp" android:layout_height="100dp"`
+                  // — a fixed square, not stretched by the card around it.
+                  const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Center(
+                      child: SizedBox(
+                        key: AboutScreen.appIconKey,
+                        width: 100,
+                        height: 100,
+                        child: IntroIcon1(size: 100),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            _Card(
-              key: AboutScreen.linksCardKey,
-              theme: theme,
-              children: <Widget>[
-                _CardHeader(text: l10n.links, color: accent),
-                _LinkItem(
-                  text: l10n.prefRateThisApp,
-                  theme: theme,
-                  onTap: () => _open(AboutLinks.rateApp),
-                ),
-                _LinkItem(
-                  text: l10n.prefSendFeedback,
-                  theme: theme,
-                  onTap: () => _open(AboutLinks.sendFeedback),
-                ),
-                _LinkItem(
-                  text: l10n.helpTranslate,
-                  theme: theme,
-                  onTap: () => _open(AboutLinks.helpTranslate),
-                ),
-                _LinkItem(
-                  text: l10n.prefViewSourceCode,
-                  theme: theme,
-                  onTap: () => _open(AboutLinks.viewSourceCode),
-                ),
-                _LinkItem(
-                  text: l10n.prefViewPrivacy,
-                  theme: theme,
-                  onTap: () => _open(AboutLinks.privacyPolicy),
-                ),
-              ],
-            ),
-            _Card(
-              key: AboutScreen.developersCardKey,
-              theme: theme,
-              children: <Widget>[
-                _CardHeader(text: l10n.developers, color: accent),
-                for (final developer in AboutScreen.developers)
-                  _Item(text: developer, theme: theme),
-                _LinkItem(
-                  text: l10n.viewAllContributors,
-                  theme: theme,
-                  onTap: () => _open(AboutLinks.codeContributors),
-                ),
-              ],
-            ),
-            _Card(
-              key: AboutScreen.translatorsCardKey,
-              theme: theme,
-              children: <Widget>[
-                _CardHeader(text: l10n.translators, color: accent),
-                for (final group in AboutScreen.translators) ...<Widget>[
-                  _LanguageItem(text: group.language, theme: theme),
-                  for (final name in group.names)
-                    _Item(text: name, theme: theme),
+                  Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Text(
+                      l10n.appName,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    key: AboutScreen.versionKey,
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _onPressDeveloperCountdown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        l10n.versionN(widget.version),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _toFlutterColor(theme.mediumContrastTextColor),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
+              ),
+              _Card(
+                key: AboutScreen.linksCardKey,
+                theme: theme,
+                children: <Widget>[
+                  _CardHeader(text: l10n.links, color: accent),
+                  _LinkItem(
+                    text: l10n.prefRateThisApp,
+                    theme: theme,
+                    onTap: () => _open(AboutLinks.rateApp),
+                  ),
+                  _LinkItem(
+                    text: l10n.prefSendFeedback,
+                    theme: theme,
+                    onTap: () => _open(AboutLinks.sendFeedback),
+                  ),
+                  _LinkItem(
+                    text: l10n.helpTranslate,
+                    theme: theme,
+                    onTap: () => _open(AboutLinks.helpTranslate),
+                  ),
+                  _LinkItem(
+                    text: l10n.prefViewSourceCode,
+                    theme: theme,
+                    onTap: () => _open(AboutLinks.viewSourceCode),
+                  ),
+                  _LinkItem(
+                    text: l10n.prefViewPrivacy,
+                    theme: theme,
+                    onTap: () => _open(AboutLinks.privacyPolicy),
+                  ),
+                ],
+              ),
+              _Card(
+                key: AboutScreen.developersCardKey,
+                theme: theme,
+                children: <Widget>[
+                  _CardHeader(text: l10n.developers, color: accent),
+                  for (final developer in AboutScreen.developers)
+                    _Item(text: developer, theme: theme),
+                  _LinkItem(
+                    text: l10n.viewAllContributors,
+                    theme: theme,
+                    onTap: () => _open(AboutLinks.codeContributors),
+                  ),
+                ],
+              ),
+              _Card(
+                key: AboutScreen.translatorsCardKey,
+                theme: theme,
+                children: <Widget>[
+                  _CardHeader(text: l10n.translators, color: accent),
+                  for (final group in AboutScreen.translators) ...<Widget>[
+                    _LanguageItem(text: group.language, theme: theme),
+                    for (final name in group.names)
+                      _Item(text: name, theme: theme),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );

@@ -43,6 +43,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/edit_habit_model.dart';
 import '../../common/dialogs/color_picker_dialog.dart';
+import '../../common/dialogs/current_dialog.dart';
 import '../../common/dialogs/frequency_picker_dialog.dart';
 import '../../common/dialogs/weekday_picker_dialog.dart';
 import '../../theme/app_theme.dart';
@@ -342,6 +343,16 @@ class _EditHabitView extends StatefulWidget {
 }
 
 class _EditHabitViewState extends State<_EditHabitView> {
+  /// `fun Dialog.dismissCurrentAndShow()` / the `DialogFragment` overload,
+  /// against the process-wide slot of `DialogUtils`
+  /// (`platform-glue.transient-ui-helpers#4`).
+  ///
+  /// Five of the screen's six pickers go through it — colour, boolean
+  /// frequency, target type, reminder time and reminder days — and the sixth
+  /// deliberately does not; see [_onPickNumericalFrequency].
+  Future<T?> _dismissCurrentAndShow<T>(Future<T?> Function() show) =>
+      dismissCurrentAndShow<T>(context, show);
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -698,7 +709,10 @@ class _EditHabitViewState extends State<_EditHabitView> {
   /// (`edit-habit.color-control#1`, `#2`).
   Future<void> _onPickColor() async {
     final model = context.read<EditHabitModel>();
-    final picked = await showColorPickerDialog(context, selected: model.color);
+    // `picker.dismissCurrentAndShow(supportFragmentManager, "colorPicker")`.
+    final picked = await _dismissCurrentAndShow<core.PaletteColor>(
+      () => showColorPickerDialog(context, selected: model.color),
+    );
     if (picked == null) return;
     model.setColor(picked);
   }
@@ -706,9 +720,13 @@ class _EditHabitViewState extends State<_EditHabitView> {
   /// `FrequencyPickerDialog(freqNum, freqDen)`.
   Future<void> _onPickFrequency() async {
     final model = context.read<EditHabitModel>();
-    final picked = await showFrequencyPickerDialog(
-      context,
-      frequency: core.Frequency(model.freqNum, model.freqDen),
+    // `picker.dismissCurrentAndShow(supportFragmentManager,
+    // "frequencyPicker")`.
+    final picked = await _dismissCurrentAndShow<core.Frequency>(
+      () => showFrequencyPickerDialog(
+        context,
+        frequency: core.Frequency(model.freqNum, model.freqDen),
+      ),
     );
     if (picked == null) return;
     model.setFrequency(picked.numerator, picked.denominator);
@@ -716,6 +734,13 @@ class _EditHabitViewState extends State<_EditHabitView> {
 
   /// The three-item `AlertDialog` the numerical frequency control opens
   /// (`edit-habit.numerical-frequency-picker#1`, `#2`).
+  ///
+  /// Deliberately *not* routed through [_dismissCurrentAndShow]: this is the
+  /// one picker on the screen whose last statement is a bare `builder.show()`
+  /// rather than `dialog.dismissCurrentAndShow()`, so it neither closes the
+  /// tracked dialog nor becomes the tracked one
+  /// (`edit-habit.numerical-frequency-picker#5`). Whether that is an oversight
+  /// upstream or not, it is reproduced rather than tidied.
   Future<void> _onPickNumericalFrequency() async {
     final l10n = L10n.of(context);
     final model = context.read<EditHabitModel>();
@@ -737,12 +762,17 @@ class _EditHabitViewState extends State<_EditHabitView> {
   Future<void> _onPickTargetType() async {
     final l10n = L10n.of(context);
     final model = context.read<EditHabitModel>();
-    final picked = await _showListDialog<core.NumericalHabitType>(
-      context,
-      options: <String, core.NumericalHabitType>{
-        l10n.targetTypeAtLeast: core.NumericalHabitType.atLeast,
-        l10n.targetTypeAtMost: core.NumericalHabitType.atMost,
-      },
+    // `val dialog = builder.create(); dialog.dismissCurrentAndShow()` — the
+    // only one of the two list dialogs that goes through the slot
+    // (`edit-habit.target-type-picker#6`).
+    final picked = await _dismissCurrentAndShow<core.NumericalHabitType>(
+      () => _showListDialog<core.NumericalHabitType>(
+        context,
+        options: <String, core.NumericalHabitType>{
+          l10n.targetTypeAtLeast: core.NumericalHabitType.atLeast,
+          l10n.targetTypeAtMost: core.NumericalHabitType.atMost,
+        },
+      ),
     );
     if (picked == null) return;
     model.setTargetType(picked);
@@ -757,24 +787,27 @@ class _EditHabitViewState extends State<_EditHabitView> {
     final model = context.read<EditHabitModel>();
     final theme = coreThemeOf(context);
     final accent = toFlutterColor(theme.colorOf(model.color));
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: EditHabitScreen.initialReminderTime(
-        model.reminderHour,
-        model.reminderMin,
+    // `dialog.dismissCurrentAndShow(supportFragmentManager, "timePicker")`.
+    final picked = await _dismissCurrentAndShow<TimeOfDay>(
+      () => showTimePicker(
+        context: context,
+        initialTime: EditHabitScreen.initialReminderTime(
+          model.reminderHour,
+          model.reminderMin,
+        ),
+        routeSettings: const RouteSettings(
+          name: EditHabitScreen.timePickerTag,
+        ),
+        builder: (context, child) {
+          final base = Theme.of(context);
+          return Theme(
+            data: base.copyWith(
+              colorScheme: base.colorScheme.copyWith(primary: accent),
+            ),
+            child: child!,
+          );
+        },
       ),
-      routeSettings: const RouteSettings(
-        name: EditHabitScreen.timePickerTag,
-      ),
-      builder: (context, child) {
-        final base = Theme.of(context);
-        return Theme(
-          data: base.copyWith(
-            colorScheme: base.colorScheme.copyWith(primary: accent),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked == null) return;
     model.setReminderTime(picked.hour, picked.minute);
@@ -784,9 +817,9 @@ class _EditHabitViewState extends State<_EditHabitView> {
   /// (`edit-habit.reminder-days#1`).
   Future<void> _onPickReminderDays() async {
     final model = context.read<EditHabitModel>();
-    final picked = await showWeekdayPickerDialog(
-      context,
-      selected: model.reminderDays,
+    // `dialog.dismissCurrentAndShow(supportFragmentManager, "dayPicker")`.
+    final picked = await _dismissCurrentAndShow<core.WeekdayList>(
+      () => showWeekdayPickerDialog(context, selected: model.reminderDays),
     );
     if (picked == null) return;
     model.setReminderDays(picked);

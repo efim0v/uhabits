@@ -36,6 +36,7 @@ library;
 // ignore_for_file: implementation_imports
 
 import 'package:uhabits_core/src/ui/views/number_button.dart' as core_views;
+import 'package:uhabits_core/src/ui/views/ring.dart' as core_ring;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../platform/flutter_canvas.dart' show TextOutlineCanvas;
@@ -59,21 +60,22 @@ const double yesAutoStrokeWidth = 5.0;
 /// does not scale with density; a Flutter logical pixel is the unit this
 /// canvas speaks, so the literal is kept as-is
 /// (`charts-canvas-theming.notes-indicator#2`).
-const double notesIndicatorRadius = 8.0;
+const double notesIndicatorRadius = core_ring.notesIndicatorRadius;
 
 /// `View.drawNotesIndicator(pNotesIndicator, canvas, color, size, notes)`.
+///
+/// Upstream this is one `fun View.drawNotesIndicator(...)` extension shared by
+/// both drawers, and it stays one function here: the body lives in the core
+/// package next to the other notes indicator, and this is the keyword-argument
+/// spelling the two call sites below use
+/// (`charts-canvas-theming.notes-indicator#3`).
 void drawNotesIndicator(
   core.Canvas canvas, {
   required core.Color color,
   required double size,
   required String notes,
-}) {
-  // `if (notes.isBlank()) return` — empty or whitespace-only.
-  if (notes.trim().isEmpty) return;
-  canvas.setColor(color);
-  final cy = 0.8 * size;
-  canvas.fillCircle(canvas.getWidth() - cy, cy, notesIndicatorRadius);
-}
+}) =>
+    core_ring.drawNotesIndicator(canvas, color, size, notes);
 
 /// Port of `CheckmarkButtonView.Drawer`.
 class CheckmarkButtonView extends core.View {

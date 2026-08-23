@@ -23,6 +23,7 @@ import 'package:uhabits/l10n/app_localizations_en.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/habit_list_model.dart';
+import 'package:uhabits/ui/common/dialogs/confirm_delete_dialog.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/list/list_habits_command_toasts.dart';
@@ -240,13 +241,17 @@ void main() {
 
       expect(tray.shown.map((n) => n.habit.name).toSet(),
           <String>{'Meditate', 'Run'},
-          reason: 'list-habits.selection-menu-actions#9 — one notification '
-              'per selected habit');
+          reason: 'list-habits.selection-menu-actions#9 and '
+              'notifications.dev-test-action#2 — tapping it calls '
+              'notificationTray.show(h, getToday(), 0) for every selected '
+              'habit');
       for (final shown in tray.shown) {
         expect(shown.date, getToday(),
-            reason: 'list-habits.selection-menu-actions#9');
+            reason: 'list-habits.selection-menu-actions#9 and '
+                'notifications.dev-test-action#2 — date = today');
         expect(shown.reminderTime, 0,
-            reason: 'list-habits.selection-menu-actions#9 — reminder-time 0');
+            reason: 'list-habits.selection-menu-actions#9 and '
+                'notifications.dev-test-action#2 — reminderTime = 0');
       }
       // …and unlike every other item, the selection is left alone.
       expect(model.selected, hasLength(2),
@@ -263,14 +268,94 @@ void main() {
       await selectRow(tester, 'Meditate');
 
       expect(modelOf(tester).scope.preferences.isDeveloper, isFalse,
-          reason: 'list-habits.selection-menu-actions#9 — pref_developer '
-              'defaults to false');
+          reason: 'list-habits.selection-menu-actions#9 and '
+              'notifications.dev-test-action#1 — the visibility of '
+              'action_notify equals preferences.isDeveloper (key '
+              '"pref_developer", default false)');
       expect(barOf(tester).isVisible(ListHabitsSelectionMenuItems.notify),
           isFalse,
-          reason: 'list-habits.selection-menu-actions#9');
+          reason: 'list-habits.selection-menu-actions#9 and '
+              'notifications.dev-test-action#1');
       await openOverflow(tester);
       expect(itemFinder(ListHabitsSelectionMenuItems.notify), findsNothing,
-          reason: 'list-habits.selection-menu-actions#9');
+          reason: 'list-habits.selection-menu-actions#9 and '
+              'notifications.dev-test-action#4 — the same gating hides the '
+              'item completely for non-developer users');
+      await tester.tapAt(const Offset(400, 500));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('#4 delete asks about exactly the habits that are selected',
+        (tester) async {
+      // `confirm-delete.dialog#8`, the other call site: the list passes the
+      // size of the selection, so the same dialog addresses one habit or many.
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      addHabit(scope, 'Run');
+      await pumpScreen(tester, scope);
+
+      await selectRow(tester, 'Meditate');
+      await openOverflow(tester);
+      await tester.tap(itemFinder(ListHabitsSelectionMenuItems.delete));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<ConfirmDeleteDialog>(find.byType(ConfirmDeleteDialog))
+            .quantity,
+        1,
+        reason: 'confirm-delete.dialog#8 — the habit-list selection menu '
+            'passes the number of selected habits',
+      );
+      expect(find.text('Delete habit?'), findsOneWidget,
+          reason: 'confirm-delete.dialog#8');
+      await tester.tap(find.byKey(const ValueKey<String>('confirm_delete_no')));
+      await tester.pumpAndSettle();
+
+      // …and with both rows selected it is the plural, from the same argument.
+      await selectRow(tester, 'Run');
+      expect(modelOf(tester).selected, hasLength(2),
+          reason: 'confirm-delete.dialog#8');
+      await openOverflow(tester);
+      await tester.tap(itemFinder(ListHabitsSelectionMenuItems.delete));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<ConfirmDeleteDialog>(find.byType(ConfirmDeleteDialog))
+            .quantity,
+        2,
+        reason: 'confirm-delete.dialog#8 — the number of selected habits, not '
+            'a constant',
+      );
+      expect(find.text('Delete habits?'), findsOneWidget,
+          reason: 'confirm-delete.dialog#8');
+      await tester.tap(find.byKey(const ValueKey<String>('confirm_delete_no')));
+      await tester.pumpAndSettle();
+      expect(scope.habitList.size(), 2,
+          reason: 'confirm-delete.dialog#8 — and "No" left both alone');
+    });
+
+    testWidgets('#9 turning developer mode on brings the notify item back',
+        (tester) async {
+      // The other half of `notifications.dev-test-action#1` and `#4`: the item
+      // is not merely absent by default, its presence *is* the preference.
+      final storage = MemoryStorage()..putBoolean('pref_developer', true);
+      final scope = openScope(preferencesStorage: storage);
+      addHabit(scope, 'Meditate');
+      await pumpScreen(tester, scope);
+      await selectRow(tester, 'Meditate');
+
+      expect(modelOf(tester).scope.preferences.isDeveloper, isTrue,
+          reason: 'notifications.dev-test-action#1 — the menu item '
+              'R.id.action_notify has visibility == preferences.isDeveloper');
+      expect(barOf(tester).isVisible(ListHabitsSelectionMenuItems.notify),
+          isTrue,
+          reason: 'notifications.dev-test-action#1');
+      await openOverflow(tester);
+      expect(itemFinder(ListHabitsSelectionMenuItems.notify), findsOneWidget,
+          reason: 'notifications.dev-test-action#4 — the gating is the only '
+              'thing that hides it');
       await tester.tapAt(const Offset(400, 500));
       await tester.pumpAndSettle();
     });

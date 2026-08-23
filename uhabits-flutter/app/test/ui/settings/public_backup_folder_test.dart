@@ -14,6 +14,15 @@
 /// and `takePersistableUriPermission` on the way back. Neither has a Flutter
 /// API, the `publicBackupFolder` row is rendered disabled for exactly that
 /// reason, and they are deliberately left uncited rather than approximated.
+///
+/// The last group is the same summary arithmetic seen from the other feature
+/// that owns it, `io.public-backup-folder-pref`: its `#4` is
+/// `settings.screen.database-category#9` restated, so it is pinned against the
+/// same [fullPathFor] and asserted separately rather than by aliasing one rule
+/// id onto the other. That feature's `#2`, `#3` and `#6` are the Storage Access
+/// Framework again — the picker intent, the persistable permission, and the
+/// preference key that neither the export task nor `AutoBackup` can consult
+/// while nothing is able to write it — and stay uncited alongside `#7`/`#8`.
 library;
 
 // ignore_for_file: implementation_imports
@@ -246,6 +255,75 @@ void main() {
       );
       expect(File('$dir/${names[6]}').existsSync(), isTrue,
           reason: '$rule The newest is never touched.');
+    });
+  });
+
+  group('io.public-backup-folder-pref', () {
+    test('#4 the summary the preference row shows once a folder is picked',
+        () {
+      const String rule =
+          'io.public-backup-folder-pref#4 — The summary is then recomputed: '
+          "for a 'content' URI the tree document id is split on ':' into type "
+          "and relative path; type 'primary' (case-insensitive) maps to "
+          'Environment.getExternalStorageDirectory().absolutePath, any other '
+          "type maps to '/storage/<type>'; the summary is that base, plus "
+          "'/<rel>' when rel is non-empty. For a 'file' URI the summary is the "
+          'absolute file path. For anything else the raw URI string is shown.';
+
+      // `primary` -> Environment.getExternalStorageDirectory().absolutePath.
+      expect(
+        fullPathFor(Uri.parse(
+            'content://com.android.externalstorage.documents/tree/primary%3ABackups')),
+        '$primaryExternalStorageDir/Backups',
+        reason: rule,
+      );
+      // equalsIgnoreCase, so the volume spelled in capitals is the same one.
+      expect(
+        fullPathFor(Uri.parse(
+            'content://com.android.externalstorage.documents/tree/Primary%3ABackups')),
+        '$primaryExternalStorageDir/Backups',
+        reason: rule,
+      );
+      // Any other type -> /storage/<type>.
+      expect(
+        fullPathFor(Uri.parse(
+            'content://com.android.externalstorage.documents/tree/ABCD-1234%3ALoop%2FBackups')),
+        '/storage/ABCD-1234/Loop/Backups',
+        reason: rule,
+      );
+      // An empty relative path leaves the base alone — no trailing slash.
+      expect(
+        fullPathFor(Uri.parse(
+            'content://com.android.externalstorage.documents/tree/ABCD-1234%3A')),
+        '/storage/ABCD-1234',
+        reason: '$rule rel is empty, so nothing is appended.',
+      );
+      // A "file" URI is its own absolute path.
+      expect(
+        fullPathFor(Uri.parse('file:///storage/emulated/0/Loop')),
+        '/storage/emulated/0/Loop',
+        reason: rule,
+      );
+
+      // "For anything else the raw URI string is shown" is the caller's half:
+      // fullPathFor answers null and the row falls back to what was stored.
+      expect(fullPathFor(Uri.parse('https://example.org/backups')), isNull,
+          reason: rule);
+
+      final built = buildModel();
+      built.storage.putString('publicBackupFolder',
+          'content://com.android.externalstorage.documents/tree/primary%3ABackups');
+      expect(
+        built.model.publicBackupFolderSummary,
+        '$primaryExternalStorageDir/Backups',
+        reason: '$rule The row shows the derived path…',
+      );
+      built.storage.putString('publicBackupFolder', 'https://example.org/x');
+      expect(
+        built.model.publicBackupFolderSummary,
+        'https://example.org/x',
+        reason: '$rule …and the raw string when it cannot derive one.',
+      );
     });
   });
 }

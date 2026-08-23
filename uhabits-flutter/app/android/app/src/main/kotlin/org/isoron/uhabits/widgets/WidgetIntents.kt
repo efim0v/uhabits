@@ -64,9 +64,11 @@ import org.isoron.uhabits.MainActivity
  *
  * A boolean Checkmark tap now brings the app to the foreground, where upstream
  * toggled in place. That is the one visible regression, and it is not a small
- * one: the widget's whole point is toggling without opening anything.
- * `widgets.checkmark#6` is therefore reported as unmet. Everything else lands on
- * the upstream behaviour or better: numerical Checkmark taps already opened the
+ * one: the widget's whole point is toggling without opening anything. The rest
+ * of `widgets.checkmark#6` survives intact — the toggle action, the habit the
+ * link addresses and the absent day that makes it target today — because the
+ * link is handed straight to the ported `WidgetReceiver`. Everything else lands
+ * on the upstream behaviour or better: numerical Checkmark taps already opened the
  * app upstream (`widgets.checkmark#7`), and the five graph widgets already
  * opened `ShowHabitActivity` (`widgets.frequency#6`, `widgets.history#5`,
  * `widgets.score#7`, `widgets.streak#6`, `widgets.target#9`).

@@ -185,6 +185,10 @@ class AppScope {
         habitList: habitList,
         registry: WidgetRegistry(preferencesStorage),
         platform: HomeWidgetPlugin(),
+        // `settings.preferences.widget-opacity#4`: the settings row writes
+        // `pref_widget_opacity` and asks for a republish; this is the half
+        // that carries the new value to the launcher's process.
+        preferences: preferences,
       ),
       commandRunner: commandRunner,
       taskRunner: taskRunner,

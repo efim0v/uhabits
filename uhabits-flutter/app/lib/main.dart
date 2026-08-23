@@ -10,10 +10,14 @@ import 'platform/crash_handler.dart';
 import 'platform/flutter_files.dart';
 import 'platform/locale_first_weekday.dart';
 import 'state/app_scope.dart';
+import 'state/intent_router.dart';
 import 'state/reminder_permission_gate.dart';
 import 'state/theme_model.dart';
 import 'state/widget_link.dart';
+import 'state/widget_sync.dart';
+import 'ui/common/window_insets.dart';
 import 'ui/habits/list/habit_list_screen.dart';
+import 'ui/habits/show/show_habit_screen.dart';
 import 'ui/theme/app_theme.dart';
 
 /// Port of `HabitsApplication.onCreate` plus `ListHabitsActivity`'s
@@ -98,34 +102,61 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
       hooks: FlutterCrashHandlerHooks(),
     )..install();
     WidgetsBinding.instance.addObserver(this);
+    // Built before the first frame, so that the habit list can register with it
+    // as it mounts; only the plugin subscription waits for the frame.
+    _widgetLinks = _buildWidgetLinks();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pushSystemBrightness();
       unawaited(_onResume());
-      _startWidgetLinks();
+      unawaited(_widgetLinks?.start());
     });
   }
 
-  /// Subscribes to `uhabits://widget/...`, which is how a freshly placed
-  /// home-screen widget asks for the habit picker (`widgets.config-picker#1`).
+  /// Builds the receiver for `uhabits://widget/...`, the four deep links
+  /// `android/.../widgets/WidgetIntents.kt` sends.
   ///
-  /// Without it a placed widget can never be configured: the native
+  /// Without it a placed widget can never be configured — the native
   /// `HabitPickerDialog` captures the widget id and reports the outcome, but
-  /// the habit catalogue it would list only exists on this side.
-  void _startWidgetLinks() {
-    if (!mounted || _widgetLinks != null) return;
+  /// the habit catalogue it would list only exists on this side — and a tap on
+  /// a configured one opens the app on the list instead of acting.
+  WidgetLinkRouter? _buildWidgetLinks() {
     final scope = context.read<AppScope>();
     // Null on a host with no widget support, and in every widget test, because
-    // `startPlatformServices` is what builds it.
+    // `startPlatformServices` is what builds them.
     final sync = scope.widgetSync;
-    if (sync == null) return;
-    _widgetLinks = WidgetLinkRouter(
+    final tray = scope.notificationTray;
+    if (sync == null) return null;
+    return WidgetLinkRouter(
       habitList: scope.habitList,
       registry: sync.bridge.registry,
       publish: sync.updateWidgets,
       navigator: _navigatorKey,
       launches: const HomeWidgetLaunches(),
+      // `WidgetComponent`, which `WidgetReceiver.onReceive` creates per
+      // broadcast: the parser, the behavior, the preferences and the updater.
+      receiver: tray == null
+          ? null
+          : WidgetIntentReceiver(
+              parser: IntentParser(scope.habitList),
+              controller: WidgetBehavior(
+                habitList: scope.habitList,
+                commandRunner: scope.commandRunner,
+                notificationTray: tray,
+                preferences: scope.preferences,
+              ),
+              preferences: scope.preferences,
+              updateWidgets: sync.updateWidgets,
+              scheduleStartDayWidgetUpdate: sync.scheduleStartDayWidgetUpdate,
+              logging: scope.logging,
+            ),
+      // `IntentFactory.startShowHabitActivity`, pushed onto the list route the
+      // way `TaskStackBuilder` put `ListHabitsActivity` under it.
+      showHabit: (habit) {
+        final navigatorContext = _navigatorKey.currentContext;
+        if (navigatorContext == null) return;
+        unawaited(ShowHabitScreen.open(navigatorContext, habit));
+      },
     );
-    unawaited(_widgetLinks!.start());
   }
 
   @override
@@ -221,9 +252,15 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
       // `GregorianCalendar(Locale.getDefault()).firstDayOfWeek`. It has to be
       // installed below the localizations delegates, which is what
       // `MaterialApp.builder` is.
-      builder: (context, child) =>
-          FirstWeekdayFromLocale(child: child ?? const SizedBox.shrink()),
-      home: const HabitListScreen(),
+      //
+      // `rootView.applyRootViewInsets()`, which upstream every full-window
+      // activity calls on its own root, lives here for the same reason: this
+      // is the one root a Flutter app has (`platform-glue.window-insets#1`,
+      // `#5`).
+      builder: (context, child) => RootViewInsets(
+        child: FirstWeekdayFromLocale(child: child ?? const SizedBox.shrink()),
+      ),
+      home: HabitListScreen(widgetLinks: _widgetLinks),
     );
   }
 }

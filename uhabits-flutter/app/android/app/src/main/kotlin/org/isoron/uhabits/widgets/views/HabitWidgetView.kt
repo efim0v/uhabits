@@ -38,16 +38,23 @@ import kotlin.math.max
  * `widgets.card-chrome#1`: a FrameLayout that inflates its inner layout and
  * looks up `id=frame` to hold the card background.
  *
- * ## The one thing that is missing
+ * ## Where the alpha comes from, and what it touches
  *
  * `settings.preferences.widget-opacity` — the `pref_widget_opacity` list
- * preference — has no Flutter settings row and is not in the published document,
- * so [setBackgroundAlpha] is only ever called with 255. Every consequence of a
- * lower alpha is therefore unreachable: `widgets.card-chrome#6`'s "shadow only
- * when fully opaque" is always true, and
- * `settings.preferences.widget-opacity#6`..`#8` describe a state this build
- * cannot enter. The plumbing is kept intact so that adding the preference to the
- * document is the only change needed.
+ * preference — is written by the Flutter settings row and travels to this
+ * process inside the published document, so [setBackgroundAlpha] is called with
+ * whatever the user picked (`BaseWidget.preferedBackgroundAlpha`).
+ *
+ * `settings.preferences.widget-opacity#6`: the value reaches exactly one place,
+ * `backgroundPaint.alpha` in [rebuildBackground]. The card goes translucent; the
+ * text, the rings and the charts drawn on top of it do not, because they are
+ * painted by the subclass's own views with their own paints.
+ *
+ * `settings.preferences.widget-opacity#8` / `widgets.card-chrome#6`: the drop
+ * shadow is opt-in per widget and only at full opacity — the five graph widgets
+ * call `setShadowAlpha(0x4f)` when `preferedBackgroundAlpha >= 255` and leave
+ * [shadowAlpha] at the theme's 0 otherwise, so a translucent card has no shadow
+ * behind it to show through.
  */
 abstract class HabitWidgetView(context: Context) : FrameLayout(context) {
 

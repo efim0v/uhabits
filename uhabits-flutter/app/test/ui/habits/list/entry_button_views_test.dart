@@ -28,6 +28,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/flutter_canvas.dart' show TextOutlineCanvas;
 import 'package:uhabits/ui/habits/list/entry_button_views.dart';
 import 'package:uhabits_core/src/ui/views/number_button.dart' as core_views;
+import 'package:uhabits_core/src/ui/views/ring.dart' as core_ring;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 void main() {
@@ -489,6 +490,52 @@ void main() {
       expect(view.units, 'km', reason: 'list-habits.number-button#12');
       expect(view.threshold, 100.0, reason: 'list-habits.number-button#12');
       expect(view.color, habitColor, reason: 'list-habits.number-button#12');
+    });
+  });
+
+  group('charts-canvas-theming.notes-indicator', () {
+    test('#3 one helper, two call sites, each passing its own cached em', () {
+      const rule = 'charts-canvas-theming.notes-indicator#3';
+
+      // `fun View.drawNotesIndicator(...)` is a single extension in
+      // ViewExtensions.kt, and the port keeps it a single function: the one in
+      // the core package, next to HistoryChart's unrelated dot. The wrapper
+      // exported here only supplies the keyword-argument spelling.
+      final direct = _RecordingCanvas(width: 48, height: 48);
+      drawNotesIndicator(direct, color: habitColor, size: 10.0, notes: 'x');
+      final shared = _RecordingCanvas(width: 48, height: 48);
+      core_ring.drawNotesIndicator(shared, habitColor, 10.0, 'x');
+      expect(direct.ops.map((op) => op.toString()).toList(),
+          shared.ops.map((op) => op.toString()).toList(),
+          reason: '$rule — the same helper, not a second copy of it');
+      expect(notesIndicatorRadius, core_ring.notesIndicatorRadius,
+          reason: '$rule — including the radius constant');
+
+      // `size = em` at both call sites, where `em` is the value each drawer
+      // cached under *its own* paint: 14sp for the checkmark glyph, 14sp for
+      // the number — but 12sp once the checkmark falls back to a question
+      // mark, which is why the two dots do not line up.
+      final checkDot = draw(checkmark(core.Entry.yesManual, notes: 'x'))
+          .opsNamed('fillCircle')
+          .single;
+      expect(checkDot.args[1], closeTo(0.8 * _em(smallTextSize), 1e-9),
+          reason: '$rule — CheckmarkButtonView passes its cached em');
+
+      final numberDot = draw(number(value: 150.0, units: 'km', notes: 'x'))
+          .opsNamed('fillCircle')
+          .single;
+      expect(numberDot.args[1], closeTo(0.8 * _em(smallTextSize), 1e-9),
+          reason: '$rule — NumberButtonView passes its own');
+
+      final questionDot = draw(
+        checkmark(core.Entry.unknown,
+            notes: 'x', areQuestionMarksEnabled: true),
+      ).opsNamed('fillCircle').single;
+      expect(questionDot.args[1], closeTo(0.8 * _em(smallerTextSize), 1e-9),
+          reason: '$rule — "the respective view\'s cached em": the question '
+              'mark is measured at 12sp, so its dot sits higher');
+      expect(questionDot.args[2], checkDot.args[2],
+          reason: '$rule — while the radius, being a bare 8f, does not move');
     });
   });
 }

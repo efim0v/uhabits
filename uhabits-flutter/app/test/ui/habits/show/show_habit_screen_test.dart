@@ -1654,11 +1654,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(NumberDialog), findsNothing,
-          reason: 'show-habit.delete#4 — the tracked dialog is dismissed '
-              'first');
+          reason: 'show-habit.delete#4 and confirm-delete.dialog#7 — it is '
+              'shown with dismissCurrentAndShow(), so it closes any other '
+              'tracked dialog first');
       expect(find.byType(ConfirmDeleteDialog), findsOneWidget,
-          reason: 'show-habit.delete#4 — and the confirmation takes its '
-              'place');
+          reason: 'show-habit.delete#4 and confirm-delete.dialog#7 — and the '
+              'confirmation takes its place');
+      expect(
+        tester
+            .widget<ConfirmDeleteDialog>(find.byType(ConfirmDeleteDialog))
+            .quantity,
+        1,
+        reason: 'confirm-delete.dialog#8 — ShowHabitActivity always passes '
+            'quantity = 1',
+      );
+      expect(find.text('Delete habit?'), findsOneWidget,
+          reason: 'confirm-delete.dialog#8 — so the detail screen always asks '
+              'about one habit, whatever the list has selected');
 
       // And "No" still leaves the habit alone.
       await tester.tap(find.byKey(const ValueKey<String>('confirm_delete_no')));

@@ -22,6 +22,7 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/score_card.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../../l10n/app_localizations.dart';
+import '../../../../platform/flutter_canvas.dart' show TransparencyCanvas;
 import '../../../core_view.dart';
 import '../../list/list_header.dart' show IntlLocalDateFormatter;
 
@@ -242,10 +243,12 @@ List<String> bucketLabelsWithoutDay(L10n l10n) => <String>[
 ///  * `canvas.drawOval` of a square rect becomes [core.Canvas.fillCircle] of
 ///    the inscribed circle, which is the same shape;
 ///  * the transparency path (an offscreen ARGB_8888 bitmap so that the marker
-///    hole can be punched with `PorterDuff.CLEAR`) is dropped — it exists for
-///    the home-screen widgets, which Flutter does not have. The hole is always
-///    overpainted with `cardBackgroundColor`, exactly as the non-transparent
-///    branch does.
+///    hole can be punched with `PorterDuff.CLEAR`) becomes a `saveLayer` on the
+///    Flutter canvas, reached through the [TransparencyCanvas] capability. It is
+///    off by default — the show-habit card draws over an opaque `cardBgColor`
+///    and wants the hole *overpainted* — and a canvas that cannot offer the
+///    capability falls back to the same opaque path
+///    (`charts-canvas-theming.score-chart#16`).
 ///
 /// Everything else — the integer truncations, the shared `maxDayWidth` /
 /// `maxMonthWidth` getters that both measure month names, the marker drawn one
@@ -258,6 +261,7 @@ class ScoreChartView extends core.View {
     required this.dateFormatter,
     required this.bucketSize,
     this.dataOffset = 0,
+    this.isTransparencyEnabled = false,
   });
 
   /// Newest bucket first, as [ScoreCardState.scores] delivers it.
@@ -281,6 +285,21 @@ class ScoreChartView extends core.View {
   /// up yet (`show-habit.chart-scrolling`), so the host always passes 0.
   final int dataOffset;
 
+  /// `setIsTransparencyEnabled(enabled)`.
+  ///
+  /// False on the show-habit card, which sits on an opaque card; true is the
+  /// widget case, where the marker has to punch a real hole so the wallpaper
+  /// shows through it (`charts-canvas-theming.score-chart#16`).
+  final bool isTransparencyEnabled;
+
+  /// Whether [draw] will really take the transparent path on [canvas].
+  ///
+  /// `isTransparencyEnabled` alone is not enough: the offscreen layer and the
+  /// two blend modes are a capability of the backend, and a canvas without it
+  /// draws the opaque marker rather than a wrong one.
+  bool usesTransparencyOn(core.Canvas canvas) =>
+      isTransparencyEnabled && canvas is TransparencyCanvas;
+
   @override
   void draw(core.Canvas canvas) {
     // `if (scores == null) return` — the first statement of onDraw, and the
@@ -288,6 +307,23 @@ class ScoreChartView extends core.View {
     // (`charts-canvas-theming.score-chart#6`).
     final scores = this.scores;
     if (scores == null) return;
+    // `if (isTransparencyEnabled) { if (internalDrawingCache == null)
+    // reallocateCache(); activeCanvas = cacheCanvas;
+    // internalDrawingCache!!.eraseColor(Color.TRANSPARENT) }`: everything below
+    // is drawn onto a transparent buffer of the view's size, which is then
+    // blitted onto the real canvas (`charts-canvas-theming.score-chart#16`).
+    final transparent = usesTransparencyOn(canvas);
+    if (transparent) (canvas as TransparencyCanvas).beginTransparencyLayer();
+    _drawChart(canvas, scores, transparent: transparent);
+    // `if (activeCanvas !== canvas) canvas.drawBitmap(internalDrawingCache, …)`.
+    if (transparent) (canvas as TransparencyCanvas).endTransparencyLayer();
+  }
+
+  void _drawChart(
+    core.Canvas canvas,
+    List<core.Score> scores, {
+    required bool transparent,
+  }) {
     final width = canvas.getWidth();
     var height = canvas.getHeight();
     // onSizeChanged: `if (height < 9) height = 200`.
@@ -345,9 +381,12 @@ class ScoreChartView extends core.View {
         // The marker of a column is drawn while the next one is processed, so
         // a column skipped for want of data leaves the previous marker
         // unpainted until some later column has data.
-        _drawMarker(canvas, prevCx, prevCy, baseSize);
+        _drawMarker(canvas, prevCx, prevCy, baseSize,
+            transparent: transparent);
       }
-      if (k == nColumns - 1) _drawMarker(canvas, cx, cy, baseSize);
+      if (k == nColumns - 1) {
+        _drawMarker(canvas, cx, cy, baseSize, transparent: transparent);
+      }
       prevCx = cx;
       prevCy = cy;
 
@@ -426,8 +465,28 @@ class ScoreChartView extends core.View {
 
   /// `drawMarker`: the baseSize square inset by 0.225 and filled with the card
   /// background, then inset by a further 0.1 and filled with the habit colour.
-  void _drawMarker(core.Canvas canvas, double cx, double cy, int baseSize) {
+  /// `drawMarker`: two concentric ovals, the outer one the card background and
+  /// the inner one the habit colour, so the marker reads as a ring with a hole
+  /// (`charts-canvas-theming.score-chart#11`).
+  ///
+  /// With transparency on, `setModeOrColor` replaces both colours with an
+  /// xfermode: CLEAR for the hole and SRC for the ring, so the hole is a real
+  /// one and the ring's own alpha is written rather than composited.
+  void _drawMarker(
+    core.Canvas canvas,
+    double cx,
+    double cy,
+    int baseSize, {
+    bool transparent = false,
+  }) {
     final outer = baseSize / 2.0 - baseSize * 0.225;
+    if (transparent) {
+      final layer = canvas as TransparencyCanvas;
+      layer.clearCircle(cx, cy, outer);
+      canvas.setColor(color);
+      layer.srcCircle(cx, cy, outer - baseSize * 0.1);
+      return;
+    }
     canvas.setColor(theme.cardBackgroundColor);
     canvas.fillCircle(cx, cy, outer);
     canvas.setColor(color);

@@ -113,7 +113,19 @@ class WidgetDocument(
     val widgetId: Int,
     val today: LocalDate,
     val habits: List<HabitData>,
-    val missingHabitIds: List<Long>
+    val missingHabitIds: List<Long>,
+    /**
+     * `Preferences.widgetOpacity`, the `pref_widget_opacity` list preference
+     * (`settings.preferences.widget-opacity#1`, `#3`).
+     *
+     * `BaseWidget.preferedBackgroundAlpha` turns it into the alpha the card's
+     * background paint is drawn at, except inside a stack
+     * (`settings.preferences.widget-opacity#5`, `#7`). Read defensively: a
+     * document written before the field existed carries no key, and 255 —
+     * `android:defaultValue` on the row — is what the preference itself
+     * defaults to.
+     */
+    val widgetOpacity: Int = DEFAULT_WIDGET_OPACITY
 ) {
     /**
      * `widgets.stack#1`: upstream returns a single-habit widget only when
@@ -136,6 +148,9 @@ class WidgetDocument(
     }
 
     companion object {
+        /** `HomeWidgetBridge.defaultWidgetOpacity`. */
+        const val DEFAULT_WIDGET_OPACITY = 255
+
         fun parse(json: JSONObject): WidgetDocument {
             val habits = json.optJSONArray("habits") ?: JSONArray()
             val missing = json.optJSONArray("missingHabitIds") ?: JSONArray()
@@ -145,7 +160,8 @@ class WidgetDocument(
                 habits = (0 until habits.length()).map {
                     HabitData.parse(habits.getJSONObject(it))
                 },
-                missingHabitIds = (0 until missing.length()).map { missing.getLong(it) }
+                missingHabitIds = (0 until missing.length()).map { missing.getLong(it) },
+                widgetOpacity = json.optInt("widgetOpacity", DEFAULT_WIDGET_OPACITY)
             )
         }
     }

@@ -330,6 +330,27 @@ void main() {
           reason: 'notifications.content#7: setShowWhen(true)');
     });
 
+    test('#7 the developer "notify now" action stamps the Unix epoch', () {
+      // `ListHabitsSelectionMenu` passes reminderTime = 0 for the dev-only
+      // action_notify item, and setWhen takes that number as-is.
+      final spec =
+          buildBuilder().build(yesNoHabit(), 10, LocalDate.ymd(2015, 1, 26), 0);
+
+      expect(spec.whenMillis, 0,
+          reason: 'notifications.dev-test-action#3: because reminderTime is 0, '
+              "the resulting notification's setWhen is the Unix epoch");
+      expect(
+        DateTime.fromMillisecondsSinceEpoch(spec.whenMillis, isUtc: true),
+        DateTime.utc(1970),
+        reason: 'notifications.dev-test-action#3: 0 ms is 1970-01-01T00:00Z, '
+            'so the notification is stamped with the epoch rather than with '
+            'the moment it was posted',
+      );
+      expect(spec.showWhen, isTrue,
+          reason: 'notifications.dev-test-action#3: and the timestamp is '
+              'shown, so the epoch is what the user sees');
+    });
+
     test('#4 the body is the question, or the default question when blank', () {
       final habit = yesNoHabit(question: 'Did you meditate this morning?');
       final builder = buildBuilder();

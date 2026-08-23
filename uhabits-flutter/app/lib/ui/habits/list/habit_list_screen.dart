@@ -35,7 +35,9 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/habit_list_model.dart';
+import '../../../state/intent_router.dart' as intents;
 import '../../../state/theme_model.dart';
+import '../../../state/widget_link.dart';
 import '../../about/about_screen.dart';
 import '../../common/dialogs/checkmark_dialog.dart';
 import '../../common/dialogs/color_picker_dialog.dart';
@@ -53,7 +55,7 @@ import 'list_header.dart';
 
 /// The main screen. Owns the [HabitListModel] for as long as it is mounted.
 class HabitListScreen extends StatelessWidget {
-  const HabitListScreen({this.onOpenUrl, super.key});
+  const HabitListScreen({this.onOpenUrl, this.widgetLinks, super.key});
 
   /// The habit card list — a `ListView` or a `ReorderableListView`, depending
   /// on whether the adapter is sortable, so callers that only want "the list"
@@ -65,19 +67,32 @@ class HabitListScreen extends StatelessWidget {
   /// falls back to when nothing can handle the intent.
   final void Function(String url)? onOpenUrl;
 
+  /// The app-level receiver for `uhabits://widget/...`.
+  ///
+  /// This screen is `ListHabitsActivity`, and upstream the ACTION_EDIT deep
+  /// link is delivered straight to it: the system sets `Activity.intent`, and
+  /// `parseIntents()` reads it at the end of the next `onResume`. A Flutter app
+  /// has one activity for the whole process, so the link lands app-wide first;
+  /// registering with the router while this screen is mounted is what puts it
+  /// back where upstream had it. Null in every test that pumps the screen on
+  /// its own, and on any host with no widget support.
+  final WidgetLinkRouter? widgetLinks;
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<HabitListModel>(
       create: (context) => HabitListModel(context.read<AppScope>())..attach(),
-      child: _HabitListView(onOpenUrl: onOpenUrl),
+      child: _HabitListView(onOpenUrl: onOpenUrl, widgetLinks: widgetLinks),
     );
   }
 }
 
 class _HabitListView extends StatefulWidget {
-  const _HabitListView({this.onOpenUrl});
+  const _HabitListView({this.onOpenUrl, this.widgetLinks});
 
   final void Function(String url)? onOpenUrl;
+
+  final WidgetLinkRouter? widgetLinks;
 
   @override
   State<_HabitListView> createState() => _HabitListViewState();
@@ -186,6 +201,24 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
         if (mounted) showListHabitsMessage(context, message);
       },
     )..onAttached();
+    // After the first frame, because acting on the intent means showing a
+    // dialog and there is no route to show one on until then. `onResume` has
+    // the same property upstream: the window exists before `parseIntents()`
+    // runs.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.widgetLinks?.attachListScreen(_onDeepLinkIntent);
+    });
+  }
+
+  /// `ListHabitsActivity.onNewIntent` -> `setIntent(intent)`, followed by the
+  /// `parseIntents()` its next `onResume` would have run.
+  ///
+  /// Both halves are the model's already (`list-habits.startup-lifecycle#8`);
+  /// this only delivers.
+  void _onDeepLinkIntent(intents.Intent intent) {
+    _model
+      ..pendingIntent = intent
+      ..parseIntents();
   }
 
   @override
@@ -211,6 +244,7 @@ class _HabitListViewState extends State<_HabitListView> with RestorationMixin {
       ..onShowColorPicker = null
       ..onShowDeleteConfirmationScreen = null
       ..onShowEditHabitsScreen = null;
+    widget.widgetLinks?.detachListScreen(_onDeepLinkIntent);
     super.dispose();
   }
 

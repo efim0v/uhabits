@@ -18,6 +18,45 @@ abstract interface class TextOutlineCanvas {
   void drawTextOutline(String text, double x, double y);
 }
 
+/// A [core.Canvas] that can render into an offscreen layer and punch true holes
+/// in it.
+///
+/// The second capability declared here rather than on the shared interface, and
+/// for the same reason as the first: `org.isoron.platform.gui.Canvas` has no
+/// concept of a `PorterDuffXfermode`, and the Android charts that need one —
+/// `ScoreChart` and `RingView` — reach past it to `android.graphics`.
+///
+/// What they reach for is a widget-transparency mode: an `ARGB_8888` bitmap of
+/// the view's size, erased to `Color.TRANSPARENT` every frame, drawn into and
+/// then blitted onto the real canvas. That buffer is what makes
+/// `PorterDuff.CLEAR` meaningful — without it "clear" would erase the launcher's
+/// wallpaper showing through, not the chart. `Canvas.saveLayer` /
+/// `Canvas.restore` is the same construction in `dart:ui`, so the three methods
+/// below are exactly the three operations
+/// `charts-canvas-theming.score-chart#11` and `#16` need.
+///
+/// Probed for with an `is` check: a canvas that does not offer it (the golden
+/// recorders, a test double) makes a chart fall back to the opaque path, which
+/// is what the non-transparent branch of the Kotlin does anyway.
+abstract interface class TransparencyCanvas {
+  /// `internalDrawingCache = Bitmap.createBitmap(w, h, ARGB_8888)` plus
+  /// `eraseColor(Color.TRANSPARENT)`: everything drawn until
+  /// [endTransparencyLayer] lands on a fully transparent surface of its own.
+  void beginTransparencyLayer();
+
+  /// `canvas.drawBitmap(internalDrawingCache, 0f, 0f, null)`: composite the
+  /// layer onto the canvas underneath it.
+  void endTransparencyLayer();
+
+  /// `pGraph.xfermode = XFERMODE_CLEAR` for one filled circle: erases the
+  /// layer's pixels instead of painting over them.
+  void clearCircle(double centerX, double centerY, double radius);
+
+  /// `pGraph.xfermode = XFERMODE_SRC` for one filled circle: writes the current
+  /// colour *and its alpha* rather than compositing it over what is there.
+  void srcCircle(double centerX, double centerY, double radius);
+}
+
 /// Draws the core's charts onto a Flutter canvas.
 ///
 /// Every chart in `uhabits_core` is written against [core.Canvas] and knows
@@ -27,7 +66,8 @@ abstract interface class TextOutlineCanvas {
 ///
 /// Flutter's logical pixels are already density-independent, so unlike
 /// AndroidCanvas and JavaCanvas this backend needs no density conversion.
-class FlutterCanvas extends core.Canvas implements TextOutlineCanvas {
+class FlutterCanvas extends core.Canvas
+    implements TextOutlineCanvas, TransparencyCanvas {
   FlutterCanvas(this._canvas, this._size);
 
   final ui.Canvas _canvas;
@@ -147,6 +187,38 @@ class FlutterCanvas extends core.Canvas implements TextOutlineCanvas {
     };
     // The core anchors text on its visual centre, not on the baseline.
     painter.paint(_canvas, ui.Offset(left, y - painter.height / 2));
+  }
+
+  // -------------------------------------------------------------------------
+  // TransparencyCanvas
+  // -------------------------------------------------------------------------
+
+  @override
+  void beginTransparencyLayer() {
+    _canvas.saveLayer(ui.Offset.zero & _size, ui.Paint());
+  }
+
+  @override
+  void endTransparencyLayer() => _canvas.restore();
+
+  @override
+  void clearCircle(double centerX, double centerY, double radius) {
+    _canvas.drawCircle(
+      ui.Offset(centerX, centerY),
+      radius,
+      ui.Paint()
+        ..isAntiAlias = true
+        ..blendMode = ui.BlendMode.clear,
+    );
+  }
+
+  @override
+  void srcCircle(double centerX, double centerY, double radius) {
+    _canvas.drawCircle(
+      ui.Offset(centerX, centerY),
+      radius,
+      _fillPaint..blendMode = ui.BlendMode.src,
+    );
   }
 
   /// [TextOutlineCanvas.drawTextOutline].

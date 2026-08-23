@@ -31,11 +31,13 @@
 /// - Anything that only exists while Android is running it — the measure
 ///   passes, the background thread, the `PendingIntent` the launcher holds — is
 ///   out of reach and stays uncited.
-/// - Rule 6 of `widgets.checkmark`: a boolean Checkmark tap is a broadcast to
-///   `WidgetReceiver` upstream and an app launch here, because the toggle it
-///   runs is Dart. Its rule id is deliberately not written out anywhere in this
-///   file, so the coverage tool keeps reporting it as the open work it is; see
-///   the KDoc on `WidgetIntents` for the whole argument.
+/// - A boolean Checkmark tap is a broadcast to `WidgetReceiver` upstream and an
+///   app launch here, because the toggle it runs is Dart. What survives the
+///   substitution — the action, the habit it addresses, the missing day that
+///   makes it target today — is asserted in
+///   app/test/state/widget_checkmark_tap_test.dart, on both sides of the
+///   process boundary; what does not is the delivery, and the KDoc on
+///   `WidgetIntents` carries that argument.
 library;
 
 import 'dart:io';

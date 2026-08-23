@@ -19,31 +19,40 @@
 /// The `home_widget` plugin delivers those URIs to Dart, and [WidgetLinkRouter]
 /// is what receives them.
 ///
-/// ## What it routes today
+/// ## What it routes
 ///
-/// Only `configure`, and deliberately: it is the one action with nowhere else
-/// to go. A widget the user has just placed has no habit bound to it, the
-/// native `HabitPickerDialog` has no habit catalogue to offer, and until
-/// something answers this link the widget can never leave its "open Loop Habit
-/// Tracker to set up this widget" state. See
-/// `app/lib/ui/common/dialogs/widget_picker_dialog.dart`.
+/// All four, and each one lands where its Android counterpart landed:
 ///
-/// `toggle`, `edit` and `show` are parsed and then dropped. Routing them means
-/// reaching into the habit list screen — `ListHabitsBehavior.onToggle`,
-/// `onEdit` and the detail route — which is a different slice of the port;
-/// `widgets.checkmark#6` and `#8` stay unmet until it lands, exactly as they
-/// were before this file existed.
+///  * `configure` opens the habit picker. It is the one action with nowhere
+///    else to go — a widget the user has just placed has no habit bound to it,
+///    the native `HabitPickerDialog` has no habit catalogue to offer, and until
+///    something answers this link the widget can never leave its "open Loop
+///    Habit Tracker to set up this widget" state. See
+///    `app/lib/ui/common/dialogs/widget_picker_dialog.dart`.
+///  * `toggle`, `edit` and `show` are translated back into the exact
+///    `android.content.Intent` upstream would have sent —
+///    [widgetLinkIntent] — and handed to the port of the component that
+///    received it: [WidgetIntentReceiver] for the toggle broadcast, the habit
+///    list's `parseIntents()` for the ACTION_EDIT deep link, and the habit
+///    detail route for the five graph widgets.
+///
+/// Nothing but the translation is new. Every decision after it — which entry
+/// value a toggle writes, which day it targets, what a stale intent does — is
+/// the Kotlin dispatch, ported in `lib/state/intent_router.dart`.
 library;
 
 import 'dart:async';
 
 import 'package:flutter/services.dart' show MissingPluginException;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart' hide Intent;
 import 'package:home_widget/home_widget.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../platform/home_widget_bridge.dart';
 import '../ui/common/dialogs/widget_picker_dialog.dart';
+import 'intent_router.dart';
+
+export 'intent_router.dart' show WidgetIntentReceiver, widgetLinkIntent;
 
 /// One parsed `uhabits://widget/...` link.
 @immutable
@@ -164,11 +173,56 @@ class WidgetLinkRouter {
     required this.publish,
     required this.navigator,
     required this.launches,
+    this.receiver,
+    this.showHabit,
   });
 
   /// The catalogue the picker lists. The reason the picker is on this side of
   /// the process boundary at all.
   final Iterable<core.Habit> habitList;
+
+  /// The port of `WidgetReceiver`, which answers the toggle link.
+  ///
+  /// Null on a host with no habit store behind it — every widget test that
+  /// pumps the picker on its own — and then a toggle link is dropped rather
+  /// than half-applied.
+  final WidgetIntentReceiver? receiver;
+
+  /// `IntentFactory.startShowHabitActivity(context, habit)`, which the five
+  /// graph widgets fire. Supplied by the app because pushing a route needs a
+  /// `BuildContext` the router deliberately does not hold.
+  final void Function(core.Habit habit)? showHabit;
+
+  /// The mounted habit list, which is what owns `Activity.intent`.
+  ///
+  /// `ListHabitsActivity` receives the ACTION_EDIT deep link itself: the system
+  /// hands it the intent, and `parseIntents()` reads it at the end of the next
+  /// `onResume`. The screen registers here while it is mounted so the link
+  /// reaches the same place; a link that arrives while nothing is mounted waits
+  /// in [_pendingListIntent], exactly as an `Intent` waits on an activity that
+  /// has not been created yet.
+  void Function(Intent intent)? _listTarget;
+
+  Intent? _pendingListIntent;
+
+  /// Called by the habit list screen while it is on screen.
+  void attachListScreen(void Function(Intent intent) target) {
+    _listTarget = target;
+    final Intent? pending = _pendingListIntent;
+    if (pending == null) return;
+    _pendingListIntent = null;
+    target(pending);
+  }
+
+  /// Called when that screen goes away. Ignored when a different screen has
+  /// since attached, so an out-of-order dispose cannot orphan the live one.
+  ///
+  /// The comparison is `==`, not [identical]: callers pass a bound instance
+  /// tear-off, and Dart guarantees two tear-offs of the same method on the
+  /// same object are equal but not that they are the same object.
+  void detachListScreen(void Function(Intent intent) target) {
+    if (_listTarget == target) _listTarget = null;
+  }
 
   /// Where a confirmed choice is written: `widgetPreferences.addWidget`
   /// (`widgets.config-picker#10`).
@@ -215,8 +269,43 @@ class WidgetLinkRouter {
   Future<void> handle(Uri? uri) async {
     final WidgetLink? link = WidgetLink.parse(uri);
     if (link == null) return;
-    if (link.action == WidgetLink.actionConfigure) await _configure(link);
-    // toggle / edit / show: see the library comment.
+    if (link.action == WidgetLink.actionConfigure) {
+      await _configure(link);
+      return;
+    }
+    if (link.action == WidgetLink.actionShow) {
+      // Handled before the translation below, because it is the one action
+      // that needs no date: `IntentFactory.startShowHabitActivity` sets only
+      // the data uri, and `getToday()` throws until the app has booted.
+      final core.Habit? habit =
+          habitList.where((core.Habit h) => h.id == link.habitId).firstOrNull;
+      // `ShowHabitActivity.onCreate` dereferences the lookup with `!!` and
+      // crashes on a habit that was deleted between the widget's last redraw
+      // and the tap. A deep link is not an activity launch — the app is
+      // already running and the user is looking at it — so a stale id is
+      // dropped instead of taking the process down.
+      if (habit != null) showHabit?.call(habit);
+      return;
+    }
+    // The other two carry an Android intent behind them; rebuild it and hand
+    // it to the port of whichever component upstream addressed.
+    final Intent? intent = widgetLinkIntent(link, today: core.getToday());
+    if (intent == null) return;
+    switch (link.action) {
+      case WidgetLink.actionToggle:
+        receiver?.onReceive(intent);
+      case WidgetLink.actionEdit:
+        // `onNewIntent` -> `setIntent(intent)`; the screen's next
+        // `parseIntents()` is what acts on it.
+        final void Function(Intent intent)? target = _listTarget;
+        if (target == null) {
+          _pendingListIntent = intent;
+        } else {
+          target(intent);
+        }
+      default:
+        break;
+    }
   }
 
   /// The Flutter half of `HabitPickerDialog.onCreate` and `confirm()`.

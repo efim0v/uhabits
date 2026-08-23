@@ -9,9 +9,12 @@
 ///
 /// The rest of the feature is asserted elsewhere: the key, its type and its
 /// entries in test/ui/settings/settings_screen_test.dart (`#1`, `#2`, `#3`),
-/// and `#5`..`#8` — the alpha the native widget paints its card with — are
-/// unreachable in this build, because `BaseWidget.widgetOpacity` is pinned at
-/// 255 (see the KDoc on `HabitWidgetView`). They are deliberately not cited.
+/// and `#5`..`#8` — the alpha the native widget paints its card with, and the
+/// shadow only a fully opaque one gets — in test/platform/widget_opacity_test
+/// .dart. The republish this file pins is what carries the new value across:
+/// the preference travels to the launcher's process inside the widget
+/// document, so a write with no republish would leave the home screen showing
+/// the old alpha until the next command.
 library;
 
 // ignore_for_file: implementation_imports

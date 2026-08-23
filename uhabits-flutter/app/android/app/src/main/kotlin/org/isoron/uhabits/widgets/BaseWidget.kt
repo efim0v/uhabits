@@ -96,19 +96,33 @@ abstract class BaseWidget(
     /**
      * `widgets.card-chrome#5` / `settings.preferences.widget-opacity#5`: 255
      * inside a stack, `Preferences.widgetOpacity` otherwise.
+     *
+     * `settings.preferences.widget-opacity#7`: the `stacked` branch is why a
+     * page of a StackWidget ignores the preference entirely — the pages sit on
+     * the stack's own background and would otherwise show each other through.
      */
     protected val preferedBackgroundAlpha: Int
         get() = if (stacked) 255 else widgetOpacity
 
     /**
-     * `Preferences.widgetOpacity`, pinned at the preference's own default.
+     * `Preferences.widgetOpacity`, carried across the process boundary by the
+     * published document (`HomeWidgetBridge.buildWidgetDocument`).
      *
-     * `pref_widget_opacity` is not in the published document and has no Flutter
-     * settings row, so 255 is the only value this build can produce. Everything
-     * downstream of a lower alpha is therefore unreachable — see the KDoc on
-     * [org.isoron.uhabits.widgets.views.HabitWidgetView].
+     * Upstream this was `prefs.widgetOpacity`, read from the app's own
+     * SharedPreferences because the provider and the app were the same program.
+     * Here the settings row writes the preference in the Flutter process and
+     * republishes (`settings.preferences.widget-opacity#4`); [setWidgetOpacity]
+     * is where the new value lands.
      */
-    private val widgetOpacity: Int get() = 255
+    private var widgetOpacity: Int = WidgetDocument.DEFAULT_WIDGET_OPACITY
+
+    /**
+     * Set from the widget's document before it is drawn, the same way
+     * [setDimensions] is set from the launcher's options bundle.
+     */
+    fun setWidgetOpacity(value: Int) {
+        widgetOpacity = value
+    }
 
     /**
      * `widgets.remoteviews-rendering#1`: build the view, measure it, refresh it,

@@ -65,12 +65,21 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
         context: Context,
         widgetId: Int,
         document: WidgetDocument
-    ): BaseWidget =
-        if (document.isStack()) {
+    ): BaseWidget {
+        val widget = if (document.isStack()) {
             StackWidget(context, widgetId, stackWidgetType, document.habits)
         } else {
             buildSingleWidget(context, widgetId, document)
         }
+        // `settings.preferences.widget-opacity#5`: upstream read
+        // `prefs.widgetOpacity` out of the application component, because the
+        // provider and the app were the same program. The preference now
+        // arrives in the document instead, and every widget gets it before it
+        // is measured or drawn. A StackWidget is `stacked` and discards it,
+        // which is `settings.preferences.widget-opacity#7`.
+        widget.setWidgetOpacity(document.widgetOpacity)
+        return widget
+    }
 
     /**
      * `widgets.provider-lifecycle#1`: update every id in the array on a

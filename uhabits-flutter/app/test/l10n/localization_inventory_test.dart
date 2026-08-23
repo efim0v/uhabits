@@ -19,27 +19,13 @@
 /// in Flutter the text direction is a consequence of the locale rather than a
 /// manifest flag: shipping `ar`, `fa` and `he` is what turns the mirroring on.
 ///
-/// Not asserted here, and left uncited on purpose:
-///
-///  - rule 11 of `platform-glue.localization-inventory` (which locales
-///    translate the `hints` string-array). ARB has no arrays, so the array's
-///    per-locale translation status has no counterpart to check.
-///  - rule 15 (`pickers.xml`): those 21 resources are dimensions and floats of
-///    the Android date-time picker widget, which the port does not use.
-///  - rule 3 of `platform-glue.rtl-layout` (the third factor of
-///    `HeaderView.updateScrollDirection`). The first two — the base -1 and the
-///    flip from `isCheckmarkSequenceReversed` — are asserted in
-///    test/ui/habits/list/list_header_test.dart under
-///    `list-habits.header-scrolling#4`. The RTL factor is deliberately absent
-///    from `ListHeader._scrollDirection`, and correctly so *given* rule 4's
-///    gap: the drawn strip does not mirror under an RTL locale, so flipping
-///    the drag would move it against its own columns. The two belong to one
-///    fix, described under rule 4 below and reported with this slice.
-///  - rule 6 (mirroring is partial by design, because some paddings use
-///    Left/Right rather than Start/End). The Flutter distinction is
-///    `EdgeInsets` versus `EdgeInsetsDirectional` and the port uses the
-///    non-directional one throughout; asserting today's choice per widget
-///    would pin a set of paddings that ought to be free to change.
+/// Rules 3 and 6 of `platform-glue.rtl-layout` are asserted in
+/// test/ui/rtl_layout_test.dart instead: the three-factor drag direction and
+/// the non-directional colour-button margin are widget geometry, and the RTL
+/// gap this file's rule-4 test used to report has since been closed —
+/// `ListHeader` now composes the ambient `Directionality` into both the drawn
+/// strip and the drag, exactly as `updateScrollDirection` composes its three
+/// factors.
 library;
 
 // The preferences and the header view live outside uhabits_core's public
@@ -59,6 +45,7 @@ import 'package:uhabits/ui/habits/list/list_header.dart';
 import 'package:uhabits/ui/settings/settings_screen.dart';
 import 'package:uhabits_core/src/gui/font_awesome.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/hint_list.dart' as core;
 import 'package:uhabits_core/src/preferences/preferences.dart' as core;
 import 'package:uhabits_core/src/ui/views/habit_list_header.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
@@ -699,6 +686,80 @@ void main() {
                   'message in ${arb.key}');
         }
       }
+    });
+
+    test('#11 the hints array is one Dart list, so no locale can redeclare it',
+        () {
+      const String rule = 'platform-glue.localization-inventory#11 — in-ID, '
+          'sv-SE and uk-UA additionally translate the <string-array '
+          'name="hints">; no other locale does. ARB has no array concept: the '
+          'array became two ordinary message ids (localized-arrays#6) and the '
+          'order that made them an array is one Dart constant, '
+          'core.listHabitsHints. So there is nothing left for a locale to '
+          'redeclare — the three that did are simply the three that translated '
+          'the two strings, which every complete locale now does.';
+
+      // No ARB value is a list anywhere in the catalogue: that is what makes
+      // the per-locale array override structurally impossible rather than
+      // merely absent.
+      for (final MapEntry<String, Map<String, Object?>> arb in arbs.entries) {
+        for (final String key in messagesOf(arb.value)) {
+          expect(arb.value[key], isA<String>(),
+              reason: '$rule ${arb.key}/$key is a message, not an array.');
+        }
+      }
+
+      expect(core.listHabitsHints, hasLength(2),
+          reason: '$rule The ordering lives here, once, for every locale.');
+
+      // The three locales the rule names, under their modern subtags.
+      for (final String tag in <String>['id', 'sv', 'uk']) {
+        expect(messagesOf(arbs[tag]!), containsAll(<String>['hintDrag', 'hintLandscape']),
+            reason: '$rule $tag translates both members, as its array override '
+                'did.');
+      }
+      // And so does a locale that had no array override at all.
+      expect(messagesOf(arbs['de']!),
+          containsAll(<String>['hintDrag', 'hintLandscape']),
+          reason: '$rule German never redeclared the array upstream and needs '
+              'no equivalent here.');
+    });
+
+    test('#15 the picker geometry constants are not messages', () {
+      const String rule = 'platform-glue.localization-inventory#15 — '
+          'res/values/pickers.xml holds 21 <string> resources but they are '
+          'dimension/float constants for the date-time picker, all '
+          'translatable="false" where declared as <item ... type="string">. '
+          'They are numbers wearing a string type so that the Android radial '
+          'picker could read them through Resources.getString; the port uses '
+          "Flutter's own showTimePicker, which carries its own geometry, and "
+          'the ARB inventory therefore contains none of them.';
+
+      // Every message is human-readable text, never a bare number. This is the
+      // same shape as #13 (no message is a glyph) and #14 (no message is a
+      // URL).
+      for (final MapEntry<String, Map<String, Object?>> arb in arbs.entries) {
+        for (final String key in messagesOf(arb.value)) {
+          expect(double.tryParse('${arb.value[key]}'.trim()), isNull,
+              reason: '$rule ${arb.key}/$key would be one of those constants '
+                  'if it parsed as a number.');
+        }
+      }
+      // The ids themselves never made it across either.
+      expect(
+        messagesOf(template).where((String k) =>
+            k.contains('radius') || k.contains('Multiplier') ||
+            k.startsWith('circle') || k.startsWith('ampm')),
+        isEmpty,
+        reason: rule,
+      );
+      // And the picker those constants configured is the framework's.
+      expect(
+        File('${arbDir.parent.path}/ui/common/dialogs/snooze_picker_dialog.dart')
+            .readAsStringSync(),
+        contains('showTimePicker('),
+        reason: '$rule The one screen that ever raised the radial picker.',
+      );
     });
   });
 

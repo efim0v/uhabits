@@ -60,6 +60,7 @@ import 'package:uhabits_core/src/time/local_date.dart';
 ///   "version": 1,
 ///   "widgetId": 1,
 ///   "today": "2015-01-26",
+///   "widgetOpacity": 255,
 ///   "habits": [{
 ///     "id": 3, "name": "Run", "question": "...", "color": 1,
 ///     "type": "NUMERICAL", "unit": "miles",
@@ -88,9 +89,11 @@ class HomeWidgetBridge {
     required HabitList habitList,
     required WidgetRegistry registry,
     required HomeWidgetPlatform platform,
+    Preferences? preferences,
   })  : _habitList = habitList,
         _registry = registry,
-        _platform = platform;
+        _platform = platform,
+        _preferences = preferences;
 
   final HabitList _habitList;
 
@@ -103,8 +106,30 @@ class HomeWidgetBridge {
 
   final HomeWidgetPlatform _platform;
 
+  /// The half of `BaseWidget.prefs` a widget actually reads:
+  /// `Preferences.widgetOpacity`.
+  ///
+  /// Optional because a host that publishes no preferences — every test that
+  /// only cares about habit data — should not have to build one; absent, the
+  /// document carries [defaultWidgetOpacity], which is the value the
+  /// preference itself defaults to.
+  final Preferences? _preferences;
+
   /// Bump whenever a field below changes meaning or disappears.
   static const int schemaVersion = 1;
+
+  /// `android:defaultValue="255"` on the `pref_widget_opacity` row
+  /// (`settings.preferences.widget-opacity#2`), i.e. fully opaque.
+  static const int defaultWidgetOpacity = 255;
+
+  /// `Preferences.widgetOpacity`, as the native side will read it.
+  ///
+  /// `BaseWidget.preferedBackgroundAlpha` is `if (stacked) 255 else
+  /// prefs.widgetOpacity` (`settings.preferences.widget-opacity#5`), and the
+  /// `stacked` half is decided in the launcher's process — so what crosses is
+  /// the preference, not the alpha.
+  int get widgetOpacity =>
+      _preferences?.widgetOpacity ?? defaultWidgetOpacity;
 
   /// The number of daily values published per habit. Sixty days covers the
   /// widest of the six widgets (the history grid) at every size the launcher
@@ -184,6 +209,9 @@ class HomeWidgetBridge {
       'version': schemaVersion,
       'widgetId': widgetId,
       'today': formatDate(today),
+      // `settings.preferences.widget-opacity#5`: the alpha the card's
+      // background paint is drawn at, unless the widget is a page of a stack.
+      'widgetOpacity': widgetOpacity,
       'habits': habits,
       'missingHabitIds': missing,
     };

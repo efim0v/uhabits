@@ -33,9 +33,52 @@
     <!-- <shortcuts> meta-data, so launchers get no round variant and the app -->
     <!-- exposes no static or dynamic app shortcuts.                          -->
     <!-- ================================================================== -->
+    <!-- ================================================================== -->
+    <!-- platform-glue.manifest-components#1: upstream's <application>        -->
+    <!-- carries eight attributes. Six of them survive here:                 -->
+    <!--                                                                     -->
+    <!--   android:name        — ".HabitsApplication" becomes                -->
+    <!--                         ${applicationName}, the Flutter embedding's -->
+    <!--                         Application class. The startup sequence      -->
+    <!--                         HabitsApplication.onCreate performed is now  -->
+    <!--                         AppScope.boot() (platform-glue.app-startup-  -->
+    <!--                         order), which runs in Dart and therefore     -->
+    <!--                         cannot be an Application subclass.           -->
+    <!--   android:label       — @string/main_activity_title ("Habits"),      -->
+    <!--                         not @string/app_name.                        -->
+    <!--   android:icon        — @mipmap/ic_launcher.                         -->
+    <!--   android:allowBackup — true, as upstream.                          -->
+    <!--   android:supportsRtl — true. It still matters even though the       -->
+    <!--                         Flutter UI mirrors through Directionality:    -->
+    <!--                         the widget RemoteViews layouts and the three  -->
+    <!--                         picker dialogs below are real Android views.  -->
+    <!--   android:theme       — lives on the activity here, because that is   -->
+    <!--                         where the Flutter embedding looks for         -->
+    <!--                         LaunchTheme/NormalTheme (settings.theme.      -->
+    <!--                         system-night-window-background).              -->
+    <!--                                                                     -->
+    <!-- Two are deliberately absent:                                        -->
+    <!--                                                                     -->
+    <!--   android:backupAgent — there is no BackupAgentHelper; see the       -->
+    <!--                         ledger note on platform-glue.backup-agent.   -->
+    <!--                         allowBackup on its own gives Auto Backup.    -->
+    <!--   the per-app locale list — replaced by                             -->
+    <!--                         MaterialApp.supportedLocales, which          -->
+    <!--                         platform-glue.locale-config#1 pins; that     -->
+    <!--                         rule asserts this manifest names no such     -->
+    <!--                         attribute, so it is not spelled out here     -->
+    <!--                         either.                                      -->
+    <!--                                                                     -->
+    <!-- platform-glue.manifest-components#11: and no                         -->
+    <!-- com.google.android.backup.api_key meta-data, because the Android     -->
+    <!-- Backup Service key belongs to a registered key/value backup agent    -->
+    <!-- this port does not have.                                            -->
+    <!-- ================================================================== -->
     <application
         android:label="@string/main_activity_title"
         android:name="${applicationName}"
+        android:allowBackup="true"
+        android:supportsRtl="true"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

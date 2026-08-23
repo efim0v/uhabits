@@ -679,8 +679,9 @@ void main() {
       expect(
         h.log,
         <String>['showCheckmarkPopup', 'confetti', 'command'],
-        reason: 'list-habits.toggle-from-row#8 — confetti when '
-            'newValue != entry.value && newValue == YES_MANUAL, then the '
+        reason: 'list-habits.toggle-from-row#8 and checkmark-dialog.popup#11 — '
+            'the list screen additionally fires confetti when '
+            'newValue != previous value and newValue == YES_MANUAL, then the '
             'command runs',
       );
       expect(
@@ -689,8 +690,10 @@ void main() {
             .having((c) => c.value, 'value', Entry.yesManual)
             .having((c) => c.notes, 'notes', 'done')
             .having((c) => c.habit, 'habit', same(empty)),
-        reason: 'list-habits.toggle-from-row#8 — CreateRepetitionCommand('
-            'habitList, habit, date, newValue, newNotes) is run',
+        reason: 'list-habits.toggle-from-row#8 and checkmark-dialog.popup#11 — '
+            'the caller turns the pair the popup returned into '
+            'CreateRepetitionCommand(habitList, habit, date, newValue, '
+            'newNotes)',
       );
     });
 
@@ -705,8 +708,8 @@ void main() {
       expect(
         h.screen.confetti,
         isEmpty,
-        reason: 'list-habits.toggle-from-row#8 — newValue == entry.value, so '
-            'no confetti',
+        reason: 'list-habits.toggle-from-row#8 and checkmark-dialog.popup#11 — '
+            'newValue == entry.value, so no confetti',
       );
 
       h.behavior.onEdit(empty, today, 0.0, 0.0);
@@ -714,8 +717,8 @@ void main() {
       expect(
         h.screen.confetti,
         isEmpty,
-        reason: 'list-habits.toggle-from-row#8 — SKIP(3) is not YES_MANUAL(2), '
-            'so no confetti',
+        reason: 'list-habits.toggle-from-row#8 and checkmark-dialog.popup#11 — '
+            'SKIP(3) is not YES_MANUAL(2), so no confetti',
       );
     });
 

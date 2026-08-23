@@ -308,7 +308,7 @@ class _ListHeaderState extends State<ListHeader>
     // HabitListHeader's `today` is the newest column, so scrolling back is a
     // subtraction: column i then shows today.minus(i + dataOffset)
     // (`list-habits.header-dates#2`).
-    final core.View header = HabitListHeader(
+    final core.View header = HeaderDatesView(
       today.minus(widget.dataOffset),
       widget.buttonCount,
       theme,
@@ -332,6 +332,73 @@ class _ListHeaderState extends State<ListHeader>
         ),
       ),
     );
+  }
+}
+
+/// The strip itself: the core [HabitListHeader]'s drawing with
+/// `HeaderView.Drawer`'s vertical placement.
+///
+/// The two views paint the same thing and differ in exactly one respect. The
+/// KMP header stacks its two lines `theme.smallTextSize * 0.6` either side of
+/// the centre; `HeaderView.Drawer` — the one the shipping Android list screen
+/// puts on screen, and the one the goldens under
+/// androidTest/assets/views/habits/list/HeaderView/ were captured from —
+/// stacks them at `rect.centerY() - 0.25 * em` and `rect.centerY() + 1.25 *
+/// em`, where `em = paint.measureText("m")` under the header's own bold 10sp
+/// paint (`list-habits.header-dates#7`, `#12`).
+///
+/// That is not a rescaling of the same layout: `em` is an advance *width*, so
+/// the offsets track the font's proportions rather than its nominal size, and
+/// the pair is not symmetric about the centre — the weekday name sits a
+/// quarter of an em above it and the day number a full em and a quarter below.
+///
+/// Everything else is [HabitListHeader] verbatim, the hairline along the bottom
+/// edge included. `HeaderView` has no hairline of its own — it separates itself
+/// from the list with `elevation = dp(2f)` instead — and the port keeps the
+/// drawn line because a Flutter header casts no shadow onto the list.
+class HeaderDatesView extends core.View {
+  HeaderDatesView(this._today, this._nButtons, this._theme, this._fmt);
+
+  final core.LocalDate _today;
+  final int _nButtons;
+  final core.Theme _theme;
+  final core.LocalDateFormatter _fmt;
+
+  @override
+  void draw(core.Canvas canvas) {
+    final width = canvas.getWidth();
+    final height = canvas.getHeight();
+    final buttonSize = _theme.checkmarkButtonSize;
+    canvas.setColor(_theme.headerBackgroundColor);
+    canvas.fillRect(0.0, 0.0, width, height);
+
+    canvas.setColor(_theme.headerBorderColor);
+    canvas.setStrokeWidth(0.5);
+    canvas.drawLine(0.0, height - 0.5, width, height - 0.5);
+
+    // `paint = TextPaint().apply { textSize = dim(R.dimen.tinyTextSize);
+    // textAlign = CENTER; typeface = Typeface.DEFAULT_BOLD; color =
+    // sres.getColor(R.attr.contrast60) }` (`list-habits.header-dates#12`).
+    canvas.setColor(_theme.headerTextColor);
+    canvas.setFont(core.Font.bold);
+    canvas.setFontSize(_theme.smallTextSize);
+
+    // `val em = paint.measureText("m")`, hoisted out of the loop exactly as
+    // the Drawer hoists it.
+    final em = canvas.measureText('m');
+
+    for (var index = 0; index < _nButtons; index++) {
+      final date = _today.minus(_nButtons - index - 1);
+      final name = _fmt.shortWeekdayName(date).toUpperCase();
+      final number = date.day.toString();
+
+      final x = width - (index + 1) * buttonSize + buttonSize / 2;
+      final centerY = height / 2;
+      // `val y1 = rect.centerY() - 0.25 * em`
+      // `val y2 = rect.centerY() + 1.25 * em`
+      canvas.drawText(name, x, centerY - 0.25 * em);
+      canvas.drawText(number, x, centerY + 1.25 * em);
+    }
   }
 }
 

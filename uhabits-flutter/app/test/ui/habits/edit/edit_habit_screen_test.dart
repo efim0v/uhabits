@@ -23,6 +23,7 @@ import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/edit_habit_model.dart';
+import 'package:uhabits/ui/common/dialogs/current_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/weekday_picker_dialog.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
@@ -2261,6 +2262,97 @@ void main() {
       expect(modelOf(tester).freqDen, 1,
           reason: 'edit-habit.numerical-frequency-picker#6 — without changing '
               'the frequency');
+    });
+  });
+
+  group('the DialogUtils current-dialog slot', () {
+    setUp(resetCurrentDialog);
+    tearDown(resetCurrentDialog);
+
+    testWidgets('edit-habit.target-type-picker#6: the target-type dialog is '
+        'shown via dismissCurrentAndShow, so it becomes the tracked one',
+        (tester) async {
+      const rule = 'edit-habit.target-type-picker#6';
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        habitType: HabitType.numerical,
+      );
+      expect(hasCurrentDialog, isFalse, reason: rule);
+
+      await tester.tap(find.byKey(EditHabitScreen.targetTypePickerKey));
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsOneWidget, reason: rule);
+      expect(hasCurrentDialog, isTrue,
+          reason: '\$rule — dismissCurrentAndShow registers the dialog in the '
+              'process-wide slot before showing it');
+
+      // …and being tracked is what lets anything else close it: the next
+      // dismissCurrentAndShow, or a screen going to the background.
+      dismissCurrentDialog();
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsNothing,
+          reason: '\$rule — so it first dismisses any other dialog tracked as '
+              "'current', and is itself dismissed the same way");
+      expect(hasCurrentDialog, isFalse, reason: rule);
+      expect(modelOf(tester).targetType, NumericalHabitType.atLeast,
+          reason: '\$rule — closing it picks nothing');
+    });
+
+    testWidgets('edit-habit.target-type-picker#6: opening another tracked '
+        'picker closes it', (tester) async {
+      const rule = 'edit-habit.target-type-picker#6';
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        habitType: HabitType.numerical,
+      );
+
+      // The colour picker is one of the five that share the slot.
+      await tester.tap(find.byKey(EditHabitScreen.colorButtonKey));
+      await tester.pumpAndSettle();
+      expect(hasCurrentDialog, isTrue, reason: rule);
+
+      dismissCurrentDialog();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(EditHabitScreen.targetTypePickerKey));
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsOneWidget,
+          reason: '\$rule — the target-type list opens in the slot the colour '
+              'picker has vacated');
+    });
+
+    testWidgets('edit-habit.numerical-frequency-picker#5: builder.show() '
+        'leaves the slot alone', (tester) async {
+      const rule = 'edit-habit.numerical-frequency-picker#5';
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        habitType: HabitType.numerical,
+      );
+
+      await tester.tap(find.byKey(EditHabitScreen.numericalFrequencyPickerKey));
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsOneWidget, reason: rule);
+      expect(hasCurrentDialog, isFalse,
+          reason: '\$rule — it is shown with builder.show(), so it never '
+              'registers itself as the current dialog');
+
+      // Which is exactly what makes it survive a dismissCurrentDialog() that
+      // would have closed any of the other five.
+      dismissCurrentDialog();
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsOneWidget,
+          reason: '\$rule — so it does NOT participate in the global '
+              '"dismiss current dialog first" mechanism');
+
+      // It also does not evict a dialog that *is* tracked: the two mechanisms
+      // simply never meet.
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsNothing, reason: rule);
+      expect(hasCurrentDialog, isFalse, reason: rule);
     });
   });
 

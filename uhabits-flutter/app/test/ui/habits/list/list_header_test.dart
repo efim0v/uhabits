@@ -246,6 +246,53 @@ void main() {
           reason: 'list-habits.header-dates#6');
     });
 
+    testWidgets('#7 the two baselines are -0.25 em and +1.25 em from the '
+        'column centre', (tester) async {
+      const rule = 'list-habits.header-dates#7';
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+
+      // `val em = paint.measureText("m")`, under the header's own paint: bold,
+      // at the tinyTextSize dimension. The recording canvas returns
+      // 0.6 * fontSize per character, so one "m" at 10sp is 6.0.
+      final em = canvas.measureText('m');
+      expect(em, 6.0,
+          reason: '$rule — em is measureText("m") at the header text size, a '
+              'width rather than a line height');
+
+      // `rect.set(0f, 0f, width, height)` is only ever offset horizontally, so
+      // every column's centreY is the strip's own centre.
+      const centerY = 48.0 / 2;
+
+      final texts = canvas.opsNamed('drawText');
+      expect(texts.length, 10, reason: '$rule — two lines per column');
+      for (var column = 0; column < 5; column++) {
+        final weekday = texts[column * 2];
+        final number = texts[column * 2 + 1];
+        expect(weekday.args[1], closeTo(centerY - 0.25 * em, 1e-9),
+            reason: '$rule — the weekday baseline is rectCenterY - 0.25 * em');
+        expect(number.args[1], closeTo(centerY + 1.25 * em, 1e-9),
+            reason: '$rule — the day number baseline is rectCenterY + '
+                '1.25 * em');
+      }
+
+      // The pair is deliberately asymmetric: 1.5 em apart, and their midpoint
+      // sits half an em *below* the centre rather than on it.
+      expect(texts[1].args[1] - texts[0].args[1], closeTo(1.5 * em, 1e-9),
+          reason: '$rule — 1.25 em - (-0.25 em) = 1.5 em between the two '
+              'baselines');
+      expect((texts[0].args[1] + texts[1].args[1]) / 2,
+          closeTo(centerY + 0.5 * em, 1e-9),
+          reason: '$rule — which is not centred on rectCenterY');
+
+      // And they track the em, not the nominal text size: a header drawn under
+      // a wider font pushes both lines out proportionally.
+      expect(texts[0].args[1], lessThan(centerY),
+          reason: '$rule — the weekday name is above the centre');
+      expect(texts[1].args[1], greaterThan(centerY),
+          reason: '$rule — and the day number below it');
+    });
+
     testWidgets('#6 the day of month carries no leading zero', (tester) async {
       await _pumpHeader(
         tester,

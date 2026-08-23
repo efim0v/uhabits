@@ -36,6 +36,78 @@ abstract class Theme {
 
   Color get toolbarColor => const Color.fromRgb(0xffffff);
 
+  // -------------------------------------------------------------------------
+  // The Android styled-resource attributes (res/values/attrs.xml)
+  // -------------------------------------------------------------------------
+  //
+  // `charts-canvas-theming.android-contrast-attrs#1`: the legacy Android charts
+  // — ScoreChart, FrequencyChart, StreakChart, TargetChart, RingView,
+  // HeaderView, CheckmarkButtonView and NumberButtonView — never see a
+  // `Theme` at all. They read `?attr/contrast60`, `?attr/cardBgColor` and the
+  // rest off the activity's theme through `StyledResources`, and those
+  // attributes are declared in styles.xml, not in Themes.kt.
+  //
+  // The two systems overlap but do not agree: `lowContrastTextColor` is
+  // 0xE0E0E0 while `contrast40` is #D8D8D8, `cardBackgroundColor` is
+  // TRANSPARENT under the widget theme while `cardBgColor` is #303030, and the
+  // pure-black theme blackens the header attribute while leaving the Themes.kt
+  // token at grey_900. A chart being ported from the Android side therefore has
+  // to read the attribute, not the token — so both live here, side by side,
+  // each keeping the name and the value of its own source file.
+
+  /// `?attr/contrast0` — @color/white in the light theme.
+  Color get contrast0 => const Color.fromRgb(0xFFFFFF);
+
+  /// `?attr/contrast20` — @color/grey_300.
+  Color get contrast20 => const Color.fromRgb(0xE0E0E0);
+
+  /// `?attr/contrast40` — @color/grey_350. Note this is *not*
+  /// [lowContrastTextColor] (0xE0E0E0), which is the Themes.kt token nearest
+  /// to it.
+  Color get contrast40 => const Color.fromRgb(0xD8D8D8);
+
+  /// `?attr/contrast60` — @color/grey_500, the colour of every chart label.
+  Color get contrast60 => const Color.fromRgb(0x9E9E9E);
+
+  /// `?attr/contrast80` — @color/grey_700.
+  Color get contrast80 => const Color.fromRgb(0x616161);
+
+  /// `?attr/contrast100` — @color/grey_800.
+  Color get contrast100 => const Color.fromRgb(0x424242);
+
+  /// `?attr/cardBgColor` — @color/grey_50, the background a chart punches its
+  /// marker holes with.
+  Color get cardBgColor => const Color.fromRgb(0xFAFAFA);
+
+  /// `?attr/windowBackgroundColor` — @color/grey_200.
+  Color get windowBackgroundColor => const Color.fromRgb(0xEEEEEE);
+
+  /// `?attr/highlightedBackgroundColor` — @color/grey_100, the background of a
+  /// selected habit row.
+  Color get highlightedBackgroundColor => const Color.fromRgb(0xF5F5F5);
+
+  /// `?attr/headerBackgroundColor` — @color/grey_200.
+  ///
+  /// Deliberately *not* the same member as [headerBackgroundColor], which is
+  /// the Themes.kt token of the same name. The two carry equal values in the
+  /// light and dark themes and diverge in the pure-black one, where the
+  /// attribute is black and the token stays grey_900; `HeaderView` reads the
+  /// attribute and the KMP `HabitListHeader` reads the token.
+  Color get attrHeaderBackgroundColor => const Color.fromRgb(0xEEEEEE);
+
+  /// `?attr/widgetShadowAlpha`, a float rather than a colour.
+  double get widgetShadowAlpha => 0.25;
+
+  /// The int-array `?attr/palette` points at, or null when the theme declares
+  /// no `palette` attribute at all — which is what `StyledResources.getResource`
+  /// reports as a resource id of -1
+  /// (`charts-canvas-theming.android-contrast-attrs#8`).
+  ///
+  /// Every shipped variant declares one, so the null branch exists only for the
+  /// sake of the exception it produces.
+  List<Color>? get palette =>
+      <Color>[for (var index = 0; index < 20; index++) color(index)];
+
   /// `R.attr.useHabitColorAsPrimary`. True in the light theme, false in both
   /// dark ones, where the toolbar takes [primaryColor] instead of the habit's
   /// palette colour (`charts-canvas-theming.android-contrast-attrs#2`, `#3`).
@@ -125,6 +197,38 @@ class LightTheme extends Theme {}
 /// and toolbarColor). They are kept here rather than dropped, so the Kotlin
 /// source and this file stay line-for-line comparable.
 class DarkTheme extends Theme {
+  /// `AppBaseThemeDark`'s attribute block
+  /// (`charts-canvas-theming.android-contrast-attrs#3`).
+  @override
+  Color get contrast0 => const Color.fromRgb(0x212121);
+
+  @override
+  Color get contrast20 => const Color.fromRgb(0x424242);
+
+  @override
+  Color get contrast40 => const Color.fromRgb(0x525252);
+
+  @override
+  Color get contrast60 => const Color.fromRgb(0x9E9E9E);
+
+  @override
+  Color get contrast80 => const Color.fromRgb(0xE0E0E0);
+
+  @override
+  Color get contrast100 => const Color.fromRgb(0xF5F5F5);
+
+  @override
+  Color get cardBgColor => const Color.fromRgb(0x303030);
+
+  @override
+  Color get windowBackgroundColor => const Color.fromRgb(0x212121);
+
+  @override
+  Color get highlightedBackgroundColor => const Color.fromRgb(0x424242);
+
+  @override
+  Color get attrHeaderBackgroundColor => const Color.fromRgb(0x212121);
+
   /// `AppBaseThemeDark` sets useHabitColorAsPrimary=false, so the toolbar is
   /// grey_950 rather than the habit's colour.
   @override
@@ -235,6 +339,43 @@ final class PureBlackTheme extends DarkTheme {
 
   @override
   Color get lowContrastTextColor => const Color.fromRgb(0x212121);
+
+  // `AppBaseThemeDark.PureBlack`'s attribute block
+  // (`charts-canvas-theming.android-contrast-attrs#4`). It restates every
+  // contrast level one step darker than the dark theme's, and blackens the four
+  // background attributes. `palette` is not restated, so the dark palette is
+  // inherited.
+
+  @override
+  Color get contrast0 => const Color.fromRgb(0x000000);
+
+  @override
+  Color get contrast20 => const Color.fromRgb(0x212121);
+
+  @override
+  Color get contrast40 => const Color.fromRgb(0x424242);
+
+  @override
+  Color get contrast60 => const Color.fromRgb(0x9E9E9E);
+
+  @override
+  Color get contrast80 => const Color.fromRgb(0xBDBDBD);
+
+  @override
+  Color get contrast100 => const Color.fromRgb(0xEEEEEE);
+
+  @override
+  Color get cardBgColor => const Color.fromRgb(0x000000);
+
+  @override
+  Color get windowBackgroundColor => const Color.fromRgb(0x000000);
+
+  @override
+  Color get highlightedBackgroundColor => const Color.fromRgb(0x000000);
+
+  /// Black, where the Themes.kt [headerBackgroundColor] token stays grey_900.
+  @override
+  Color get attrHeaderBackgroundColor => const Color.fromRgb(0x000000);
 }
 
 /// Kotlin: `class WidgetTheme : LightTheme()`.
@@ -244,6 +385,91 @@ final class PureBlackTheme extends DarkTheme {
 /// decide whether to skip its contrast comparison for day numbers, and
 /// BarChart's background fill becomes a no-op.
 class WidgetTheme extends LightTheme {
+  // -------------------------------------------------------------------------
+  // `<style name="WidgetTheme" parent="AppBaseThemeDark">`
+  // (`charts-canvas-theming.android-contrast-attrs#5`)
+  // -------------------------------------------------------------------------
+  //
+  // The attribute half of the widget theme inherits from the *dark* style,
+  // while this class extends [LightTheme] because that is what `Themes.kt`
+  // does. Everything AppBaseThemeDark contributes therefore has to be restated
+  // below — contrast40, the window/header/highlight backgrounds and
+  // useHabitColorAsPrimary — or the light values would leak in through the
+  // Dart superclass.
+
+  @override
+  Color get contrast0 => Color.WHITE;
+
+  /// `@color/white_a0` — #0fffffff, white at 15/255.
+  @override
+  Color get contrast20 => Color.WHITE.withAlpha(0x0F / 255.0);
+
+  /// Not restated by the style, so grey_750 comes down from AppBaseThemeDark.
+  @override
+  Color get contrast40 => const Color.fromRgb(0x525252);
+
+  /// `@color/white_aa` — #afffffff, white at 175/255.
+  @override
+  Color get contrast60 => Color.WHITE.withAlpha(0xAF / 255.0);
+
+  @override
+  Color get contrast80 => const Color.fromRgb(0x424242);
+
+  @override
+  Color get contrast100 => Color.WHITE;
+
+  /// grey_850, where [cardBackgroundColor] — the Themes.kt token — is
+  /// [Color.TRANSPARENT].
+  @override
+  Color get cardBgColor => const Color.fromRgb(0x303030);
+
+  @override
+  Color get windowBackgroundColor => const Color.fromRgb(0x212121);
+
+  @override
+  Color get highlightedBackgroundColor => const Color.fromRgb(0x424242);
+
+  @override
+  Color get attrHeaderBackgroundColor => const Color.fromRgb(0x212121);
+
+  @override
+  bool get useHabitColorAsPrimary => false;
+
+  /// `<item name="widgetShadowAlpha">0</item>`: a widget drawn over the user's
+  /// wallpaper casts no shadow.
+  @override
+  double get widgetShadowAlpha => 0.0;
+
+  /// `@array/transparentWidgetPalette`, the darker palette a widget needs to
+  /// stay legible over a wallpaper.
+  ///
+  /// A third palette, distinct from both [color] (the `Themes.kt` widget
+  /// palette) and from the light one the base class points at: the last three
+  /// greys collapse into `@color/black_aa`, black at 175/255.
+  @override
+  List<Color>? get palette => <Color>[
+        const Color.fromRgb(0xC62828), //  0 red_800
+        const Color.fromRgb(0xD84315), //  1 deep_orange_800
+        const Color.fromRgb(0xEF6C00), //  2 orange_800
+        const Color.fromRgb(0xFF8F00), //  3 amber_800
+        const Color.fromRgb(0xF9A825), //  4 yellow_800
+        const Color.fromRgb(0x9E9D24), //  5 lime_800
+        const Color.fromRgb(0x7CB342), //  6 light_green_600
+        const Color.fromRgb(0x388E3C), //  7 green_700
+        const Color.fromRgb(0x00796B), //  8 teal_700
+        const Color.fromRgb(0x0097A7), //  9 cyan_700
+        const Color.fromRgb(0x0288D1), // 10 light_blue_700
+        const Color.fromRgb(0x1565C0), // 11 blue_800
+        const Color.fromRgb(0x283593), // 12 indigo_800
+        const Color.fromRgb(0x512DA8), // 13 deep_purple_700
+        const Color.fromRgb(0x7B1FA2), // 14 purple_700
+        const Color.fromRgb(0xC2185B), // 15 pink_700
+        const Color.fromRgb(0x4E342E), // 16 brown_800
+        Color.BLACK.withAlpha(0xAF / 255.0), // 17 black_aa
+        Color.BLACK.withAlpha(0xAF / 255.0), // 18 black_aa
+        Color.BLACK.withAlpha(0xAF / 255.0), // 19 black_aa
+      ];
+
   @override
   Color get cardBackgroundColor => Color.TRANSPARENT;
 
