@@ -16,6 +16,7 @@ import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
+import 'package:uhabits/ui/habits/list/list_habits_root_view.dart';
 import 'package:uhabits/ui/habits/list/list_header.dart';
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
 import 'package:uhabits_core/src/gui/color.dart' as gui;
@@ -439,7 +440,8 @@ void main() {
 
       // Scroll the list so rows that were never built come on screen; they
       // must already be showing the scrolled dates, not today.
-      await tester.drag(find.byType(ListView), const Offset(0, -600));
+      await tester.drag(
+          find.byKey(HabitListScreen.habitCardListKey), const Offset(0, -600));
       await tester.pumpAndSettle();
 
       expect(find.byKey(EntryPanel.buttonKey(today)), findsNothing,
@@ -640,6 +642,260 @@ void main() {
       expect(habit.computedEntries.get(today).value, 100000,
           reason: 'list-habits.entry-edit-popup-numeric#7');
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // ListHabitsRootView: the stack, the window insets and the confetti origin
+  // -------------------------------------------------------------------------
+  group('root view', () {
+    /// The screen under a window that reports [padding] as its system insets.
+    Future<void> pumpWithPadding(
+      WidgetTester tester,
+      AppScope scope,
+      EdgeInsets padding,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: MediaQuery(
+            data: MediaQueryData(padding: padding),
+            child: Provider<AppScope>.value(
+              value: scope,
+              child: const HabitListScreen(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('#1 the children are stacked in the order the root view adds '
+        'them', (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await tester.pumpWidget(wrap(scope));
+      await tester.pumpAndSettle();
+
+      final root = tester.getRect(find.byType(HabitListScreen));
+      final bar = tester.getRect(find.byType(AppBar));
+      final header = tester.getRect(find.byType(ListHeader));
+      final list = tester.getRect(find.byKey(HabitListScreen.habitCardListKey));
+      final progress = tester.getRect(find.byType(TaskProgressBar));
+      final hint = tester.getRect(find.byType(HintView));
+      final confetti = tester.getRect(find.byType(ConfettiOverlay));
+
+      // `addAtTop(tbar)` then `addBelow(header, tbar)`.
+      expect(header.top, bar.bottom, reason: 'list-habits.screen-layout#1');
+      // `addBelow(listView, header, height = MATCH_PARENT)`.
+      expect(list.top, header.bottom, reason: 'list-habits.screen-layout#1');
+      expect(list.bottom, root.bottom, reason: 'list-habits.screen-layout#1');
+      // The empty view is GONE while there are rows, so it takes no space.
+      expect(tester.getSize(find.byType(EmptyListView)), Size.zero,
+          reason: 'list-habits.screen-layout#1');
+      // `addBelow(progressBar, header) { it.topMargin = dp(-6f) }`.
+      expect(progress.top, header.bottom - 6,
+          reason: 'list-habits.screen-layout#1');
+      // `addAtBottom(hintView)`.
+      expect(hint.bottom, root.bottom, reason: 'list-habits.screen-layout#1');
+      // `addAtTop(konfettiView)` with translationZ 10: it covers the whole
+      // root, toolbar included, and is painted last.
+      expect(confetti, root, reason: 'list-habits.screen-layout#1');
+    });
+
+    testWidgets('#1 the empty view occupies the same area as the list',
+        (tester) async {
+      // `addBelow(llEmpty, header, height = MATCH_PARENT)`: once it is
+      // VISIBLE it covers exactly the rectangle the RecyclerView covers.
+      final scope = openScope(name: 'empty.db');
+      await tester.pumpWidget(wrap(scope));
+      await tester.pumpAndSettle();
+
+      expect(find.text('You have no active habits'), findsOneWidget,
+          reason: 'list-habits.screen-layout#1');
+      expect(tester.getRect(find.byType(EmptyListView)),
+          tester.getRect(find.byKey(HabitListScreen.habitCardListKey)),
+          reason: 'list-habits.screen-layout#1');
+    });
+
+    testWidgets('#7 left and right window insets become root padding over a '
+        'black background', (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      const inset = EdgeInsets.only(left: 24, right: 12, top: 40, bottom: 16);
+      await pumpWithPadding(tester, scope, inset);
+
+      final screen = tester.getRect(find.byType(HabitListScreen));
+      final scaffold = tester.getRect(find.byType(Scaffold).first);
+      expect(scaffold.left - screen.left, 24.0,
+          reason: 'list-habits.screen-layout#7');
+      expect(screen.right - scaffold.right, 12.0,
+          reason: 'list-habits.screen-layout#7');
+      // No vertical padding on the root: the toolbar takes the top inset.
+      expect(scaffold.top, screen.top,
+          reason: 'list-habits.screen-layout#7');
+      expect(scaffold.bottom, screen.bottom,
+          reason: 'list-habits.screen-layout#7');
+
+      // `view.background = ColorDrawable(Color.BLACK)`.
+      final painted = tester.widget<ColoredBox>(
+        find.descendant(
+          of: find.byType(HabitListScreen),
+          matching: find.byType(ColoredBox),
+        ).first,
+      );
+      expect(painted.color, const ui.Color(0xFF000000),
+          reason: 'list-habits.screen-layout#7');
+
+      // `applyToolbarInsets`: the toolbar grows by the top inset instead of
+      // being pushed down.
+      final bar = tester.getRect(find.byType(AppBar));
+      expect(bar.top, screen.top, reason: 'list-habits.screen-layout#7');
+      expect(bar.height, kToolbarHeight + 40,
+          reason: 'list-habits.screen-layout#7');
+    });
+
+    testWidgets('#8 the bottom systemBars inset is added to the last card, '
+        'once', (tester) async {
+      final scope = openScope();
+      for (var i = 0; i < 3; i++) {
+        addHabit(scope, 'Habit $i');
+      }
+      await pumpWithPadding(
+        tester,
+        scope,
+        const EdgeInsets.only(bottom: 32),
+      );
+
+      // The default primary order is BY_POSITION, so the list is the sortable
+      // one (`list-habits.drag-reorder#1`).
+      final list = tester.widget<ReorderableListView>(
+        find.byType(ReorderableListView),
+      );
+      final padding = list.padding!;
+      expect(padding.bottom, 88 + 32,
+          reason: 'list-habits.screen-layout#8');
+      expect(padding.top, 0.0, reason: 'list-habits.screen-layout#8');
+
+      // …and exactly once: `insetDecorationsAdded` guards the second call.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await pumpWithPadding(
+        tester,
+        scope,
+        const EdgeInsets.only(bottom: 32),
+      );
+      expect(
+        tester
+            .widget<ReorderableListView>(find.byType(ReorderableListView))
+            .padding!
+            .bottom,
+        88 + 32,
+        reason: 'list-habits.screen-layout#8',
+      );
+    });
+
+    testWidgets('#5 the burst starts at the centre of the tapped button, less '
+        'the left window inset', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      const inset = EdgeInsets.only(left: 24);
+      await pumpWithPadding(tester, scope, inset);
+
+      final today = getToday();
+      final button = tester.getRect(find.byKey(EntryPanel.buttonKey(today)));
+      // isShortToggleEnabled is false, so the long press is the toggle, and
+      // UNKNOWN -> YES_MANUAL is the value that fires confetti.
+      await tester.longPress(find.byKey(EntryPanel.buttonKey(today)));
+      await tester.pump();
+
+      expect(habit.computedEntries.get(today).value, Entry.yesManual,
+          reason: 'list-habits.confetti#5');
+      final overlay =
+          tester.state<ConfettiOverlayState>(find.byType(ConfettiOverlay));
+      expect(overlay.parties, hasLength(1),
+          reason: 'list-habits.confetti#5');
+      final origin = overlay.parties.single.position;
+      // The window position of the button centre…
+      expect(origin.dx, closeTo(button.center.dx - 24, 0.001),
+          reason: 'list-habits.confetti#5 — less the display-cutout left safe '
+              'inset, which the root already carried away as padding');
+      expect(origin.dy, closeTo(button.center.dy, 0.001),
+          reason: 'list-habits.confetti#5');
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('#1 a toggle to NO fires no burst at all', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      habit.originalEntries.add(Entry(getToday(), Entry.yesManual));
+      habit.recompute();
+      await tester.pumpWidget(wrap(scope));
+      await tester.pumpAndSettle();
+
+      final today = getToday();
+      await tester.longPress(find.byKey(EntryPanel.buttonKey(today)));
+      await tester.pumpAndSettle();
+
+      expect(habit.computedEntries.get(today).value, Entry.no,
+          reason: 'list-habits.toggle-from-row#1');
+      expect(
+        tester
+            .state<ConfettiOverlayState>(find.byType(ConfettiOverlay))
+            .parties,
+        isEmpty,
+        reason: 'list-habits.toggle-from-row#1 — showConfetti only runs for '
+            'YES_MANUAL',
+      );
+    });
+
+    testWidgets('header-scrolling#8 the scroll state survives a restart',
+        (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await tester.pumpWidget(
+        MaterialApp(
+          restorationScopeId: 'app',
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Provider<AppScope>.value(
+            value: scope,
+            child: const HabitListScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final today = getToday();
+      // Three columns into the past.
+      final gesture =
+          await tester.startGesture(tester.getCenter(find.byType(ListHeader)));
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-144, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<HabitCard>(find.byType(HabitCard)).dataOffset, 3,
+          reason: 'list-habits.header-scrolling#8');
+      expect(find.byKey(EntryPanel.buttonKey(today)), findsNothing,
+          reason: 'list-habits.header-scrolling#8');
+
+      // `onSaveInstanceState` writes the header's scroller state and the card
+      // list's dataOffset into the saved instance state; the restore puts both
+      // back.
+      await tester.restartAndRestore();
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<ListHeader>(find.byType(ListHeader)).dataOffset, 3,
+          reason: 'list-habits.header-scrolling#8 — the header came back on '
+              'the column it was left on');
+      expect(tester.widget<HabitCard>(find.byType(HabitCard)).dataOffset, 3,
+          reason: 'list-habits.header-scrolling#8 — and so did the list');
+      expect(find.byKey(EntryPanel.buttonKey(today)), findsNothing,
+          reason: 'list-habits.header-scrolling#8');
+      expect(find.byKey(EntryPanel.buttonKey(today.minus(3))), findsOneWidget,
+          reason: 'list-habits.header-scrolling#8');
+    });
+
   });
 }
 

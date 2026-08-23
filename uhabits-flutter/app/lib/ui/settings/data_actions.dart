@@ -50,6 +50,7 @@ import 'package:uhabits_core/uhabits_core.dart' show Sqlite3DatabaseOpener;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../platform/bug_reporter.dart';
 import '../../platform/flutter_files.dart';
 import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
@@ -75,6 +76,10 @@ enum DataActionMessage {
 
   /// `R.string.activity_not_found` — "No app was found to support this action"
   activityNotFound,
+
+  /// `ListHabitsBehavior.Message.COULD_NOT_GENERATE_BUG_REPORT`,
+  /// `R.string.bug_report_failed` — "Failed to generate bug report."
+  couldNotGenerateBugReport,
 }
 
 /// `Activity.startActivitySafely(Intent(ACTION_VIEW, Uri.parse(url)))`.
@@ -106,9 +111,13 @@ class DataActions {
     required this.urlOpener,
     required this.importTaskFactory,
     required this.showMessage,
+    FlutterBugReporter? bugReporter,
+    SendEmailScreen? emailScreen,
     void Function()? refreshHabitList,
     DateTime Function()? clock,
   })  : _refreshHabitList = refreshHabitList,
+        _bugReporter = bugReporter,
+        _emailScreen = emailScreen,
         _clock = clock ?? DateTime.now;
 
   /// Wires the real plugins. The one call the app makes at startup.
@@ -131,6 +140,11 @@ class DataActions {
         logging: scope.logging,
       ),
       showMessage: showMessage,
+      bugReporter: FlutterBugReporter(
+        dirFinder: HabitsDirFinder.of(directories),
+        deviceInfo: DeviceInfo.current(),
+      ),
+      emailScreen: SendEmailScreen(opener: const PlatformUrlOpener().open),
     );
   }
 
@@ -156,6 +170,14 @@ class DataActions {
   /// observe it without starting a background refresh.
   final void Function()? _refreshHabitList;
 
+  /// `ListHabitsModule`, the `@Inject` class extending `AndroidBugReporter`
+  /// that binds `ListHabitsBehavior.BugReporter` for the list screen. Null on
+  /// a host that could not resolve its directories.
+  final FlutterBugReporter? _bugReporter;
+
+  /// `Activity.showSendEmailScreen(...)`.
+  final SendEmailScreen? _emailScreen;
+
   /// `System.currentTimeMillis()`, which is what names a backup file.
   final DateTime Function() _clock;
 
@@ -179,8 +201,37 @@ class DataActions {
       case SettingsResult.exportDb:
         return exportDb();
       case SettingsResult.bugReport:
+        return sendBugReport();
       case SettingsResult.repairDb:
         return;
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // Generate bug report
+  // -------------------------------------------------------------------
+
+  /// `ListHabitsBehavior.onSendBugReport()`, at the boundary where the
+  /// reporter and the mail client live.
+  ///
+  /// The two steps and their order are the core's — dump to a file first, then
+  /// build the text and hand it to the send-email screen — and the core's own
+  /// test covers the presenter that runs them. What is here is the wiring the
+  /// Android app does in `ListHabitsModule`: a real reporter and a real
+  /// sender behind the settings row.
+  Future<void> sendBugReport() async {
+    final reporter = _bugReporter;
+    final email = _emailScreen;
+    if (reporter == null || email == null) return;
+    reporter.dumpBugReportToFile();
+    try {
+      final log = reporter.getBugReport();
+      await email.showSendBugReportToDeveloperScreen(log);
+    } on Object catch (error, stackTrace) {
+      // `catch (e: Exception) { e.printStackTrace(); showMessage(...) }`.
+      stderr.writeln(error);
+      stderr.writeln(stackTrace);
+      showMessage(DataActionMessage.couldNotGenerateBugReport);
     }
   }
 
@@ -483,6 +534,8 @@ String dataActionMessageText(L10n l10n, DataActionMessage message) {
       return l10n.fileNotRecognized;
     case DataActionMessage.activityNotFound:
       return l10n.activityNotFound;
+    case DataActionMessage.couldNotGenerateBugReport:
+      return l10n.bugReportFailed;
   }
 }
 

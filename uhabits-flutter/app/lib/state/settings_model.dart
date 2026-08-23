@@ -22,6 +22,8 @@
 /// in as [storage]. Without it those rows render read-only.
 library;
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
@@ -47,6 +49,66 @@ enum SettingsResult {
   /// The numeric `RESULT_*` constant, kept so an importer of an existing
   /// Android intent contract can still match on it.
   final int code;
+}
+
+/// `Environment.getExternalStorageDirectory().absolutePath` on every Android
+/// device since the storage rework: the primary shared volume.
+///
+/// A constant rather than a lookup, because no plugin this app depends on
+/// exposes shared storage — the same reason `getSDCardDir` takes its parent as
+/// an argument (`platform-glue.dir-finder#4`).
+const String primaryExternalStorageDir = '/storage/emulated/0';
+
+/// Port of `SettingsFragment.fullPathFor(uri)`
+/// (`settings.screen.database-category#9`).
+///
+/// ```kotlin
+/// when (uri.scheme) {
+///     "content" -> {
+///         val docId = DocumentsContract.getTreeDocumentId(uri)
+///         val (type, rel) = docId.split(":", limit = 2)...
+///         val base = if (type.equals("primary", true))
+///             Environment.getExternalStorageDirectory().absolutePath
+///         else "/storage/$type"
+///         if (rel.isEmpty()) base else "$base/$rel"
+///     }
+///     "file" -> java.io.File(uri.path!!).absolutePath
+///     else -> null
+/// }
+/// ```
+///
+/// Returns null for any other scheme, which is the caller's signal to show the
+/// raw URI instead. Like the original it does not defend against a `content`
+/// URI that is not a tree URI: `DocumentsContract.getTreeDocumentId` throws
+/// `IllegalArgumentException` there, and so does this
+/// ([ArgumentError] being Dart's counterpart).
+String? fullPathFor(Uri uri, {String primaryDir = primaryExternalStorageDir}) {
+  switch (uri.scheme) {
+    case 'content':
+      final docId = _treeDocumentId(uri);
+      final separator = docId.indexOf(':');
+      // `split(":", limit = 2)`: everything after the FIRST colon is the
+      // relative path, colons included.
+      final type = separator < 0 ? docId : docId.substring(0, separator);
+      final rel = separator < 0 ? '' : docId.substring(separator + 1);
+      final base = type.toLowerCase() == 'primary' ? primaryDir : '/storage/$type';
+      return rel.isEmpty ? base : '$base/$rel';
+    case 'file':
+      // `java.io.File(uri.path!!).absolutePath`.
+      return File(uri.path).absolute.path;
+    default:
+      return null;
+  }
+}
+
+/// `DocumentsContract.getTreeDocumentId(uri)`: the second path segment of a
+/// `content://<authority>/tree/<documentId>` URI.
+String _treeDocumentId(Uri uri) {
+  final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+  if (segments.length < 2 || segments.first != 'tree') {
+    throw ArgumentError('Invalid URI: $uri');
+  }
+  return segments[1];
 }
 
 class SettingsModel extends ChangeNotifier {
@@ -186,8 +248,23 @@ class SettingsModel extends ChangeNotifier {
 
   int get widgetOpacity => preferences.widgetOpacity;
 
+  /// `SettingsFragment.onSharedPreferenceChanged`:
+  ///
+  /// ```kotlin
+  /// if (key == "pref_widget_opacity" && widgetUpdater != null) {
+  ///     Log.d("SettingsFragment", "updating widgets")
+  ///     widgetUpdater!!.updateWidgets()
+  /// }
+  /// ```
+  ///
+  /// The one preference whose change repaints the home screen, and the only
+  /// key the fragment special-cases — every other row is read by whoever needs
+  /// it, next time it needs it. `widgetSync` is null on a host with no widget
+  /// support and in every widget test, which is the `widgetUpdater != null`
+  /// guard (`settings.preferences.widget-opacity#4`).
   set widgetOpacity(int value) {
     preferences.widgetOpacity = value;
+    scope.widgetSync?.updateWidgets();
     notifyListeners();
   }
 
@@ -251,7 +328,8 @@ class SettingsModel extends ChangeNotifier {
   // Database category
   // -------------------------------------------------------------------
 
-  /// `updatePublicBackupFolderSummary`: null means "No folder selected".
+  /// The raw `publicBackupFolder` key: an `android.net.Uri` as a string, or
+  /// null when it was never written.
   ///
   /// The picker behind it is the Storage Access Framework, so nothing ever
   /// writes this key in the Flutter build; the getter is here so the row can
@@ -259,6 +337,20 @@ class SettingsModel extends ChangeNotifier {
   String? get publicBackupFolder {
     final value = _rawString('publicBackupFolder', '');
     return value.isEmpty ? null : value;
+  }
+
+  /// `updatePublicBackupFolderSummary()`: the human-readable path the row
+  /// shows, or null for "No folder selected".
+  ///
+  /// ```kotlin
+  /// val uriString = sharedPrefs?.getString("publicBackupFolder", null)
+  /// if (uriString == null) { pref.summary = ...no_public_backup_folder_selected; return }
+  /// pref.summary = fullPathFor(Uri.parse(uriString)) ?: uriString
+  /// ```
+  String? get publicBackupFolderSummary {
+    final uriString = publicBackupFolder;
+    if (uriString == null) return null;
+    return fullPathFor(Uri.parse(uriString)) ?? uriString;
   }
 
   // -------------------------------------------------------------------

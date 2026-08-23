@@ -246,6 +246,11 @@ class EditHabitScreen extends StatelessWidget {
   static const Key yesNoTypeCardKey = Key('habitType.buttonYesNo');
   static const Key measurableTypeCardKey = Key('habitType.buttonMeasurable');
 
+  /// The fragment tag `EditHabitActivity` shows the radial time picker under,
+  /// reused here as the route name the way `HistoryEditorDialog` reuses its own
+  /// (`edit-habit.reminder-time#7`).
+  static const String timePickerTag = 'timePicker';
+
   /// What `TimePickerDialog.newInstance(...)` is seeded with: the current
   /// reminder, or 08:00 when there is none (`edit-habit.reminder-time#3`).
   static TimeOfDay initialReminderTime(int hour, int minute) => TimeOfDay(
@@ -744,15 +749,32 @@ class _EditHabitViewState extends State<_EditHabitView> {
   }
 
   /// `TimePickerDialog.newInstance(...)` seeded with 08:00 when no reminder is
-  /// set yet (`edit-habit.reminder-time#3`).
+  /// set yet (`edit-habit.reminder-time#3`), shown under the fragment tag
+  /// "timePicker" (`edit-habit.reminder-time#7`) and tinted with `androidColor`
+  /// — the habit colour resolved against the current theme, which is what
+  /// `newInstance` is handed as the accent (`edit-habit.color-control#5`).
   Future<void> _onPickReminderTime() async {
     final model = context.read<EditHabitModel>();
+    final theme = coreThemeOf(context);
+    final accent = toFlutterColor(theme.colorOf(model.color));
     final picked = await showTimePicker(
       context: context,
       initialTime: EditHabitScreen.initialReminderTime(
         model.reminderHour,
         model.reminderMin,
       ),
+      routeSettings: const RouteSettings(
+        name: EditHabitScreen.timePickerTag,
+      ),
+      builder: (context, child) {
+        final base = Theme.of(context);
+        return Theme(
+          data: base.copyWith(
+            colorScheme: base.colorScheme.copyWith(primary: accent),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked == null) return;
     model.setReminderTime(picked.hour, picked.minute);

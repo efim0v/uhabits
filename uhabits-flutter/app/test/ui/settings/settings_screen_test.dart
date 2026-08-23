@@ -599,6 +599,82 @@ void main() {
             'summary wraps back onto the first name',
       );
     });
+
+    testWidgets(
+        'settings.preferences.first-weekday#11 — the row\'s default is the '
+        'current weekday, recomputed every time the screen rebuilds',
+        (tester) async {
+      const String rule =
+          'settings.preferences.first-weekday#11 — updateWeekdayPreference() '
+          'also calls setDefaultValue(currentFirstWeekday.toString()) each time '
+          'it runs, and it runs on every onResume and on every '
+          'SharedPreferences change. The XML carries no android:defaultValue '
+          '(#8), so this is the only thing that gives the row a default at all: '
+          'whatever the weekday currently resolves to, including the value the '
+          'locale supplies while pref_first_weekday is unset. The port has no '
+          'ListPreference to configure — the row derives everything from '
+          'model.firstWeekday on each build, which is the same "recomputed, '
+          'never captured" property.';
+
+      final int savedHook = getFirstWeekdayNumberAccordingToLocale();
+      addTearDown(
+          () => getFirstWeekdayNumberAccordingToLocale = () => savedHook);
+
+      final harness = await open(tester);
+      expect(harness.storage.getString('pref_first_weekday', 'unset'), 'unset',
+          reason: '$rule Nothing has been stored, so only the default is '
+              'speaking.');
+
+      Future<int?> checkedValue() async {
+        await tester.tap(rowNamed('pref_first_weekday'));
+        await tester.pumpAndSettle();
+        final ListTile checked = tester
+            .widgetList<ListTile>(find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.byType(ListTile),
+            ))
+            .firstWhere((tile) => tile.trailing != null);
+        final int value =
+            int.parse((checked.key! as ValueKey<Object?>).value.toString().split('-').last);
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        return value;
+      }
+
+      expect(await checkedValue(), 1,
+          reason: '$rule The default the dialog opens on is the current '
+              'weekday — Sunday, from the locale hook.');
+
+      // "on every SharedPreferences change": the locale moves and an unrelated
+      // preference is written, which is what makes the fragment re-run
+      // updateWeekdayPreference. The row follows.
+      getFirstWeekdayNumberAccordingToLocale = () => 2;
+      await tapSwitch(tester, 'pref_short_toggle');
+
+      expect(
+        find.descendant(
+          of: rowNamed('pref_first_weekday'),
+          matching: find.text('Monday'),
+        ),
+        findsOneWidget,
+        reason: '$rule The summary was recomputed rather than captured once at '
+            'first build.',
+      );
+      expect(await checkedValue(), 2,
+          reason: '$rule …and so was the default the dialog opens on.');
+
+      // Once a value really is stored it wins over the recomputed default,
+      // exactly as setDefaultValue does for a ListPreference whose key exists.
+      await tester.tap(rowNamed('pref_first_weekday'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Wednesday'));
+      await tester.pumpAndSettle();
+      getFirstWeekdayNumberAccordingToLocale = () => 6;
+      await tapSwitch(tester, 'pref_short_toggle');
+      expect(await checkedValue(), 4,
+          reason: '$rule A stored value is not overwritten by the default, '
+              'however often the default is set.');
+    });
   });
 
   // -------------------------------------------------------------------
@@ -850,18 +926,29 @@ void main() {
 
       expect(SettingsModel(harness.scope, storage: storage).publicBackupFolder,
           tree,
-          reason: 'io.public-backup-folder-pref#7: the summary shows the '
-              'stored value; the human-readable path derived from the tree '
-              'document id needs DocumentsContract, so the raw URI string is '
-              'what is left');
+          reason: 'io.public-backup-folder-pref#7: the raw getter still holds '
+              'the stored URI string, which is what the picker would write');
+      // The summary is the human-readable path derived from the tree document
+      // id — `SettingsFragment.fullPathFor`, ported in lib/state/
+      // settings_model.dart and asserted in detail under
+      // settings.screen.database-category#9.
+      expect(
+        find.descendant(
+          of: rowNamed('publicBackupFolder'),
+          matching: find.text('$primaryExternalStorageDir/Loop'),
+        ),
+        findsOneWidget,
+        reason: 'io.public-backup-folder-pref#7: the human-readable path when '
+            'it can be resolved',
+      );
       expect(
         find.descendant(
           of: rowNamed('publicBackupFolder'),
           matching: find.text(tree),
         ),
-        findsOneWidget,
-        reason: 'io.public-backup-folder-pref#7: otherwise the raw URI string '
-            'is shown',
+        findsNothing,
+        reason: 'io.public-backup-folder-pref#7: the raw URI string is the '
+            'fallback, not the first choice',
       );
       expect(
         find.descendant(
@@ -1036,6 +1123,50 @@ void main() {
       await tester.tap(rowNamed('about'));
       await tester.pumpAndSettle();
       expect(harness.aboutShown, isTrue);
+    });
+
+    testWidgets(
+        'settings.screen.troubleshooting-and-links#2 — the report is mailed to '
+        'dev@loophabits.org, subject "Bug Report - Loop Habit Tracker"',
+        (tester) async {
+      const String rule =
+          'settings.screen.troubleshooting-and-links#2 — Bug reports are '
+          'emailed to "dev@loophabits.org" with subject "Bug Report - Loop '
+          'Habit Tracker"; if BugReporter.getBugReport() throws, the list '
+          'screen shows the message for COULD_NOT_GENERATE_BUG_REPORT instead.';
+
+      await open(tester);
+      final l10n = L10n.of(tester.element(find.byType(SettingsRow).first));
+
+      expect(SettingsScreen.bugReportTo, 'dev@loophabits.org',
+          reason: '$rule @string/bugReportTo.');
+      expect(SettingsScreen.bugReportSubject, 'Bug Report - Loop Habit Tracker',
+          reason: '$rule @string/bugReportSubject.');
+
+      // showSendEmailScreen(to, subject, content) as a mailto URI: EXTRA_EMAIL
+      // is the recipient, EXTRA_SUBJECT and EXTRA_TEXT the two parameters.
+      final Uri mail = SettingsScreen.bugReportMailto('log line 1\nline 2');
+      expect(mail.scheme, 'mailto', reason: rule);
+      expect(mail.path, 'dev@loophabits.org', reason: rule);
+      expect(mail.queryParameters['subject'], 'Bug Report - Loop Habit Tracker',
+          reason: rule);
+      expect(mail.queryParameters['body'], 'log line 1\nline 2',
+          reason: '$rule The report itself is the body, as EXTRA_TEXT was.');
+
+      // The other branch of the same rule: when the report cannot be produced,
+      // nothing is mailed and COULD_NOT_GENERATE_BUG_REPORT is shown instead.
+      // ListHabitsBehavior.onSendBugReport is what chooses between the two, and
+      // that choice is asserted in
+      // packages/uhabits_core/test/ui/screens/habits/list/
+      // list_habits_behavior_test.dart; what belongs to this screen is the
+      // string the message resolves to.
+      expect(l10n.bugReportFailed, 'Failed to generate bug report.',
+          reason: '$rule …the message for COULD_NOT_GENERATE_BUG_REPORT.');
+      expect(
+        tester.widget<SettingsRow>(rowNamed('bugReport')).title,
+        'Generate bug report',
+        reason: '$rule The row that starts the whole flow.',
+      );
     });
 
     testWidgets(

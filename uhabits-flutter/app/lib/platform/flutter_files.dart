@@ -135,6 +135,27 @@ String? getDir(List<String> potentialParentDirs, String relativePath) {
   return path;
 }
 
+/// Port of `FileUtils.getSDCardDir(relativePath)`.
+///
+/// The one-candidate variant of [getDir]: Android builds
+/// `arrayOf(Environment.getExternalStorageDirectory())` and hands it straight
+/// to `getDir`, so every rule of [getDir] — first writable parent wins, create
+/// on demand, silent null on failure — applies unchanged, with the list
+/// reduced to a single entry.
+///
+/// [externalStorageDir] is that entry. It is a parameter rather than a lookup
+/// because `Environment.getExternalStorageDirectory()` is the *shared* storage
+/// root, which only Android has and which no plugin this app depends on
+/// exposes: `path_provider.getExternalStorageDirectory()` answers with the
+/// app-private external directory instead, which is a different place.
+/// Upstream's only caller is `BaseViewTest`, which writes rendered-view
+/// screenshots to `<sdcard>/test-screenshots`; nothing in the shipping app
+/// calls it.
+String? getSDCardDir(String relativePath, {required String externalStorageDir}) {
+  final parents = <String>[externalStorageDir];
+  return getDir(parents, relativePath);
+}
+
 /// `File.canWrite()`, which is false for a path that does not exist.
 ///
 /// `dart:io` has no `canWrite`, so this reads the owner write bit out of the
@@ -195,16 +216,26 @@ class HabitsDirFinder
 /// Written by hand rather than through `intl` because the pattern must not
 /// follow the device locale — a Persian or Thai calendar would rename the
 /// backups — and because `Locale.US` digits are ASCII.
-String backupDateString(DateTime instant) {
-  final utc = instant.toUtc();
-  String two(int value) => value.toString().padLeft(2, '0');
-  return '${utc.year.toString().padLeft(4, '0')}-${two(utc.month)}-'
-      '${two(utc.day)} ${two(utc.hour)}${two(utc.minute)}${two(utc.second)}';
-}
+String backupDateString(DateTime instant) => _formatYmdHms(instant.toUtc());
 
 /// `"Loop Habits Backup $date.db"`.
 String backupFileName(DateTime instant) =>
     'Loop Habits Backup ${backupDateString(instant)}.db';
+
+/// The `yyyy-MM-dd HHmmss` pattern itself, applied to an already zone-adjusted
+/// value. `Locale.US` only matters for the digits, which are ASCII here by
+/// construction.
+///
+/// `AndroidBugReporter.dumpBugReportToFile()` builds its log filename from the
+/// same pattern, constructed independently — see `FlutterBugReporter
+/// .logFileName`, whose time zone is the device's default rather than UTC
+/// (`platform-glue.time-and-date-formatting#4`).
+String _formatYmdHms(DateTime value) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${value.year.toString().padLeft(4, '0')}-${two(value.month)}-'
+      '${two(value.day)} ${two(value.hour)}${two(value.minute)}'
+      '${two(value.second)}';
+}
 
 /// Port of `DatabaseUtils.saveDatabaseCopy(context, dir: File)`.
 ///

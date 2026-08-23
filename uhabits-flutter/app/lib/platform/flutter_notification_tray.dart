@@ -27,6 +27,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
@@ -597,6 +598,15 @@ class LocalNotificationsPresenter implements NotificationPresenter {
 
   final ReminderNotificationBuilder _builder;
 
+  /// `notifications.content#2`: `setSmallIcon(R.drawable.ic_notification)`.
+  ///
+  /// The plugin takes the drawable by *name* — it resolves
+  /// `@drawable/<androidSmallIcon>` out of the app's own resources — so the
+  /// file has to exist under `android/app/src/main/res/drawable`. It is the
+  /// same white-on-transparent vector the Android build ships; a missing one
+  /// is not a compile error, it is a reminder that never appears.
+  static const String androidSmallIcon = 'ic_notification';
+
   /// Initialises the plugin, declares the iOS categories and creates the
   /// Android channel.
   ///
@@ -618,7 +628,7 @@ class LocalNotificationsPresenter implements NotificationPresenter {
         LocalNotificationsPresenter(plugin: resolved, builder: builder);
     await resolved.initialize(
       InitializationSettings(
-        android: const AndroidInitializationSettings('ic_notification'),
+        android: const AndroidInitializationSettings(androidSmallIcon),
         iOS: DarwinInitializationSettings(
           // The permission prompt is raised from the habit list, the way
           // `ListHabitsActivity.onResume` asks for POST_NOTIFICATIONS only when
@@ -749,4 +759,119 @@ class LocalNotificationsPresenter implements NotificationPresenter {
 
   @override
   Future<void> cancel(int id) => plugin.cancel(id);
+}
+
+// ---------------------------------------------------------------------------
+// The system's own notification-channel screen
+// ---------------------------------------------------------------------------
+
+/// Port of the `reminderCustomize` click handler in `SettingsFragment`:
+///
+/// ```kotlin
+/// AndroidNotificationTray.createAndroidNotificationChannel(context)
+/// val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+///     .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+///     .putExtra(Settings.EXTRA_CHANNEL_ID, NotificationTray.REMINDERS_CHANNEL_ID)
+/// startActivity(intent)
+/// ```
+///
+/// The order is the whole point (`notifications.channel#3`): the settings
+/// screen the intent opens shows *one* channel, and a channel Android has
+/// never been told about does not exist, so creating it first is what stops
+/// the user landing on an empty page.
+///
+/// Notification channels are an Android concept; [openReminderChannelSettings]
+/// answers false everywhere else, which is the `ActivityNotFoundException`
+/// branch of `startActivitySafely`.
+abstract interface class NotificationChannelSettings {
+  Future<bool> openReminderChannelSettings();
+}
+
+/// The half of the flow that talks to `flutter_local_notifications`:
+/// `NotificationManager.createNotificationChannel(...)`.
+///
+/// Split out from [PlatformNotificationChannelSettings] so the *order* of the
+/// two calls can be observed without a plugin.
+abstract interface class NotificationChannelCreator {
+  /// `AndroidNotificationTray.createAndroidNotificationChannel(context)`.
+  Future<void> createReminderChannel();
+}
+
+/// [NotificationChannelCreator] over `flutter_local_notifications`.
+class LocalNotificationsChannelCreator implements NotificationChannelCreator {
+  const LocalNotificationsChannelCreator({
+    required this.plugin,
+    required this.channelName,
+  });
+
+  final FlutterLocalNotificationsPlugin plugin;
+
+  /// `R.string.reminder`, the user-visible channel name
+  /// (`notifications.channel#1`).
+  final String channelName;
+
+  @override
+  Future<void> createReminderChannel() async {
+    await plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(
+          AndroidNotificationChannel(
+            NotificationTray.remindersChannelId,
+            channelName,
+            importance: Importance.defaultImportance,
+          ),
+        );
+  }
+}
+
+/// [NotificationChannelSettings] over a method channel handled by
+/// `MainActivity`.
+///
+/// `Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS` is not exposed by any
+/// package this app depends on, and `EXTRA_APP_PACKAGE` has to be the running
+/// package, which only the Android side knows — so the Dart side sends the
+/// channel id and the activity supplies its own package name.
+class PlatformNotificationChannelSettings
+    implements NotificationChannelSettings {
+  const PlatformNotificationChannelSettings({
+    required this.creator,
+    this.channel = const MethodChannel(methodChannelName),
+  });
+
+  final NotificationChannelCreator creator;
+
+  final MethodChannel channel;
+
+  /// Must match the constant in
+  /// `android/app/src/main/kotlin/org/isoron/uhabits/MainActivity.kt`.
+  static const String methodChannelName = 'org.isoron.uhabits/notifications';
+
+  /// The method `MainActivity` answers.
+  static const String openChannelSettingsMethod = 'openChannelSettings';
+
+  /// The argument key carrying `Settings.EXTRA_CHANNEL_ID`.
+  static const String channelIdArgument = 'channelId';
+
+  @override
+  Future<bool> openReminderChannelSettings() async {
+    // The channel first, always: the screen the intent opens is a view onto
+    // one channel and cannot render a channel that does not exist yet.
+    await creator.createReminderChannel();
+    try {
+      final opened = await channel.invokeMethod<bool>(
+        openChannelSettingsMethod,
+        <String, Object?>{
+          channelIdArgument: NotificationTray.remindersChannelId,
+        },
+      );
+      return opened ?? false;
+    } on MissingPluginException {
+      // No Android side to answer — iOS, macOS, a test host.
+      return false;
+    } on PlatformException {
+      // `startActivitySafely`: nothing could handle the intent.
+      return false;
+    }
+  }
 }

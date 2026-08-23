@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Generated from app/lib/l10n/app_sk.arb by
+  app/test/platform/launcher_icon_test.dart's contract: the launcher
+  label is an Android string resource, because the launcher reads it long
+  before any Dart runs (app-identity.launcher-icon#1).
+-->
+<resources>
+    <string name="app_name">Loop Habit Tracker</string>
+    <string name="main_activity_title">Návyky</string>
+</resources>

@@ -6,12 +6,18 @@ import 'package:flutter/foundation.dart';
 import 'package:uhabits_core/src/commands/create_habit_command.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
+import 'package:uhabits_core/src/ui/intent_parser.dart';
+import 'package:uhabits_core/src/ui/notification_tray.dart';
 import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_adapter.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_controller.dart';
 import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_menu_behavior.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_selection_menu_behavior.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
 import 'app_scope.dart';
 
+export 'package:uhabits_core/src/ui/intent_parser.dart' show Intent;
 export 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_adapter.dart'
     show HabitCardData;
 export 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dart'
@@ -34,8 +40,23 @@ export 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dar
 /// interface and re-emits each call through a nullable handler that the widget
 /// installs while it is mounted.
 class HabitListModel extends ChangeNotifier
-    implements HabitCardListAdapterListener, ListHabitsBehaviorScreen {
+    implements
+        HabitCardListAdapterListener,
+        ListHabitsBehaviorScreen,
+        ListHabitsMenuBehaviorScreen,
+        ListHabitsMenuThemeSwitcher,
+        HabitCardListSelectionMenu,
+        ListHabitsSelectionMenuBehaviorScreen {
   HabitListModel(this.scope) {
+    // `ListHabitsMenu.behavior`. Its init block seeds showArchived /
+    // showCompleted from the preferences and installs the first filter
+    // (`list-habits.filters#1`).
+    _menuBehavior = ListHabitsMenuBehavior(
+      this,
+      scope.adapter,
+      scope.preferences,
+      this,
+    );
     _behavior = ListHabitsBehavior(
       scope.habitList,
       const _UnsupportedDirFinder(),
@@ -46,12 +67,82 @@ class HabitListModel extends ChangeNotifier
       const _UnsupportedBugReporter(),
       exportCsvTaskFactory: _unsupportedExportCsvTask,
     );
+    // `ListHabitsSelectionMenu.behavior`.
+    _selectionMenuBehavior = ListHabitsSelectionMenuBehavior(
+      scope.habitList,
+      this,
+      scope.adapter,
+      scope.commandRunner,
+    );
+    // `HabitCardListView.controller`. The menu and the controller point at each
+    // other, which is why Kotlin injects the menu lazily.
+    _listController = HabitCardListController(
+      scope.adapter,
+      _behavior,
+      () => this,
+    );
     _observableListener = ModelObservableListener(notifyListeners);
   }
 
   final AppScope scope;
 
   late final ListHabitsBehavior _behavior;
+
+  late final ListHabitsMenuBehavior _menuBehavior;
+
+  /// `ListHabitsMenu.behavior` — the presenter behind the toolbar menu.
+  ListHabitsMenuBehavior get menu => _menuBehavior;
+
+  late final ListHabitsSelectionMenuBehavior _selectionMenuBehavior;
+
+  /// `ListHabitsSelectionMenu.behavior`.
+  ListHabitsSelectionMenuBehavior get selectionMenu => _selectionMenuBehavior;
+
+  late final HabitCardListController _listController;
+
+  /// `HabitCardListView.controller`: the two-state machine over the selection.
+  HabitCardListController get listController => _listController;
+
+  /// `ListHabitsActivity.ACTION_EDIT`, the action a reminder's "enter"
+  /// notification fires.
+  static const String actionEdit = 'org.isoron.uhabits.ACTION_EDIT';
+
+  /// `ListHabitsActivity.intent`, as last set by `onNewIntent`.
+  ///
+  /// The delivery is the platform's — on Android an `Intent`, here whatever the
+  /// notification layer hands over — but what is done with it, and the fact
+  /// that it is done exactly once, is this class's
+  /// (`list-habits.startup-lifecycle#8`).
+  Intent? pendingIntent;
+
+  /// `ListHabitsSelectionMenu.notificationTray`, used only by the developer
+  /// "notify" item. Null when the platform services were never started, which
+  /// is what every widget test sees.
+  NotificationTray? notificationTray;
+
+  /// `ListHabitsActivity.parseIntents()`, the last statement of `onResume`.
+  ///
+  /// An ACTION_EDIT intent carries the habit id and the day it targets, and
+  /// opens that entry's popup at (0, 0) — coordinates that make
+  /// `showConfetti` return immediately (`list-habits.confetti#1`). The intent
+  /// is dropped afterwards, so a resume that follows handles nothing.
+  void parseIntents() {
+    final intent = pendingIntent;
+    if (intent == null) return;
+    if (intent.action == actionEdit) {
+      // `intent.extras?.getLong(...)`: null only when the intent carries no
+      // extras at all. A *missing* key inside a present bundle reads as 0,
+      // and `habitList.getById(0)!!` then throws — upstream behaviour.
+      if (intent.extras.isNotEmpty) {
+        final habitId = intent.getLongExtra('habit', 0);
+        final timestampMillis = intent.getLongExtra('timestamp', 0);
+        final habit = scope.habitList.getById(habitId)!;
+        final date = LocalDate.fromUnixTime(timestampMillis);
+        _behavior.onEdit(habit, date, 0, 0);
+      }
+    }
+    pendingIntent = null;
+  }
 
   late final ModelObservableListener _observableListener;
 
@@ -79,6 +170,40 @@ class HabitListModel extends ChangeNotifier
   void Function(PaletteColor color, double x, double y)? onShowConfetti;
 
   // ---------------------------------------------------------------------
+  // ListHabitsMenuBehavior.Screen handlers, installed by the widget layer
+  // ---------------------------------------------------------------------
+
+  void Function()? onApplyTheme;
+  void Function()? onShowAboutScreen;
+  void Function()? onShowFAQScreen;
+  void Function()? onShowSettingsScreen;
+  void Function()? onShowSelectHabitTypeDialog;
+
+  /// The `ThemeSwitcher` slice the menu needs. Installed by the widget layer,
+  /// which is where the app's [ThemeModel] lives.
+  bool Function()? nightModeGetter;
+  void Function()? nightModeToggle;
+
+  // ---------------------------------------------------------------------
+  // ListHabitsSelectionMenu handlers, installed by the widget layer
+  // ---------------------------------------------------------------------
+
+  /// `activity.startSupportActionMode(this)`.
+  void Function()? onSelectionStarted;
+
+  /// `activeActionMode?.invalidate()`.
+  void Function()? onSelectionChanged;
+
+  /// `activeActionMode?.finish()`.
+  void Function()? onSelectionFinished;
+
+  void Function(PaletteColor defaultColor, OnColorPickedCallback callback)?
+      onShowColorPicker;
+  void Function(OnConfirmedCallback callback, int quantity)?
+      onShowDeleteConfirmationScreen;
+  void Function(List<Habit> selected)? onShowEditHabitsScreen;
+
+  // ---------------------------------------------------------------------
   // Lifecycle. Port of ListHabitsActivity.onResume / onPause.
   // ---------------------------------------------------------------------
 
@@ -95,6 +220,8 @@ class HabitListModel extends ChangeNotifier
       _behavior.onStartup();
     }
     refresh();
+    // `ListHabitsActivity.onResume` ends with `parseIntents()`.
+    parseIntents();
   }
 
   void detach() {
@@ -146,6 +273,10 @@ class HabitListModel extends ChangeNotifier
   List<Habit> get selected => scope.adapter.selected;
 
   bool get isSelectionEmpty => scope.adapter.isSelectionEmpty;
+
+  /// `HabitCardListAdapter.isSortable`: true only while the primary order is
+  /// BY_POSITION (`list-habits.drag-reorder#1`).
+  bool get isSortable => scope.adapter.isSortable;
 
   void toggleSelection(int position) => scope.adapter.toggleSelection(position);
 
@@ -273,6 +404,74 @@ class HabitListModel extends ChangeNotifier
   @override
   void showSendFileScreen(String filename) =>
       throw UnsupportedError('The send file screen is not ported yet');
+
+  // ---------------------------------------------------------------------
+  // ListHabitsMenuBehavior.Screen and the ThemeSwitcher slice
+  // ---------------------------------------------------------------------
+
+  @override
+  void applyTheme() => onApplyTheme?.call();
+
+  @override
+  void showAboutScreen() => onShowAboutScreen?.call();
+
+  @override
+  void showFAQScreen() => onShowFAQScreen?.call();
+
+  @override
+  void showSettingsScreen() => onShowSettingsScreen?.call();
+
+  @override
+  void showSelectHabitTypeDialog() => onShowSelectHabitTypeDialog?.call();
+
+  @override
+  bool get isNightMode => nightModeGetter?.call() ?? false;
+
+  @override
+  void toggleNightMode() => nightModeToggle?.call();
+
+  // ---------------------------------------------------------------------
+  // HabitCardListSelectionMenu and ListHabitsSelectionMenuBehavior.Screen
+  // ---------------------------------------------------------------------
+
+  @override
+  void onSelectionStart() => onSelectionStarted?.call();
+
+  @override
+  void onSelectionChange() => onSelectionChanged?.call();
+
+  @override
+  void onSelectionFinish() => onSelectionFinished?.call();
+
+  @override
+  void showColorPicker(
+    PaletteColor defaultColor,
+    OnColorPickedCallback callback,
+  ) =>
+      onShowColorPicker?.call(defaultColor, callback);
+
+  @override
+  void showDeleteConfirmationScreen(
+    OnConfirmedCallback callback,
+    int quantity,
+  ) =>
+      onShowDeleteConfirmationScreen?.call(callback, quantity);
+
+  @override
+  void showEditHabitsScreen(List<Habit> selected) =>
+      onShowEditHabitsScreen?.call(selected);
+
+  /// `R.id.action_notify`, the developer-only item: show today's notification
+  /// for every selected habit, with reminder time 0, and leave the selection
+  /// alone (`list-habits.selection-menu-actions#9`).
+  void onNotifyHabits() {
+    final tray = notificationTray ?? scope.notificationTray;
+    if (tray == null) return;
+    final today = getToday();
+    for (final habit in scope.adapter.selected) {
+      tray.show(habit, today, 0);
+    }
+  }
 }
 
 class _UnsupportedDirFinder implements ListHabitsBehaviorDirFinder {

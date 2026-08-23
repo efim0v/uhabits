@@ -14,6 +14,9 @@ library;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+// `Theme` is ambiguous: Flutter's inherited widget and the core's palette
+// holder share the name, and this file needs both.
+import 'package:flutter/material.dart' as material show Color, Theme;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
@@ -145,6 +148,7 @@ void main() {
     HabitType habitType = HabitType.yesNo,
     bool dark = false,
     bool? use24HourFormat,
+    List<NavigatorObserver> observers = const <NavigatorObserver>[],
   }) async {
     final Widget host = Provider<AppScope>.value(
       value: scope,
@@ -172,6 +176,7 @@ void main() {
         key: ValueKey<int>(nextTree++),
         localizationsDelegates: L10n.localizationsDelegates,
         supportedLocales: L10n.supportedLocales,
+        navigatorObservers: observers,
         theme: dark ? ThemeData.dark() : ThemeData.light(),
         // `builder` sits *above* the navigator, so the pushed editor route —
         // and the dialogs it opens — see the overridden MediaQuery too.
@@ -2543,4 +2548,269 @@ void main() {
     });
   });
 
+  // =======================================================================
+  // The colour the time picker is tinted with, and the tag it is shown under
+  // =======================================================================
+
+  group('edit-habit.color-control, the picker accent', () {
+    /// The colour scheme the radial picker is themed with. Upstream that is
+    /// the `accentColor` argument of `TimePickerDialog.newInstance(...)`.
+    material.Color accentOf(WidgetTester tester) => material.Theme.of(
+          tester.element(find.byType(TimePickerDialog)),
+        ).colorScheme.primary;
+
+    testWidgets('#5 androidColor is the accent handed to the time picker, so '
+        'changing the colour changes the picker highlight', (tester) async {
+      final theme = LightTheme();
+      await pumpEditor(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      // PaletteColor(11) is the screen's default.
+      await tester.tap(find.byKey(EditHabitScreen.reminderTimePickerKey));
+      await tester.pumpAndSettle();
+      expect(accentOf(tester), toFlutterColor(theme.color(11)),
+          reason: 'edit-habit.color-control#5 — the picker opens tinted with '
+              'androidColor, not with the app accent');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      // Repaint the screen red and re-open the picker.
+      await tester.tap(find.byKey(EditHabitScreen.colorButtonKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey<String>('color_swatch_0')));
+      await tester.pumpAndSettle();
+      expect(modelOf(tester).color, const PaletteColor(0),
+          reason: 'edit-habit.color-control#5');
+
+      await tester.tap(find.byKey(EditHabitScreen.reminderTimePickerKey));
+      await tester.pumpAndSettle();
+      expect(accentOf(tester), toFlutterColor(theme.color(0)),
+          reason: 'edit-habit.color-control#5 — changing the colour changes '
+              "the time picker's highlight colour");
+      expect(accentOf(tester), isNot(toFlutterColor(theme.color(11))),
+          reason: 'edit-habit.color-control#5');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('#5 the dark theme resolves androidColor through its own '
+        'palette', (tester) async {
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        dark: true,
+      );
+
+      await tester.tap(find.byKey(EditHabitScreen.reminderTimePickerKey));
+      await tester.pumpAndSettle();
+      expect(accentOf(tester), toFlutterColor(DarkTheme().color(11)),
+          reason: 'edit-habit.color-control#5 — androidColor is '
+              'themeSwitcher.currentTheme.color(color), so a night theme tints '
+              'the picker with the dark palette entry');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+  });
+
+  group('edit-habit.reminder-time, the tag', () {
+    testWidgets('#7 the time picker route carries the "timePicker" tag',
+        (tester) async {
+      final names = <String?>[];
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        observers: <NavigatorObserver>[_RouteNameObserver(names)],
+      );
+
+      expect(EditHabitScreen.timePickerTag, 'timePicker',
+          reason: 'edit-habit.reminder-time#7');
+      expect(names, isNot(contains('timePicker')),
+          reason: 'edit-habit.reminder-time#7 — nothing is shown until the '
+              'control is tapped');
+
+      await tester.tap(find.byKey(EditHabitScreen.reminderTimePickerKey));
+      await tester.pumpAndSettle();
+
+      expect(names, contains('timePicker'),
+          reason: 'edit-habit.reminder-time#7 — the dialog is shown with tag '
+              '"timePicker", reused here as the route name');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+  });
+
+  // =======================================================================
+  // habit-type-dialog.select-type: the window it is shown in and its metrics
+  // =======================================================================
+
+  group('habit-type-dialog.select-type, revisited', () {
+    /// Opens the chooser the way `ListHabitsMenuBehavior.onCreateHabit` does,
+    /// but from a bare host so the chooser is the only thing on screen.
+    Future<void> pumpChooser(WidgetTester tester, AppScope scope) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey<int>(nextTree++),
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Provider<AppScope>.value(
+            value: scope,
+            child: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => EditHabitScreen.selectTypeAndOpen(context),
+                    child: const Text('host'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('host'));
+      await tester.pumpAndSettle();
+    }
+
+    /// The `Material` the dialog paints its own scrim with.
+    Finder scrim() => find
+        .descendant(
+          of: find.byType(HabitTypeDialog),
+          matching: find.byType(Material),
+        )
+        .first;
+
+    testWidgets('#2 the Translucent theme: no title, a transparent window and '
+        'fade animations', (tester) async {
+      await pumpChooser(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      // `@style/Theme.Translucent` sets windowNoTitle, so there is no dialog
+      // chrome of any kind between the window and the two cards.
+      expect(find.byType(AlertDialog), findsNothing,
+          reason: 'habit-type-dialog.select-type#2 — windowNoTitle');
+      expect(find.byType(AppBar), findsNothing,
+          reason: 'habit-type-dialog.select-type#2 — windowNoTitle');
+
+      // windowBackground = @android:color/transparent: the only colour the
+      // window carries is the scrim the layout paints itself, so the route
+      // must not add a barrier colour of its own.
+      final route = ModalRoute.of(tester.element(find.byType(HabitTypeDialog)));
+      expect(route?.barrierColor, const material.Color(0x00000000),
+          reason: 'habit-type-dialog.select-type#2 — a transparent window '
+              'background, the scrim belongs to the layout');
+
+      // windowAnimationStyle = fade in / fade out.
+      expect(
+        find.ancestor(
+          of: find.byType(HabitTypeDialog),
+          matching: find.byType(FadeTransition),
+        ),
+        findsWidgets,
+        reason: 'habit-type-dialog.select-type#2 — fade-in/fade-out window '
+            'animations',
+      );
+    });
+
+    testWidgets('#2 #3 a full-screen, vertically centred column over the '
+        '#a0000000 scrim', (tester) async {
+      await pumpChooser(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      expect(HabitTypeDialog.scrimColor, const material.Color(0xA0000000),
+          reason: 'habit-type-dialog.select-type#3 — @color/translucent_black, '
+              'black at 62.7% alpha');
+      expect(tester.widget<Material>(scrim()).color, HabitTypeDialog.scrimColor,
+          reason: 'habit-type-dialog.select-type#3');
+
+      // Full screen, status bar included — the translucent status bar of the
+      // Translucent theme is what lets the scrim reach the top edge.
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      expect(tester.getRect(scrim()), Offset.zero & screen,
+          reason: 'habit-type-dialog.select-type#3 — the dialog is '
+              'full-screen; #2 — under a translucent status bar');
+
+      // The two cards are one vertically centred column.
+      final first = tester.getRect(find.byKey(EditHabitScreen.yesNoTypeCardKey));
+      final last =
+          tester.getRect(find.byKey(EditHabitScreen.measurableTypeCardKey));
+      expect(last.top, greaterThan(first.top),
+          reason: 'habit-type-dialog.select-type#3 — a column, in order');
+      expect(
+        (first.top + last.bottom) / 2,
+        moreOrLessEquals(screen.height / 2, epsilon: 0.5),
+        reason: 'habit-type-dialog.select-type#3 — vertically centred',
+      );
+    });
+
+    testWidgets('#8 20sp bold titles, 1.25-spaced bodies and 6dp cards',
+        (tester) async {
+      await pumpChooser(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      final title = tester.widget<Text>(find.text('Yes or No'));
+      expect(title.style?.fontSize, 20.0,
+          reason: 'habit-type-dialog.select-type#8 — 20sp titles');
+      expect(title.style?.fontWeight, FontWeight.bold,
+          reason: 'habit-type-dialog.select-type#8 — bold titles');
+
+      final body = tester.widget<Text>(
+        find.text(
+          'e.g. Did you wake up early today? Did you exercise? '
+          'Did you play chess?',
+        ),
+      );
+      expect(body.style?.fontSize, HabitTypeDialog.bodyTextSize,
+          reason: 'habit-type-dialog.select-type#8 — the small text size');
+      expect(body.style?.height, 1.25,
+          reason: 'habit-type-dialog.select-type#8 — lineSpacingMultiplier');
+      expect(body.style?.fontSize, lessThan(title.style!.fontSize!),
+          reason: 'habit-type-dialog.select-type#8');
+
+      // 8dp between the title and the body it introduces.
+      expect(
+        tester.getRect(find.text(
+          'e.g. Did you wake up early today? Did you exercise? '
+          'Did you play chess?',
+        )).top -
+            tester.getRect(find.text('Yes or No')).bottom,
+        8.0,
+        reason: 'habit-type-dialog.select-type#8 — 8dp bottom margin on the '
+            'title',
+      );
+
+      // 6dp of elevation and a rounded ripple background.
+      final card = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byKey(EditHabitScreen.yesNoTypeCardKey),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(card.elevation, 6.0,
+          reason: 'habit-type-dialog.select-type#8 — 6dp elevation');
+      expect(card.borderRadius, isNotNull,
+          reason: 'habit-type-dialog.select-type#8 — a rounded background');
+      final ink = tester.widget<InkWell>(
+        find
+            .descendant(
+              of: find.byKey(EditHabitScreen.yesNoTypeCardKey),
+              matching: find.byType(InkWell),
+            )
+            .first,
+      );
+      expect(ink.borderRadius, card.borderRadius,
+          reason: 'habit-type-dialog.select-type#8 — the ripple is clipped to '
+              'the same rounded background');
+    });
+  });
+}
+
+/// Records the name of every route that is pushed, so a test can assert the
+/// fragment tag a dialog is shown under.
+class _RouteNameObserver extends NavigatorObserver {
+  _RouteNameObserver(this.names);
+
+  final List<String?> names;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    names.add(route.settings.name);
+  }
 }

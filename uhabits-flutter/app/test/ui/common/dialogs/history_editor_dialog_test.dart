@@ -773,6 +773,74 @@ void main() {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  // The chart-hosting contract the editor stands for
+  // -------------------------------------------------------------------------
+
+  group('charts-canvas-theming.chart-host-contracts', () {
+    testWidgets('#3 padding 10, a screen-wide window capped at 350dp, a live '
+        'rebuild on every command, and a LightTheme state', (tester) async {
+      final habit = addHabit(
+        entries: <core.Entry>[core.Entry(today.minus(1), core.Entry.yesManual)],
+      );
+      // Dark mode, so "always LightTheme" is distinguishable from "the current
+      // theme".
+      await openEditor(tester, habitId: habit.id!, theme: core.DarkTheme());
+
+      final chart = chartOf(tester);
+      expect(chart.padding, 10.0,
+          reason: 'charts-canvas-theming.chart-host-contracts#3 — the history '
+              'editor builds its HistoryChart with padding = 10.0');
+      expect(tester.getSize(chartFinder), const Size(800, 350),
+          reason: 'charts-canvas-theming.chart-host-contracts#3 — sized to '
+              '(screenWidth, min(screenHeight, 350dp))');
+      expect(HistoryEditorDialog.maxHeight, 350.0,
+          reason: 'charts-canvas-theming.chart-host-contracts#3');
+
+      // The chart itself keeps the switcher's current theme…
+      expect(chart.theme, isA<core.DarkTheme>(),
+          reason: 'charts-canvas-theming.chart-host-contracts#3 — the chart is '
+              'given the current theme');
+      // …while the state it is refreshed from is always built with LightTheme.
+      expect(
+        HistoryEditorDialog.buildState(habit: habit, preferences: preferences)
+            .theme,
+        isA<core.LightTheme>(),
+        reason: 'charts-canvas-theming.chart-host-contracts#3 — even in dark '
+            'mode the state is built with LightTheme()',
+      );
+
+      // A finished command rebuilds series, defaultSquare and notesIndicators.
+      // Newest first, so today is series[0]: unchecked before the command…
+      final before = List<Square>.of(chart.series);
+      expect(before.first, Square.off,
+          reason: 'charts-canvas-theming.chart-host-contracts#3');
+      commandRunner.run(
+        CreateRepetitionCommand(
+          habitList,
+          habit,
+          today,
+          core.Entry.yesManual,
+          'a note',
+        ),
+      );
+      await tester.pumpAndSettle();
+      final after = chartOf(tester);
+      // …and checked after it, without the dialog being reopened.
+      expect(after.series.first, Square.on,
+          reason: 'charts-canvas-theming.chart-host-contracts#3 — the series '
+              'is rebuilt whenever a command finishes');
+      expect(after.defaultSquare, Square.off,
+          reason: 'charts-canvas-theming.chart-host-contracts#3 — and so are '
+              'defaultSquare…');
+      expect(after.notesIndicators, hasLength(after.series.length),
+          reason: 'charts-canvas-theming.chart-host-contracts#3 — …and '
+              'notesIndicators');
+      expect(after.notesIndicators.first, isTrue,
+          reason: 'charts-canvas-theming.chart-host-contracts#3');
+    });
+  });
 }
 
 /// `kotlin.math.round` / `Math.rint`, the rounding `HistoryChart.draw` uses to

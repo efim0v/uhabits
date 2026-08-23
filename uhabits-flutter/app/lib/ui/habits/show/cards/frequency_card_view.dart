@@ -265,6 +265,43 @@ class FrequencyChartView extends core.View {
     }
     return maxWidth;
   }
+
+  /// ```kotlin
+  /// fun populateWithRandomData() {
+  ///     val today = getToday()
+  ///     var date = LocalDate(today.year, today.month, 1)
+  ///     val rand = Random()
+  ///     frequency.clear()
+  ///     for (i in 0..39) {
+  ///         val values = IntArray(7) { rand.nextInt(5) }.toTypedArray()
+  ///         frequency[date] = values
+  ///         date = stepMonth(date, -1)
+  ///     }
+  ///     maxFreq = getMaxFreq(frequency)
+  /// }
+  /// ```
+  ///
+  /// Forty consecutive months walking backwards from the current one, each
+  /// with seven random values in 0..4
+  /// (`charts-canvas-theming.frequency-chart#14`). The Dart view takes its
+  /// map in the constructor rather than owning one, so this returns the map
+  /// the Kotlin would have installed; `maxFreq` is derived on every draw here,
+  /// so there is nothing else to update.
+  static Map<core.LocalDate, List<int>> populateWithRandomData({
+    math.Random? random,
+  }) {
+    final rand = random ?? math.Random();
+    final today = core.getToday();
+    var date = core.LocalDate.ymd(today.year, today.month, 1);
+    final frequency = <core.LocalDate, List<int>>{};
+    for (var i = 0; i <= 39; i++) {
+      frequency[date] = <int>[
+        for (var j = 0; j < 7; j++) rand.nextInt(5),
+      ];
+      date = _stepMonth(date, -1);
+    }
+    return frequency;
+  }
 }
 
 /// `stepMonth`: month arithmetic that wraps the year and always lands on the

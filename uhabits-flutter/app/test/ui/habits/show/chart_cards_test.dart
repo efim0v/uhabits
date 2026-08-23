@@ -15,6 +15,8 @@ library;
 // uhabits_core exports neither lib/src/ui/screens nor lib/src/ui/views yet.
 // ignore_for_file: implementation_imports
 
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
@@ -2251,6 +2253,275 @@ void main() {
       chart.onLongClick(10, 50);
       expect(listener.longPresses[1], listener.longPresses[0],
           reason: 'show-habit.chart-scrolling#9');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // The rules that survive only as methods on the chart views
+  // -------------------------------------------------------------------------
+
+  group('chart view internals', () {
+    test('charts-canvas-theming.streak-chart#3: maxStreakCount is the row '
+        'count the current height allows', () {
+      expect(StreakChartView.maxStreakCount(100.0), 5,
+          reason: 'charts-canvas-theming.streak-chart#3 — '
+              'floor(measuredHeight / baseSize)');
+      expect(StreakChartView.maxStreakCount(0.0), 0,
+          reason: 'charts-canvas-theming.streak-chart#3');
+      expect(StreakChartView.maxStreakCount(19.0), 0,
+          reason: 'charts-canvas-theming.streak-chart#3 — a view shorter than '
+              'one row shows none');
+      expect(StreakChartView.maxStreakCount(59.0), 2,
+          reason: 'charts-canvas-theming.streak-chart#3 — the remainder is '
+              'floored, not rounded');
+      expect(StreakChartView.maxStreakCount(60.0), 3,
+          reason: 'charts-canvas-theming.streak-chart#3');
+    });
+
+    test('charts-canvas-theming.streak-chart#13: maxLabelWidth is never reset, '
+        'so it only grows within one view instance', () {
+      final view = StreakChartView(
+        streaks: <core.Streak>[
+          core.Streak(core.LocalDate.ymd(2015, 1, 16), today),
+        ],
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        // measureText is 0.6 em per glyph, so a longer label is a wider one.
+        dateLabel: (date) => 'XXXXXXXXXXXXXXXX',
+      );
+      final wide = _RecordingCanvas(width: 1200, height: 20);
+      view.draw(wide);
+      final grown = view.maxLabelWidth;
+      expect(grown, greaterThan(0.0),
+          reason: 'charts-canvas-theming.streak-chart#13 — the first draw '
+              'measures the labels');
+
+      // A second draw with *shorter* labels leaves the field alone: Kotlin's
+      // updateMaxMinLengths resets maxLength and minLength but never
+      // maxLabelWidth.
+      final narrow = StreakChartView(
+        streaks: view.streaks,
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        dateLabel: (date) => 'X',
+      )..maxLabelWidth = grown;
+      narrow.draw(_RecordingCanvas(width: 1200, height: 20));
+      expect(narrow.maxLabelWidth, grown,
+          reason: 'charts-canvas-theming.streak-chart#13 — a narrower label '
+              'never shrinks it back');
+
+      // The one place it *is* cleared is the label-suppression branch of #12.
+      final squeezed = StreakChartView(
+        streaks: view.streaks,
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        dateLabel: (date) => 'XXXXXXXXXXXXXXXX',
+      );
+      squeezed.draw(_RecordingCanvas(width: 100, height: 20));
+      expect(squeezed.maxLabelWidth, 0.0,
+          reason: 'charts-canvas-theming.streak-chart#13 — only #12 resets it');
+    });
+
+    test('charts-canvas-theming.streak-chart#14: the four-entry bar ramp and '
+        'the three-entry text ramp', () {
+      final view = StreakChartView(
+        streaks: const <core.Streak>[],
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+      );
+
+      expect(view.colors, hasLength(4),
+          reason: 'charts-canvas-theming.streak-chart#14 — IntArray(4)');
+      expect(view.colors[0], theme.lowContrastTextColor,
+          reason: 'charts-canvas-theming.streak-chart#14 — colors[0] is '
+              'contrast20');
+      for (var i = 1; i <= 3; i++) {
+        expect(view.colors[i].red, green.red,
+            reason: 'charts-canvas-theming.streak-chart#14 — colors[$i] keeps '
+                "the primary colour's red");
+        expect(view.colors[i].green, green.green,
+            reason: 'charts-canvas-theming.streak-chart#14');
+        expect(view.colors[i].blue, green.blue,
+            reason: 'charts-canvas-theming.streak-chart#14');
+      }
+      expect(view.colors[1].alpha, closeTo(96 / 255, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#14 — Color.argb(96, …)');
+      expect(view.colors[2].alpha, closeTo(192 / 255, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#14 — Color.argb(192, …)');
+      expect(view.colors[3].alpha, 1.0,
+          reason: 'charts-canvas-theming.streak-chart#14 — index 3 is the '
+              'primary colour itself, alpha 255');
+
+      expect(view.textColors, hasLength(3),
+          reason: 'charts-canvas-theming.streak-chart#14 — IntArray(3)');
+      expect(view.textColors[0], theme.highContrastTextColor,
+          reason: 'charts-canvas-theming.streak-chart#14 — textColors[0] is '
+              "contrast80, the port's high-contrast text colour");
+      expect(view.textColors[1], theme.mediumContrastTextColor,
+          reason: 'charts-canvas-theming.streak-chart#14 — textColors[1] is '
+              'contrast60');
+      expect(view.textColors[2], theme.cardBackgroundColor,
+          reason: 'charts-canvas-theming.streak-chart#14 — textColors[2] is '
+              'contrast0');
+    });
+
+    test('charts-canvas-theming.streak-chart#15: populateWithRandomData builds '
+        'ten consecutive streaks starting today', () {
+      final streaks =
+          StreakChartView.populateWithRandomData(random: Random(1234));
+
+      expect(streaks, hasLength(10),
+          reason: 'charts-canvas-theming.streak-chart#15 — `for (i in 0..9)`');
+      expect(streaks.first.start, today,
+          reason: 'charts-canvas-theming.streak-chart#15 — the first one '
+              'starts today');
+      for (final streak in streaks) {
+        // end = start.plus(nextInt(100)), so the length is 1..100 days.
+        final length = streak.start.daysUntil(streak.end);
+        expect(length, inInclusiveRange(0, 99),
+            reason: 'charts-canvas-theming.streak-chart#15 — random length '
+                '0..99');
+      }
+      for (var i = 1; i < streaks.length; i++) {
+        expect(streaks[i].start, streaks[i - 1].end.plus(1),
+            reason: 'charts-canvas-theming.streak-chart#15 — each one begins '
+                'the day after the previous ends');
+      }
+    });
+
+    test('charts-canvas-theming.frequency-chart#14: populateWithRandomData '
+        'fills forty months backwards with seven values each', () {
+      final frequency =
+          FrequencyChartView.populateWithRandomData(random: Random(7));
+
+      expect(frequency, hasLength(40),
+          reason: 'charts-canvas-theming.frequency-chart#14 — `for (i in '
+              '0..39)`');
+      var date = core.LocalDate.ymd(today.year, today.month, 1);
+      for (var i = 0; i < 40; i++) {
+        expect(frequency.containsKey(date), isTrue,
+            reason: 'charts-canvas-theming.frequency-chart#14 — consecutive '
+                'months walking backwards from the current one');
+        final values = frequency[date]!;
+        expect(values, hasLength(7),
+            reason: 'charts-canvas-theming.frequency-chart#14 — IntArray(7)');
+        for (final value in values) {
+          expect(value, inInclusiveRange(0, 4),
+              reason: 'charts-canvas-theming.frequency-chart#14 — '
+                  'rand.nextInt(5)');
+        }
+        date = core.LocalDate.ymd(
+          date.month == 1 ? date.year - 1 : date.year,
+          date.month == 1 ? 12 : date.month - 1,
+          1,
+        );
+      }
+    });
+
+    test('charts-canvas-theming.frequency-chart#13: a transparent background '
+        'changes the colours and nothing else', () {
+      final widgetTheme = core.WidgetTheme();
+      _RecordingCanvas render(core.Theme t) {
+        final view = FrequencyChartView(
+          frequency: <core.LocalDate, List<int>>{
+            core.LocalDate.ymd(2015, 1, 1): <int>[0, 4, 2, 1, 0, 3, 0],
+            core.LocalDate.ymd(2014, 12, 1): <int>[1, 1, 1, 1, 1, 1, 1],
+          },
+          color: t.colorOf(habitColor),
+          theme: t,
+          dateFormatter: formatter,
+          firstWeekday: core.DayOfWeek.sunday,
+          isNumerical: false,
+          today: today,
+        );
+        final canvas = _RecordingCanvas(width: 300, height: 200);
+        view.draw(canvas);
+        return canvas;
+      }
+
+      final light = render(theme);
+      final transparent = render(widgetTheme);
+
+      // `setIsBackgroundTransparent(true)` only re-runs initColors(): there is
+      // no offscreen bitmap and no xfermode, so the call *sequence* is
+      // identical and only the paint colours move.
+      expect(
+        transparent.ops.map((op) => op.name).toList(),
+        light.ops.map((op) => op.name).toList(),
+        reason: 'charts-canvas-theming.frequency-chart#13 — the same calls, in '
+            'the same order',
+      );
+      expect(
+        transparent.ops.map((op) => op.args).toList(),
+        light.ops.map((op) => op.args).toList(),
+        reason: 'charts-canvas-theming.frequency-chart#13 — with the same '
+            'geometry',
+      );
+      expect(
+        transparent.ops.map((op) => op.text).toList(),
+        light.ops.map((op) => op.text).toList(),
+        reason: 'charts-canvas-theming.frequency-chart#13',
+      );
+      expect(
+        transparent.ops.map((op) => op.color).toList(),
+        isNot(light.ops.map((op) => op.color).toList()),
+        reason: 'charts-canvas-theming.frequency-chart#13 — only the colours '
+            'differ, which is exactly what initColors changes',
+      );
+    });
+
+    test('charts-canvas-theming.score-chart#6: a chart with no scores yet '
+        'draws nothing at all', () {
+      final canvas = _RecordingCanvas(width: 300, height: 200);
+      ScoreChartView(
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        bucketSize: 7,
+      ).draw(canvas);
+      expect(canvas.ops, isEmpty,
+          reason: 'charts-canvas-theming.score-chart#6 — onDraw returns before '
+              'the grid when scores is null');
+
+      // An *empty* list is not the same thing: the grid is still drawn.
+      final empty = _RecordingCanvas(width: 300, height: 200);
+      ScoreChartView(
+        scores: const <core.Score>[],
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        bucketSize: 7,
+      ).draw(empty);
+      expect(empty.ops, isNotEmpty,
+          reason: 'charts-canvas-theming.score-chart#6 — only null short '
+              'circuits');
+    });
+
+    test('charts-canvas-theming.score-chart#18: populateWithRandomData is a '
+        '99-step random walk from 0.5', () {
+      final scores =
+          ScoreChartView.populateWithRandomData(random: Random(99));
+
+      expect(scores, hasLength(99),
+          reason: 'charts-canvas-theming.score-chart#18 — `for (i in 1..99)`');
+      for (var i = 0; i < scores.length; i++) {
+        expect(scores[i].date, today.minus(i + 1),
+            reason: 'charts-canvas-theming.score-chart#18 — walking backwards '
+                'from today, starting at today - 1');
+        expect(scores[i].value, inInclusiveRange(0.0, 1.0),
+            reason: 'charts-canvas-theming.score-chart#18 — clamped to 0..1');
+      }
+      var previous = 0.5;
+      for (final score in scores) {
+        expect((score.value - previous).abs(), lessThanOrEqualTo(0.1 + 1e-9),
+            reason: 'charts-canvas-theming.score-chart#18 — a random walk of '
+                'step 0.1 starting at 0.5');
+        previous = score.value;
+      }
     });
   });
 }

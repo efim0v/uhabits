@@ -234,6 +234,313 @@ void main() {
         reason: 'color-picker.palette-source#1',
       );
     });
+
+    testWidgets('#4 a short last row is padded so the grid stays rectangular', (
+      tester,
+    ) async {
+      // The vendored picker takes its colours as an array; 19 of them leave
+      // the last row one short.
+      await _pumpHosted(
+        tester,
+        (context) => const ColorPickerDialog(paletteSize: 19),
+      );
+
+      expect(
+        _swatch(18),
+        findsOneWidget,
+        reason: 'color-picker.dialog#4 — the last colour there is',
+      );
+      expect(
+        _swatch(19),
+        findsNothing,
+        reason: 'color-picker.dialog#4 — and nothing beyond it',
+      );
+
+      final blank = find.byKey(const ValueKey<String>('color_swatch_blank_19'));
+      expect(
+        blank,
+        findsOneWidget,
+        reason: 'color-picker.dialog#4 — the hole is filled with a blank view',
+      );
+      expect(
+        tester.getSize(blank),
+        tester.getSize(_swatch(18)),
+        reason: 'color-picker.dialog#4 — of the same size',
+      );
+      // Row 4 is even, so it reads left to right and the blank sits last.
+      expect(
+        tester.getCenter(blank).dx,
+        greaterThan(tester.getCenter(_swatch(18)).dx),
+        reason: 'color-picker.dialog#4',
+      );
+      expect(
+        tester.getCenter(blank).dy,
+        tester.getCenter(_swatch(18)).dy,
+        reason: 'color-picker.dialog#4 — the grid stays rectangular',
+      );
+    });
+
+    testWidgets('#6 pressing or focusing a swatch darkens it', (tester) async {
+      expect(
+        ColorPickerDialog.pressedValueMultiplier,
+        0.70,
+        reason: 'color-picker.dialog#6',
+      );
+
+      const red = Color(0xFFD32F2F);
+      final darkened = HSVColor.fromColor(ColorPickerDialog.darken(red));
+      final original = HSVColor.fromColor(red);
+      // The drawable works in 8-bit channels, so the round trip back out of
+      // the Color is only accurate to 1/255.
+      expect(
+        darkened.value,
+        closeTo(original.value * 0.70, 1 / 255),
+        reason: 'color-picker.dialog#6 — the HSV value component is '
+            'multiplied by 0.70',
+      );
+      expect(
+        [darkened.hue, darkened.saturation],
+        [closeTo(original.hue, 1.0), closeTo(original.saturation, 1 / 255)],
+        reason: 'color-picker.dialog#6 — hue and saturation are left alone',
+      );
+
+      await _open(tester, (context) => showColorPickerDialog(context));
+      final ink = tester.widget<InkWell>(
+        find.descendant(of: _swatch(0), matching: find.byType(InkWell)),
+      );
+      final swatch = _swatchColor(tester, 0)!;
+      expect(
+        ink.highlightColor,
+        ColorPickerDialog.darken(swatch),
+        reason: 'color-picker.dialog#6 — pressed',
+      );
+      expect(
+        ink.focusColor,
+        ColorPickerDialog.darken(swatch),
+        reason: 'color-picker.dialog#6 — focused',
+      );
+    });
+
+    testWidgets('#10 the index round trip cannot fail', (tester) async {
+      // Android hands the picker raw ARGB and converts back with
+      // palette.indexOf(argb), which yields PaletteColor(-1) whenever the
+      // colour is not in the current themed palette. This port passes the
+      // index itself — the ledger's own note asks for it — so the tapped
+      // swatch always comes back as its own index, in either theme.
+      var result = await _open<core.PaletteColor>(
+        tester,
+        (context) => showColorPickerDialog(context),
+      );
+      await tester.tap(_swatch(13));
+      await tester.pumpAndSettle();
+      expect(
+        result.value,
+        const core.PaletteColor(13),
+        reason: 'color-picker.dialog#10',
+      );
+
+      result = await _open<core.PaletteColor>(
+        tester,
+        (context) => showColorPickerDialog(context),
+        theme: appThemeData(core.DarkTheme()),
+      );
+      await tester.tap(_swatch(13));
+      await tester.pumpAndSettle();
+      expect(
+        result.value,
+        const core.PaletteColor(13),
+        reason: 'color-picker.dialog#10 — the dark palette has entirely '
+            'different ARGB values, and the round trip still holds',
+      );
+      expect(
+        result.value,
+        isNot(const core.PaletteColor(-1)),
+        reason: 'color-picker.dialog#10 — PaletteColor(-1) is unreachable',
+      );
+    });
+
+    testWidgets('#11 the grid is there from the first frame, so no spinner '
+        'ever shows', (tester) async {
+      await _open(
+        tester,
+        (context) => showColorPickerDialog(context),
+        settle: false,
+      );
+
+      expect(
+        find.byType(CircularProgressIndicator),
+        findsNothing,
+        reason: 'color-picker.dialog#11 — the colours are known '
+            'synchronously, so the large progress spinner never stands in for '
+            'the grid',
+      );
+      for (var i = 0; i < 20; i++) {
+        expect(
+          _swatch(i),
+          findsOneWidget,
+          reason: 'color-picker.dialog#11 — the palette is set up-front',
+        );
+      }
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('#12 the palette and the selection survive a configuration '
+        'change', (tester) async {
+      await _open(
+        tester,
+        (context) => showColorPickerDialog(
+          context,
+          selected: const core.PaletteColor(5),
+        ),
+      );
+      final before = [for (var i = 0; i < 20; i++) _swatchColor(tester, i)];
+
+      addTearDown(tester.view.reset);
+      tester.view.physicalSize = const Size(1200, 1800);
+      await tester.pumpAndSettle();
+
+      expect(
+        [for (var i = 0; i < 20; i++) _swatchColor(tester, i)],
+        before,
+        reason: 'color-picker.dialog#12 — the colour array survives, as the '
+            '"palette" instance-state key makes it survive upstream',
+      );
+      expect(
+        find.descendant(of: _swatch(5), matching: find.byIcon(Icons.check)),
+        findsOneWidget,
+        reason: 'color-picker.dialog#12 — and so does "selected_color"',
+      );
+    });
+
+    testWidgets('#13 the swatches keep palette order, never HSV order', (
+      tester,
+    ) async {
+      await _open(tester, (context) => showColorPickerDialog(context));
+
+      final theme = core.LightTheme();
+      final order = [for (var i = 0; i < 20; i++) _swatchColor(tester, i)];
+      expect(
+        order,
+        [for (var i = 0; i < 20; i++) toFlutterColor(theme.color(i))],
+        reason: 'color-picker.dialog#13 — the grid is filled straight from the '
+            'palette; HsvColorComparator is dead upstream and is not ported',
+      );
+
+      // What the unused comparator would have produced, for contrast.
+      final byHue = [...order]
+        ..sort(
+          (a, b) => HSVColor.fromColor(
+            a!,
+          ).hue.compareTo(HSVColor.fromColor(b!).hue),
+        );
+      expect(
+        order,
+        isNot(byHue),
+        reason: 'color-picker.dialog#13 — sorting would visibly reorder the '
+            'grid, and it does not happen',
+      );
+    });
+
+    testWidgets('palette-source#2 the light palette, entry by entry', (
+      tester,
+    ) async {
+      await _open(tester, (context) => showColorPickerDialog(context));
+
+      // @array/lightPalette resolved through res/values/material_colors.xml:
+      // red_700, deep_orange_700, orange_700, amber_800, yellow_800, lime_700,
+      // light_green_600, green_700, teal_600, cyan_600, light_blue_600,
+      // blue_700, indigo_700, deep_purple_600, purple_600, pink_600,
+      // brown_700, grey_800, grey_600, grey_500.
+      expect(
+        [for (var i = 0; i < 20; i++) _swatchColor(tester, i)],
+        _colors(const <int>[
+          0xD32F2F, 0xE64A19, 0xF57C00, 0xFF8F00, 0xF9A825,
+          0xAFB42B, 0x7CB342, 0x388E3C, 0x00897B, 0x00ACC1,
+          0x039BE5, 0x1976D2, 0x303F9F, 0x5E35B1, 0x8E24AA,
+          0xD81B60, 0x5D4037, 0x424242, 0x757575, 0x9E9E9E,
+        ]),
+        reason: 'color-picker.palette-source#2',
+      );
+    });
+
+    testWidgets('palette-source#3 the dark palette, entry by entry', (
+      tester,
+    ) async {
+      await _open(
+        tester,
+        (context) => showColorPickerDialog(context),
+        theme: appThemeData(core.DarkTheme()),
+      );
+
+      // @array/darkPalette: red_200, deep_orange_200, orange_200, amber_100,
+      // yellow_200, lime_200, light_green_200, green_A200, teal_200, cyan_200,
+      // light_blue_200, blue_300, indigo_200, deep_purple_200, purple_200,
+      // pink_200, brown_200, grey_100, grey_300, grey_500.
+      expect(
+        [for (var i = 0; i < 20; i++) _swatchColor(tester, i)],
+        _colors(const <int>[
+          0xEF9A9A, 0xFFAB91, 0xFFCC80, 0xFFECB3, 0xFFF59D,
+          0xE6EE9C, 0xC5E1A5, 0x69F0AE, 0x80CBC4, 0x80DEEA,
+          0x81D4FA, 0x64B5F6, 0x9FA8DA, 0xB39DDB, 0xCE93D8,
+          0xF48FB1, 0xBCAAA4, 0xF5F5F5, 0xE0E0E0, 0x9E9E9E,
+        ]),
+        reason: 'color-picker.palette-source#3',
+      );
+      // grey_500 closes both arrays; nothing else is shared at that index.
+      expect(
+        core.DarkTheme().color(19),
+        core.LightTheme().color(19),
+        reason: 'color-picker.palette-source#3',
+      );
+    });
+
+    test('palette-source#4 #5 the fixed palette ignores the theme', () {
+      const fixed = <String>[
+        '#D32F2F', '#E64A19', '#F57C00', '#FF8F00', '#F9A825',
+        '#AFB42B', '#7CB342', '#388E3C', '#00897B', '#00ACC1',
+        '#039BE5', '#1976D2', '#303F9F', '#5E35B1', '#8E24AA',
+        '#D81B60', '#5D4037', '#303030', '#757575', '#aaaaaa',
+      ];
+      expect(
+        [for (var i = 0; i < 20; i++) core.PaletteColor(i).toCsvColor()],
+        fixed,
+        reason: 'color-picker.palette-source#4',
+      );
+      expect(
+        [
+          for (var i = 0; i < 20; i++)
+            core.PaletteColor(i).toFixedAndroidColor(),
+        ],
+        [
+          for (final hex in fixed)
+            0xFF000000 | int.parse(hex.substring(1), radix: 16),
+        ],
+        reason: 'color-picker.palette-source#5 — the same 20 fixed values',
+      );
+
+      // Index 17 is grey_800 in the light theme and grey_100 in the dark one,
+      // yet the CSV colour is #303030 in both: the mapping is theme-free.
+      expect(
+        core.PaletteColor(17).toCsvColor(),
+        '#303030',
+        reason: 'color-picker.palette-source#4',
+      );
+      expect(
+        toFlutterColor(core.LightTheme().color(17)),
+        isNot(const Color(0xFF303030)),
+        reason: 'color-picker.palette-source#4',
+      );
+      expect(
+        () => core.PaletteColor(20).toCsvColor(),
+        throwsRangeError,
+        reason: 'color-picker.palette-source#4 — index out of range throws',
+      );
+      expect(
+        () => core.PaletteColor(-1).toFixedAndroidColor(),
+        throwsRangeError,
+        reason: 'color-picker.palette-source#5',
+      );
+    });
   });
 
   group('frequency-picker.options', () {
@@ -472,6 +779,52 @@ void main() {
         expect(result.value, isNull, reason: 'frequency-picker.options#8');
       },
     );
+
+    testWidgets('#9 populateViews runs again on a resume, not only on the '
+        'first show', (tester) async {
+      // The dialog is hosted directly so the test can reconfigure it, which is
+      // the closest a Flutter dialog gets to Android's onResume.
+      final resumes = ValueNotifier<int>(0);
+      addTearDown(resumes.dispose);
+      await _pumpHosted(
+        tester,
+        (context) => ValueListenableBuilder<int>(
+          valueListenable: resumes,
+          builder: (context, _, _) =>
+              FrequencyPickerDialog(frequency: core.Frequency(3, 7)),
+        ),
+      );
+
+      expect(
+        _checkedRow(tester),
+        FrequencyRow.xTimesPerWeek,
+        reason: 'frequency-picker.options#9',
+      );
+
+      // The user checks something else...
+      await tester.tap(_radio(FrequencyRow.everyDay));
+      await tester.pumpAndSettle();
+      expect(
+        _checkedRow(tester),
+        FrequencyRow.everyDay,
+        reason: 'frequency-picker.options#9',
+      );
+
+      // ... and the next resume re-derives the row from the numerator and the
+      // denominator the dialog was built with, throwing that choice away.
+      resumes.value++;
+      await tester.pumpAndSettle();
+      expect(
+        _checkedRow(tester),
+        FrequencyRow.xTimesPerWeek,
+        reason: 'frequency-picker.options#9',
+      );
+      expect(
+        _fieldText(tester, FrequencyRow.xTimesPerWeek),
+        '3',
+        reason: 'frequency-picker.options#9 — the field is repopulated too',
+      );
+    });
   });
 
   group('frequency-picker.populate-from-frequency', () {
@@ -609,6 +962,48 @@ void main() {
         '14',
         reason: 'frequency-picker.populate-from-frequency#8',
       );
+    });
+
+    testWidgets('#1 all five radios are cleared and exactly one is checked', (
+      tester,
+    ) async {
+      final frequencies = <core.Frequency>[
+        core.Frequency(1, 1),
+        core.Frequency(1, 5),
+        core.Frequency(3, 7),
+        core.Frequency(1, 31),
+        core.Frequency(5, 30),
+        core.Frequency(3, 14),
+      ];
+      for (final frequency in frequencies) {
+        await _openFrequency(tester, frequency);
+
+        final radios = tester
+            .widgetList<Radio<FrequencyRow>>(find.byType(Radio<FrequencyRow>))
+            .toList();
+        expect(
+          radios.length,
+          FrequencyRow.values.length,
+          reason: 'frequency-picker.populate-from-frequency#1 — five radios',
+        );
+        final checked = _checkedRow(tester);
+        expect(
+          checked,
+          isNotNull,
+          reason: 'frequency-picker.populate-from-frequency#1 — exactly one '
+              'row is selected for $frequency',
+        );
+        expect(
+          radios.where((radio) => radio.value == checked).length,
+          1,
+          reason: 'frequency-picker.populate-from-frequency#1 — the other four '
+              'are left unchecked for $frequency',
+        );
+
+        // Back to an empty screen before the next frequency.
+        await tester.tapAt(const Offset(5, 5));
+        await tester.pumpAndSettle();
+      }
     });
   });
 
@@ -798,6 +1193,80 @@ void main() {
         reason: 'frequency-picker.save-and-validation#8',
       );
     });
+
+    testWidgets('#1 the result starts at (1, 1) and only the checked branch '
+        'touches it', (tester) async {
+      // Opened on "3 times in 14 days", so that row carries 3 and 14 while the
+      // three other fields keep their 3 / 3 / 10 placeholders. Checking the
+      // day row must ignore every one of them.
+      var result = await _openFrequency(tester, core.Frequency(3, 14));
+      expect(
+        _checkedRow(tester),
+        FrequencyRow.xTimesPerYDays,
+        reason: 'frequency-picker.save-and-validation#1',
+      );
+      await tester.tap(_radio(FrequencyRow.everyDay));
+      await tester.pumpAndSettle();
+      await _save(tester);
+      expect(
+        result.value,
+        core.Frequency(1, 1),
+        reason: 'frequency-picker.save-and-validation#1 — the untouched '
+            'numerator and denominator are the 1 and 1 Save starts from',
+      );
+
+      // The week branch, and only it: the month field still reads 10 and the
+      // day field still reads 3, and neither reaches the result.
+      result = await _openFrequency(tester, core.Frequency(3, 14));
+      await tester.tap(_radio(FrequencyRow.xTimesPerWeek));
+      await tester.pumpAndSettle();
+      await tester.enterText(_field(FrequencyRow.xTimesPerWeek), '4');
+      expect(
+        _fieldText(tester, FrequencyRow.xTimesPerMonth),
+        '10',
+        reason: 'frequency-picker.save-and-validation#1',
+      );
+      await _save(tester);
+      expect(
+        result.value,
+        core.Frequency(4, 7),
+        reason: 'frequency-picker.save-and-validation#1 — exactly one branch '
+            'is applied',
+      );
+    });
+
+    testWidgets('#10 a field cannot hold anything but digits, and an empty '
+        'one falls back to (1, 1)', (tester) async {
+      final result = await _openFrequency(tester, core.Frequency(1, 1));
+      await tester.tap(_radio(FrequencyRow.everyXDays));
+      await tester.pumpAndSettle();
+
+      // android:inputType="number": letters and separators never land.
+      await tester.enterText(_field(FrequencyRow.everyXDays), 'ab.c-9');
+      await tester.pumpAndSettle();
+      expect(
+        _fieldText(tester, FrequencyRow.everyXDays),
+        '9',
+        reason: 'frequency-picker.save-and-validation#10 — non-numeric content '
+            'is impossible',
+      );
+
+      // An empty field, on the other hand, is possible.
+      await tester.enterText(_field(FrequencyRow.everyXDays), '');
+      await tester.pumpAndSettle();
+      expect(
+        _fieldText(tester, FrequencyRow.everyXDays),
+        '',
+        reason: 'frequency-picker.save-and-validation#10',
+      );
+      await _save(tester);
+      expect(
+        result.value,
+        core.Frequency(1, 1),
+        reason: 'frequency-picker.save-and-validation#10 — an empty field is '
+            'handled by the rules above',
+      );
+    });
   });
 
   group('weekday-picker.dialog', () {
@@ -905,6 +1374,46 @@ void main() {
         result.value,
         isNot(core.WeekdayList.everyDay),
         reason: 'weekday-picker.dialog#9',
+      );
+    });
+
+    testWidgets('#8 the ticks survive a configuration change', (tester) async {
+      // Saturday only, plus a Monday the user ticks by hand.
+      final result = await _openWeekdays(tester, core.WeekdayList(1));
+      await tester.tap(_weekday(2));
+      await tester.pumpAndSettle();
+
+      List<bool?> ticks() => <bool?>[
+        for (var i = 0; i < 7; i++)
+          tester.widget<CheckboxListTile>(_weekday(i)).value,
+      ];
+      expect(
+        ticks(),
+        [true, false, true, false, false, false, false],
+        reason: 'weekday-picker.dialog#8',
+      );
+
+      // Rotate. Android restores the BooleanArray from the "selectedDays"
+      // instance-state key; here the same array lives in the dialog's State,
+      // which the relayout does not throw away.
+      addTearDown(tester.view.reset);
+      tester.view.physicalSize = const Size(1200, 1800);
+      await tester.pumpAndSettle();
+
+      expect(
+        ticks(),
+        [true, false, true, false, false, false, false],
+        reason: 'weekday-picker.dialog#8 — the checked array is preserved '
+            'across a configuration change',
+      );
+
+      // And it is that array the positive button reports.
+      await tester.tap(find.byKey(const ValueKey<String>('weekday_ok')));
+      await tester.pumpAndSettle();
+      expect(
+        result.value,
+        core.WeekdayList(1 | 4),
+        reason: 'weekday-picker.dialog#8',
       );
     });
   });
@@ -1221,6 +1730,222 @@ void main() {
         result.value!.value,
         core.Entry.yesManual,
         reason: 'models.entry-values#10',
+      );
+    });
+
+    testWidgets('#1 colour, value and notes are all carried by the popup', (
+      tester,
+    ) async {
+      const habitColor = core.Color.fromRgb(0x8E24AA);
+      final result = await _openCheckmark(
+        tester,
+        value: core.Entry.skip,
+        notes: 'ran 5k',
+        color: habitColor,
+      );
+
+      // "notes": the existing note, pre-filled. There is no way to leave it
+      // out — the argument is required, so the non-null assertion that crashes
+      // upstream is unrepresentable here.
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey<String>('checkmark_notes')),
+            )
+            .controller!
+            .text,
+        'ran 5k',
+        reason: 'checkmark-dialog.popup#1',
+      );
+      // "color": an ARGB already resolved through the current theme.
+      expect(
+        _glyphColor(tester, 'yes'),
+        toFlutterColor(habitColor),
+        reason: 'checkmark-dialog.popup#1 — the colour arrives resolved, not '
+            'as a palette index',
+      );
+      // "value": the existing entry value, which the IME action hands back.
+      // Re-entering the same text only connects the input; the note is
+      // untouched.
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('checkmark_notes')),
+        'ran 5k',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        result.value,
+        const CheckmarkDialogResult(core.Entry.skip, 'ran 5k'),
+        reason: 'checkmark-dialog.popup#1',
+      );
+    });
+
+    testWidgets('#10 every way out reports back, and only once the popup is '
+        'gone', (tester) async {
+      // A button.
+      var result = await _openCheckmark(tester, value: core.Entry.no);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('checkmark_yes_button')),
+      );
+      await tester.pumpAndSettle();
+      expect(result.completed, isTrue, reason: 'checkmark-dialog.popup#10');
+      expect(
+        find.byType(CheckmarkDialog),
+        findsNothing,
+        reason: 'checkmark-dialog.popup#10 — onDismiss fires last',
+      );
+
+      // The IME action.
+      result = await _openCheckmark(tester, value: core.Entry.no);
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('checkmark_notes')),
+        '',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(result.completed, isTrue, reason: 'checkmark-dialog.popup#10');
+
+      // A dismissal that changed the notes.
+      result = await _openCheckmark(tester, value: core.Entry.no, notes: 'a');
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('checkmark_notes')),
+        'b',
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(result.completed, isTrue, reason: 'checkmark-dialog.popup#10');
+
+      // A dismissal that changed nothing at all: still reported.
+      result = await _openCheckmark(tester, value: core.Entry.no, notes: 'a');
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(
+        result.completed,
+        isTrue,
+        reason: 'checkmark-dialog.popup#10 — onDismiss() always fires, '
+            'regardless of how the dialog closed',
+      );
+      expect(result.value, isNull, reason: 'checkmark-dialog.popup#10');
+    });
+
+    testWidgets('#12 the popup does not force the keyboard open', (
+      tester,
+    ) async {
+      await _openCheckmark(tester, value: core.Entry.no, notes: 'a');
+
+      final notes = tester.widget<TextField>(
+        find.byKey(const ValueKey<String>('checkmark_notes')),
+      );
+      expect(
+        notes.autofocus,
+        isFalse,
+        reason: 'checkmark-dialog.popup#12 — unlike NumberDialog, nothing '
+            'here asks for focus',
+      );
+      expect(
+        tester.binding.focusManager.primaryFocus?.context?.widget,
+        isNot(isA<EditableText>()),
+        reason: 'checkmark-dialog.popup#12 — no text field takes focus when '
+            'the popup opens, so no soft keyboard comes up',
+      );
+    });
+
+    testWidgets('#13 #14 four glyph buttons over a free-text notes field', (
+      tester,
+    ) async {
+      final preferences = Preferences(MemoryStorage())
+        ..isSkipEnabled = true
+        ..areQuestionMarksEnabled = true;
+      const habitColor = core.Color.fromRgb(0x00897B);
+
+      // #13: the four values the four buttons stand for.
+      const buttons = <String, int>{
+        'yes': core.Entry.yesManual,
+        'no': core.Entry.no,
+        'skip': core.Entry.skip,
+        'unknown': core.Entry.unknown,
+      };
+      expect(
+        [core.Entry.yesManual, core.Entry.no, core.Entry.skip],
+        [2, 0, 3],
+        reason: 'checkmark-dialog.popup#13',
+      );
+      expect(core.Entry.unknown, -1, reason: 'checkmark-dialog.popup#13');
+
+      for (final entry in buttons.entries) {
+        final result = await _openCheckmark(
+          tester,
+          value: core.Entry.no,
+          color: habitColor,
+          preferences: preferences,
+        );
+        expect(
+          find.byKey(const ValueKey<String>('checkmark_notes')),
+          findsOneWidget,
+          reason: 'checkmark-dialog.popup#13 — plus a free-text notes field',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey<String>('checkmark_notes')),
+          'note',
+        );
+        await tester.tap(
+          find.byKey(ValueKey<String>('checkmark_${entry.key}_button')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          result.value,
+          CheckmarkDialogResult(entry.value, 'note'),
+          reason: 'checkmark-dialog.popup#13 — the ${entry.key} button',
+        );
+      }
+
+      // #14: the tints and the typeface.
+      await _openCheckmark(
+        tester,
+        value: core.Entry.no,
+        color: habitColor,
+        preferences: preferences,
+      );
+      final dim = toFlutterColor(core.LightTheme().mediumContrastTextColor);
+      expect(
+        [for (final name in buttons.keys) _glyphColor(tester, name)],
+        [
+          toFlutterColor(habitColor),
+          dim,
+          toFlutterColor(habitColor),
+          dim,
+        ],
+        reason: 'checkmark-dialog.popup#14 — Yes and Skip take the habit '
+            'colour, No and Unknown contrast60',
+      );
+      expect(
+        [for (final name in buttons.keys) _glyphFont(tester, name)],
+        ['FontAwesome', 'FontAwesome', 'FontAwesome', 'FontAwesome'],
+        reason: 'checkmark-dialog.popup#14 — all four use the FontAwesome '
+            'typeface',
+      );
+    });
+
+    testWidgets('#15 the popup route carries the "checkmarkDialog" tag', (
+      tester,
+    ) async {
+      final names = <String?>[];
+      await _openCheckmark(
+        tester,
+        value: core.Entry.no,
+        observers: <NavigatorObserver>[_RouteNameObserver(names)],
+      );
+
+      expect(
+        CheckmarkDialog.tag,
+        'checkmarkDialog',
+        reason: 'checkmark-dialog.popup#15',
+      );
+      expect(
+        names,
+        contains('checkmarkDialog'),
+        reason: 'checkmark-dialog.popup#15 — the popup is shown with tag '
+            '"checkmarkDialog", reused here as the route name',
       );
     });
   });
@@ -1578,6 +2303,58 @@ void main() {
             'leaves the value unchanged',
       );
     });
+
+    testWidgets('#7 the value field takes focus as soon as the popup opens', (
+      tester,
+    ) async {
+      await _openNumber(tester, value: 7.0);
+
+      final value = tester.widget<TextField>(
+        find.byKey(const ValueKey<String>('number_value')),
+      );
+      expect(
+        value.autofocus,
+        isTrue,
+        reason: 'number-dialog.popup#7 — the field requests focus and the soft '
+            'keyboard comes up with it; the synthetic ACTION_DOWN/ACTION_UP '
+            'pair Android needs 250ms after creation has no equivalent here',
+      );
+      expect(
+        value.focusNode?.hasFocus,
+        isTrue,
+        reason: 'number-dialog.popup#7 — the keyboard is open on the value '
+            'field, not on the notes field',
+      );
+      expect(
+        value.focusNode?.hasPrimaryFocus,
+        isTrue,
+        reason: 'number-dialog.popup#7 — the keyboard lands on the value '
+            'field, not on the notes field above it',
+      );
+    });
+
+    testWidgets('#18 the popup route carries the "numberDialog" tag', (
+      tester,
+    ) async {
+      final names = <String?>[];
+      await _openNumber(
+        tester,
+        value: 7.0,
+        observers: <NavigatorObserver>[_RouteNameObserver(names)],
+      );
+
+      expect(
+        NumberDialog.tag,
+        'numberDialog',
+        reason: 'number-dialog.popup#18',
+      );
+      expect(
+        names,
+        contains('numberDialog'),
+        reason: 'number-dialog.popup#18 — the popup is shown with tag '
+            '"numberDialog", reused here as the route name',
+      );
+    });
   });
 
   group('confirm-delete.dialog', () {
@@ -1672,6 +2449,50 @@ void main() {
       expect(result.completed, isTrue, reason: 'confirm-delete.dialog#6');
       expect(result.value, isFalse, reason: 'confirm-delete.dialog#6');
     });
+
+    testWidgets('#1 a plain alert built around a quantity', (tester) async {
+      // One dialog addresses one habit...
+      await _open(
+        tester,
+        (context) => showConfirmDeleteDialog(context, quantity: 1),
+      );
+      expect(
+        find.byType(AlertDialog),
+        findsOneWidget,
+        reason: 'confirm-delete.dialog#1 — a plain AlertDialog: a title, a '
+            'message and two buttons, nothing custom',
+      );
+      expect(
+        find.text('Delete habit?'),
+        findsOneWidget,
+        reason: 'confirm-delete.dialog#1',
+      );
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      // ... or many, from the same widget and the same quantity argument.
+      await _open(
+        tester,
+        (context) => showConfirmDeleteDialog(context, quantity: 12),
+      );
+      expect(
+        find.byType(AlertDialog),
+        findsOneWidget,
+        reason: 'confirm-delete.dialog#1',
+      );
+      expect(
+        find.text('Delete habits?'),
+        findsOneWidget,
+        reason: 'confirm-delete.dialog#1 — the quantity is what lets one '
+            'dialog address one habit or many',
+      );
+      expect(
+        tester.widget<ConfirmDeleteDialog>(find.byType(ConfirmDeleteDialog))
+            .quantity,
+        12,
+        reason: 'confirm-delete.dialog#1',
+      );
+    });
   });
 }
 
@@ -1694,6 +2515,8 @@ Future<_Result<T>> _open<T>(
   Future<T?> Function(BuildContext context) show, {
   Locale locale = const Locale('en'),
   ThemeData? theme,
+  List<NavigatorObserver> observers = const <NavigatorObserver>[],
+  bool settle = true,
 }) async {
   final result = _Result<T>();
   await tester.pumpWidget(
@@ -1701,6 +2524,7 @@ Future<_Result<T>> _open<T>(
       locale: locale,
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: L10n.supportedLocales,
+      navigatorObservers: observers,
       theme: theme,
       home: Builder(
         builder: (context) => Scaffold(
@@ -1718,9 +2542,38 @@ Future<_Result<T>> _open<T>(
     ),
   );
   await tester.tap(find.text('open'));
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    // One frame only: the first the dialog route ever paints.
+    await tester.pump();
+  }
   return result;
 }
+
+/// Hosts a dialog widget directly, without a route, so a test can rebuild it
+/// under its own control.
+Future<void> _pumpHosted(
+  WidgetTester tester,
+  WidgetBuilder builder, {
+  Locale locale = const Locale('en'),
+  ThemeData? theme,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      locale: locale,
+      localizationsDelegates: L10n.localizationsDelegates,
+      supportedLocales: L10n.supportedLocales,
+      theme: theme,
+      home: Scaffold(body: Center(child: Builder(builder: builder))),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Opaque Flutter colours from the RGB triples of res/values/material_colors.
+List<Color> _colors(List<int> rgb) =>
+    [for (final value in rgb) Color(0xFF000000 | value)];
 
 Finder _swatch(int index) =>
     find.byKey(ValueKey<String>('color_swatch_$index'));
@@ -1783,6 +2636,7 @@ Future<_Result<CheckmarkDialogResult>> _openCheckmark(
   String notes = '',
   core.Color color = const core.Color.fromRgb(0xD32F2F),
   Preferences? preferences,
+  List<NavigatorObserver> observers = const <NavigatorObserver>[],
 }) => _open<CheckmarkDialogResult>(
   tester,
   (context) => showCheckmarkDialog(
@@ -1792,7 +2646,18 @@ Future<_Result<CheckmarkDialogResult>> _openCheckmark(
     color: color,
     preferences: preferences ?? Preferences(MemoryStorage()),
   ),
+  observers: observers,
 );
+
+String? _glyphFont(WidgetTester tester, String name) => tester
+    .widget<Text>(
+      find.descendant(
+        of: find.byKey(ValueKey<String>('checkmark_${name}_button')),
+        matching: find.byType(Text),
+      ),
+    )
+    .style
+    ?.fontFamily;
 
 Color? _glyphColor(WidgetTester tester, String name) => tester
     .widget<Text>(
@@ -1811,6 +2676,7 @@ Future<_Result<NumberDialogResult>> _openNumber(
   core.Color color = const core.Color.fromRgb(0xD32F2F),
   Preferences? preferences,
   Locale locale = const Locale('en'),
+  List<NavigatorObserver> observers = const <NavigatorObserver>[],
 }) => _open<NumberDialogResult>(
   tester,
   (context) => showNumberDialog(
@@ -1821,9 +2687,23 @@ Future<_Result<NumberDialogResult>> _openNumber(
     preferences: preferences ?? Preferences(MemoryStorage()),
   ),
   locale: locale,
+  observers: observers,
 );
 
 String _numberValue(WidgetTester tester) => tester
     .widget<TextField>(find.byKey(const ValueKey<String>('number_value')))
     .controller!
     .text;
+
+/// Records the name of every route that is pushed, so a test can assert the
+/// fragment tag a dialog is shown under.
+class _RouteNameObserver extends NavigatorObserver {
+  _RouteNameObserver(this.names);
+
+  final List<String?> names;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    names.add(route.settings.name);
+  }
+}

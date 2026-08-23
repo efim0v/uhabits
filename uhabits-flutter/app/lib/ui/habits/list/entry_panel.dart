@@ -17,23 +17,10 @@
 /// there are, which date each one stands for, which way round they are laid
 /// out, and which callback a tap or a long press reaches.
 ///
-/// Known gaps against the Android buttons, all of them inherited from the core
-/// views rather than introduced here:
-///
-///  * `CheckmarkButton` paints a check or a cross and nothing else — Android
-///    also has glyphs for SKIP and (when question marks are enabled) UNKNOWN,
-///    and it strokes YES_AUTO as an outline. A YES_AUTO day therefore shows a
-///    solid low-contrast check here, not a hollow one.
-///  * `NumberButton` compares `value >= threshold` unconditionally, so an
-///    at-most habit colours the wrong days. [targetType] is accepted and
-///    forwarded nowhere for that reason; it is here so the call sites are
-///    already correct when the core view grows the branch.
-///  * neither core view draws the notes indicator. `drawNotesIndicator` does
-///    exist in core, but its radius is a bare `8.0` in *device* pixels
-///    (documented as such upstream), which would be a 16-logical-pixel blob on
-///    a 48-logical-pixel Flutter button. Calling it would look wrong, and
-///    scaling it here would be inventing a value, so [notes] is carried
-///    through to the callbacks and not yet painted.
+/// The cells paint [CheckmarkButtonView] and [NumberButtonView] — the ports of
+/// the *Android* button views, not the smaller KMP ones in `uhabits_core` — so
+/// the SKIP and question-mark glyphs, the hollow YES_AUTO check, the AT_MOST
+/// colouring, the unit trimming and the notes indicator are all present.
 library;
 
 // The core package does not export lib/src/ui/views or lib/src/preferences
@@ -42,11 +29,10 @@ library;
 
 import 'package:flutter/widgets.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart' as core;
-import 'package:uhabits_core/src/ui/views/checkmark_button.dart' as core_views;
-import 'package:uhabits_core/src/ui/views/number_button.dart' as core_views;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../core_view.dart';
+import 'entry_button_views.dart';
 
 /// Kotlin: `(LocalDate, Int, String) -> Unit`, the `onToggle` of
 /// CheckmarkPanelView. [value] is the value the entry is moving *to*, already
@@ -60,6 +46,19 @@ typedef EntryToggleCallback = void Function(
 /// Kotlin: `(LocalDate) -> Unit`, the `onEdit` of both panels.
 typedef EntryEditCallback = void Function(core.LocalDate date);
 
+/// Reports which cell was just pressed, together with the centre of that cell
+/// in the panel's own coordinates.
+///
+/// Kotlin: `HabitCardView.getRelativeButtonLocation(date)`, which reads
+/// `panel.x + button.x + button.width / 2` and `button.height / 2` straight off
+/// the laid-out children. The panel computes the same point analytically —
+/// every cell is [core.Theme.checkmarkButtonSize] wide and the row has no
+/// spacing — so the caller does not need a key per button.
+typedef EntryPressedCallback = void Function(
+  core.LocalDate date,
+  Offset centerInPanel,
+);
+
 /// A row of entry buttons, one per visible date, newest first.
 ///
 /// [values] and [notes] are indexed the way HabitCardListCache hands them out:
@@ -68,7 +67,7 @@ typedef EntryEditCallback = void Function(core.LocalDate date);
 /// position `i` stands for `today - (i + dataOffset)` and reads
 /// `values[i + dataOffset]`. Indices past the end of [values] fall back the way
 /// the Kotlin panels do: UNKNOWN for a checkmark, 0.0 for a measurement.
-class EntryPanel extends StatelessWidget {
+class EntryPanel extends StatefulWidget {
   const EntryPanel({
     required this.values,
     required this.color,
@@ -83,6 +82,7 @@ class EntryPanel extends StatelessWidget {
     this.dataOffset = 0,
     this.onToggle,
     this.onEdit,
+    this.onPressed,
     super.key,
   });
 
@@ -108,7 +108,8 @@ class EntryPanel extends StatelessWidget {
 
   final String unit;
 
-  /// Accepted but unused — see the library comment.
+  /// `habit.targetType`; the number cells colour an at-most day the other way
+  /// round (`list-habits.number-button#3`).
   final core.NumericalHabitType targetType;
 
   final double targetValue;
@@ -123,6 +124,10 @@ class EntryPanel extends StatelessWidget {
 
   final EntryEditCallback? onEdit;
 
+  /// Fires for every gesture that reaches a cell, before [onToggle] / [onEdit].
+  /// `HabitCardView` uses it to place the ripple hotspot.
+  final EntryPressedCallback? onPressed;
+
   /// The key of the button standing for [date], so callers and tests can reach
   /// one cell without depending on its position in the row (which
   /// [core.Preferences.isCheckmarkSequenceReversed] flips).
@@ -130,44 +135,123 @@ class EntryPanel extends StatelessWidget {
       ValueKey<String>('entryButton:${date.daysSince2000}');
 
   @override
+  State<EntryPanel> createState() => _EntryPanelState();
+}
+
+class _EntryPanelState extends State<EntryPanel> {
+  /// `CheckmarkButtonView.value`, the field `performToggle()` writes before it
+  /// reports anything to the presenter (`list-habits.toggle-from-row#4`).
+  ///
+  /// Keyed by [core.LocalDate.daysSince2000]. A rebind clears it, exactly as
+  /// `ButtonPanelView.setupButtons` overwrites `button.value` on every refresh.
+  final Map<int, int> _optimisticValues = <int, int>{};
+
+  late final _PanelPreferencesListener _preferencesListener;
+
+  @override
+  void initState() {
+    super.initState();
+    // `ButtonPanelView.onAttachedToWindow`: the panel listens to the
+    // preferences while it is attached, and re-inflates its buttons when the
+    // checkmark sequence flips (`list-habits.entry-panels#9`).
+    _preferencesListener = _PanelPreferencesListener(_onCheckmarkSequenceChanged);
+    widget.preferences.addListener(_preferencesListener);
+  }
+
+  @override
+  void didUpdateWidget(EntryPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.preferences, widget.preferences)) {
+      oldWidget.preferences.removeListener(_preferencesListener);
+      widget.preferences.addListener(_preferencesListener);
+    }
+    // `HabitCardListView.bindCardView` pushes the cached values back into every
+    // button, which is what discards an optimistic value once the command has
+    // been through the cache.
+    _optimisticValues.clear();
+  }
+
+  @override
+  void dispose() {
+    // `ButtonPanelView.onDetachedFromWindow`.
+    widget.preferences.removeListener(_preferencesListener);
+    super.dispose();
+  }
+
+  void _onCheckmarkSequenceChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final today = core.getToday();
     final buttons = <Widget>[
-      for (var index = 0; index < buttonCount; index++) _buildButton(today, index),
+      for (var index = 0; index < widget.buttonCount; index++)
+        _buildButton(today, index),
     ];
 
     // ButtonPanelView.inflateButtons: the buttons are built newest-first and
     // then added in reverse when the preference is set.
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children:
-          preferences.isCheckmarkSequenceReversed ? buttons.reversed.toList() : buttons,
+      children: widget.preferences.isCheckmarkSequenceReversed
+          ? buttons.reversed.toList()
+          : buttons,
     );
   }
 
-  Widget _buildButton(core.LocalDate today, int index) {
-    final offset = index + dataOffset;
-    final date = today.minus(offset);
-    final note = offset < notes.length ? notes[offset] : '';
-    final key = buttonKey(date);
-    final size = theme.checkmarkButtonSize;
+  /// `HabitCardView.getRelativeButtonLocation`, in panel coordinates: the
+  /// horizontal centre of the cell that ended up at [position] in the row, and
+  /// `button.height / 2` vertically.
+  Offset _centerOf(int position) {
+    final size = widget.theme.checkmarkButtonSize;
+    return Offset((position + 0.5) * size, size / 2);
+  }
 
-    if (isNumerical) {
+  Widget _buildButton(core.LocalDate today, int index) {
+    final offset = index + widget.dataOffset;
+    final date = today.minus(offset);
+    final note = offset < widget.notes.length ? widget.notes[offset] : '';
+    final key = EntryPanel.buttonKey(date);
+    final size = widget.theme.checkmarkButtonSize;
+    final position = widget.preferences.isCheckmarkSequenceReversed
+        ? widget.buttonCount - 1 - index
+        : index;
+    void reportPress() =>
+        widget.onPressed?.call(date, _centerOf(position));
+
+    if (widget.isNumerical) {
       // NumberPanelView.setupButtons: out of range is 0.0, not UNKNOWN.
-      final value = offset < values.length ? values[offset] / 1000.0 : 0.0;
+      final value =
+          offset < widget.values.length ? widget.values[offset] / 1000.0 : 0.0;
       // NumberButtonView answers both gestures with onEdit.
-      void edit() => onEdit?.call(date);
+      void edit() {
+        reportPress();
+        widget.onEdit?.call(date);
+      }
+
       return EntryButton(
         key: key,
         size: size,
-        view: core_views.NumberButton(color, value, targetValue, unit, theme),
+        view: NumberButtonView(
+          color: widget.color,
+          value: value,
+          threshold: widget.targetValue,
+          units: widget.unit,
+          theme: widget.theme,
+          targetType: widget.targetType,
+          notes: note,
+          areQuestionMarksEnabled:
+              widget.preferences.areQuestionMarksEnabled,
+        ),
         onTap: edit,
         onLongPress: edit,
       );
     }
 
-    final value =
-        offset < values.length ? values[offset] : core.Entry.unknown;
+    final stored =
+        offset < widget.values.length ? widget.values[offset] : core.Entry.unknown;
+    final value = _optimisticValues[date.daysSince2000] ?? stored;
 
     void toggle() {
       // CheckmarkButtonView.performToggle: the button advances its own value
@@ -175,25 +259,50 @@ class EntryPanel extends StatelessWidget {
       // caller.
       final next = core.Entry.nextToggleValue(
         value,
-        isSkipEnabled: preferences.isSkipEnabled,
-        areQuestionMarksEnabled: preferences.areQuestionMarksEnabled,
+        isSkipEnabled: widget.preferences.isSkipEnabled,
+        areQuestionMarksEnabled: widget.preferences.areQuestionMarksEnabled,
       );
-      onToggle?.call(date, next, note);
+      reportPress();
+      // `value = Entry.nextToggleValue(...)` runs *before* `onToggle(...)`, and
+      // the setter invalidates, so the cell repaints with the new value whether
+      // or not the command ever comes back.
+      setState(() => _optimisticValues[date.daysSince2000] = next);
+      widget.onToggle?.call(date, next, note);
     }
 
-    void edit() => onEdit?.call(date);
+    void edit() {
+      reportPress();
+      widget.onEdit?.call(date);
+    }
 
     // CheckmarkButtonView.onClick / onLongClick: the preference decides which
     // gesture toggles and which one opens the editor.
-    final shortToggle = preferences.isShortToggleEnabled;
+    final shortToggle = widget.preferences.isShortToggleEnabled;
     return EntryButton(
       key: key,
       size: size,
-      view: core_views.CheckmarkButton(value, color, theme),
+      view: CheckmarkButtonView(
+        value: value,
+        color: widget.color,
+        theme: widget.theme,
+        notes: note,
+        areQuestionMarksEnabled: widget.preferences.areQuestionMarksEnabled,
+      ),
       onTap: shortToggle ? toggle : edit,
       onLongPress: shortToggle ? edit : toggle,
     );
   }
+}
+
+/// `Preferences.Listener`, narrowed to the one callback ButtonPanelView
+/// overrides.
+class _PanelPreferencesListener extends core.PreferencesListener {
+  _PanelPreferencesListener(this._onChanged);
+
+  final VoidCallback _onChanged;
+
+  @override
+  void onCheckmarkSequenceChanged() => _onChanged();
 }
 
 /// One cell of an [EntryPanel]: a core [core.View] painted into a square of

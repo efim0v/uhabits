@@ -39,11 +39,38 @@ import org.isoron.uhabits.R
  */
 abstract class BaseWidgetProvider : AppWidgetProvider() {
 
-    protected abstract fun buildWidget(
+    /**
+     * `widgets.stack#1`: the StackWidgetType this provider's widgets become
+     * when their document holds anything other than exactly one habit.
+     */
+    protected abstract val stackWidgetType: StackWidgetType
+
+    /** The provider's own widget, for the ordinary one-habit case. */
+    protected abstract fun buildSingleWidget(
         context: Context,
         widgetId: Int,
         document: WidgetDocument
     ): BaseWidget
+
+    /**
+     * `widgets.stack#1`: a single-habit widget only when exactly one habit is
+     * bound; 0 or 2+ habits are a StackWidget of the matching type.
+     *
+     * Two or more is what a home screen carried over from the Kotlin build
+     * looks like — `settings.widget-preferences.habit-ids` still reads its
+     * comma-separated `widget-%06d-habit` values. Zero is a widget bound to
+     * nothing, which draws the type's empty label (`widgets.error-states#4`).
+     */
+    private fun buildWidget(
+        context: Context,
+        widgetId: Int,
+        document: WidgetDocument
+    ): BaseWidget =
+        if (document.isStack()) {
+            StackWidget(context, widgetId, stackWidgetType, document.habits)
+        } else {
+            buildSingleWidget(context, widgetId, document)
+        }
 
     /**
      * `widgets.provider-lifecycle#1`: update every id in the array on a

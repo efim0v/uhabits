@@ -22,6 +22,13 @@ import android.content.Context
 
 /** `widgets.registration#1`: launcher label 'History'. */
 class HistoryWidgetProvider : BaseWidgetProvider() {
-    override fun buildWidget(context: Context, widgetId: Int, document: WidgetDocument) =
+    /** `widgets.stack#1`: what a multi-habit document becomes. */
+    override val stackWidgetType get() = StackWidgetType.HISTORY
+
+    override fun buildSingleWidget(
+        context: Context,
+        widgetId: Int,
+        document: WidgetDocument
+    ) =
         HistoryWidget(context, widgetId, document.singleHabit(), document.today)
 }

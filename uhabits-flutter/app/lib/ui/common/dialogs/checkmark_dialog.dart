@@ -18,9 +18,11 @@
 ///  * `onDismiss()` "always fires last, regardless of how the dialog closed"
 ///    (`checkmark-dialog.popup#10`). A `Future` is that callback: the caller
 ///    resumes exactly once, after the dialog is gone.
-///  * `dismissCurrentAndShow` with the tag "checkmarkDialog"
-///    (`checkmark-dialog.popup#15`) belongs to `dialogs.single-current-dialog`
-///    and is not this file's business.
+///  * the "dismiss whatever is tracked as current first" half of
+///    `dismissCurrentAndShow` (`checkmark-dialog.popup#15`) belongs to
+///    `dialogs.single-current-dialog` and is not this file's business; the tag
+///    it is shown under survives as the route name, the way
+///    `HistoryEditorDialog` keeps its own.
 library;
 
 import 'package:flutter/material.dart';
@@ -100,6 +102,7 @@ Future<CheckmarkDialogResult?> showCheckmarkDialog(
   final draft = NotesDraft(notes);
   final result = await showDialog<CheckmarkDialogResult>(
     context: context,
+    routeSettings: const RouteSettings(name: CheckmarkDialog.tag),
     builder: (context) => CheckmarkDialog(
       value: value,
       notes: notes,
@@ -134,6 +137,11 @@ class CheckmarkDialog extends StatefulWidget {
     required this.preferences,
     this.draft,
   });
+
+  /// The fragment tag `ListHabitsScreen` and `ShowHabitActivity` show the
+  /// popup under, reused here as the route name
+  /// (`checkmark-dialog.popup#15`).
+  static const String tag = 'checkmarkDialog';
 
   final int value;
 

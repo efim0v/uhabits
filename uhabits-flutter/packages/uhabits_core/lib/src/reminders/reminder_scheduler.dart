@@ -7,6 +7,7 @@ import '../models/habit_list.dart';
 import '../models/habit_matcher.dart';
 import '../preferences/widget_preferences.dart';
 import '../time/date_utils.dart';
+import '../ui/notification_tray.dart' show ReminderSchedulerApi;
 
 /// Port of
 /// uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt
@@ -26,7 +27,8 @@ import '../time/date_utils.dart';
 /// Every method is `@Synchronized` upstream. A Dart isolate has a single
 /// thread and none of these methods suspends, so each one already runs to
 /// completion before another can start; there is no lock to port.
-class ReminderScheduler implements CommandRunnerListener {
+class ReminderScheduler
+    implements CommandRunnerListener, ReminderSchedulerApi {
   ReminderScheduler(
     this._commandRunner,
     this._habitList,
@@ -90,6 +92,7 @@ class ReminderScheduler implements CommandRunnerListener {
   ///
   /// The checkmark day is derived with hard-coded zero offsets, so the user's
   /// midnight-delay preference is deliberately not applied here.
+  @override
   void scheduleAtTime(Habit habit, int reminderTime) {
     _sys.log('ReminderScheduler', 'Scheduling alarm for habit=${habit.id}');
     if (!habit.hasReminder()) {
@@ -118,6 +121,7 @@ class ReminderScheduler implements CommandRunnerListener {
   /// Re-arms every habit that carries a reminder, archived ones included — they
   /// are dropped one level down, inside [scheduleAtTime]. Nothing is cancelled
   /// first; an alarm is simply replaced by the next one for the same habit.
+  @override
   void scheduleAll() {
     _sys.log('ReminderScheduler', 'Scheduling all alarms');
     final reminderHabits = _habitList.getFiltered(HabitMatcher.withAlarm);
@@ -140,6 +144,7 @@ class ReminderScheduler implements CommandRunnerListener {
   /// Snoozes [habit] by [minutes], persisting the new instant so that any
   /// later [scheduleAll] — after a reboot, an edit, or an app restart —
   /// re-honours it until it expires.
+  @override
   void snoozeReminder(Habit habit, int minutes) {
     final now = DateUtils.applyTimezone(DateUtils.getLocalTime());
     final snoozedUntil = now + minutes * 60 * 1000;

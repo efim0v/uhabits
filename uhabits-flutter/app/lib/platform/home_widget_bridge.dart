@@ -96,6 +96,11 @@ class HomeWidgetBridge {
 
   final WidgetRegistry _registry;
 
+  /// Which widgets exist and which habits each one shows. Exposed because
+  /// `HabitPickerDialog.confirm()` writes into it: the picker is the only thing
+  /// that ever adds a binding.
+  WidgetRegistry get registry => _registry;
+
   final HomeWidgetPlatform _platform;
 
   /// Bump whenever a field below changes meaning or disappears.

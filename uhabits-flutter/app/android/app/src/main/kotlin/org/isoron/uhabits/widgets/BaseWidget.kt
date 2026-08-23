@@ -48,8 +48,7 @@ abstract class BaseWidget(
     val id: Int,
     /**
      * `widgets.card-chrome#5`: a widget rendered inside a StackWidget is forced
-     * opaque. Stack widgets are not reproduced, so this is always false and
-     * exists only to keep [preferedBackgroundAlpha] honest about what it is.
+     * opaque. Set by [StackRemoteViewsFactory] for every page it builds.
      */
     val stacked: Boolean = false
 ) {

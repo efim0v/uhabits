@@ -252,7 +252,7 @@ List<String> bucketLabelsWithoutDay(L10n l10n) => <String>[
 /// column late — is kept as it is upstream.
 class ScoreChartView extends core.View {
   ScoreChartView({
-    required this.scores,
+    this.scores,
     required this.color,
     required this.theme,
     required this.dateFormatter,
@@ -261,7 +261,12 @@ class ScoreChartView extends core.View {
   });
 
   /// Newest bucket first, as [ScoreCardState.scores] delivers it.
-  final List<core.Score> scores;
+  ///
+  /// Kotlin: `private var scores: List<Score>? = null`, filled in by
+  /// `setScores`. Null is the state the view is in between construction and
+  /// the first `setState`, and [draw] returns immediately in it
+  /// (`charts-canvas-theming.score-chart#6`).
+  final List<core.Score>? scores;
 
   final core.Color color;
 
@@ -278,6 +283,11 @@ class ScoreChartView extends core.View {
 
   @override
   void draw(core.Canvas canvas) {
+    // `if (scores == null) return` — the first statement of onDraw, and the
+    // reason a freshly inflated ScoreChart paints nothing at all
+    // (`charts-canvas-theming.score-chart#6`).
+    final scores = this.scores;
+    if (scores == null) return;
     final width = canvas.getWidth();
     var height = canvas.getHeight();
     // onSizeChanged: `if (height < 9) height = 200`.
@@ -431,6 +441,46 @@ class ScoreChartView extends core.View {
       maxWidth = math.max(maxWidth, canvas.measureText(name));
     }
     return maxWidth;
+  }
+
+  /// ```kotlin
+  /// fun populateWithRandomData() {
+  ///     val random = Random()
+  ///     val newScores = LinkedList<Score>()
+  ///     var previous = 0.5
+  ///     val today = getToday()
+  ///     for (i in 1..99) {
+  ///         val step = 0.1
+  ///         var current = previous + random.nextDouble() * step * 2 - step
+  ///         current = max(0.0, min(1.0, current))
+  ///         newScores.add(Score(today.minus(i), current))
+  ///         previous = current
+  ///     }
+  ///     scores = newScores
+  /// }
+  /// ```
+  ///
+  /// Ninety-nine scores walking backwards from today — the first is
+  /// *yesterday*, because the loop starts at 1 — as a random walk of step 0.1
+  /// clamped to 0..1 and starting at 0.5
+  /// (`charts-canvas-theming.score-chart#18`). The clamp feeds back into the
+  /// walk: `previous` is the clamped value, not the raw one.
+  ///
+  /// Returned rather than installed, because the Dart view takes its scores in
+  /// the constructor; the generator is a seam so a test can pin the walk.
+  static List<core.Score> populateWithRandomData({math.Random? random}) {
+    final rand = random ?? math.Random();
+    final newScores = <core.Score>[];
+    var previous = 0.5;
+    final today = core.getToday();
+    for (var i = 1; i <= 99; i++) {
+      const step = 0.1;
+      var current = previous + rand.nextDouble() * step * 2 - step;
+      current = math.max(0.0, math.min(1.0, current));
+      newScores.add(core.Score(today.minus(i), current));
+      previous = current;
+    }
+    return newScores;
   }
 }
 

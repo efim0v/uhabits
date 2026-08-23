@@ -15,17 +15,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
+import 'package:uhabits/l10n/app_localizations_en.dart';
+import 'package:uhabits/l10n/app_localizations_es.dart';
 import 'package:uhabits/platform/app_database.dart';
+import 'package:uhabits/platform/home_widget_bridge.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/show_habit_model.dart';
+import 'package:uhabits/state/widget_sync.dart';
+import 'package:uhabits/ui/common/dialogs/checkmark_dialog.dart';
+import 'package:uhabits/ui/common/dialogs/confirm_delete_dialog.dart';
+import 'package:uhabits/ui/common/dialogs/history_editor_dialog.dart';
+import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
+import 'package:uhabits/ui/habits/show/cards/history_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/notes_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/overview_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/subtitle_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
 import 'package:uhabits/ui/theme/app_theme.dart' show appThemeData;
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
+import 'package:uhabits_core/src/io/files.dart' show LocalUserFile, UserFile;
+import 'package:uhabits_core/src/preferences/preferences.dart' show Preferences;
 import 'package:uhabits_core/src/ui/intent_parser.dart' show parseContentUriId;
 // `Color` and `Theme` collide with the Material ones, so they come in under a
 // prefix and everything else stays bare.
@@ -1343,6 +1354,677 @@ void main() {
               '"Habit unarchived"');
     });
   });
+
+  // -----------------------------------------------------------------------
+  // The overflow menu — ShowHabitMenu.kt and res/menu/show_habit.xml
+  // -----------------------------------------------------------------------
+
+  group('overflow menu', () {
+    ShowHabitModel menuModel(AppScope scope, Habit habit) {
+      final model = ShowHabitModel(
+        scope: scope,
+        habit: habit,
+        theme: LightTheme(),
+        system: _TempCSVOutputDir(tempDir.path),
+      );
+      addTearDown(model.dispose);
+      return model;
+    }
+
+    test('show-habit.menu#1: the six items, in the order show_habit.xml '
+        'declares them', () {
+      expect(
+        ShowHabitMenuItem.values,
+        <ShowHabitMenuItem>[
+          ShowHabitMenuItem.export,
+          ShowHabitMenuItem.archive,
+          ShowHabitMenuItem.unarchive,
+          ShowHabitMenuItem.delete,
+          ShowHabitMenuItem.edit,
+          ShowHabitMenuItem.randomize,
+        ],
+        reason: 'show-habit.menu#1 — Export, Archive, Unarchive, Delete, '
+            'Edit, Randomize',
+      );
+
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      // An unarchived habit hides Unarchive, and Randomize is off by default,
+      // so what the toolbar actually inflates keeps the same relative order.
+      expect(
+        menuModel(scope, habit).menu.onCreateOptionsMenu(),
+        <ShowHabitMenuItem>[
+          ShowHabitMenuItem.export,
+          ShowHabitMenuItem.archive,
+          ShowHabitMenuItem.delete,
+          ShowHabitMenuItem.edit,
+        ],
+        reason: 'show-habit.menu#1',
+      );
+    });
+
+    test('show-habit.menu#2: Edit is the only action button; the other five '
+        'are overflow-only', () {
+      expect(
+        ShowHabitMenuItem.values.where((i) => i.isActionButton).toList(),
+        <ShowHabitMenuItem>[ShowHabitMenuItem.edit],
+        reason: 'show-habit.menu#2 — showAsAction="ifRoom" on Edit alone',
+      );
+      for (final item in <ShowHabitMenuItem>[
+        ShowHabitMenuItem.export,
+        ShowHabitMenuItem.archive,
+        ShowHabitMenuItem.unarchive,
+        ShowHabitMenuItem.delete,
+        ShowHabitMenuItem.randomize,
+      ]) {
+        expect(item.isActionButton, isFalse,
+            reason: 'show-habit.menu#2 — $item is showAsAction="never"');
+      }
+    });
+
+    testWidgets('show-habit.menu#2: the toolbar shows Edit and hides the rest '
+        'behind the overflow button', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(ShowHabitScreen.editActionKey), findsOneWidget,
+          reason: 'show-habit.menu#2 — Edit is an action button');
+      expect(find.byKey(ShowHabitScreen.overflowMenuKey), findsOneWidget,
+          reason: 'show-habit.menu#2 — the other five need the overflow');
+      expect(
+        find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.delete)),
+        findsNothing,
+        reason: 'show-habit.menu#2 — and are not on the toolbar',
+      );
+
+      await tester.tap(find.byKey(ShowHabitScreen.overflowMenuKey));
+      await tester.pumpAndSettle();
+
+      for (final item in <ShowHabitMenuItem>[
+        ShowHabitMenuItem.export,
+        ShowHabitMenuItem.archive,
+        ShowHabitMenuItem.delete,
+      ]) {
+        expect(find.byKey(ShowHabitScreen.menuItemKey(item)), findsOneWidget,
+            reason: 'show-habit.menu#2 — $item is in the overflow');
+      }
+      expect(
+        find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.edit)),
+        findsNothing,
+        reason: 'show-habit.menu#2 — Edit is not repeated in the overflow',
+      );
+    });
+
+    test('show-habit.menu#5 and show-habit.randomize#1: Randomize is hidden '
+        'unless pref_developer is set', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      final model = menuModel(scope, habit);
+
+      expect(scope.preferences.isDeveloper, isFalse,
+          reason: 'show-habit.menu#5 — pref_developer defaults to false');
+      expect(
+        model.menu.onCreateOptionsMenu(),
+        isNot(contains(ShowHabitMenuItem.randomize)),
+        reason: 'show-habit.menu#5 — android:visible="false" until the '
+            'developer flag turns it on',
+      );
+      expect(
+        model.menu.onCreateOptionsMenu(),
+        isNot(contains(ShowHabitMenuItem.randomize)),
+        reason: 'show-habit.randomize#1 — the action is unreachable without '
+            'preferences.isDeveloper',
+      );
+
+      scope.preferences.isDeveloper = true;
+      expect(model.menu.onCreateOptionsMenu(),
+          contains(ShowHabitMenuItem.randomize),
+          reason: 'show-habit.menu#5 — and visible once it is');
+      expect(model.menu.onCreateOptionsMenu(),
+          contains(ShowHabitMenuItem.randomize),
+          reason: 'show-habit.randomize#1 — which is the only way in');
+    });
+
+    testWidgets('show-habit.randomize#1: the overflow carries Randomize only '
+        'for a developer build', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ShowHabitScreen.overflowMenuKey));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.randomize)),
+        findsNothing,
+        reason: 'show-habit.randomize#1 — not reachable from a normal build',
+      );
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      scope.preferences.isDeveloper = true;
+      modelOf(tester).refresh();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ShowHabitScreen.overflowMenuKey));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.randomize)),
+        findsOneWidget,
+        reason: 'show-habit.randomize#1 — reachable once isDeveloper is set',
+      );
+      expect(find.text(ShowHabitMenuItem.randomizeTitle), findsOneWidget,
+          reason: 'show-habit.menu#5 — titled with the literal "Randomize"');
+    });
+
+    test('show-habit.menu#5: the Randomize title is never translated', () {
+      expect(ShowHabitMenuItem.randomize.title(L10nEn()), 'Randomize',
+          reason: 'show-habit.menu#5 — an untranslated XML literal');
+      expect(ShowHabitMenuItem.randomize.title(L10nEs()), 'Randomize',
+          reason: 'show-habit.menu#5 — the same in every locale, unlike the '
+              'other five titles');
+      expect(ShowHabitMenuItem.delete.title(L10nEs()),
+          isNot(ShowHabitMenuItem.delete.title(L10nEn())),
+          reason: 'show-habit.menu#6 — which do follow the locale');
+    });
+
+    test('show-habit.menu#7: the six known ids return true, route to their own '
+        'presenter call, and anything else returns false', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      // A recording presenter: the routing is what the `when` block decides,
+      // and running the real commands here would only exercise
+      // ShowHabitMenuPresenter, which has its own tests.
+      final presenter = _RecordingMenuPresenter(scope, habit);
+      final menu = ShowHabitMenu(
+        presenter: presenter,
+        preferences: scope.preferences,
+      );
+
+      const expected = <ShowHabitMenuItem, String>{
+        ShowHabitMenuItem.edit: 'onEditHabit',
+        ShowHabitMenuItem.archive: 'onArchiveHabits',
+        ShowHabitMenuItem.unarchive: 'onUnarchiveHabits',
+        ShowHabitMenuItem.delete: 'onDeleteHabit',
+        ShowHabitMenuItem.randomize: 'onRandomize',
+        ShowHabitMenuItem.export: 'onExportCSV',
+      };
+      for (final entry in expected.entries) {
+        presenter.calls.clear();
+        expect(menu.onOptionsItemSelected(entry.key), isTrue,
+            reason: 'show-habit.menu#7 — ${entry.key} is one of the six '
+                'handled ids');
+        expect(presenter.calls, <String>[entry.value],
+            reason: 'show-habit.menu#7 — and it reaches ${entry.value}');
+      }
+
+      // android.R.id.home, the Up button, is the id that matters: falling
+      // through is what lets the platform's default handler navigate up.
+      presenter.calls.clear();
+      expect(menu.onOptionsItemSelected('android.R.id.home'), isFalse,
+          reason: 'show-habit.menu#7 — anything else falls through');
+      expect(menu.onOptionsItemSelected(null), isFalse,
+          reason: 'show-habit.menu#7');
+      expect(menu.onOptionsItemSelected(0), isFalse,
+          reason: 'show-habit.menu#7');
+      expect(presenter.calls, isEmpty,
+          reason: 'show-habit.menu#7 — and nothing at all is dispatched');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Messages, deletion and widgets
+  // -----------------------------------------------------------------------
+
+  group('menu actions, wired', () {
+    testWidgets('show-habit.archive-unarchive#3: archiving shows a white '
+        'snackbar at the bottom of the screen', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+
+      modelOf(tester).menuPresenter.onArchiveHabits();
+      await tester.pump();
+      final snack = tester.widget<Text>(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text('Habit archived'),
+        ),
+      );
+      expect(snack.style!.color, Colors.white,
+          reason: 'show-habit.archive-unarchive#3 — white text at the bottom '
+              'of the screen');
+      // Let the snackbar time out and the command finish, so neither outlives
+      // the test.
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+    });
+
+    testWidgets('show-habit.archive-unarchive#5: a message with no suitable '
+        'parent view is dropped in silence', (tester) async {
+      // `Activity.showMessage` wraps `Snackbar.make(findViewById(content), …)`
+      // in a try/catch for IllegalArgumentException.
+      late BuildContext hostless;
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Builder(builder: (context) {
+            hostless = context;
+            return const SizedBox.shrink();
+          }),
+        ),
+      );
+      expect(ScaffoldMessenger.maybeOf(hostless), isNull,
+          reason: 'show-habit.archive-unarchive#5 — no suitable parent view');
+      expect(() => showShowHabitMessage(hostless, 'Habit archived'),
+          returnsNormally,
+          reason: 'show-habit.archive-unarchive#5 — the '
+              'IllegalArgumentException is swallowed');
+      await tester.pump();
+      expect(find.text('Habit archived'), findsNothing,
+          reason: 'show-habit.archive-unarchive#5 — and nothing is shown');
+    });
+
+    testWidgets('show-habit.delete#4: the confirmation is shown with '
+        'dismissCurrentAndShow, so the open entry popup goes first',
+        (tester) async {
+      final scope = openScope();
+      final habit = addHabit(
+        scope,
+        'Run',
+        type: HabitType.numerical,
+        targetValue: 5,
+        unit: 'km',
+      );
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      final model = modelOf(tester);
+
+      // A tap on a calendar day opens the number popup, which is one of the
+      // dialogs `dismissCurrentAndShow` tracks.
+      model.presenter.historyCardPresenter.onDateShortPress(getToday());
+      await tester.pumpAndSettle();
+      expect(find.byType(NumberDialog), findsOneWidget);
+
+      model.menuPresenter.onDeleteHabit();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NumberDialog), findsNothing,
+          reason: 'show-habit.delete#4 — the tracked dialog is dismissed '
+              'first');
+      expect(find.byType(ConfirmDeleteDialog), findsOneWidget,
+          reason: 'show-habit.delete#4 — and the confirmation takes its '
+              'place');
+
+      // And "No" still leaves the habit alone.
+      await tester.tap(find.byKey(const ValueKey<String>('confirm_delete_no')));
+      await tester.pumpAndSettle();
+      expect(scope.habitList.getById(habit.id!), same(habit),
+          reason: 'show-habit.delete#2');
+    });
+
+    test('show-habit.widget-refresh#2: updateWidgets pushes new data '
+        'to every home-screen widget', () async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      final platform = _RecordingHomeWidgetPlatform();
+      final sync = WidgetSync(
+        bridge: HomeWidgetBridge(
+          habitList: scope.habitList,
+          registry: WidgetRegistry(scope.preferencesStorage),
+          platform: platform,
+        ),
+        commandRunner: scope.commandRunner,
+        taskRunner: scope.taskRunner,
+        midnightTimer: scope.midnightTimer,
+        preferences: scope.preferences,
+      );
+      final model = ShowHabitModel(
+        scope: scope,
+        habit: habit,
+        theme: LightTheme(),
+        widgetUpdater: sync.updateWidgets,
+      );
+      addTearDown(model.dispose);
+
+      // `ScoreCardPresenter.onSpinnerPosition` writes the preference, then
+      // calls screen.updateWidgets() and screen.refresh()
+      // (`show-habit.widget-refresh#1`).
+      model.presenter.scoreCardPresenter.onSpinnerPosition(3);
+      await sync.settle();
+
+      expect(platform.refreshed, HomeWidgetBridge.providerNames,
+          reason: 'show-habit.widget-refresh#2 — updateWidgets delegates to '
+              'the WidgetUpdater, which pushes to all app widgets');
+      expect(scope.preferences.scoreCardSpinnerPosition, 3,
+          reason: 'show-habit.widget-refresh#2 — the spinner preference is '
+              'the one the widgets read their bucket size from');
+      expect(Preferences(scope.preferencesStorage).scoreCardSpinnerPosition, 3,
+          reason: 'show-habit.widget-refresh#2 — and it is shared storage, '
+              'not screen-local state');
+    });
+
+    testWidgets('show-habit.delete#3: confirming deletes the habit and closes '
+        'the screen', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      final other = addHabit(scope, 'Run');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Provider<AppScope>.value(
+            value: scope,
+            child: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => ShowHabitScreen.open(context, habit),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      modelOf(tester).menuPresenter.onDeleteHabit();
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey<String>('confirm_delete_yes')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShowHabitScreen), findsNothing,
+          reason: 'show-habit.delete#3 — the screen finishes');
+      expect(scope.habitList.getById(habit.id!), isNull,
+          reason: 'show-habit.delete#3 — and the habit is gone');
+      expect(scope.habitList.getById(other.id!), same(other),
+          reason: 'show-habit.delete#3 — only that one');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // The History card's date-clicked path
+  // -----------------------------------------------------------------------
+
+  group('history card wiring', () {
+    testWidgets('history-editor.dialog#11: a day tapped on the card opens the '
+        'check-mark popup, or the number popup for a numerical habit',
+        (tester) async {
+      final scope = openScope();
+      final boolean = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(wrap(scope, boolean));
+      await tester.pumpAndSettle();
+      modelOf(tester)
+          .presenter
+          .historyCardPresenter
+          .onDateShortPress(getToday());
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckmarkDialog), findsOneWidget,
+          reason: 'history-editor.dialog#11 — a yes/no habit gets the '
+              'check-mark popup');
+
+      // Saving from the popup runs a CreateRepetitionCommand, which refreshes
+      // the whole screen.
+      await tester
+          .tap(find.byKey(const ValueKey<String>('checkmark_yes_button')));
+      await tester.pumpAndSettle();
+      expect(boolean.computedEntries.get(getToday()).value, Entry.yesManual,
+          reason: 'history-editor.dialog#11');
+
+      final numerical = addHabit(
+        scope,
+        'Run',
+        type: HabitType.numerical,
+        targetValue: 5,
+        unit: 'km',
+      );
+      await tester.pumpWidget(wrap(scope, numerical));
+      await tester.pumpAndSettle();
+      modelOf(tester)
+          .presenter
+          .historyCardPresenter
+          .onDateShortPress(getToday());
+      await tester.pumpAndSettle();
+      expect(find.byType(NumberDialog), findsOneWidget,
+          reason: 'history-editor.dialog#11 — a numerical habit gets the '
+              'number popup');
+    });
+
+    testWidgets('history-editor.dialog#14: the card\'s Edit button opens the '
+        'editor, wired to the card\'s own presenter', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      final model = modelOf(tester);
+
+      await tester.ensureVisible(find.byKey(HistoryCardView.editButtonKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(HistoryCardView.editButtonKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HistoryEditorDialog), findsOneWidget,
+          reason: 'history-editor.dialog#14');
+      expect(
+        identical(
+          HistoryEditorDialog.current!.chart!.onDateClickedListener,
+          model.presenter.historyCardPresenter,
+        ),
+        isTrue,
+        reason: 'history-editor.dialog#17 — the dialog is routed to the same '
+            'HistoryCardPresenter as the card',
+      );
+
+      // And a day tapped inside the dialog reaches the popup through it.
+      HistoryEditorDialog.current!.chart!.onDateClickedListener
+          .onDateShortPress(getToday());
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckmarkDialog), findsOneWidget,
+          reason: 'history-editor.dialog#11');
+      // The editor stays open underneath the popup.
+      expect(find.byType(HistoryEditorDialog), findsOneWidget,
+          reason: 'history-editor.dialog#10');
+    });
+
+    testWidgets('show-habit.screen-scaffold#7 and history-editor.dialog#13: '
+        'onResume re-attaches the editor\'s date-clicked listener',
+        (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      final model = modelOf(tester);
+
+      await tester.ensureVisible(find.byKey(HistoryCardView.editButtonKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(HistoryCardView.editButtonKey));
+      await tester.pumpAndSettle();
+
+      // `findFragmentByTag("historyEditor")` finds it.
+      final editor = HistoryEditorDialog.current;
+      expect(editor, isNotNull,
+          reason: 'show-habit.screen-scaffold#7 — the dialog is still present');
+
+      // A configuration change recreates the fragment, which comes back with
+      // whatever listener its own arguments gave it — here, a stranger.
+      final stranger = _RecordingDateListener();
+      editor!.setOnDateClickedListener(stranger);
+      expect(identical(editor.chart!.onDateClickedListener, stranger), isTrue);
+
+      // onPause / onResume.
+      model.detach();
+      model.attach();
+      await tester.pumpAndSettle();
+
+      expect(
+        identical(
+          editor.chart!.onDateClickedListener,
+          model.presenter.historyCardPresenter,
+        ),
+        isTrue,
+        reason: 'show-habit.screen-scaffold#7 — onResume re-attaches the '
+            'screen\'s HistoryCardPresenter',
+      );
+      expect(
+        identical(
+          HistoryEditorDialog.current!.chart!.onDateClickedListener,
+          model.presenter.historyCardPresenter,
+        ),
+        isTrue,
+        reason: 'history-editor.dialog#13 — so the reopened dialog stays '
+            'interactive after a configuration change',
+      );
+
+      // And it really is interactive again.
+      editor.chart!.onDateClickedListener.onDateShortPress(getToday());
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckmarkDialog), findsOneWidget,
+          reason: 'history-editor.dialog#13');
+      expect(stranger.presses, isEmpty,
+          reason: 'history-editor.dialog#13 — the stale listener is gone');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Intent resolution
+  // -----------------------------------------------------------------------
+
+  group('intent resolution', () {
+    test('show-habit.screen-scaffold#2: an unknown id crashes; there is no '
+        '"habit not found" screen', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      expect(
+        ShowHabitScreen.habitFromUri(
+          scope.habitList,
+          Uri.parse(habit.uriString),
+        ),
+        same(habit),
+        reason: 'show-habit.screen-scaffold#1 — the URI resolves through '
+            'habitList.getById',
+      );
+
+      final unknown =
+          Uri.parse('content://org.isoron.uhabits/habit/${habit.id! + 4242}');
+      expect(scope.habitList.getById(parseContentUriId(unknown)), isNull,
+          reason: 'show-habit.screen-scaffold#2 — getById returns null for an '
+              'id that is not in the list');
+      expect(
+        () => ShowHabitScreen.habitFromUri(scope.habitList, unknown),
+        throwsA(isA<TypeError>()),
+        reason: 'show-habit.screen-scaffold#2 — and the `!!` dereferences it '
+            'rather than falling back to an empty state',
+      );
+    });
+  });
+}
+
+/// A [ShowHabitMenuPresenter] that records which method the menu called
+/// instead of running it. Every member `ShowHabitMenu` can reach is overridden,
+/// so the constructor arguments are never touched.
+class _RecordingMenuPresenter extends ShowHabitMenuPresenter {
+  _RecordingMenuPresenter(AppScope scope, Habit habit)
+      : super(
+          commandRunner: scope.commandRunner,
+          habit: habit,
+          habitList: scope.habitList,
+          screen: _NullMenuScreen(),
+          system: _TempCSVOutputDir('/dev/null'),
+          taskRunner: scope.taskRunner,
+        );
+
+  final List<String> calls = <String>[];
+
+  @override
+  void onEditHabit() => calls.add('onEditHabit');
+
+  @override
+  void onArchiveHabits() => calls.add('onArchiveHabits');
+
+  @override
+  void onUnarchiveHabits() => calls.add('onUnarchiveHabits');
+
+  @override
+  void onDeleteHabit() => calls.add('onDeleteHabit');
+
+  @override
+  void onRandomize() => calls.add('onRandomize');
+
+  @override
+  void onExportCSV() => calls.add('onExportCSV');
+}
+
+class _NullMenuScreen implements ShowHabitMenuPresenterScreen {
+  @override
+  void close() {}
+
+  @override
+  void refresh() {}
+
+  @override
+  void showDeleteConfirmationScreen(void Function() callback) {}
+
+  @override
+  void showEditHabitScreen(Habit habit) {}
+
+  @override
+  void showMessage(ShowHabitMenuPresenterMessage? m) {}
+
+  @override
+  void showSendFileScreen(String filename) {}
+}
+
+/// `HabitsDirFinder(AndroidDirFinder(this))` over a directory the test owns.
+class _TempCSVOutputDir implements ShowHabitMenuPresenterSystem {
+  _TempCSVOutputDir(this.path);
+
+  final String path;
+
+  @override
+  UserFile getCSVOutputDir() => LocalUserFile(path);
+}
+
+/// [HomeWidgetPlatform] over nothing, recording which providers were told to
+/// redraw.
+class _RecordingHomeWidgetPlatform implements HomeWidgetPlatform {
+  final List<String> refreshed = <String>[];
+
+  @override
+  Future<void> saveWidgetData(String id, String? value) async {}
+
+  @override
+  Future<void> updateWidget({
+    required String name,
+    required String qualifiedAndroidName,
+    required String iOSName,
+  }) async {
+    refreshed.add(name);
+  }
+
+  @override
+  Future<void> setAppGroupId(String groupId) async {}
+}
+
+/// The listener a recreated dialog would come back with.
+class _RecordingDateListener extends OnDateClickedListener {
+  final List<LocalDate> presses = <LocalDate>[];
+
+  @override
+  void onDateShortPress(LocalDate date) => presses.add(date);
+
+  @override
+  void onDateLongPress(LocalDate date) => presses.add(date);
 }
 
 /// Same rounding as `FlutterCanvas.setColor` and `core.Color.toInt`.

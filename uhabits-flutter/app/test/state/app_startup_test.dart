@@ -16,21 +16,23 @@
 /// order the calls actually arrived in, rather than inferring it from the
 /// finished state.
 ///
+/// ## The two halves of the sequence
+///
+/// Steps (2) to (6) — open the database, build the graph, write
+/// `lastAppVersion`, stamp today, recompute every habit — need nothing but
+/// Dart, and `AppScope.open` runs them synchronously. Steps (7) to (10) start
+/// the three long-lived collaborators, and each of those is built on a plugin:
+/// `AppScope.startPlatformServices` constructs them and hands them to
+/// [AppScope.startServices], which is the sequence itself. The tests below
+/// drive `startServices` with test doubles for the three platform seams
+/// (`SystemTray`, `SystemScheduler`, `HomeWidgetPlatform`) so the order the
+/// calls arrive in can be read back rather than inferred.
+///
 /// ## Rules that have no counterpart in this build
 ///
 /// Reported as gaps rather than asserted, because asserting them would mean
 /// pinning behaviour the port should grow, not keep:
 ///
-///  * `#5` — nothing writes `prefs.lastAppVersion` at startup. The preference
-///    itself is ported (key `last_version`, default 0) and is asserted below;
-///    the launch-time write is missing, so an upgrade is indistinguishable
-///    from a relaunch.
-///  * `#9`, `#11` — no widget updater is started and no start-of-day widget
-///    refresh is scheduled. `WidgetSync` exists in lib/state/widget_sync.dart
-///    and nothing constructs it.
-///  * `#10` — no reminder scheduler and no notification tray are registered as
-///    command listeners at launch, so a freshly started app schedules no
-///    reminders until something else runs a command.
 ///  * `#12` — `onTerminate`'s three `stopListening()` calls have nothing to
 ///    stop. The half of the rule that does exist — tearing the scope down in
 ///    an order that cannot touch a closed database — is asserted.
@@ -59,11 +61,16 @@ import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/commands/create_habit_command.dart';
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
+import 'package:uhabits/platform/home_widget_bridge.dart';
+import 'package:uhabits/state/widget_sync.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
+import 'package:uhabits_core/src/preferences/widget_preferences.dart';
+import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/date_utils.dart';
+import 'package:uhabits_core/src/ui/notification_tray.dart';
 import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_adapter.dart';
 import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_cache.dart';
 import 'package:uhabits_core/src/utils/midnight_timer.dart';
@@ -194,6 +201,124 @@ class ProbeListener implements CommandRunnerListener {
 
   @override
   void onCommandFinished(Command command) => finished.add(command);
+}
+
+// ---------------------------------------------------------------------------
+// The three platform seams of steps (7) to (10)
+// ---------------------------------------------------------------------------
+
+/// `AndroidNotificationTray`, reduced to a note in [calls].
+class FakeSystemTray implements SystemTray {
+  FakeSystemTray(this.calls);
+
+  final List<String> calls;
+
+  @override
+  void log(String msg) {}
+
+  @override
+  void removeNotification(int notificationId) =>
+      calls.add('tray.remove($notificationId)');
+
+  @override
+  void showNotification(
+    Habit habit,
+    int notificationId,
+    LocalDate date,
+    int reminderTime,
+  ) =>
+      calls.add('tray.show(${habit.id})');
+}
+
+/// `IntentScheduler`, reduced to a note in [calls].
+class FakeSystemScheduler implements SystemScheduler {
+  FakeSystemScheduler(this.calls);
+
+  final List<String> calls;
+
+  @override
+  void log(String componentName, String msg) {
+    // `scheduleAll` logs before it touches a habit, which is what makes an
+    // empty habit list still observable.
+    if (msg == 'Scheduling all alarms') calls.add('scheduler.scheduleAll');
+  }
+
+  @override
+  SchedulerResult scheduleShowReminder(
+    int reminderTime,
+    Habit habit,
+    int timestamp,
+  ) {
+    calls.add('scheduler.showReminder(${habit.id})');
+    return SchedulerResult.ok;
+  }
+
+  @override
+  SchedulerResult? scheduleWidgetUpdate(int updateTime) {
+    calls.add('scheduler.widgetUpdate');
+    return SchedulerResult.ok;
+  }
+}
+
+/// The `home_widget` plugin, reduced to a note in [calls].
+class FakeHomeWidgetPlatform implements HomeWidgetPlatform {
+  FakeHomeWidgetPlatform(this.calls);
+
+  final List<String> calls;
+
+  @override
+  Future<void> saveWidgetData(String id, String? value) async {}
+
+  @override
+  Future<void> setAppGroupId(String groupId) async {}
+
+  @override
+  Future<void> updateWidget({
+    required String name,
+    required String qualifiedAndroidName,
+    required String iOSName,
+  }) async {
+    // One note per publish, not one per provider.
+    if (name == HomeWidgetBridge.providerNames.first) {
+      calls.add('widgets.update');
+    }
+  }
+}
+
+/// The three collaborators `startPlatformServices` would build, over fakes.
+class Services {
+  Services(AppScope scope, this.calls)
+      : tray = NotificationTray(
+          scope.taskRunner,
+          scope.commandRunner,
+          scope.preferences,
+          FakeSystemTray(calls),
+        ),
+        scheduler = ReminderScheduler(
+          scope.commandRunner,
+          scope.habitList,
+          FakeSystemScheduler(calls),
+          WidgetPreferences(scope.preferencesStorage),
+        ),
+        sync = WidgetSync(
+          bridge: HomeWidgetBridge(
+            habitList: scope.habitList,
+            registry: WidgetRegistry(scope.preferencesStorage),
+            platform: FakeHomeWidgetPlatform(calls),
+          ),
+          commandRunner: scope.commandRunner,
+          taskRunner: scope.taskRunner,
+          midnightTimer: scope.midnightTimer,
+          preferences: scope.preferences,
+        );
+
+  final List<String> calls;
+  final NotificationTray tray;
+  final ReminderScheduler scheduler;
+  final WidgetSync sync;
+
+  void startOn(AppScope scope) =>
+      scope.startServices(tray: tray, scheduler: scheduler, sync: sync);
 }
 
 void main() {
@@ -554,9 +679,9 @@ void main() {
           'persisted as SharedPreferences int key "last_version" (default 0 '
           'when absent) and is set to BuildConfig.VERSION_CODE (20301) on every '
           'launch. The preference is ported exactly, including the key and the '
-          'default; the launch-time write is NOT — nothing in AppScope.boot '
-          'touches it, and this build has no version code to write. Reported '
-          'as a gap; asserting the current value would pin the gap in place.';
+          'default; the launch-time write is asserted by the '
+          'settings.preferences.first-run-and-launch-count#4 test below, whose '
+          'value is this build\'s own version code rather than upstream\'s.';
 
       expect(preferences.lastAppVersion, 0, reason: rule);
 
@@ -677,6 +802,112 @@ void main() {
               'first one');
     });
 
+    test('#9 the widget updater subscribes and arms the start-of-day refresh',
+        () async {
+      final AppScope scope = await boot();
+      final Services services = Services(scope, <String>[]);
+
+      const String rule =
+          'platform-glue.app-startup-order#9 — widgetUpdater.startListening() '
+          'and widgetUpdater.scheduleStartDayWidgetUpdate() are both called at '
+          'startup; scheduleStartDayWidgetUpdate schedules an RTC alarm at '
+          'DateUtils.getStartOfTomorrowWithOffset(midnightDelayHours, 0). '
+          'AlarmManager has no Flutter analogue, so the port arms the core '
+          'MidnightTimer instead and exposes the instant the alarm would carry '
+          'as WidgetSync.nextStartOfDayUpdate.';
+
+      expect(services.sync.nextStartOfDayUpdate, isNull,
+          reason: '$rule Nothing is armed before the sequence runs.');
+
+      services.startOn(scope);
+
+      expect(
+        services.sync.nextStartOfDayUpdate,
+        DateUtils.getStartOfTomorrowWithOffset(
+          scope.preferences.midnightDelayHours,
+          0,
+        ),
+        reason: '$rule scheduleStartDayWidgetUpdate() ran, with exactly that '
+            'offset pair.',
+      );
+      expect(scope.widgetSync, same(services.sync), reason: rule);
+
+      // startListening(): the publisher is on the command runner, so a command
+      // reaches it without anything else being wired.
+      final List<String> calls = services.calls;
+      calls.clear();
+      final Habit habit = HabitFixtures(scope.modelFactory, scope.habitList)
+          .createEmptyHabit(name: 'Read');
+      scope.commandRunner.run(
+        CreateHabitCommand(scope.modelFactory, scope.habitList, habit),
+      );
+      await pumpEventQueue();
+      expect(calls, contains('widgets.update'),
+          reason: '$rule startListening() ran too: a finished command '
+              'republishes the widget data.');
+    });
+
+    test('#9 the armed instant follows the midnight-delay preference',
+        () async {
+      // 2015-01-26 01:30 UTC.
+      systemCurrentTimeMillis = () => 1422235800000;
+      File(p.join(supportDir.path, preferencesFilename)).writeAsStringSync(
+          jsonEncode(<String, String>{'pref_midnight_delay': 'true'}));
+
+      final AppScope scope = await boot();
+      final Services services = Services(scope, <String>[])..startOn(scope);
+
+      expect(services.sync.nextStartOfDayUpdate,
+          DateUtils.getStartOfTomorrowWithOffset(3, 0),
+          reason: 'platform-glue.app-startup-order#9: the offset really is '
+              'midnightDelayHours — with the delay on it is 3, and the armed '
+              'instant moves with it.');
+      expect(services.sync.nextStartOfDayUpdate,
+          isNot(DateUtils.getStartOfTomorrowWithOffset(0, 0)),
+          reason: 'platform-glue.app-startup-order#9: the two answers differ, '
+              'so the assertion above is not vacuous');
+    });
+
+    test('#11 the final step is asynchronous: scheduleAll, then updateWidgets',
+        () async {
+      final String path = p.join(supportDir.path, databaseFilename);
+      seedHabits(path, count: 1);
+
+      final AppScope scope = await boot();
+      // A habit with a reminder, so scheduleAll has something to arm.
+      final Habit habit = scope.habitList.first
+        ..reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habit.observable.notifyListeners();
+
+      final List<String> calls = <String>[];
+      final Services services = Services(scope, calls);
+
+      const String rule =
+          'platform-glue.app-startup-order#11 — The final step runs '
+          'asynchronously on the task runner: reminderScheduler.scheduleAll() '
+          'followed by widgetUpdater.updateWidgets().';
+
+      services.startOn(scope);
+
+      expect(calls, isEmpty,
+          reason: '$rule Asynchronously: startServices returns before either '
+              'call has happened, because the task runner\'s dispatchers defer '
+              'off the caller\'s stack.');
+
+      await pumpEventQueue();
+
+      expect(calls, contains('scheduler.scheduleAll'), reason: rule);
+      expect(calls, contains('widgets.update'), reason: rule);
+      expect(
+        calls.indexOf('scheduler.scheduleAll'),
+        lessThan(calls.indexOf('widgets.update')),
+        reason: '$rule And in that order — scheduleAll first.',
+      );
+      expect(calls, contains('scheduler.showReminder(${habit.id})'),
+          reason: '$rule scheduleAll really armed the habit that has a '
+              'reminder, so the first assertion is not just a log line.');
+    });
+
     test('#10 the command runner is the listener registry the three '
         'collaborators would join', () async {
       final AppScope scope = await boot();
@@ -698,16 +929,46 @@ void main() {
               'reminderScheduler.startListening() and '
               'notificationTray.startListening() register them as CommandRunner '
               'listeners (notificationTray additionally registers as a '
-              'Preferences listener). Neither collaborator is started at launch '
-              'here — that is the gap this slice reports — but the registry '
-              'they would join is built by boot() and works: a listener added '
-              'to it hears every finished command.');
-      expect(scope.cache, isA<CommandRunnerListener>(),
-          reason: 'platform-glue.app-startup-order#10: the one listener this '
-              'build does have is the habit-list cache, which registers itself '
-              'on attach rather than at launch');
-
+              'Preferences listener). The registry they join is built by boot() '
+              'and works: a listener added to it hears every finished command.');
       scope.commandRunner.removeListener(probe);
+
+      // And the two collaborators really are on it once the sequence has run.
+      final List<String> calls = <String>[];
+      final Services services = Services(scope, calls)..startOn(scope);
+      await pumpEventQueue();
+      calls.clear();
+
+      final Habit second = HabitFixtures(scope.modelFactory, scope.habitList)
+          .createEmptyHabit(name: 'Walk')
+        ..reminder = Reminder(7, 0, WeekdayList.everyDay);
+      scope.commandRunner.run(
+        CreateHabitCommand(scope.modelFactory, scope.habitList, second),
+      );
+      await pumpEventQueue();
+
+      expect(calls, contains('scheduler.scheduleAll'),
+          reason: 'platform-glue.app-startup-order#10: the reminder scheduler '
+              'is a CommandRunner listener — a finished command re-arms every '
+              'alarm.');
+
+      // The tray's second registration: a preference listener. Flipping the
+      // sticky flag calls onNotificationsChanged, which reshows everything the
+      // tray believes is on screen.
+      services.tray.show(second, getToday(), 0);
+      await pumpEventQueue();
+      calls.clear();
+      scope.preferences.setNotificationsSticky(true);
+      await pumpEventQueue();
+      expect(calls, contains('tray.show(${second.id})'),
+          reason: 'platform-glue.app-startup-order#10: '
+              '"notificationTray additionally registers as a Preferences '
+              'listener" — changing pref_sticky_notifications reshows the '
+              'notification without any command running.');
+
+      expect(scope.cache, isA<CommandRunnerListener>(),
+          reason: 'platform-glue.app-startup-order#10: the habit-list cache is '
+              'a third listener, registered on attach rather than at launch');
     });
 
     test('#12 close() is onTerminate: the cache is cancelled and the '
@@ -742,4 +1003,157 @@ void main() {
               'the scope owns the connection and hands it back.');
     });
   });
+
+  // =======================================================================
+  // settings.preferences.first-run-and-launch-count
+  //
+  // Rules #1, #2, #3, #5 and #6 belong to `Preferences` and to
+  // `ListHabitsBehavior.onStartup`, and are asserted in the core package. What
+  // is left is #4, which is a claim about the application object.
+  // =======================================================================
+
+  group('settings.preferences.first-run-and-launch-count', () {
+    const String rule =
+        'settings.preferences.first-run-and-launch-count#4 — '
+        'HabitsApplication.onCreate unconditionally assigns '
+        'prefs.lastAppVersion = BuildConfig.VERSION_CODE on every launch.';
+
+    test('#4 every launch writes the version code, whatever was stored', () async {
+      final String prefsPath = p.join(supportDir.path, preferencesFilename);
+
+      // A file left behind by an older build.
+      File(prefsPath).writeAsStringSync(
+          jsonEncode(<String, String>{'last_version': '19000'}));
+
+      final AppScope first = await boot();
+      expect(first.preferences.lastAppVersion, appVersionCode,
+          reason: '$rule The stored 19000 is overwritten at launch.');
+      expect(
+        (jsonDecode(File(prefsPath).readAsStringSync())
+            as Map<String, Object?>)['last_version'],
+        '$appVersionCode',
+        reason: '$rule And it reaches the settings file, not just the cache.',
+      );
+      await pumpEventQueue();
+      first.close();
+      scopes.remove(first);
+      resetToday();
+
+      // "Unconditionally": the second launch writes it again even though the
+      // stored value already matches.
+      File(prefsPath).writeAsStringSync(
+          jsonEncode(<String, String>{'last_version': '0'}));
+      final AppScope second = await boot();
+      expect(second.preferences.lastAppVersion, appVersionCode, reason: rule);
+    });
+
+    test('#4 the write happens before today is stamped, as step (4) of (1)',
+        () async {
+      final String path = p.join(supportDir.path, databaseFilename);
+      seedHabits(path, count: 1);
+
+      final List<String> writes = <String>[];
+      final AppScope scope = openScope(
+        path,
+        storage: WriteRecordingStorage(writes),
+      );
+      expect(scope.habitList.size(), 1);
+
+      expect(writes, contains('last_version'),
+          reason: '$rule AppScope.open is this port\'s onCreate, and it does '
+              'the write.');
+      expect(writes.first, 'last_version',
+          reason: '$rule Step (4) comes before step (5): nothing else has been '
+              'written by the time it happens.');
+    });
+
+    test('#4 the version code tracks the build number the Android build uses',
+        () {
+      // `versionCode = flutter.versionCode` in android/app/build.gradle.kts,
+      // and flutter.versionCode is the `+N` of `version:` in pubspec.yaml. If
+      // the pubspec moves and the constant does not, every launch would write
+      // a stale version code.
+      final File pubspec = _findPubspec();
+      final RegExpMatch? version =
+          RegExp(r'^version:\s*\S+\+(\d+)\s*$', multiLine: true)
+              .firstMatch(pubspec.readAsStringSync());
+      expect(version, isNotNull,
+          reason: '$rule The pubspec declares a build number.');
+      expect(int.parse(version!.group(1)!), appVersionCode,
+          reason: '$rule BuildConfig.VERSION_CODE is that build number, and '
+              'appVersionCode — the value written at launch — is it.');
+    });
+  });
+}
+
+/// app/pubspec.yaml, found by walking up from the test's working directory.
+File _findPubspec() {
+  Directory dir = Directory.current;
+  for (int i = 0; i < 6; i++) {
+    final File here = File('${dir.path}/pubspec.yaml');
+    if (here.existsSync() &&
+        here.readAsStringSync().startsWith('name: uhabits\n')) {
+      return here;
+    }
+    final File app = File('${dir.path}/app/pubspec.yaml');
+    if (app.existsSync()) return app;
+    final Directory parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError('app/pubspec.yaml not found from ${Directory.current.path}');
+}
+
+/// A [PreferencesStorage] that records the key of every write, in order.
+class WriteRecordingStorage extends PreferencesStorage {
+  WriteRecordingStorage(this.writes);
+
+  final List<String> writes;
+  final PreferencesStorage inner = MemoryStorage();
+
+  @override
+  void onAttached(Preferences preferences) => inner.onAttached(preferences);
+
+  @override
+  void clear() => inner.clear();
+
+  @override
+  bool getBoolean(String key, bool defValue) => inner.getBoolean(key, defValue);
+
+  @override
+  int getInt(String key, int defValue) => inner.getInt(key, defValue);
+
+  @override
+  int getLong(String key, int defValue) => inner.getLong(key, defValue);
+
+  @override
+  String getString(String key, String defValue) =>
+      inner.getString(key, defValue);
+
+  @override
+  void putBoolean(String key, bool value) {
+    writes.add(key);
+    inner.putBoolean(key, value);
+  }
+
+  @override
+  void putInt(String key, int value) {
+    writes.add(key);
+    inner.putInt(key, value);
+  }
+
+  @override
+  void putLong(String key, int value) {
+    writes.add(key);
+    inner.putLong(key, value);
+  }
+
+  @override
+  void putString(String key, String value) {
+    writes.add(key);
+    inner.putString(key, value);
+  }
+
+  @override
+  void remove(String key) => inner.remove(key);
 }

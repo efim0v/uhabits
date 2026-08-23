@@ -22,6 +22,13 @@ import android.content.Context
 
 /** `widgets.registration#1`: launcher label 'Target'. */
 class TargetWidgetProvider : BaseWidgetProvider() {
-    override fun buildWidget(context: Context, widgetId: Int, document: WidgetDocument) =
+    /** `widgets.stack#1`: what a multi-habit document becomes. */
+    override val stackWidgetType get() = StackWidgetType.TARGET
+
+    override fun buildSingleWidget(
+        context: Context,
+        widgetId: Int,
+        document: WidgetDocument
+    ) =
         TargetWidget(context, widgetId, document.singleHabit(), document.today)
 }

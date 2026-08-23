@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/gui/theme.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
@@ -129,6 +130,114 @@ void main() {
       expect(() => const PaletteColor(-1).toFixedAndroidColor(),
           throwsRangeError,
           reason: 'models.palette-color#7');
+    });
+
+    test('#8 the instrumentation-test colour is the FIXED palette, not a '
+        "theme's", () {
+      // `PaletteUtils.getAndroidTestColor(index)` is nothing but
+      // `PaletteColor(index).toFixedAndroidColor()`, so the port has one
+      // function where Kotlin has a function and a one-line alias. What the
+      // alias buys upstream is that instrumentation tests read the fixed
+      // twenty colours rather than whatever the running theme resolved, and
+      // that is the part with observable content.
+      for (var i = 0; i < 20; i++) {
+        expect(PaletteColor(i).toFixedAndroidColor(),
+            int.parse('FF${csvColors[i].substring(1)}', radix: 16),
+            reason: 'models.palette-color#8 — getAndroidTestColor(index) is '
+                'PaletteColor(index).toFixedAndroidColor(), the fixed list');
+      }
+
+      // Sixteen of the twenty happen to coincide with the light theme; the
+      // greys do not, which is what makes "fixed" a different source of truth
+      // from "themed".
+      for (final i in <int>[0, 8, 11, 16, 18]) {
+        expect(PaletteColor(i).toFixedAndroidColor(),
+            LightTheme().color(i).toInt(),
+            reason: 'models.palette-color#8 — most entries agree with the '
+                'light theme, which is why the confusion is possible at all');
+      }
+      expect(const PaletteColor(17).toFixedAndroidColor(), 0xFF303030,
+          reason: 'models.palette-color#8 — but index 17 is #303030 in the '
+              'fixed palette');
+      expect(LightTheme().color(17).toInt(), isNot(0xFF303030),
+          reason: 'models.palette-color#8 — and #424242 in the light theme, so '
+              'an instrumentation test reading the theme would read a '
+              'different colour');
+      expect(const PaletteColor(19).toFixedAndroidColor(), 0xFFAAAAAA,
+          reason: 'models.palette-color#8 — index 19 likewise: #aaaaaa fixed');
+      expect(LightTheme().color(19).toInt(), isNot(0xFFAAAAAA),
+          reason: 'models.palette-color#8 — #9E9E9E themed');
+      expect(DarkTheme().color(11).toInt(),
+          isNot(const PaletteColor(11).toFixedAndroidColor()),
+          reason: 'models.palette-color#8 — and no dark-theme entry matches at '
+              'all: the fixed palette is theme-independent by construction');
+    });
+
+    test('#9 the inverse lookup runs over the CURRENT THEME\'s palette and '
+        'yields PaletteColor(-1) when nothing matches', () {
+      // `fun Int.toPaletteColor(context: Context) = PaletteColor(
+      //      StyledResources(context).getPalette().indexOf(this))`
+      //
+      // The port carries palette *indices* rather than resolved ARGB values
+      // (see `color-picker.dialog#10`), so there is no Dart function to call;
+      // what survives is the palette each theme exposes, and the lookup is
+      // spelled here exactly as Kotlin spells it.
+      List<int> paletteOf(Theme theme) =>
+          <int>[for (var i = 0; i < 20; i++) theme.color(i).toInt()];
+      PaletteColor toPaletteColor(int argb, Theme theme) =>
+          PaletteColor(paletteOf(theme).indexOf(argb));
+
+      for (final theme in <Theme>[LightTheme(), DarkTheme(), PureBlackTheme()]) {
+        expect(paletteOf(theme), hasLength(20),
+            reason: 'models.palette-color#9 — getPalette() is the 20-entry '
+                'array of the running theme');
+        for (var i = 0; i < 20; i++) {
+          expect(toPaletteColor(theme.color(i).toInt(), theme), PaletteColor(i),
+              reason: 'models.palette-color#9 — palette.indexOf(colour) is the '
+                  'index that produced it, in every theme');
+        }
+        expect(toPaletteColor(0x00000000, theme), const PaletteColor(-1),
+            reason: 'models.palette-color#9 — an unmatched colour yields '
+                'PaletteColor(-1), not a clamp and not a throw');
+      }
+
+      // "CURRENT theme" is the whole point: the same ARGB resolves differently
+      // depending on which palette is asked.
+      final lightBlue = LightTheme().color(11).toInt();
+      expect(toPaletteColor(lightBlue, LightTheme()), const PaletteColor(11),
+          reason: 'models.palette-color#9 — #1976D2 is index 11 of the light '
+              'palette');
+      expect(toPaletteColor(lightBlue, DarkTheme()), const PaletteColor(-1),
+          reason: 'models.palette-color#9 — and is not in the dark palette at '
+              'all, so the same int answers -1 there');
+      expect(
+        toPaletteColor(DarkTheme().color(11).toInt(), DarkTheme()),
+        const PaletteColor(11),
+        reason: 'models.palette-color#9 — while the dark palette answers 11 '
+            'for its own blue',
+      );
+    });
+
+    test('#10 PaletteColor(11) is the blue the About toolbar is hard-coded to',
+        () {
+      expect(const PaletteColor(11).toCsvColor(), '#1976D2',
+          reason: 'models.palette-color#10 — PaletteColor(11) is blue '
+              '#1976D2');
+      expect(const PaletteColor(11).toFixedAndroidColor(), 0xFF1976D2,
+          reason: 'models.palette-color#10 — the same blue as ARGB');
+      // `setupToolbar(..., color = PaletteColor(11), ...)` in AboutView.kt and
+      // in EditSettingRootView.kt (the Tasker/automation edit screen, which
+      // this port does not ship). It is a literal index, not the habit colour
+      // and not the default colour.
+      expect(const PaletteColor(11), isNot(const PaletteColor(8)),
+          reason: 'models.palette-color#10 — it is deliberately not the '
+              'default habit colour PaletteColor(8)');
+      expect(LightTheme().colorOf(const PaletteColor(11)).toInt(), 0xFF1976D2,
+          reason: 'models.palette-color#10 — the toolbar resolves it through '
+              'the theme, which in the light theme is that very blue');
+      expect(DarkTheme().colorOf(const PaletteColor(11)).toInt(), 0xFF64B5F6,
+          reason: 'models.palette-color#10 — and in a dark theme it is that '
+              "theme's blue: the index is hard-coded, the colour is not");
     });
 
     test('#5 the default habit color is PaletteColor(8), teal', () {

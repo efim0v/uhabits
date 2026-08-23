@@ -7,8 +7,8 @@
   ~ widgets.registration#4: resizeMode vertical|horizontal, updatePeriodMillis
   ~ 3600000, widgetCategory home_screen.
   ~ widgets.registration#6: configure activity HabitPickerDialog.
-  ~ widgets.registration#5 (previewImage) is NOT reproduced; see
-  ~ widget_checkmark_info.xml.
+  ~ widgets.registration#5: the static preview, ported from
+  ~ uhabits-android/src/main/res/drawable-nodpi/.
   -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:configure="org.isoron.uhabits.widgets.activities.HabitPickerDialog"
@@ -17,6 +17,7 @@
     android:minResizeHeight="100dp"
     android:minResizeWidth="100dp"
     android:minWidth="100dp"
+    android:previewImage="@drawable/widget_preview_history"
     android:resizeMode="vertical|horizontal"
     android:updatePeriodMillis="3600000"
     android:widgetCategory="home_screen" />

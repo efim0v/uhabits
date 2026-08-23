@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Port of the window-background half of uhabits-android/src/main/res/values/
+  colors.xml.
+
+  settings.theme.system-night-window-background#1: the app's window background
+  is `android:colorBackground`, bound to @color/color_background, which is
+  grey_200 (#EEEEEE) here and grey_900 (#212121) in values-night. Upstream
+  values-night/colors.xml is the only -night qualified file in the whole app,
+  and this pair is the port's copy of it.
+-->
+<resources>
+    <!-- @color/grey_200 of material_colors.xml. -->
+    <color name="grey_200">#EEEEEE</color>
+
+    <!-- @color/grey_900. -->
+    <color name="grey_900">#212121</color>
+
+    <color name="color_background">@color/grey_200</color>
+
+    <!-- app-identity.launcher-icon#2: the adaptive icon's flat
+         background layer. -->
+    <color name="ic_launcher_background">#1976D2</color>
+</resources>

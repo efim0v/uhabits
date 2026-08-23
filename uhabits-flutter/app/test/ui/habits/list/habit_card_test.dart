@@ -21,14 +21,16 @@
 ///    each rule: which buttons exist after a new `buttonCount`, and which
 ///    dates and values they carry after a new `dataOffset`.
 ///  * the entry-panels rule about the panel registering itself as a
-///    `Preferences` listener while attached has no counterpart here: the
-///    screen reads the preference and passes it down, so the panel subscribes
-///    to nothing. It is left uncited on purpose.
+///    `Preferences` listener while attached *is* ported: [EntryPanel] adds a
+///    `Preferences.Listener` while it is mounted, so flipping the
+///    checkmark-sequence preference re-inflates the row without anything above
+///    it rebuilding.
 library;
 
 // The core package does not export lib/src/preferences yet.
 // ignore_for_file: implementation_imports
 
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/ui/core_view.dart';
@@ -965,6 +967,216 @@ void main() {
           const Size(48, 48),
           reason: 'list-habits.checkmark-button-rendering#9 — regardless of '
               'the incoming measure spec');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ButtonPanelView.onAttachedToWindow / onDetachedFromWindow, and the
+  // optimistic value CheckmarkButtonView.performToggle writes into itself.
+  // -------------------------------------------------------------------------
+  group('panel subscriptions and optimistic values', () {
+    testWidgets('#9 flipping the checkmark sequence re-inflates the row with '
+        'no rebuild from above', (tester) async {
+      await pumpCard(tester, habit: buildHabit(), buttonCount: 5);
+      final newest = tester.getCenter(find.byKey(EntryPanel.buttonKey(today)));
+      final oldest =
+          tester.getCenter(find.byKey(EntryPanel.buttonKey(today.minus(4))));
+      expect(newest.dx, lessThan(oldest.dx),
+          reason: 'list-habits.entry-panels#9');
+
+      // Nobody rebuilds the card: the preference change alone has to reach the
+      // panel, which is what `prefs.addListener(this)` in
+      // ButtonPanelView.onAttachedToWindow buys.
+      preferences.isCheckmarkSequenceReversed = true;
+      await tester.pump();
+
+      expect(
+        tester.getCenter(find.byKey(EntryPanel.buttonKey(today))).dx,
+        greaterThan(
+          tester.getCenter(find.byKey(EntryPanel.buttonKey(today.minus(4)))).dx,
+        ),
+        reason: 'list-habits.entry-panels#9 — onCheckmarkSequenceChanged() '
+            're-inflates the buttons immediately',
+      );
+    });
+
+    testWidgets('#9 a detached panel is no longer a preferences listener',
+        (tester) async {
+      await pumpCard(tester, habit: buildHabit(), buttonCount: 5);
+      // Replacing the whole tree disposes the panel, which unsubscribes.
+      await tester.pumpWidget(const SizedBox.shrink());
+
+      // The setter walks its listener list; a leaked panel would try to
+      // setState on an unmounted element and throw.
+      preferences.isCheckmarkSequenceReversed = true;
+      await tester.pump();
+      expect(tester.takeException(), isNull,
+          reason: 'list-habits.entry-panels#9 — onDetachedFromWindow removes '
+              'the listener');
+    });
+
+    testWidgets('#4 the cell paints the new value before any command runs',
+        (tester) async {
+      // The callback deliberately does nothing: no command, no refresh, no
+      // rebuild from above. Whatever the cell shows now is its own doing.
+      await pumpCard(
+        tester,
+        habit: buildHabit(),
+        values: <int>[core.Entry.no],
+        onToggle: (_, _, _) {},
+      );
+      expect(drawButton(tester, today).opsNamed('drawText').single.text,
+          core.FontAwesome.times,
+          reason: 'list-habits.toggle-from-row#4');
+
+      await tester.longPress(find.byKey(EntryPanel.buttonKey(today)));
+      await tester.pump();
+
+      expect(drawButton(tester, today).opsNamed('drawText').single.text,
+          core.FontAwesome.check,
+          reason: 'list-habits.toggle-from-row#4 — performToggle() assigns '
+              'the new value to the button and invalidates it before the '
+              'presenter is told');
+      // …and only that cell moved: its neighbour is still the UNKNOWN cross
+      // it was before the gesture.
+      expect(
+        drawButton(tester, today.minus(1)).opsNamed('drawText').single.text,
+        core.FontAwesome.times,
+        reason: 'list-habits.toggle-from-row#4',
+      );
+    });
+
+    testWidgets('#4 a rebind discards the optimistic value', (tester) async {
+      final habit = buildHabit();
+      await pumpCard(
+        tester,
+        habit: habit,
+        values: <int>[core.Entry.no],
+        onToggle: (_, _, _) {},
+      );
+      await tester.longPress(find.byKey(EntryPanel.buttonKey(today)));
+      await tester.pump();
+      expect(drawButton(tester, today).opsNamed('drawText').single.text,
+          core.FontAwesome.check,
+          reason: 'list-habits.toggle-from-row#4');
+
+      // `HabitCardListView.bindCardView` writes the cached values back into
+      // every button, so the row falls back to what the cache says.
+      await pumpCard(tester, habit: habit, values: <int>[core.Entry.no]);
+      expect(drawButton(tester, today).opsNamed('drawText').single.text,
+          core.FontAwesome.times,
+          reason: 'list-habits.toggle-from-row#4');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // HabitCardView.triggerRipple
+  // -------------------------------------------------------------------------
+  group('row ripple', () {
+    HabitCardRippleState rippleOf(WidgetTester tester) =>
+        tester.state<HabitCardRippleState>(find.byType(HabitCardRipple));
+
+    testWidgets('#9 a toggle puts the hotspot on the tapped cell and clears '
+        'the pressed state 25 ms later', (tester) async {
+      await pumpCard(
+        tester,
+        habit: buildHabit(),
+        values: <int>[core.Entry.no],
+        buttonCount: 5,
+        onToggle: (_, _, _) {},
+      );
+
+      expect(rippleOf(tester).hotspot, isNull,
+          reason: 'list-habits.habit-card#9 — no gesture, no hotspot');
+      expect(rippleOf(tester).pressed, isFalse,
+          reason: 'list-habits.habit-card#9');
+
+      final date = today.minus(2);
+      // Not `tester.longPress`: that helper elapses 600 ms in one step, which
+      // would step straight over the 25 ms window this rule is about.
+      final gesture =
+          await tester.startGesture(tester.getCenter(find.byKey(EntryPanel.buttonKey(date))));
+      await tester.pump(kLongPressTimeout);
+
+      final inner = tester.getRect(find.byType(HabitCardRipple));
+      final button = tester.getRect(find.byKey(EntryPanel.buttonKey(date)));
+      final hotspot = rippleOf(tester).hotspot;
+      expect(hotspot, isNotNull, reason: 'list-habits.habit-card#9');
+      // `panel.x + button.x + button.width / 2` and `button.height / 2`, both
+      // in the innerFrame's coordinates.
+      expect(hotspot!.dx, closeTo(button.center.dx - inner.left, 0.001),
+          reason: 'list-habits.habit-card#9');
+      expect(hotspot.dy, closeTo(theme.checkmarkButtonSize / 2, 0.001),
+          reason: 'list-habits.habit-card#9');
+      expect(rippleOf(tester).pressed, isTrue,
+          reason: 'list-habits.habit-card#9 — state_pressed | state_enabled');
+
+      await tester.pump(const Duration(milliseconds: 24));
+      expect(rippleOf(tester).pressed, isTrue,
+          reason: 'list-habits.habit-card#9 — still pressed at 24 ms');
+
+      await tester.pump(const Duration(milliseconds: 2));
+      expect(rippleOf(tester).pressed, isFalse,
+          reason: 'list-habits.habit-card#9 — background.state = intArrayOf() '
+              'after 25 ms');
+      // The hotspot itself survives: RippleDrawable keeps it until the next
+      // setHotspot.
+      expect(rippleOf(tester).hotspot, hotspot,
+          reason: 'list-habits.habit-card#9');
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('#9 opening the editor ripples too, from that cell',
+        (tester) async {
+      await pumpCard(
+        tester,
+        habit: buildHabit(
+          type: core.HabitType.numerical,
+          unit: 'pages',
+          targetValue: 100,
+        ),
+        values: <int>[200000],
+        buttonCount: 5,
+        onEdit: (_) {},
+      );
+
+      final date = today.minus(4);
+      await tester.tap(find.byKey(EntryPanel.buttonKey(date)));
+      await tester.pump();
+
+      final inner = tester.getRect(find.byType(HabitCardRipple));
+      final button = tester.getRect(find.byKey(EntryPanel.buttonKey(date)));
+      expect(rippleOf(tester).hotspot!.dx,
+          closeTo(button.center.dx - inner.left, 0.001),
+          reason: 'list-habits.habit-card#9 — NumberPanelView.onEdit calls '
+              'triggerRipple(date) as well');
+      expect(rippleOf(tester).pressed, isTrue,
+          reason: 'list-habits.habit-card#9');
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('#9 a reversed row still ripples under the pressed cell',
+        (tester) async {
+      preferences.isCheckmarkSequenceReversed = true;
+      await pumpCard(
+        tester,
+        habit: buildHabit(),
+        values: <int>[core.Entry.no],
+        buttonCount: 5,
+        onToggle: (_, _, _) {},
+      );
+
+      final date = today.minus(1);
+      await tester.longPress(find.byKey(EntryPanel.buttonKey(date)));
+      await tester.pump();
+
+      final inner = tester.getRect(find.byType(HabitCardRipple));
+      final button = tester.getRect(find.byKey(EntryPanel.buttonKey(date)));
+      expect(rippleOf(tester).hotspot!.dx,
+          closeTo(button.center.dx - inner.left, 0.001),
+          reason: 'list-habits.habit-card#9');
+      await tester.pumpAndSettle();
     });
   });
 

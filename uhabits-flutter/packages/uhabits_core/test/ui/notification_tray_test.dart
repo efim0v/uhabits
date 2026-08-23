@@ -134,11 +134,27 @@ class _FakeScheduler implements ReminderSchedulerApi {
 
   final List<String> order;
   int scheduleAllCount = 0;
+  final List<({Habit habit, int minutes})> snoozed =
+      <({Habit habit, int minutes})>[];
+  final List<({Habit habit, int time})> scheduledAtTime =
+      <({Habit habit, int time})>[];
 
   @override
   void scheduleAll() {
     scheduleAllCount++;
     order.add('scheduleAll');
+  }
+
+  @override
+  void snoozeReminder(Habit habit, int minutes) {
+    snoozed.add((habit: habit, minutes: minutes));
+    order.add('snoozeReminder:${habit.id}:$minutes');
+  }
+
+  @override
+  void scheduleAtTime(Habit habit, int reminderTime) {
+    scheduledAtTime.add((habit: habit, time: reminderTime));
+    order.add('scheduleAtTime:${habit.id}:$reminderTime');
   }
 }
 
@@ -1761,6 +1777,14 @@ class _SchedulerAdapter implements ReminderSchedulerApi {
 
   @override
   void scheduleAll() => _scheduler.scheduleAll();
+
+  @override
+  void snoozeReminder(Habit habit, int minutes) =>
+      _scheduler.snoozeReminder(habit, minutes);
+
+  @override
+  void scheduleAtTime(Habit habit, int reminderTime) =>
+      _scheduler.scheduleAtTime(habit, reminderTime);
 }
 
 /// A `SystemScheduler` that sets no alarms: the snooze bookkeeping under test

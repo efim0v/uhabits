@@ -67,6 +67,25 @@ class CheckmarkWidgetView(context: Context) : HabitWidgetView(context) {
         label = findViewById<View>(R.id.label) as TextView
         ring.setIsTransparencyEnabled(true)
         ring.setEnableFontAwesome(true)
+        // `widgets.checkmark-view#11`: what the layout editor draws when it
+        // instantiates this view with no data behind it.
+        //
+        // `activeColor` is upstream's `PaletteUtils.getAndroidTestColor(6)`,
+        // i.e. `PaletteColor(6).toFixedAndroidColor()` = #7CB342. That fixed
+        // palette is an app-side table which does not exist in the launcher's
+        // process; the widget palette is the one that does, and the two agree
+        // at index 6.
+        //
+        // Note it is `entryValue` that is seeded and not `entryState`, so the
+        // preview card renders unsatisfied — upstream's own behaviour,
+        // reproduced rather than corrected.
+        if (isInEditMode) {
+            percentage = 0.75f
+            name = "Wake up early"
+            activeColor = WidgetTheme.color(6)
+            entryValue = Entry.YES_MANUAL
+            refresh()
+        }
     }
 
     /** `widgets.checkmark-view#2`..`#5`. */

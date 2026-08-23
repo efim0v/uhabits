@@ -1343,6 +1343,12 @@ class _NoopScheduler implements ReminderSchedulerApi {
   void scheduleAll() {
     scheduleAllCount++;
   }
+
+  @override
+  void snoozeReminder(Habit habit, int minutes) {}
+
+  @override
+  void scheduleAtTime(Habit habit, int reminderTime) {}
 }
 
 // ---------------------------------------------------------------------------

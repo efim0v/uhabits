@@ -28,15 +28,14 @@
 ///
 /// ## What this file deliberately does not claim
 ///
-/// - The six `widget_preview_*` bitmaps (rule 5 of `widgets.registration`) and
-///   the `StackWidgetService` with everything behind it (rule 7 of the same
-///   feature, plus the two `widgets.stack` features) are not reproduced by the
-///   port; see the comments in the manifest and in `HabitPickerDialog`. Their
-///   rule ids are deliberately not written out anywhere in this file, so the
-///   coverage tool keeps reporting them as the open work they are.
 /// - Anything that only exists while Android is running it — the measure
 ///   passes, the background thread, the `PendingIntent` the launcher holds — is
 ///   out of reach and stays uncited.
+/// - Rule 6 of `widgets.checkmark`: a boolean Checkmark tap is a broadcast to
+///   `WidgetReceiver` upstream and an app launch here, because the toggle it
+///   runs is Dart. Its rule id is deliberately not written out anywhere in this
+///   file, so the coverage tool keeps reporting it as the open work it is; see
+///   the KDoc on `WidgetIntents` for the whole argument.
 library;
 
 import 'dart:io';
@@ -144,6 +143,30 @@ String capture(String source, RegExp pattern) {
 List<String> captureAll(String source, RegExp pattern) =>
     pattern.allMatches(source).map((RegExpMatch m) => m.group(1)!).toList();
 
+/// The `<receiver>` blocks of [manifest] that are app-widget providers, i.e.
+/// the ones carrying an `android.appwidget.provider` meta-data.
+///
+/// The manifest also declares receivers that are not widgets at all — the
+/// notification plugin's boot receiver, for one — and "exactly six" in
+/// rule 1 of `widgets.registration` and rule 7 of
+/// `platform-glue.manifest-components` counts
+/// app-widget providers, which is exactly what that meta-data makes a receiver.
+List<String> appWidgetReceivers(String manifest) =>
+    xmlBlocks(manifest, 'receiver')
+        .where((String receiver) => xmlBlocks(receiver, 'meta-data').any(
+              (String meta) =>
+                  xmlAttributes(meta)['android:name'] ==
+                  'android.appwidget.provider',
+            ))
+        .toList();
+
+/// [source] with its comments stripped, so an assertion about what the code
+/// does cannot be satisfied — or defeated — by prose that merely names the
+/// thing.
+String withoutComments(String source) => source
+    .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+    .replaceAll(RegExp(r'//[^\n]*'), '');
+
 /// A multi-line Kotlin argument list, one argument per entry.
 ///
 /// Splitting on commas would cut `max(1, view.measuredWidth)` in half; the
@@ -165,7 +188,7 @@ void main() {
 
     setUp(() {
       manifest = androidSource('AndroidManifest.xml');
-      receivers = xmlBlocks(manifest, 'receiver');
+      receivers = appWidgetReceivers(manifest);
     });
 
     /// The six `appwidget-provider` files, keyed by the provider that names
@@ -303,6 +326,79 @@ void main() {
       }
     });
 
+    test('every widget declares the preview bitmap the launcher shows', () {
+      final Map<String, Map<String, String>> info = providerInfo();
+
+      expect(
+        <String, String?>{
+          for (final MapEntry<String, Map<String, String>> e in info.entries)
+            e.key: e.value['android:previewImage'],
+        },
+        <String, String>{
+          'CheckmarkWidgetProvider': '@drawable/widget_preview_checkmark',
+          'FrequencyWidgetProvider': '@drawable/widget_preview_frequency',
+          'HistoryWidgetProvider': '@drawable/widget_preview_history',
+          'ScoreWidgetProvider': '@drawable/widget_preview_score',
+          'StreakWidgetProvider': '@drawable/widget_preview_streaks',
+          'TargetWidgetProvider': '@drawable/widget_preview_target',
+        },
+        reason: 'widgets.registration#5 — Each widget declares a static '
+            'preview image: widget_preview_checkmark, widget_preview_frequency, '
+            'widget_preview_history, widget_preview_score, '
+            'widget_preview_streaks, widget_preview_target.',
+      );
+
+      // A declaration that names a missing drawable does not build, so the
+      // resources have to be here too.
+      for (final String name in <String>[
+        'widget_preview_checkmark',
+        'widget_preview_frequency',
+        'widget_preview_history',
+        'widget_preview_score',
+        'widget_preview_streaks',
+        'widget_preview_target',
+      ]) {
+        final File file =
+            File('${androidMain.path}/res/drawable-nodpi/$name.png');
+        expect(file.existsSync(), isTrue,
+            reason: 'widgets.registration#5: $name is a real drawable');
+        expect(file.readAsBytesSync().take(4).toList(),
+            <int>[0x89, 0x50, 0x4E, 0x47],
+            reason: 'widgets.registration#5: $name is a PNG bitmap, i.e. the '
+                'static preview the rule asks for and not a placeholder');
+      }
+    });
+
+    test('the stack service is private and speaks only to the launcher', () {
+      final Map<String, String> service = xmlAttributes(
+        xmlBlocks(manifest, 'service').singleWhere(
+          (String s) =>
+              xmlAttributes(s)['android:name'] == '.widgets.StackWidgetService',
+        ),
+      );
+
+      expect(
+        <String, String?>{
+          'exported': service['android:exported'],
+          'permission': service['android:permission'],
+        },
+        <String, String>{
+          'exported': 'false',
+          'permission': 'android.permission.BIND_REMOTEVIEWS',
+        },
+        reason: 'widgets.registration#7 — StackWidgetService is declared as a '
+            'non-exported Service requiring permission '
+            'android.permission.BIND_REMOTEVIEWS.',
+      );
+      expect(
+        File('${androidMain.path}/kotlin/org/isoron/uhabits/widgets/'
+                'StackWidgetService.kt')
+            .existsSync(),
+        isTrue,
+        reason: 'widgets.registration#7: and the class it names exists',
+      );
+    });
+
     test('the configure activity is the picker each widget type needs', () {
       final Map<String, Map<String, String>> info = providerInfo();
       const String base = 'org.isoron.uhabits.widgets.activities';
@@ -407,7 +503,7 @@ void main() {
 
     test('exactly six provider receivers carry an appwidget.provider '
         'meta-data', () {
-      final List<String> receivers = xmlBlocks(manifest, 'receiver');
+      final List<String> receivers = appWidgetReceivers(manifest);
       expect(receivers, hasLength(6),
           reason: 'platform-glue.manifest-components#7 — Exactly 6 AppWidget '
               'provider receivers are declared, all exported=true with an '
@@ -625,23 +721,67 @@ void main() {
           'FrequencyWidget': sizeOf('FrequencyWidget.kt'),
           'StreakWidget': sizeOf('StreakWidget.kt'),
           'TargetWidget': sizeOf('TargetWidget.kt'),
+          'EmptyWidget': sizeOf('EmptyWidget.kt'),
           'HistoryWidget': sizeOf('HistoryWidget.kt'),
           'ScoreWidget': sizeOf('ScoreWidget.kt'),
+          'StackWidget': sizeOf('StackWidget.kt'),
         },
         <String, Map<String, int>>{
           'CheckmarkWidget': <String, int>{'height': 125, 'width': 125},
           'FrequencyWidget': <String, int>{'height': 200, 'width': 200},
           'StreakWidget': <String, int>{'height': 200, 'width': 200},
           'TargetWidget': <String, int>{'height': 200, 'width': 200},
+          'EmptyWidget': <String, int>{'height': 200, 'width': 200},
           'HistoryWidget': <String, int>{'height': 250, 'width': 250},
           'ScoreWidget': <String, int>{'height': 300, 'width': 300},
+          'StackWidget': <String, int>{'height': 0, 'width': 0},
         },
         reason: 'widgets.dimensions#5 — Default sizes in pixels are: '
             'CheckmarkWidget 125x125, FrequencyWidget 200x200, StreakWidget '
             '200x200, TargetWidget 200x200, EmptyWidget 200x200, HistoryWidget '
-            '250x250, ScoreWidget 300x300, StackWidget 0x0. EmptyWidget and '
-            'StackWidget exist only to serve a stack, which the port does not '
-            'reproduce.',
+            '250x250, ScoreWidget 300x300, StackWidget 0x0.',
+      );
+    });
+
+    test('the stack factory sizes its children exactly as the provider does',
+        () {
+      /// The body of `getDimensionsFromOptions`, whitespace-normalised, so the
+      /// comparison is about the code and not about how it is wrapped.
+      String dimensionsBody(String source) {
+        final int start = source.indexOf('fun getDimensionsFromOptions');
+        expect(start, greaterThan(0),
+            reason: 'widgets.dimensions#6: the function is there to compare');
+        const String last =
+            'return WidgetDimensions(minWidth, maxHeight, maxWidth, minHeight)';
+        final int end = source.indexOf(last, start);
+        return source
+            .substring(start, end + last.length)
+            .replaceAll(RegExp(r'\s+'), ' ');
+      }
+
+      final String provider = dimensionsBody(widgetKotlin('BaseWidgetProvider.kt'));
+      final String factory = dimensionsBody(widgetKotlin('StackWidgetService.kt'));
+
+      expect(
+        factory,
+        provider,
+        reason: 'widgets.dimensions#6 — StackRemoteViewsFactory duplicates the '
+            'same getDimensionsFromOptions logic verbatim so the child widgets '
+            'inside a stack are sized from the stack widget\'s own options '
+            'bundle.',
+      );
+      expect(
+        factory,
+        contains('WidgetDimensions(minWidth, maxHeight, maxWidth, minHeight)'),
+        reason: 'widgets.dimensions#6: crossed the same way — portrait is '
+            '(minWidth x maxHeight), landscape is (maxWidth x minHeight)',
+      );
+      expect(
+        widgetKotlin('StackWidgetService.kt'),
+        contains('AppWidgetManager.getInstance(context).getAppWidgetOptions('
+            'widgetId)'),
+        reason: 'widgets.dimensions#6: and the bundle is the stack widget\'s '
+            'own',
       );
     });
   });
@@ -769,12 +909,10 @@ void main() {
         reason: 'widgets.remoteviews-rendering#5 — The click PendingIntent is '
             'attached to R.id.button only when getOnClickPendingIntent returns '
             'non-null; EmptyWidget and StackWidget return null and therefore '
-            'have no click target. Neither of those two widgets is reproduced, '
-            'so in this build every widget is clickable — the guard is kept '
-            'because it is what makes that statement checkable.',
+            'have no click target.',
       );
 
-      // The six that exist all return a non-null PendingIntent.
+      // The six real widgets all return a non-null PendingIntent.
       for (final String widget in <String>[
         'CheckmarkWidget',
         'FrequencyWidget',
@@ -789,6 +927,17 @@ void main() {
               'PendingIntent'),
           reason: 'widgets.remoteviews-rendering#5: $widget returns a non-null '
               'PendingIntent (the return type is not nullable)',
+        );
+      }
+
+      // The two that only serve a stack return null.
+      for (final String widget in <String>['EmptyWidget', 'StackWidget']) {
+        expect(
+          widgetKotlin('$widget.kt'),
+          contains('override fun getOnClickPendingIntent(context: Context): '
+              'PendingIntent? = null'),
+          reason: 'widgets.remoteviews-rendering#5: $widget has no click '
+              'target at all',
         );
       }
     });
@@ -1022,9 +1171,13 @@ void main() {
         '255',
         reason: 'widgets.card-chrome#5 — BaseWidget.preferedBackgroundAlpha '
             'returns 255 whenever the widget is rendered inside a StackWidget '
-            '(stacked == true), and otherwise returns Preferences.widgetOpacity. '
-            'Stack widgets are not reproduced, so `stacked` is always false '
-            'here and the branch exists to keep the other half honest.',
+            '(stacked == true), and otherwise returns Preferences.widgetOpacity.',
+      );
+      expect(
+        widgetKotlin('StackWidgetService.kt'),
+        contains('CheckmarkWidget(context, widgetId, habit, today, true)'),
+        reason: 'widgets.card-chrome#5: a stack page passes stacked = true, '
+            'which is the only way that branch is ever taken',
       );
     });
 
@@ -1510,6 +1663,62 @@ void main() {
         widgetKotlin('BaseWidgetProvider.kt'),
         isNot(contains('errorView.setOnClickPendingIntent')),
         reason: 'widgets.error-states#3: and none is attached in code either',
+      );
+    });
+
+    test('an empty stack shows its own label instead of a habit', () {
+      final String stack = widgetKotlin('StackWidget.kt');
+
+      expect(
+        stack,
+        contains('remoteViews.setEmptyView(\n'
+            '            StackWidgetType.getStackWidgetAdapterViewId('
+            'widgetType),\n'
+            '            StackWidgetType.getStackWidgetEmptyViewId(widgetType)\n'
+            '        )'),
+        reason: 'widgets.error-states#4 — A stack widget whose adapter reports '
+            'zero items shows its type-specific empty TextView (e.g. '
+            '\'Checkmark Stack Widget\') instead of any habit content.',
+      );
+      expect(
+        xmlRoot(androidSource('res/layout/checkmark_stackview_widget.xml'),
+            'TextView')['android:text'],
+        'Checkmark Stack Widget',
+        reason: 'widgets.error-states#4: which is the label in the layout',
+      );
+      expect(
+        widgetKotlin('StackWidgetService.kt'),
+        contains('override fun getCount(): Int = habitIds.size'),
+        reason: 'widgets.error-states#4: "zero items" is an empty habit id '
+            'array, which is what a widget bound to no habits produces',
+      );
+    });
+
+    test('a page still being built shows the blank placeholder card', () {
+      final String service = widgetKotlin('StackWidgetService.kt');
+      final String body = service.substring(
+        service.indexOf('override fun getLoadingView'),
+        service.indexOf('    init {'),
+      );
+
+      expect(
+        body,
+        contains('val widget = EmptyWidget(context, widgetId)'),
+        reason: 'widgets.error-states#5 — While a stack page is loading, the '
+            'EmptyWidget placeholder (blank rounded card with an empty title) '
+            'is shown.',
+      );
+      expect(
+        widgetKotlin('EmptyWidget.kt'),
+        contains('override fun refreshData(widgetView: View) {}'),
+        reason: 'widgets.error-states#5: blank, because nothing is ever drawn '
+            'into it',
+      );
+      expect(
+        widgetKotlin('EmptyWidget.kt'),
+        isNot(contains('setTitle')),
+        reason: 'widgets.error-states#5: and the title is left empty, because '
+            'nothing ever sets one',
       );
     });
 
@@ -2361,6 +2570,62 @@ void main() {
           reason: 'widgets.checkmark-view#10: thickness');
     });
 
+    test('the layout-editor preview seeds a three-quarters "Wake up early"',
+        () {
+      final int marker = view.indexOf('if (isInEditMode)');
+      expect(marker, greaterThan(0),
+          reason: 'widgets.checkmark-view#11 — In layout-editor preview mode '
+              'the view seeds percentage=0.75f, name=\'Wake up early\', '
+              'activeColor=getAndroidTestColor(6), entryValue=YES_MANUAL.');
+
+      // The seeding is the last thing construction does, so it overwrites
+      // nothing and nothing overwrites it.
+      final String body = view.substring(marker, view.indexOf('}', marker) + 1);
+
+      expect(
+        <String, String>{
+          'percentage': capture(body, RegExp(r'percentage = (\S+)')),
+          'name': capture(body, RegExp(r'name = "([^"]*)"')),
+          'activeColor': capture(body, RegExp(r'activeColor = (\S+)')),
+          'entryValue': capture(body, RegExp(r'entryValue = (\S+)')),
+        },
+        <String, String>{
+          'percentage': '0.75f',
+          'name': 'Wake up early',
+          // `PaletteUtils.getAndroidTestColor(6)` is
+          // `PaletteColor(6).toFixedAndroidColor()`, i.e. `#7CB342`, the light
+          // green. The fixed palette it reads is not part of this source set —
+          // only the widget palette is — and the two agree at index 6, which is
+          // the only index the rule names.
+          'activeColor': 'WidgetTheme.color(6)',
+          'entryValue': 'Entry.YES_MANUAL',
+        },
+        reason: 'widgets.checkmark-view#11 — In layout-editor preview mode the '
+            "view seeds percentage=0.75f, name='Wake up early', "
+            'activeColor=getAndroidTestColor(6), entryValue=YES_MANUAL.',
+      );
+
+      expect(
+        capture(widgetKotlin('WidgetTheme.kt'),
+                RegExp(r'0xAFB42B, (0x[0-9A-Fa-f]{6}), 0x388E3C'))
+            .toUpperCase(),
+        '0X7CB342',
+        reason: 'widgets.checkmark-view#11: index 6 of the palette is the '
+            'light green getAndroidTestColor(6) resolves to',
+      );
+
+      expect(body, contains('refresh()'),
+          reason: 'widgets.checkmark-view#11: the seeded values are drawn, '
+              'which is the whole point of the preview');
+
+      // `entryValue`, not `entryState` — so the preview card stays unchecked
+      // and the ring shows an unsatisfied glyph. Upstream does exactly this;
+      // reproduced rather than corrected.
+      expect(body, isNot(contains('entryState =')),
+          reason: 'widgets.checkmark-view#11: entryValue is seeded, entryState '
+              'is not');
+    });
+
     test('the ring is an arc from -90 degrees with a cleared centre and a '
         'centred glyph', () {
       final String ring = widgetViewKotlin('RingView.kt');
@@ -3030,6 +3295,977 @@ void main() {
       expect(widget, contains('WidgetIntents.showHabit(context, id, habit)'),
           reason: 'widgets.target#9 — Tapping the Target widget opens '
               'ShowHabitActivity for that habit.');
+    });
+  });
+
+  // =======================================================================
+  // widgets.empty
+  // =======================================================================
+
+  group('widgets.empty', () {
+    late String widget;
+    late String view;
+    late String service;
+
+    setUp(() {
+      widget = widgetKotlin('EmptyWidget.kt');
+      view = widgetViewKotlin('EmptyWidgetView.kt');
+      service = widgetKotlin('StackWidgetService.kt');
+    });
+
+    test('the Empty widget is a 200x200 card nobody can tap', () {
+      expect(
+        <String, String>{
+          'height': capture(widget,
+              RegExp(r'override val defaultHeight: Int get\(\) = (\d+)')),
+          'width': capture(widget,
+              RegExp(r'override val defaultWidth: Int get\(\) = (\d+)')),
+        },
+        <String, String>{'height': '200', 'width': '200'},
+        reason: 'widgets.empty#1 — EmptyWidget has default size 200x200 px, '
+            'returns null from getOnClickPendingIntent (so it is never '
+            'clickable), and does nothing in refreshData.',
+      );
+      expect(
+        widget,
+        contains('override fun getOnClickPendingIntent(context: Context): '
+            'PendingIntent? = null'),
+        reason: 'widgets.empty#1: never clickable',
+      );
+      expect(widget, contains('override fun refreshData(widgetView: View) {}'),
+          reason: 'widgets.empty#1: and nothing to refresh');
+    });
+
+    test('its view is the graph shell with a visible, empty title', () {
+      expect(
+        widget,
+        contains('override fun buildView(): View = EmptyWidgetView(context)'),
+        reason: 'widgets.empty#2 — Its view is an EmptyWidgetView, which '
+            'inflates the same R.layout.widget_graph as the graph widgets, '
+            'makes the title TextView visible, and leaves the title text empty '
+            '(no chart is added).',
+      );
+      expect(
+        capture(
+            view,
+            RegExp(r'override val innerLayoutId: Int\s*\n\s*get\(\) = '
+                r'R.layout.(\w+)')),
+        'widget_graph',
+        reason: 'widgets.empty#2: the same shell the graph widgets use',
+      );
+      expect(view, contains('title.visibility = VISIBLE'),
+          reason: 'widgets.empty#2: the title is made visible');
+      expect(view, isNot(contains('addView')),
+          reason: 'widgets.empty#2: and nothing is added below it');
+      expect(
+        xmlRoot(androidSource('res/layout/widget_graph.xml'), 'TextView')
+            .containsKey('android:text'),
+        isFalse,
+        reason: 'widgets.empty#2: the title carries no text of its own, so it '
+            'renders empty',
+      );
+    });
+
+    test('it exists only as the stack factory\'s loading view', () {
+      final String body = service.substring(
+        service.indexOf('override fun getLoadingView()'),
+        service.indexOf('init {'),
+      );
+
+      expect(body, contains('val widget = EmptyWidget(context, widgetId)'),
+          reason: 'widgets.empty#3 — EmptyWidget is used exclusively as '
+              'StackRemoteViewsFactory.getLoadingView() — the placeholder shown '
+              'while a stack page is being built; it is sized from the stack '
+              'widget\'s current AppWidgetOptions.');
+      expect(
+        body,
+        contains('widget.setDimensions(getDimensionsFromOptions(context, '
+            'options))'),
+        reason: 'widgets.empty#3: sized from the stack widget\'s own options',
+      );
+      expect(
+        body,
+        contains('AppWidgetManager.getInstance(context).getAppWidgetOptions('
+            'widgetId)'),
+        reason: 'widgets.empty#3: which are the parent widget\'s, read live',
+      );
+
+      // Nowhere else in the source set constructs one.
+      final Iterable<String> sources = Directory(
+        '${androidMain.path}/kotlin/org/isoron/uhabits/widgets',
+      )
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((File f) => !f.path.endsWith('EmptyWidget.kt'))
+          .map((File f) => f.readAsStringSync());
+      expect(
+        sources.fold<int>(
+            0,
+            (int total, String source) =>
+                total + RegExp(r'\bEmptyWidget\(').allMatches(source).length),
+        1,
+        reason: 'widgets.empty#3: exactly one construction site, and it is the '
+            'loading view',
+      );
+    });
+
+    test('the placeholder honours the opacity preference', () {
+      expect(
+        capture(widget, RegExp(r'stacked: Boolean = (\w+)')),
+        'false',
+        reason: 'widgets.empty#4 — EmptyWidget is constructed with '
+            'stacked=false by default, so the loading placeholder honours the '
+            'user\'s widgetOpacity preference rather than being forced opaque.',
+      );
+      expect(
+        service,
+        contains('EmptyWidget(context, widgetId)'),
+        reason: 'widgets.empty#4: and the factory takes that default rather '
+            'than passing true',
+      );
+    });
+  });
+
+  // =======================================================================
+  // widgets.stack
+  // =======================================================================
+
+  group('widgets.stack', () {
+    late String stack;
+    late String type;
+
+    setUp(() {
+      stack = widgetKotlin('StackWidget.kt');
+      type = widgetKotlin('StackWidgetType.kt');
+    });
+
+    /// The six per-type stack layouts, keyed by the enum constant.
+    Map<String, String> stackLayouts() => <String, String>{
+          'CHECKMARK': 'checkmark_stackview_widget',
+          'FREQUENCY': 'frequency_stackview_widget',
+          'SCORE': 'score_stackview_widget',
+          'HISTORY': 'history_stackview_widget',
+          'STREAKS': 'streak_stackview_widget',
+          'TARGET': 'target_stackview_widget',
+        };
+
+    test('a document that does not resolve to exactly one habit is a stack',
+        () {
+      final String provider = widgetKotlin('BaseWidgetProvider.kt');
+
+      expect(
+        provider,
+        contains('if (document.isStack()) {\n'
+            '            StackWidget(context, widgetId, stackWidgetType, '
+            'document.habits)\n'
+            '        } else {\n'
+            '            buildSingleWidget(context, widgetId, document)\n'
+            '        }'),
+        reason: 'widgets.stack#1 — A provider returns a single-habit widget '
+            'only when getHabitsFromWidgetId(id).size == 1; for 0 habits or 2+ '
+            'habits it returns a StackWidget of the matching StackWidgetType.',
+      );
+      expect(
+        capture(widgetKotlin('WidgetData.kt'),
+            RegExp(r'fun isStack\(\): Boolean \{[\s\S]*?return (.*)\n')),
+        'habits.size != 1',
+        reason: 'widgets.stack#1: one habit is a plain widget, anything else '
+            'is a stack',
+      );
+
+      expect(
+        <String, String>{
+          for (final String provider in <String>[
+            'CheckmarkWidgetProvider',
+            'FrequencyWidgetProvider',
+            'ScoreWidgetProvider',
+            'HistoryWidgetProvider',
+            'StreakWidgetProvider',
+            'TargetWidgetProvider',
+          ])
+            provider: capture(
+                widgetKotlin('$provider.kt'),
+                RegExp(r'override val stackWidgetType get\(\) = '
+                    r'StackWidgetType\.(\w+)')),
+        },
+        <String, String>{
+          'CheckmarkWidgetProvider': 'CHECKMARK',
+          'FrequencyWidgetProvider': 'FREQUENCY',
+          'ScoreWidgetProvider': 'SCORE',
+          'HistoryWidgetProvider': 'HISTORY',
+          'StreakWidgetProvider': 'STREAKS',
+          'TargetWidgetProvider': 'TARGET',
+        },
+        reason: 'widgets.stack#1: each provider names the matching type',
+      );
+    });
+
+    test('the six stack types carry upstream\'s explicit values', () {
+      expect(
+        captureAll(type, RegExp(r'(\w+)\(\d\)')),
+        <String>[
+          'CHECKMARK',
+          'FREQUENCY',
+          'SCORE',
+          'HISTORY',
+          'STREAKS',
+          'TARGET',
+        ],
+        reason: 'widgets.stack#2 — StackWidgetType is an enum with explicit '
+            'values: CHECKMARK=0, FREQUENCY=1, SCORE=2, HISTORY=3, STREAKS=4, '
+            'TARGET=5; getWidgetTypeFromValue returns null for any other int.',
+      );
+      expect(
+        captureAll(type, RegExp(r'\w+\((\d)\)')),
+        <String>['0', '1', '2', '3', '4', '5'],
+        reason: 'widgets.stack#2: the values, in order',
+      );
+      expect(
+        type,
+        contains('fun getWidgetTypeFromValue(value: Int): StackWidgetType?'),
+        reason: 'widgets.stack#2: an unknown value has no type',
+      );
+      expect(
+        type.substring(type.indexOf('fun getWidgetTypeFromValue')),
+        contains('else -> null'),
+        reason: 'widgets.stack#2: which is spelled null, not an exception',
+      );
+    });
+
+    test('the stack ignores the size it is asked for and inflates its own '
+        'layout', () {
+      expect(
+        stack,
+        contains('override fun getRemoteViews(width: Int, height: Int): '
+            'RemoteViews {'),
+        reason: 'widgets.stack#3 — StackWidget overrides getRemoteViews and '
+            'ignores the requested width/height entirely; it inflates the '
+            'per-type stack layout (checkmark_stackview_widget, '
+            'frequency_stackview_widget, score_stackview_widget, '
+            'history_stackview_widget, streak_stackview_widget, '
+            'target_stackview_widget).',
+      );
+      final String body =
+          stack.substring(stack.indexOf('override fun getRemoteViews'));
+      // Everything after the signature's opening brace, so the parameter names
+      // in the declaration itself do not count as uses.
+      expect(
+        RegExp(r'\bwidth\b|\bheight\b')
+            .hasMatch(body.substring(body.indexOf('{') + 1)),
+        isFalse,
+        reason: 'widgets.stack#3: the two arguments are never read',
+      );
+      expect(
+        body,
+        contains('RemoteViews(context.packageName, '
+            'StackWidgetType.getStackWidgetLayoutId(widgetType))'),
+        reason: 'widgets.stack#3: the layout comes from the type',
+      );
+
+      final String layouts =
+          type.substring(type.indexOf('fun getStackWidgetLayoutId'));
+      for (final MapEntry<String, String> entry in stackLayouts().entries) {
+        expect(
+          layouts.substring(0, layouts.indexOf('fun getStackWidgetAdapterViewId')),
+          contains('${entry.key} -> R.layout.${entry.value}'),
+          reason: 'widgets.stack#3: ${entry.key} inflates ${entry.value}',
+        );
+        expect(
+          File('${androidMain.path}/res/layout/${entry.value}.xml')
+              .existsSync(),
+          isTrue,
+          reason: 'widgets.stack#3: and that layout exists',
+        );
+      }
+    });
+
+    test('each layout is a looping StackView over a full-bleed empty label',
+        () {
+      for (final MapEntry<String, String> entry in stackLayouts().entries) {
+        final String xml =
+            androidSource('res/layout/${entry.value}.xml');
+        final Map<String, String> root = xmlRoot(xml, 'FrameLayout');
+        final Map<String, String> stackView = xmlRoot(xml, 'StackView');
+        final Map<String, String> label = xmlRoot(xml, 'TextView');
+
+        expect(
+          <String, String?>{
+            'frameWidth': root['android:layout_width'],
+            'frameHeight': root['android:layout_height'],
+            'stackWidth': stackView['android:layout_width'],
+            'stackHeight': stackView['android:layout_height'],
+            'loopViews': stackView['android:loopViews'],
+            'labelWidth': label['android:layout_width'],
+            'labelHeight': label['android:layout_height'],
+            'labelColor': label['android:textColor'],
+            'labelStyle': label['android:textStyle'],
+            'labelSize': label['android:textSize'],
+            'labelGravity': label['android:gravity'],
+          },
+          <String, String>{
+            'frameWidth': 'match_parent',
+            'frameHeight': 'match_parent',
+            'stackWidth': 'match_parent',
+            'stackHeight': 'match_parent',
+            'loopViews': 'true',
+            'labelWidth': 'match_parent',
+            'labelHeight': 'match_parent',
+            'labelColor': '#ffffff',
+            'labelStyle': 'bold',
+            'labelSize': '16sp',
+            'labelGravity': 'center',
+          },
+          reason: 'widgets.stack#4 — Each stack layout is a FrameLayout '
+              'containing a StackView with android:loopViews="true" (so '
+              'swiping wraps around) plus a full-bleed empty-state TextView '
+              '(white, bold, 16sp, centred). (${entry.key})',
+        );
+      }
+    });
+
+    test('the empty labels are upstream\'s strings, target bug included', () {
+      expect(
+        <String, String?>{
+          for (final MapEntry<String, String> entry in stackLayouts().entries)
+            entry.key: xmlRoot(androidSource('res/layout/${entry.value}.xml'),
+                'TextView')['android:text'],
+        },
+        <String, String>{
+          'CHECKMARK': 'Checkmark Stack Widget',
+          'FREQUENCY': 'Frequency Stack Widget',
+          'SCORE': 'Score Stack Widget',
+          'HISTORY': 'History Stack Widget',
+          'STREAKS': 'Streaks Stack Widget',
+          // Upstream's target layout points at R.string.streaks_stack_widget.
+          // Reproduced, not corrected.
+          'TARGET': 'Streaks Stack Widget',
+        },
+        reason: 'widgets.stack#5 — Empty-state strings are \'Checkmark Stack '
+            'Widget\', \'Frequency Stack Widget\', \'Score Stack Widget\', '
+            '\'History Stack Widget\', \'Streaks Stack Widget\'; the target '
+            'layout has a bug and reuses R.string.streaks_stack_widget '
+            '(\'Streaks Stack Widget\') instead of a target-specific string. '
+            'The port has no strings.xml, so the labels are literals — the bug '
+            'travels with them.',
+      );
+    });
+
+    test('the adapter intent carries the id, the type and the habits', () {
+      final String body =
+          stack.substring(stack.indexOf('override fun getRemoteViews'));
+
+      expect(
+        body,
+        contains('serviceIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, '
+            'id)'),
+        reason: 'widgets.stack#6 — StackWidget wires the StackView to '
+            'StackWidgetService via setRemoteAdapter with an Intent carrying '
+            'EXTRA_APPWIDGET_ID = widget id, WIDGET_TYPE = type.value, and '
+            'HABIT_IDS = the habit ids joined with \',\' '
+            '(StringUtils.joinLongs); the Intent\'s data is set to its own '
+            'URI_INTENT_SCHEME string so Android treats each configuration as '
+            'a distinct adapter.',
+      );
+      expect(
+        body,
+        contains('serviceIntent.putExtra(StackWidgetService.WIDGET_TYPE, '
+            'widgetType.value)'),
+        reason: 'widgets.stack#6: the type',
+      );
+      expect(
+        body,
+        contains('serviceIntent.putExtra(StackWidgetService.HABIT_IDS, '
+            'habitIds)'),
+        reason: 'widgets.stack#6: the habit ids',
+      );
+      expect(
+        body,
+        contains('val habitIds = StringUtils.joinLongs(habits.map { it.id }'
+            '.toLongArray())'),
+        reason: 'widgets.stack#6: joined with a comma',
+      );
+      expect(
+        body,
+        contains('serviceIntent.data = Uri.parse(serviceIntent.toUri('
+            'Intent.URI_INTENT_SCHEME))'),
+        reason: 'widgets.stack#6: and the intent names itself, so each '
+            'configuration is a distinct adapter',
+      );
+      expect(
+        body,
+        contains('remoteViews.setRemoteAdapter(\n'
+            '            StackWidgetType.getStackWidgetAdapterViewId('
+            'widgetType),\n'
+            '            serviceIntent\n'
+            '        )'),
+        reason: 'widgets.stack#6: attached to the StackView',
+      );
+      expect(
+        body,
+        contains('Intent(context, StackWidgetService::class.java)'),
+        reason: 'widgets.stack#6: pointing at StackWidgetService',
+      );
+    });
+
+    test('every rebuild notifies the adapter and re-points the empty view', () {
+      final String body =
+          stack.substring(stack.indexOf('override fun getRemoteViews'));
+
+      expect(
+        body,
+        contains('manager.notifyAppWidgetViewDataChanged(\n'
+            '            id,\n'
+            '            StackWidgetType.getStackWidgetAdapterViewId('
+            'widgetType)\n'
+            '        )'),
+        reason: 'widgets.stack#7 — StackWidget calls AppWidgetManager'
+            '.notifyAppWidgetViewDataChanged for the StackView every time '
+            'getRemoteViews runs, and calls setEmptyView to point the StackView '
+            'at its empty TextView.',
+      );
+      expect(
+        body,
+        contains('remoteViews.setEmptyView(\n'
+            '            StackWidgetType.getStackWidgetAdapterViewId('
+            'widgetType),\n'
+            '            StackWidgetType.getStackWidgetEmptyViewId(widgetType)\n'
+            '        )'),
+        reason: 'widgets.stack#7: and the empty view',
+      );
+
+      final String ids = type.substring(
+        type.indexOf('fun getStackWidgetAdapterViewId'),
+        type.indexOf('fun getPendingIntentTemplate'),
+      );
+      for (final String name in <String>[
+        'checkmark',
+        'frequency',
+        'score',
+        'history',
+        'streak',
+        'target',
+      ]) {
+        expect(ids, contains('R.id.${name}StackWidgetView'),
+            reason: 'widgets.stack#7: the $name StackView id');
+        expect(ids, contains('R.id.${name}StackWidgetEmptyView'),
+            reason: 'widgets.stack#7: and its empty view id');
+      }
+    });
+
+    test('the stack itself draws nothing and is never tapped', () {
+      expect(
+        stack,
+        contains('override fun getOnClickPendingIntent(context: Context): '
+            'PendingIntent? = null'),
+        reason: 'widgets.stack#8 — StackWidget.getOnClickPendingIntent returns '
+            'null, buildView returns null, refreshData is a no-op, and '
+            'defaultWidth/defaultHeight are both 0.',
+      );
+      expect(stack, contains('override fun buildView(): View? {'),
+          reason: 'widgets.stack#8: buildView is nullable');
+      expect(
+        stack.substring(stack.indexOf('override fun buildView')),
+        contains('return null'),
+        reason: 'widgets.stack#8: and returns null',
+      );
+      expect(
+        stack,
+        contains('override fun refreshData(widgetView: View) {'),
+        reason: 'widgets.stack#8: refreshData exists',
+      );
+      expect(
+        <String, String>{
+          'height': capture(stack,
+              RegExp(r'override val defaultHeight: Int get\(\) = (\d+)')),
+          'width': capture(stack,
+              RegExp(r'override val defaultWidth: Int get\(\) = (\d+)')),
+        },
+        <String, String>{'height': '0', 'width': '0'},
+        reason: 'widgets.stack#8: and it has no size of its own',
+      );
+    });
+
+    test('a stack forces its children opaque', () {
+      expect(
+        capture(stack, RegExp(r'stacked: Boolean = (\w+)')),
+        'true',
+        reason: 'widgets.stack#9 — StackWidget is constructed with stacked = '
+            'true, so all of its child widgets render at background alpha 255 '
+            'regardless of the user\'s widgetOpacity preference.',
+      );
+      expect(
+        widgetKotlin('StackWidgetService.kt'),
+        contains('CheckmarkWidget(context, widgetId, habit, today, true)'),
+        reason: 'widgets.stack#9: and every child is built with stacked = true',
+      );
+    });
+
+    test('one pending-intent template covers the whole StackView', () {
+      // Whitespace-normalised: the branches are the claim, not how the file
+      // happens to wrap them.
+      final String body = type
+          .substring(
+            type.indexOf('fun getPendingIntentTemplate'),
+            type.indexOf('fun getIntentFillIn'),
+          )
+          .replaceAll(RegExp(r'\s+'), ' ');
+
+      expect(
+        body,
+        contains('val containsNumerical = habits.any { it.isNumerical }'),
+        reason: 'widgets.stack#10 — One pending-intent template is set on the '
+            'whole StackView: for CHECKMARK it is showNumberPickerTemplate() '
+            'if ANY habit in the widget is numerical, else '
+            'toggleCheckmarkTemplate(); for FREQUENCY/SCORE/HISTORY/STREAKS/'
+            'TARGET it is showHabitTemplate().',
+      );
+      expect(
+        body,
+        contains('CHECKMARK -> if (containsNumerical) { '
+            'WidgetIntents.showNumberPickerTemplate(context) } else { '
+            'WidgetIntents.toggleCheckmarkTemplate(context) }'),
+        reason: 'widgets.stack#10: the checkmark branch',
+      );
+      expect(
+        body,
+        contains('FREQUENCY, SCORE, HISTORY, STREAKS, TARGET -> '
+            'WidgetIntents.showHabitTemplate(context)'),
+        reason: 'widgets.stack#10: and the other five',
+      );
+
+      // The three templates are distinct PendingIntents, as upstream's three
+      // request codes made them.
+      final String intents = widgetKotlin('WidgetIntents.kt');
+      expect(
+        <String, String>{
+          'showHabitTemplate': capture(intents,
+              RegExp(r'fun showHabitTemplate\(context: Context\): PendingIntent = template\(context, (\d+)\)')),
+          'showNumberPickerTemplate': capture(intents,
+              RegExp(r'fun showNumberPickerTemplate\(context: Context\): PendingIntent = template\(context, (\d+)\)')),
+          'toggleCheckmarkTemplate': capture(intents,
+              RegExp(r'fun toggleCheckmarkTemplate\(context: Context\): PendingIntent = template\(context, (\d+)\)')),
+        },
+        <String, String>{
+          'showHabitTemplate': '0',
+          'showNumberPickerTemplate': '1',
+          'toggleCheckmarkTemplate': '2',
+        },
+        reason: 'widgets.stack#10: upstream\'s request codes, so the three '
+            'templates stay three different PendingIntents',
+      );
+    });
+
+    test('the template is mutable, and only where the platform allows it', () {
+      final String intents = widgetKotlin('WidgetIntents.kt');
+      final int start = intents.indexOf('private fun intentTemplateFlags');
+      final String body =
+          intents.substring(start, intents.indexOf('\n    }', start) + 6);
+
+      expect(
+        body,
+        contains('var flags = 0'),
+        reason: 'widgets.stack#11 — Template PendingIntents are created with '
+            'flags = FLAG_MUTABLE on Android S (API 31) and above, and 0 on '
+            'older releases.',
+      );
+      expect(
+        body,
+        contains('if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {\n'
+            '            flags = flags or PendingIntent.FLAG_MUTABLE\n'
+            '        }'),
+        reason: 'widgets.stack#11: mutable from API 31',
+      );
+      expect(
+        intents,
+        contains('intentTemplateFlags()'),
+        reason: 'widgets.stack#11: and that is what the templates are built '
+            'with',
+      );
+      // A fill-in intent can only fill anything in if the template is mutable,
+      // so no template may take the immutable path the six single widgets use.
+      expect(
+        body,
+        isNot(contains('FLAG_IMMUTABLE')),
+        reason: 'widgets.stack#11: never immutable',
+      );
+    });
+
+    test('the habit ids travel as a comma-separated string', () {
+      final String utils = widgetKotlin('StringUtils.kt');
+
+      expect(
+        capture(utils,
+            RegExp(r'fun joinLongs\(values: LongArray\): String = '
+                r'values.joinToString\(separator = "(.)"\)')),
+        ',',
+        reason: 'widgets.stack#12 — StringUtils.joinLongs joins with \',\'; '
+            'splitLongs parses comma-separated longs and returns an EMPTY '
+            'LongArray if any token fails to parse — so a StackWidget built '
+            'from an empty habit list yields count 0 and shows the empty view.',
+      );
+      expect(
+        utils,
+        contains('str.split(",").map { it.toLong() }.toLongArray()'),
+        reason: 'widgets.stack#12: split on the same comma',
+      );
+      expect(
+        utils,
+        contains('} catch (e: NumberFormatException) {\n'
+            '            LongArray(0)\n'
+            '        }'),
+        reason: 'widgets.stack#12: an unparsable token empties the whole array '
+            '— which is what an empty habit list produces, because joinLongs '
+            'of nothing is the empty string and "" is not a number',
+      );
+      expect(
+        widgetKotlin('StackWidgetService.kt'),
+        contains('habitIds = StringUtils.splitLongs(habitIdsStr)'),
+        reason: 'widgets.stack#12: and that array is what getCount() counts',
+      );
+    });
+  });
+
+  // =======================================================================
+  // widgets.stack-service
+  // =======================================================================
+
+  group('widgets.stack-service', () {
+    late String service;
+
+    setUp(() => service = widgetKotlin('StackWidgetService.kt'));
+
+    test('the service hands out a factory built from the adapter intent', () {
+      expect(
+        service,
+        contains('class StackWidgetService : RemoteViewsService() {\n'
+            '    override fun onGetViewFactory(intent: Intent): '
+            'RemoteViewsFactory {\n'
+            '        return StackRemoteViewsFactory(this.applicationContext, '
+            'intent)\n'
+            '    }'),
+        reason: 'widgets.stack-service#1 — StackWidgetService.onGetViewFactory '
+            'returns a StackRemoteViewsFactory built from the application '
+            'context and the adapter Intent; the constants are WIDGET_TYPE = '
+            '"WIDGET_TYPE" and HABIT_IDS = "HABIT_IDS".',
+      );
+      expect(
+        <String, String>{
+          'WIDGET_TYPE':
+              capture(service, RegExp(r'const val WIDGET_TYPE = "([^"]*)"')),
+          'HABIT_IDS':
+              capture(service, RegExp(r'const val HABIT_IDS = "([^"]*)"')),
+        },
+        <String, String>{
+          'WIDGET_TYPE': 'WIDGET_TYPE',
+          'HABIT_IDS': 'HABIT_IDS',
+        },
+        reason: 'widgets.stack-service#1: the two extra names',
+      );
+    });
+
+    test('a malformed adapter intent fails by name', () {
+      final String body = service.substring(service.indexOf('    init {'));
+
+      expect(
+        body,
+        contains('if (widgetTypeValue < 0) throw RuntimeException("invalid '
+            'widget type")'),
+        reason: 'widgets.stack-service#2 — Factory construction throws '
+            'RuntimeException("invalid widget type") when the WIDGET_TYPE '
+            'extra is missing or negative (default -1), '
+            'RuntimeException("habitIdsStr is null") when HABIT_IDS is absent, '
+            'and RuntimeException("unknown widget type value: <v>") when the '
+            'value does not map to a StackWidgetType.',
+      );
+      expect(
+        body,
+        contains('intent.getIntExtra(StackWidgetService.WIDGET_TYPE, -1)'),
+        reason: 'widgets.stack-service#2: the default is -1, so a missing '
+            'extra is a negative one',
+      );
+      expect(
+        body,
+        contains('if (habitIdsStr == null) throw RuntimeException("habitIdsStr '
+            'is null")'),
+        reason: 'widgets.stack-service#2: the missing habit ids',
+      );
+      expect(
+        body,
+        contains('?: throw RuntimeException("unknown widget type value: '
+            '\$widgetTypeValue")'),
+        reason: 'widgets.stack-service#2: and a value with no type',
+      );
+    });
+
+    test('the adapter is a stable, single-view-type list of habit ids', () {
+      expect(
+        <String, String>{
+          'getCount':
+              capture(service, RegExp(r'override fun getCount\(\): Int = (.*)')),
+          'getViewTypeCount': capture(
+              service, RegExp(r'override fun getViewTypeCount\(\): Int = (.*)')),
+          'getItemId': capture(service,
+              RegExp(r'override fun getItemId\(position: Int\): Long = (.*)')),
+          'hasStableIds': capture(service,
+              RegExp(r'override fun hasStableIds\(\): Boolean = (.*)')),
+        },
+        <String, String>{
+          'getCount': 'habitIds.size',
+          'getViewTypeCount': '1',
+          'getItemId': 'habitIds[position]',
+          'hasStableIds': 'true',
+        },
+        reason: 'widgets.stack-service#3 — getCount() returns habitIds.size; '
+            'getViewTypeCount() returns 1; hasStableIds() returns true; '
+            'getItemId(position) returns habitIds[position] (the habit id); '
+            'onCreate, onDestroy and onDataSetChanged are all no-ops.',
+      );
+      for (final String method in <String>[
+        'onCreate',
+        'onDestroy',
+        'onDataSetChanged',
+      ]) {
+        expect(service, contains('override fun $method() {}'),
+            reason: 'widgets.stack-service#3: $method does nothing');
+      }
+    });
+
+    test('a position outside the list has no view', () {
+      expect(
+        service,
+        contains('if (position < 0 || position >= habitIds.size) return null'),
+        reason: 'widgets.stack-service#4 — getViewAt returns null when '
+            'position < 0 or position >= habitIds.size.',
+      );
+    });
+
+    test('each page is a child widget of the matching type, built stacked', () {
+      final String body = service.substring(
+        service.indexOf('override fun getViewAt'),
+        service.indexOf('override fun getLoadingView'),
+      );
+
+      expect(
+        body,
+        contains('if (Looper.myLooper() == null) Looper.prepare()'),
+        reason: 'widgets.stack-service#5 — getViewAt prepares a Looper on the '
+            'current thread if none exists, resolves every habit id (throwing '
+            'HabitNotFoundException if any is missing), then constructs a child '
+            'widget of the matching type with stacked=true: CHECKMARK -> '
+            'CheckmarkWidget, FREQUENCY -> FrequencyWidget(with '
+            'prefs.firstWeekday), SCORE -> ScoreWidget, HISTORY -> '
+            'HistoryWidget, STREAKS -> StreakWidget, TARGET -> TargetWidget. '
+            'The habits are resolved against the published document rather '
+            'than a habit list, and the first weekday is not part of that '
+            'document, so FrequencyWidget takes the document\'s today instead.',
+      );
+      expect(
+        body,
+        contains('?: throw HabitNotFoundException()'),
+        reason: 'widgets.stack-service#5: an id the document does not carry is '
+            'a missing habit',
+      );
+
+      final String construct = service.substring(
+        service.indexOf('private fun constructWidget'),
+        service.indexOf('override fun getLoadingView'),
+      );
+      for (final MapEntry<String, String> entry in <String, String>{
+        'CHECKMARK': 'CheckmarkWidget',
+        'FREQUENCY': 'FrequencyWidget',
+        'SCORE': 'ScoreWidget',
+        'HISTORY': 'HistoryWidget',
+        'STREAKS': 'StreakWidget',
+        'TARGET': 'TargetWidget',
+      }.entries) {
+        expect(
+          construct,
+          contains('StackWidgetType.${entry.key} -> ${entry.value}(context, '
+              'widgetId, habit, today, true)'),
+          reason: 'widgets.stack-service#5: ${entry.key} builds a '
+              '${entry.value}, stacked',
+        );
+      }
+    });
+
+    test('both orientations are built and both carry the fill-in intent', () {
+      final String body = service.substring(
+        service.indexOf('override fun getViewAt'),
+        service.indexOf('private fun constructWidget'),
+      );
+
+      expect(
+        body,
+        contains('widget.setDimensions(getDimensionsFromOptions(context, '
+            'options))'),
+        reason: 'widgets.stack-service#6 — The child widget is sized from the '
+            'parent stack widget\'s AppWidgetOptions, both its landscape and '
+            'portrait RemoteViews are built, the per-item fill-in Intent is '
+            'attached to R.id.button on BOTH, and the combined '
+            'RemoteViews(landscape, portrait) is returned.',
+      );
+      expect(
+        body,
+        contains('val landscapeViews = widget.landscapeRemoteViews'),
+        reason: 'widgets.stack-service#6: landscape first',
+      );
+      expect(
+        body,
+        contains('val portraitViews = widget.portraitRemoteViews'),
+        reason: 'widgets.stack-service#6: then portrait',
+      );
+      expect(
+        body,
+        contains('landscapeViews.setOnClickFillInIntent(R.id.button, intent)\n'
+            '        portraitViews.setOnClickFillInIntent(R.id.button, intent)'),
+        reason: 'widgets.stack-service#6: the fill-in goes on both',
+      );
+      expect(
+        body,
+        contains('val remoteViews = RemoteViews(landscapeViews, portraitViews)'),
+        reason: 'widgets.stack-service#6: and the pair is what is returned',
+      );
+    });
+
+    test('the fill-in intent depends on the type and on what is in the stack',
+        () {
+      final String type = widgetKotlin('StackWidgetType.kt');
+      final String body = type
+          .substring(type.indexOf('fun getIntentFillIn'))
+          .replaceAll(RegExp(r'\s+'), ' ');
+
+      expect(
+        body,
+        contains('val containsNumerical = allHabitsInStackWidget.any { '
+            'it.isNumerical }'),
+        reason: 'widgets.stack-service#7 — The per-item fill-in intent for '
+            'CHECKMARK is showNumberPickerFillIn(habit, today) if ANY habit in '
+            'the stack is numerical, else toggleCheckmarkFillIn(habit, today); '
+            'for all other types it is showHabitFillIn(habit).',
+      );
+      expect(
+        body,
+        contains('CHECKMARK -> if (containsNumerical) { '
+            'WidgetIntents.showNumberPickerFillIn(widgetId, habit, today) } '
+            'else { WidgetIntents.toggleCheckmarkFillIn(widgetId, habit, '
+            'today) }'),
+        reason: 'widgets.stack-service#7: the checkmark branch',
+      );
+      expect(
+        body,
+        contains('FREQUENCY, SCORE, HISTORY, STREAKS, TARGET -> '
+            'WidgetIntents.showHabitFillIn(widgetId, habit)'),
+        reason: 'widgets.stack-service#7: and the other five',
+      );
+    });
+
+    test('the fill-in carries the habit, and the day where upstream sent one',
+        () {
+      final String intents = widgetKotlin('WidgetIntents.kt');
+
+      String fillIn(String name) => intents.substring(
+            intents.indexOf('fun $name'),
+            intents.indexOf('\n\n', intents.indexOf('fun $name')),
+          );
+
+      expect(
+        captureAll(fillIn('showHabitFillIn'),
+            RegExp(r'appendQueryParameter\("(\w+)"')),
+        <String>['habit'],
+        reason: 'widgets.stack-service#8 — showHabitFillIn carries only data = '
+            'habit.uriString; toggleCheckmarkFillIn carries data = '
+            'habit.uriString plus extra timestamp = date.unixTime; '
+            'showNumberPickerFillIn carries extras habit = habit.id and '
+            'timestamp = date.unixTime (no data URI). All three travel as the '
+            'deep link\'s data instead, for the reason WidgetIntents gives: '
+            'the home_widget plugin hands Dart the intent data and nothing '
+            'else. The arguments are the same ones — the habit, and for the '
+            'two checkmark actions the day.',
+      );
+      expect(
+        captureAll(fillIn('toggleCheckmarkFillIn'),
+            RegExp(r'appendQueryParameter\("(\w+)"')),
+        <String>['habit', 'date'],
+        reason: 'widgets.stack-service#8: the toggle fill-in also names the day',
+      );
+      expect(
+        captureAll(fillIn('showNumberPickerFillIn'),
+            RegExp(r'appendQueryParameter\("(\w+)"')),
+        <String>['habit', 'date'],
+        reason: 'widgets.stack-service#8: so does the number picker',
+      );
+      expect(
+        <String, String>{
+          'showHabitFillIn':
+              capture(fillIn('showHabitFillIn'), RegExp(r'uri\((\w+), widgetId\)')),
+          'toggleCheckmarkFillIn': capture(
+              fillIn('toggleCheckmarkFillIn'), RegExp(r'uri\((\w+), widgetId\)')),
+          'showNumberPickerFillIn': capture(fillIn('showNumberPickerFillIn'),
+              RegExp(r'uri\((\w+), widgetId\)')),
+        },
+        <String, String>{
+          'showHabitFillIn': 'ACTION_SHOW',
+          'toggleCheckmarkFillIn': 'ACTION_TOGGLE',
+          'showNumberPickerFillIn': 'ACTION_EDIT',
+        },
+        reason: 'widgets.stack-service#8: and each names the action that '
+            'replaced its receiver',
+      );
+      expect(
+        intents,
+        contains('private fun fillIn(uri: Uri): Intent = Intent().apply { data '
+            '= uri }'),
+        reason: 'widgets.stack-service#8: a fill-in is data and nothing else, '
+            'which is what merges into the mutable template',
+      );
+    });
+
+    test('the loading view is an EmptyWidget sized like the parent', () {
+      final String body = service.substring(
+        service.indexOf('override fun getLoadingView'),
+        service.indexOf('    init {'),
+      );
+
+      expect(
+        body,
+        contains('val widget = EmptyWidget(context, widgetId)'),
+        reason: 'widgets.stack-service#9 — getLoadingView returns an '
+            'EmptyWidget sized from the parent widget\'s options, as combined '
+            'landscape/portrait RemoteViews.',
+      );
+      expect(
+        body,
+        contains('return RemoteViews(landscapeViews, portraitViews)'),
+        reason: 'widgets.stack-service#9: as a combined pair',
+      );
+    });
+
+    test('the factory builds its own intents rather than being handed them',
+        () {
+      expect(
+        service,
+        contains('StackWidgetType.getIntentFillIn(widgetId, widgetType, h, '
+            'habits, document.today)'),
+        reason: 'widgets.stack-service#10 — The factory constructs its own '
+            'PendingIntentFactory(context, IntentFactory()) rather than using '
+            'the DI-provided one. There is no DI graph in the launcher\'s '
+            'process at all, so WidgetIntents is a stateless object and the '
+            'factory reaches it directly — same property, no injection to '
+            'bypass.',
+      );
+      final String code = withoutComments(service);
+      expect(
+        code,
+        isNot(contains('PendingIntentFactory')),
+        reason: 'widgets.stack-service#10: there is no factory object to be '
+            'handed one of',
+      );
+      expect(
+        code,
+        isNot(contains('HabitsApplication')),
+        reason: 'widgets.stack-service#10: and nothing is resolved from an '
+            'application component, because there is none in this process',
+      );
     });
   });
 }

@@ -16,6 +16,7 @@ import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_cache.da
 import 'package:uhabits_core/src/utils/midnight_timer.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
+import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -30,6 +31,17 @@ import '../platform/flutter_alarm_scheduler.dart';
 import '../platform/flutter_notification_tray.dart';
 import '../platform/home_widget_bridge.dart';
 import 'widget_sync.dart';
+
+/// This build's `BuildConfig.VERSION_CODE`.
+///
+/// Android derives `versionCode` from `flutter.versionCode`, which is the `+N`
+/// build number of `version:` in app/pubspec.yaml — so this constant has to
+/// track that number, and test/state/app_startup_test.dart reads the pubspec
+/// back to make sure it still does. `HabitsApplication.onCreate` writes it into
+/// `Preferences.lastAppVersion` on every launch
+/// (`settings.preferences.first-run-and-launch-count#4`); upstream's own value
+/// at the ported revision was 20301.
+const int appVersionCode = 1;
 
 /// The long-lived objects of the application, built once and shared by every
 /// screen.
@@ -155,7 +167,6 @@ class AppScope {
         logging: logging,
       ),
     );
-    tray.startListening();
 
     final scheduler = ReminderScheduler(
       commandRunner,
@@ -168,10 +179,6 @@ class AppScope {
       ),
       WidgetPreferences(preferencesStorage),
     );
-    scheduler.startListening();
-    // Nothing runs when an alarm fires (see DEVIATIONS.md), so this call at
-    // startup, plus the one after every command, is what keeps alarms armed.
-    scheduler.scheduleAll();
 
     final sync = WidgetSync(
       bridge: HomeWidgetBridge(
@@ -184,9 +191,47 @@ class AppScope {
       midnightTimer: midnightTimer,
       preferences: preferences,
     );
+
+    startServices(tray: tray, scheduler: scheduler, sync: sync);
+  }
+
+  /// Steps (7) to (10) of `HabitsApplication.onCreate`, once the three
+  /// singletons exist.
+  ///
+  /// Kept separate from [_startPlatformServices] — which is the half that
+  /// cannot run without plugins — so the sequence itself is exercisable with
+  /// test doubles. Upstream:
+  ///
+  /// ```kotlin
+  /// widgetUpdater.startListening()
+  /// widgetUpdater.scheduleStartDayWidgetUpdate()
+  /// reminderScheduler.startListening()
+  /// notificationTray.startListening()
+  /// taskRunner.execute {
+  ///     reminderScheduler.scheduleAll()
+  ///     widgetUpdater.updateWidgets()
+  /// }
+  /// ```
+  void startServices({
+    required NotificationTray tray,
+    required ReminderScheduler scheduler,
+    required WidgetSync sync,
+  }) {
+    // (7) the widget updater: subscribe, then arm the start-of-day refresh at
+    // getStartOfTomorrowWithOffset(midnightDelayHours, 0).
     sync.startListening();
+    sync.scheduleStartDayWidgetUpdate();
+    // (8) the reminder scheduler, and (9) the notification tray: both join the
+    // command runner, and the tray also joins the preferences.
+    scheduler.startListening();
+    tray.startListening();
 
     _started = _Started(tray: tray, scheduler: scheduler, sync: sync);
+
+    // (10) the only asynchronous step. Nothing runs when an alarm fires (see
+    // DEVIATIONS.md), so this scheduleAll at startup, plus the one after every
+    // command, is what keeps alarms armed.
+    taskRunner.execute(_StartupRefreshTask(scheduler, sync));
   }
 
   _Started? _started;
@@ -226,6 +271,12 @@ class AppScope {
 
     // HabitsApplication.onCreate, in order. Nothing above this line touches a
     // habit, because recompute(), the scores and every matcher read getToday().
+    //
+    // (4) `prefs.lastAppVersion = BuildConfig.VERSION_CODE`, unconditionally
+    // and before today is stamped. Nothing reads it back — upstream keeps it so
+    // that a future migration can tell which build wrote the database — so the
+    // only observable effect is the write itself.
+    preferences.lastAppVersion = appVersionCode;
     setToday(computeToday(preferences.midnightDelayHours, 0));
     for (final habit in habitList) {
       habit.recompute();
@@ -272,11 +323,38 @@ class AppScope {
   }
 
   void close() {
+    // `HabitsApplication.onTerminate`, in its exact order:
+    // reminderScheduler.stopListening(), widgetUpdater.stopListening(),
+    // notificationTray.stopListening() (`commands.command-runner-listeners#8`).
+    // Null in every test that never started the platform services.
+    final started = _started;
+    if (started != null) {
+      started.scheduler.stopListening();
+      started.sync.stopListening();
+      started.tray.stopListening();
+    }
     cache.cancelTasks();
     database.close();
   }
 }
 
+
+/// `taskRunner.execute { reminderScheduler.scheduleAll(); widgetUpdater
+/// .updateWidgets() }` — the last step of `HabitsApplication.onCreate`, in that
+/// order.
+class _StartupRefreshTask extends Task {
+  _StartupRefreshTask(this._scheduler, this._sync);
+
+  final ReminderScheduler _scheduler;
+
+  final WidgetSync _sync;
+
+  @override
+  FutureOr<void> doInBackground() {
+    _scheduler.scheduleAll();
+    return _sync.updateWidgets();
+  }
+}
 
 /// The platform singletons, once [AppScope.startPlatformServices] has run.
 class _Started {

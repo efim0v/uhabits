@@ -303,6 +303,21 @@ class LocalNotificationsAlarmPlugin implements AlarmPlugin {
 
   static bool _timeZonesInitialized = false;
 
+  /// `IntentScheduler.scheduleShowReminder`'s alarm type and delivery mode,
+  /// expressed the way this plugin spells it.
+  ///
+  /// `reminders.exact-alarm-scheduling#4` and `#5`: upstream calls
+  /// `AlarmManager.setExactAndAllowWhileIdle(RTC_WAKEUP, ...)`, which wakes a
+  /// sleeping device and pierces Doze.
+  /// [AndroidScheduleMode.exactAllowWhileIdle] is the plugin's name for
+  /// exactly that pair — it forwards to
+  /// `AlarmManagerCompat.setExactAndAllowWhileIdle(alarmManager,
+  /// AlarmManager.RTC_WAKEUP, ...)`. Every other mode it offers is either
+  /// inexact or an alarm clock, and `#3` says explicitly that no inexact
+  /// fallback is used.
+  static const AndroidScheduleMode reminderScheduleMode =
+      AndroidScheduleMode.exactAllowWhileIdle;
+
   /// Loads the IANA database `zonedSchedule` needs.
   ///
   /// Every instant this class is handed is an absolute UTC epoch value computed
@@ -334,8 +349,9 @@ class LocalNotificationsAlarmPlugin implements AlarmPlugin {
       spec.body,
       when,
       _presenter.detailsFor(spec),
-      // reminders.exact-alarm-scheduling#4: setExactAndAllowWhileIdle.
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      // reminders.exact-alarm-scheduling#4 and #5: setExactAndAllowWhileIdle
+      // with RTC_WAKEUP.
+      androidScheduleMode: reminderScheduleMode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       payload: spec.payload,

@@ -116,11 +116,19 @@ class WidgetDocument(
     val missingHabitIds: List<Long>
 ) {
     /**
-     * `widgets.stack#1` inverted: upstream returns a single-habit widget only
-     * when exactly one habit is bound, and a StackWidget otherwise. Stack
-     * widgets are not reproduced (upstream removed the option to create new
-     * ones), so a document that resolves to anything but one habit is an error.
+     * `widgets.stack#1`: upstream returns a single-habit widget only when
+     * exactly one habit is bound, and a StackWidget for 0 or 2+.
+     *
+     * The unresolved ids are checked first, because upstream's
+     * `getHabitsFromWidgetId` resolves every id — throwing for the whole widget
+     * if one is gone — before anything looks at how many there are.
      */
+    fun isStack(): Boolean {
+        if (missingHabitIds.isNotEmpty()) throw HabitNotFoundException()
+        return habits.size != 1
+    }
+
+    /** The one habit of a non-stack widget. */
     fun singleHabit(): HabitData {
         if (missingHabitIds.isNotEmpty()) throw HabitNotFoundException()
         if (habits.size != 1) throw HabitNotFoundException()

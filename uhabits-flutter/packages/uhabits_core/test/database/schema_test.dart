@@ -104,6 +104,20 @@ final Matcher throwsConstraintViolation = throwsA(
 /// Locates `uhabits-core/assets/main/migrations`, the Kotlin resource directory
 /// whose files `migrations.g.dart` is generated from, by walking up from the
 /// current directory. Returns null outside the monorepo.
+/// The Android module's build script, walked up to from the test's cwd the
+/// same way [findKotlinMigrationsDir] finds the asset folder.
+File? findKotlinAndroidBuildFile() {
+  var dir = Directory.current.absolute;
+  for (var i = 0; i < 10; i++) {
+    final candidate = File('${dir.path}/uhabits-android/build.gradle.kts');
+    if (candidate.existsSync()) return candidate;
+    final parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  return null;
+}
+
 Directory? findKotlinMigrationsDir() {
   var dir = Directory.current.absolute;
   for (var i = 0; i < 10; i++) {
@@ -380,6 +394,50 @@ void main() {
       expect(db.getVersion(), 25,
           reason: 'persistence.migration-runner#7 — and the same database then '
               'migrates all the way to 25');
+    });
+
+    test('the scripts ship with the app: an assets source dir upstream, a '
+        'compiled-in map here', () {
+      // Upstream half: the Android module adds the shared core's asset folder
+      // as a second assets source dir, which is what makes the resource path
+      // `migrations/NN.sql` resolvable through `context.assets.open`.
+      final gradle = findKotlinAndroidBuildFile();
+      expect(gradle, isNotNull,
+          reason: 'persistence.migration-runner#9 — the claim is about '
+              'uhabits-android/build.gradle.kts');
+      expect(
+        gradle!.readAsStringSync(),
+        contains('assets.srcDirs("src/main/assets", "../uhabits-core/assets/main")'),
+        reason: 'persistence.migration-runner#9 — uhabits-android/'
+            'build.gradle.kts adds "../uhabits-core/assets/main" as an assets '
+            'source dir',
+      );
+
+      final dir = findKotlinMigrationsDir();
+      expect(dir, isNotNull,
+          reason: 'persistence.migration-runner#9 — that source dir is the '
+              'folder holding migrations/');
+      final asset = File('${dir!.path}/25.sql');
+      expect(asset.existsSync(), isTrue,
+          reason: 'persistence.migration-runner#9 — so '
+              'context.assets.open("migrations/25.sql") resolves');
+
+      // Port half: Dart has no asset stream in the core, so the generator
+      // copies the same folder into migrations.g.dart and the scripts are
+      // compiled into the library instead of bundled beside it.
+      expect(
+        migrationSql[databaseVersion],
+        asset.readAsStringSync().replaceAll('""', "''"),
+        reason: 'persistence.migration-runner#9 — the port ships the very same '
+            'script for version 25, compiled in rather than opened as an asset',
+      );
+      expect(
+        migrationSql.length,
+        databaseVersion - 8,
+        reason: 'persistence.migration-runner#9 — and every other script the '
+            'assets folder holds ships the same way, so no version of the '
+            'migration path depends on an asset lookup',
+      );
     });
   });
 

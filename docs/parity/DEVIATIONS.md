@@ -356,3 +356,23 @@ broadcast-receiver больше не может запустить активи�
 **Что меняется для пользователя:** Clear is a button on the reminder row instead of a button inside the dialog. The dialog is Material's — Cancel/OK plus a keyboard-entry toggle rather than the fork's Clear/Done — and it is not tinted with the habit colour, so the accent that edit-habit.color-control#5 describes is gone (that rule stays outstanding under color-control). A radial hour/minute dial, 12/24-hour mode, per-minute granularity and keyboard entry are all still there.
 
 **Дата:** 2026-08-23
+
+## Ошибки самого реестра
+
+Реестр снят с кода автоматически и в отдельных местах разошёлся с источником. Там, где
+правило противоречит Kotlin-коду, порт следует **коду**, а правило помечается здесь.
+
+### `show-habit.target-card#19`
+
+**Что утверждает правило:** график цели имеет высоту 300dp, а `baseSize = height / rowCount`.
+
+**Что в коде:** `TargetChart.onMeasure` читает высоту из спецификации только когда
+`layoutParams.height` равен `MATCH_PARENT`, а `show_habit_target.xml` задаёт фиксированные
+300dp. Реальная измеренная высота — `labels.size * 20dp`, и ровно это утверждает соседнее
+правило `charts-canvas-theming.target-chart#3`.
+
+**Решение:** порт воспроизводит поведение кода. Правило #19 оставлено непроцитированным, а не
+«выполнено» ценой утверждения, противоположного источнику. Два агента независимо пришли к
+одному выводу.
+
+**Дата:** 2026-08-23

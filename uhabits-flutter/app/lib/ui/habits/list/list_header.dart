@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:intl/intl.dart' as intl;
 // The core view lives outside uhabits_core's public library; it is imported by
 // path until the package exports lib/src/ui/views.
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart' as intl;
 import 'package:uhabits_core/src/ui/views/habit_list_header.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
+import '../../common/scrollable_chart.dart';
 import '../../core_view.dart';
 
 /// The date strip above the habit list.
@@ -42,6 +44,7 @@ class ListHeader extends StatefulWidget {
     this.today,
     this.theme,
     this.dateFormatter,
+    this.restorationId,
     super.key,
   });
 
@@ -87,6 +90,11 @@ class ListHeader extends StatefulWidget {
   /// Defaults to an [IntlLocalDateFormatter] for the ambient locale.
   final core.LocalDateFormatter? dateFormatter;
 
+  /// `ScrollableChart.onSaveInstanceState` / `onRestoreInstanceState`: the
+  /// scroller position and the reported column survive a restart when the
+  /// header is given a restoration id (`list-habits.header-scrolling#8`).
+  final String? restorationId;
+
   int get effectiveMaxDataOffset =>
       maxDataOffset ?? math.max(maxCheckmarkCount - buttonCount, 0);
 
@@ -94,25 +102,78 @@ class ListHeader extends StatefulWidget {
   State<ListHeader> createState() => _ListHeaderState();
 }
 
-class _ListHeaderState extends State<ListHeader> {
+class _ListHeaderState extends State<ListHeader>
+    with SingleTickerProviderStateMixin, RestorationMixin {
   /// The scroller's bucket size (`list-habits.header-scrolling#2`).
   static final double _columnWidth = ListHeader.columnWidth;
 
+  /// A fling that has slowed to 20 logical pixels a second is over — the same
+  /// tolerance the other scroller in this app uses.
+  static const Tolerance _flingTolerance =
+      Tolerance(distance: 0.5, velocity: 20.0);
+
   /// The scroller position, in pixels. Only the sub-column remainder is real
   /// state: the whole-column part is [_reportedOffset].
-  double _scrollX = 0.0;
+  ///
+  /// `putInt("x", scroller.currX)` / `getInt("x")`
+  /// (`list-habits.header-scrolling#8`). The scroller's `y` is always 0 here,
+  /// as it is upstream: the header never scrolls vertically.
+  final RestorableDouble _scrollXState = RestorableDouble(0.0);
 
   /// The column the scroller believes it is on — `ScrollableChart.dataOffset`.
   /// It is what a new position is compared against before the callback fires,
   /// so a parent that ignores [ListHeader.onDataOffsetChanged] is told about
   /// each column once rather than on every touch event.
-  int _reportedOffset = 0;
+  final RestorableInt _reportedOffsetState = RestorableInt(0);
+
+  late final AnimationController _fling;
+
+  double get _scrollX => _scrollXState.value;
+
+  set _scrollX(double value) => _scrollXState.value = value;
+
+  int get _reportedOffset => _reportedOffsetState.value;
+
+  set _reportedOffset(int value) => _reportedOffsetState.value = value;
+
+  @override
+  String? get restorationId => widget.restorationId;
+
+  @override
+  void restoreState(RestorationBucket? oldBucket, bool initialRestore) {
+    // The properties can only be written once they are registered, which is
+    // why the initial seeding lives here rather than in initState.
+    registerForRestoration(_scrollXState, 'x');
+    registerForRestoration(_reportedOffsetState, 'dataOffset');
+    if (initialRestore && _reportedOffset == 0 && _scrollX == 0.0) {
+      // Nothing came back from the bucket: start where the parent says.
+      _reportedOffset = widget.dataOffset;
+      _scrollX = widget.dataOffset * _columnWidth;
+      return;
+    }
+    // A restored scroller position has to reach the parent, which keeps its
+    // own copy of the offset.
+    final restored = _reportedOffset;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.dataOffset != restored) {
+        widget.onDataOffsetChanged?.call(restored);
+      }
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    _reportedOffset = widget.dataOffset;
-    _scrollX = widget.dataOffset * _columnWidth;
+    _fling = AnimationController.unbounded(vsync: this)
+      ..addListener(_onFlingTick);
+  }
+
+  @override
+  void dispose() {
+    _fling.dispose();
+    _scrollXState.dispose();
+    _reportedOffsetState.dispose();
+    super.dispose();
   }
 
   @override
@@ -144,24 +205,91 @@ class _ListHeaderState extends State<ListHeader> {
     }
   }
 
-  /// `HeaderView.updateScrollDirection`: -1, flipped by the reversed checkmark
-  /// sequence (`list-habits.header-scrolling#4`). The RTL flip is not ported —
-  /// the core view always lays its columns out left to right.
-  int get _scrollDirection => widget.isCheckmarkSequenceReversed ? 1 : -1;
+  /// `HeaderView.updateScrollDirection`: it starts at -1, is multiplied by -1
+  /// when the checkmark sequence is reversed, and again when the layout is
+  /// right-to-left (`list-habits.header-scrolling#4`,
+  /// `list-habits.header-dates#11`).
+  int _scrollDirectionOf(bool isRtl) {
+    var direction = -1;
+    if (widget.isCheckmarkSequenceReversed) direction *= -1;
+    if (isRtl) direction *= -1;
+    return direction;
+  }
+
+  /// The direction the last build resolved, so a gesture that arrives between
+  /// two builds uses the same one the strip was drawn with.
+  int _scrollDirection = -1;
 
   int _offsetOf(double scrollX) => (scrollX / _columnWidth).floor();
 
+  /// `private val maxX get() = maxDataOffset * scrollerBucketSize`.
+  double get _maxX => widget.effectiveMaxDataOffset * _columnWidth;
+
+  void _onHorizontalDragStart(DragStartDetails details) => _fling.stop();
+
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
-    final maxOffset = widget.effectiveMaxDataOffset;
     // Unlike android.widget.Scroller, which lets currX run negative and makes
     // you drag the debt back, the position is clamped to the scrollable range.
     _scrollX = (_scrollX + details.delta.dx * _scrollDirection)
-        .clamp(0.0, maxOffset * _columnWidth);
-    final newOffset = _offsetOf(_scrollX).clamp(0, maxOffset);
+        .clamp(0.0, _maxX);
+    _updateDataOffset();
+  }
+
+  /// `onFling`: `scroller.fling(currX, currY, direction * velocityX / 2, 0, 0,
+  /// maxX, 0, 0)`, animated for as long as the scroller says
+  /// (`list-habits.header-scrolling#6`).
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    final velocity = (details.primaryVelocity ?? 0.0) *
+        _scrollDirection *
+        ScrollableChart.flingVelocityFactor;
+    if (velocity == 0.0) return;
+    _fling.animateWith(
+      FrictionSimulation(
+        ScrollableChart.flingFriction,
+        _scrollX,
+        velocity,
+        tolerance: _flingTolerance,
+      ),
+    );
+  }
+
+  void _onFlingTick() {
+    final x = _fling.value;
+    final clamped = x.clamp(0.0, _maxX);
+    _scrollX = clamped;
+    // `scroller.fling(…, 0, maxX, 0, 0)` bounds the trajectory, and the
+    // scroller reports itself finished as soon as it reaches an edge.
+    if (clamped != x) _fling.stop();
+    _updateDataOffset();
+  }
+
+  /// `updateDataOffset()`: the callback fires only when the quantised column
+  /// actually moved (`list-habits.header-scrolling#7`).
+  void _updateDataOffset() {
+    final newOffset = _offsetOf(_scrollX).clamp(0, widget.effectiveMaxDataOffset);
     if (newOffset != _reportedOffset) {
       _reportedOffset = newOffset;
       widget.onDataOffsetChanged?.call(newOffset);
     }
+  }
+
+  /// `HeaderView.Drawer.draw`: the reversed order flips the columns inside the
+  /// checkmark strip, and an RTL layout then mirrors every rect about the
+  /// canvas width (`list-habits.header-dates#4`, `#5`).
+  core.View _decorate(
+    core.View header,
+    core.Theme theme, {
+    required bool isRtl,
+  }) {
+    var view = header;
+    if (widget.isCheckmarkSequenceReversed) {
+      view = MirroredView(
+        view,
+        stripWidth: widget.buttonCount * theme.checkmarkButtonSize,
+      );
+    }
+    if (isRtl) view = MirroredView.aboutCanvasWidth(view);
+    return view;
   }
 
   core.Theme _themeOf(BuildContext context) =>
@@ -174,6 +302,8 @@ class _ListHeaderState extends State<ListHeader> {
     final theme = widget.theme ?? _themeOf(context);
     final today = widget.today ?? core.getToday();
     final formatter = widget.dateFormatter ?? IntlLocalDateFormatter.of(context);
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
+    _scrollDirection = _scrollDirectionOf(isRtl);
 
     // HabitListHeader's `today` is the newest column, so scrolling back is a
     // subtraction: column i then shows today.minus(i + dataOffset)
@@ -190,18 +320,15 @@ class _ListHeaderState extends State<ListHeader> {
       // scrolling list, which is what HeaderView asks for with
       // requestDisallowInterceptTouchEvent.
       behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: _onHorizontalDragStart,
       onHorizontalDragUpdate: _onHorizontalDragUpdate,
+      onHorizontalDragEnd: _onHorizontalDragEnd,
       child: SizedBox(
         // `HeaderView.onMeasure`: the incoming width, and exactly 48dp high.
         height: theme.checkmarkButtonSize,
         width: double.infinity,
         child: CoreView(
-          view: widget.isCheckmarkSequenceReversed
-              ? MirroredView(
-                  header,
-                  stripWidth: widget.buttonCount * theme.checkmarkButtonSize,
-                )
-              : header,
+          view: _decorate(header, theme, isRtl: isRtl),
         ),
       ),
     );
@@ -226,12 +353,18 @@ class _ListHeaderState extends State<ListHeader> {
 /// over the habit-name column — so the axis here is `2 * width - stripWidth`,
 /// and no second copy of the drawing code is needed.
 class MirroredView extends core.View {
-  MirroredView(this._inner, {required this.stripWidth});
+  MirroredView(this._inner, {required double this.stripWidth});
+
+  /// `if (isRTL()) rect.set(canvas.width - rect.right, …, canvas.width -
+  /// rect.left, …)`: the reflection axis is the canvas itself, not the strip
+  /// (`list-habits.header-dates#5`).
+  MirroredView.aboutCanvasWidth(this._inner) : stripWidth = null;
 
   final core.View _inner;
 
-  /// `buttonCount * R.dimen.checkmarkWidth`.
-  final double stripWidth;
+  /// `buttonCount * R.dimen.checkmarkWidth`, or null to mirror about the whole
+  /// canvas.
+  final double? stripWidth;
 
   @override
   void draw(core.Canvas canvas) =>
@@ -258,10 +391,12 @@ class _MirrorCanvas extends core.Canvas {
 
   final core.Canvas _target;
 
-  final double _stripWidth;
+  final double? _stripWidth;
 
-  /// Reflection about the band `[width - stripWidth, width)`.
-  double _mirrorX(double x) => 2 * _target.getWidth() - _stripWidth - x;
+  /// Reflection about the band `[width - stripWidth, width)`, or about the
+  /// canvas width when there is no band.
+  double _mirrorX(double x) =>
+      2 * _target.getWidth() - (_stripWidth ?? _target.getWidth()) - x;
 
   @override
   double getWidth() => _target.getWidth();
@@ -297,6 +432,7 @@ class _MirrorCanvas extends core.Canvas {
   @override
   void drawText(String text, double x, double y) =>
       _target.drawText(text, _mirrorX(x), y);
+
 
   @override
   void fillRect(double x, double y, double width, double height) =>

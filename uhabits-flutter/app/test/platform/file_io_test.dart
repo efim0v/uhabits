@@ -1095,6 +1095,38 @@ void main() {
               'not an exception');
     });
 
+    test('#4 getSDCardDir is getDir over a single candidate parent', () {
+      const String rule =
+          'platform-glue.dir-finder#4 — FileUtils.getSDCardDir(relativePath) is '
+          'a variant that uses only Environment.getExternalStorageDirectory() '
+          'as the candidate parent. The shared-storage root is Android-only and '
+          'no plugin here exposes it, so the port takes it as an argument; what '
+          'is ported is the rest — the array has exactly one entry and goes '
+          'straight to getDir.';
+
+      final String sdcard = makeDir('sdcard');
+      final String other = makeDir('sdcard-other');
+
+      expect(getSDCardDir('test-screenshots', externalStorageDir: sdcard),
+          '$sdcard/test-screenshots',
+          reason: '$rule It resolves under that one parent…');
+      expect(Directory('$sdcard/test-screenshots').existsSync(), isTrue,
+          reason: '$rule …creating it, exactly as getDir does.');
+      expect(getSDCardDir('test-screenshots', externalStorageDir: sdcard),
+          getDir(<String>[sdcard], 'test-screenshots'),
+          reason: '$rule …and the answer is getDir\'s, verbatim.');
+
+      // "only": an unwritable root is a null, even though another writable
+      // directory exists — there is no fallback list to walk on to.
+      final String missing = '${tempDir.path}/sdcard-missing';
+      expect(getSDCardDir('Logs', externalStorageDir: missing), isNull,
+          reason: '$rule A single non-writable candidate is the whole array, '
+              'so the result is the silent null of #2.');
+      expect(getDir(<String>[missing, other], 'Logs'), '$other/Logs',
+          reason: '$rule The contrast: getDir with a second candidate would '
+              'have found one, which is what makes "only" observable.');
+    });
+
     test('#5 the well-known relative paths', () {
       final String parent = makeDir('dirfinder-names');
       final HabitsDirFinder finder = HabitsDirFinder(<String>[parent]);

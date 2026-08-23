@@ -21,10 +21,13 @@
 ///
 /// The Android lifecycle maps onto the widget lifecycle: `onCreateDialog` is
 /// [State.didChangeDependencies] (the first time round), `onResume` is
-/// [State.initState], `onPause` and `onDismiss` are [State.dispose]. There is
-/// no configuration change to survive, so `ShowHabitActivity`'s re-attachment
-/// of the listener by fragment tag (`history-editor.dialog#13`) has nothing to
-/// port: the listener is a widget field and lives as long as the dialog does.
+/// [State.initState], `onPause` and `onDismiss` are [State.dispose].
+///
+/// `ShowHabitActivity.onResume` re-attaches the date-clicked listener by
+/// looking the fragment up by tag (`history-editor.dialog#13`,
+/// `show-habit.screen-scaffold#7`); [HistoryEditorDialog.current] is that
+/// lookup and [HistoryEditorHandle.setOnDateClickedListener] is the setter it
+/// calls.
 library;
 
 import 'dart:math' as math;
@@ -108,6 +111,18 @@ Future<void> showHistoryEditorDialog(
   return future;
 }
 
+/// What `supportFragmentManager.findFragmentByTag("historyEditor")` hands back
+/// when the editor is still up: the two members `ShowHabitActivity.onResume`
+/// uses, plus the chart itself so a caller can see which listener is attached.
+abstract interface class HistoryEditorHandle {
+  /// `HistoryEditorDialog.setOnDateClickedListener(listener)`: remembers the
+  /// listener and pushes it into the live chart.
+  void setOnDateClickedListener(OnDateClickedListener listener);
+
+  /// The `chart` field. Null only before `onCreateDialog` has run.
+  HistoryChart? get chart;
+}
+
 class HistoryEditorDialog extends StatefulWidget {
   const HistoryEditorDialog({
     super.key,
@@ -134,6 +149,14 @@ class HistoryEditorDialog extends StatefulWidget {
   /// `dialogs.single-current-dialog`: the entry popups route through that one,
   /// and the editor has to survive them (`history-editor.dialog#10`, `#16`).
   static Route<void>? currentDialog;
+
+  /// `supportFragmentManager.findFragmentByTag("historyEditor")`: the live
+  /// dialog, or null when none is up (`history-editor.dialog#13`).
+  ///
+  /// A fragment manager is keyed by tag and holds at most one fragment per
+  /// tag; `clearCurrentDialog` guarantees the same here, so a single slot is
+  /// the whole lookup.
+  static HistoryEditorHandle? current;
 
   /// `HistoryEditorDialog.clearCurrentDialog()`: dismiss whatever editor is
   /// open and empty the slot.
@@ -210,10 +233,21 @@ class HistoryEditorDialog extends StatefulWidget {
 }
 
 class _HistoryEditorDialogState extends State<HistoryEditorDialog>
-    implements CommandRunnerListener {
+    implements CommandRunnerListener, HistoryEditorHandle {
   HistoryChart? _chart;
 
-  late final OnDateClickedListener _listener;
+  late OnDateClickedListener _listener;
+
+  @override
+  HistoryChart? get chart => _chart;
+
+  /// `fun setOnDateClickedListener(listener) { onDateClickedListener =
+  /// listener; chart?.onDateClickedListener = listener }`.
+  @override
+  void setOnDateClickedListener(OnDateClickedListener listener) {
+    _listener = listener;
+    _chart?.onDateClickedListener = listener;
+  }
 
   @override
   void initState() {
@@ -228,6 +262,9 @@ class _HistoryEditorDialogState extends State<HistoryEditorDialog>
           preferences: widget.preferences,
           screen: _HistoryEditorScreen(this),
         );
+    // The fragment joins the fragment manager under its tag as soon as it is
+    // added, which is what makes `findFragmentByTag` find it.
+    HistoryEditorDialog.current = this;
     // `onResume`: addListener (`history-editor.dialog#5`).
     widget.commandRunner.addListener(this);
   }
@@ -255,6 +292,11 @@ class _HistoryEditorDialogState extends State<HistoryEditorDialog>
   void dispose() {
     // `onPause`: removeListener (`history-editor.dialog#5`).
     widget.commandRunner.removeListener(this);
+    // The fragment leaves the manager with the dialog, so the tag lookup goes
+    // back to null.
+    if (identical(HistoryEditorDialog.current, this)) {
+      HistoryEditorDialog.current = null;
+    }
     super.dispose();
   }
 

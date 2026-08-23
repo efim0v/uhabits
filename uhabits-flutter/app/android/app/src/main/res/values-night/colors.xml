@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Port of uhabits-android/src/main/res/values-night/colors.xml, whose entire
+  content is this single override.
+
+  settings.theme.system-night-window-background#2: the -night qualifier follows
+  the SYSTEM dark-mode setting, which is independent of the app's own
+  automatic/light/dark preference — so the window painted before any Dart code
+  runs is dark whenever the system is dark.
+-->
+<resources>
+    <color name="color_background">@color/grey_900</color>
+</resources>

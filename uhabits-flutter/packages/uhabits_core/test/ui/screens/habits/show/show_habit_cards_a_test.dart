@@ -30,8 +30,13 @@ import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/show_habit.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/bar_card.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/frequency_card.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/notes_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/overview_card.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/score_card.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/streak_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/subtitle_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 import 'package:uhabits_core/src/ui/views/number_button.dart';
@@ -1074,6 +1079,30 @@ void main() {
         overview: OverviewCardPresenter.buildState(habit: habit, theme: _theme),
         notes: NotesCardPresenter.buildState(habit: habit),
         target: _buildTargetState(habit),
+        streaks: StreakCartPresenter.buildState(habit, _theme),
+        scores: ScoreCardPresenter.buildState(
+          habit: habit,
+          firstWeekday: _preferences.firstWeekdayInt,
+          spinnerPosition: _preferences.scoreCardSpinnerPosition,
+          theme: _theme,
+        ),
+        frequency: FrequencyCardPresenter.buildState(
+          habit: habit,
+          firstWeekday: _preferences.firstWeekday,
+          theme: _theme,
+        ),
+        history: HistoryCardPresenter.buildState(
+          habit: habit,
+          firstWeekday: _preferences.firstWeekday,
+          theme: _theme,
+        ),
+        bar: BarCardPresenter.buildState(
+          habit: habit,
+          firstWeekday: _preferences.firstWeekdayInt,
+          numericalSpinnerPosition: _preferences.barCardNumericalSpinnerPosition,
+          boolSpinnerPosition: _preferences.barCardBoolSpinnerPosition,
+          theme: _theme,
+        ),
         theme: _theme,
       );
 

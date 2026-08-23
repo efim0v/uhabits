@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is on -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is on.
+
+         settings.theme.system-night-window-background#5: upstream commit
+         7e993e17 re-parented AppBaseThemeDark from a ThemeOverlay to a full
+         theme, so dark styling inherits nothing from the light theme it does
+         not override. These two styles are full themes for the same reason:
+         their parent is a dark platform theme, not an overlay on the light
+         one, and every attribute the light pair sets is set again here. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:colorBackground">@color/color_background</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
         <!-- Show a splash screen on the activity. Automatically removed when
              the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
@@ -13,6 +22,8 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:colorBackground">@color/color_background</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
 </resources>

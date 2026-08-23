@@ -20,6 +20,7 @@ import '../models/habit.dart';
 import '../models/habit_type.dart';
 import '../preferences/preferences.dart';
 import '../tasks/task_runner.dart';
+import '../time/date_utils.dart';
 import '../time/local_date.dart';
 
 /// Port of the nested Kotlin interface `NotificationTray.SystemTray`.
@@ -280,15 +281,28 @@ abstract interface class ReminderSchedulerApi {
   /// re-reads the snooze preference for each habit, it is also where a snooze
   /// that has just expired gets discarded.
   void scheduleAll();
+
+  /// Persists a snooze of [minutes] for [habit] and re-arms its alarm at the
+  /// snoozed instant. Because the instant is written to `WidgetPreferences`,
+  /// every later [scheduleAll] re-honours it until it expires.
+  void snoozeReminder(Habit habit, int minutes);
+
+  /// Arms [habit]'s alarm at an arbitrary instant, writing nothing. This is
+  /// the "snooze until a custom time" path, and the reason a custom-time
+  /// snooze is overwritten by the next [scheduleAll].
+  void scheduleAtTime(Habit habit, int reminderTime);
 }
 
-/// Partial port of
+/// Port of
 /// uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderController.kt.
 ///
-/// Only the two entry points that belong to this slice are ported: firing a
-/// reminder and dismissing one. `onBootCompleted`, `onSnoozePressed`,
-/// `onSnoozeDelayPicked` and `onSnoozeTimePicked` belong to the reminder
-/// scheduling slices and to the Android receiver layer.
+/// Every entry point `ReminderReceiver` and `SnoozeDelayPickerActivity` reach
+/// is here except `onSnoozePressed`, whose whole body is the Android intent
+/// that starts the translucent picker activity: `context.sendBroadcast(
+/// ACTION_CLOSE_SYSTEM_DIALOGS)` followed by `startActivity(...)` with
+/// `habit.uriString` as data. That is platform glue with no core meaning, so
+/// the app package owns it and hands the answer back through
+/// [onSnoozeDelayPicked] / [onSnoozeTimePicked].
 class ReminderController {
   ReminderController(
     this._reminderScheduler,
@@ -302,11 +316,46 @@ class ReminderController {
 
   final Preferences _preferences;
 
+  /// The whole body of `onBootCompleted()`: re-arm everything.
+  ///
+  /// Nothing else is needed, because snooze times live in preferences and
+  /// therefore survive the reboot; `scheduleAll` re-reads each one and keeps
+  /// it while it is still in the future.
+  void onBootCompleted() {
+    _reminderScheduler.scheduleAll();
+  }
+
   /// Show first, re-arm second. The second call is what schedules tomorrow's
   /// alarm.
   void onShowReminder(Habit habit, LocalDate date, int reminderTime) {
     _notificationTray.show(habit, date, reminderTime);
     _reminderScheduler.scheduleAll();
+  }
+
+  /// The user picked one of the fixed snooze delays.
+  ///
+  /// Snooze first, cancel second — the order matters, because
+  /// `snoozeReminder` re-schedules the habit and the cancel that follows must
+  /// not take the freshly armed alarm down with the notification.
+  void onSnoozeDelayPicked(Habit habit, int delayInMinutes) {
+    _reminderScheduler.snoozeReminder(habit, delayInMinutes);
+    _notificationTray.cancel(habit);
+  }
+
+  /// The user picked a custom wall-clock time.
+  ///
+  /// Nothing is persisted, so the next `scheduleAll()` — after a command, an
+  /// app start or a reboot — silently replaces this one-off alarm with the
+  /// habit's regular reminder. The asymmetry against [onSnoozeDelayPicked] is
+  /// upstream behaviour and is kept.
+  ///
+  /// Kotlin's parameter is `Habit?` and its body dereferences it with `!!`, so
+  /// a null habit throws rather than being ignored; Dart's non-nullable
+  /// parameter is the same contract stated in the type.
+  void onSnoozeTimePicked(Habit habit, int hour, int minute) {
+    final time = DateUtils.getUpcomingTimeInMillis(hour, minute);
+    _reminderScheduler.scheduleAtTime(habit, time);
+    _notificationTray.cancel(habit);
   }
 
   /// Reached through the notification's delete intent.

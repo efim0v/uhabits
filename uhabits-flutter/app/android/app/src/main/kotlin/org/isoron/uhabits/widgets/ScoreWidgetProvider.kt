@@ -22,6 +22,13 @@ import android.content.Context
 
 /** `widgets.registration#1`: launcher label 'Score'. */
 class ScoreWidgetProvider : BaseWidgetProvider() {
-    override fun buildWidget(context: Context, widgetId: Int, document: WidgetDocument) =
+    /** `widgets.stack#1`: what a multi-habit document becomes. */
+    override val stackWidgetType get() = StackWidgetType.SCORE
+
+    override fun buildSingleWidget(
+        context: Context,
+        widgetId: Int,
+        document: WidgetDocument
+    ) =
         ScoreWidget(context, widgetId, document.singleHabit(), document.today)
 }

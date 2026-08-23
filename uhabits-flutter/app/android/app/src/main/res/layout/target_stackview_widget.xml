@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/layout/target_stackview_widget.xml.
+  ~
+  ~ widgets.stack#4: a FrameLayout holding a looping StackView over a full-bleed
+  ~ empty-state TextView (white, bold, 16sp, centred).
+  ~ widgets.stack#5: the label is upstream's @string/streaks_stack_widget, inlined
+  ~ because this project has no strings.xml.
+  ~
+  ~ Upstream points this layout at R.string.streaks_stack_widget rather than
+  ~ a target-specific string. It is a bug (widgets.stack#5) and it is
+  ~ reproduced, not corrected.
+  -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <StackView
+        android:id="@+id/targetStackWidgetView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:loopViews="true" />
+
+    <TextView
+        android:id="@+id/targetStackWidgetEmptyView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="Streaks Stack Widget"
+        android:textColor="#ffffff"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+</FrameLayout>

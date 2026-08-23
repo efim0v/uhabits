@@ -4,6 +4,20 @@ import 'dart:ui' as ui;
 import 'package:flutter/painting.dart' as painting;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
+/// A [core.Canvas] that can stroke the outline of a glyph.
+///
+/// `org.isoron.platform.gui.Canvas` has no text-style concept — every Android
+/// view that needs one reaches for `Paint.Style` directly, which is what
+/// `CheckmarkButtonView` does to draw a hollow YES_AUTO check. Rather than
+/// widen the shared interface, the capability is declared here and probed for
+/// with an `is` check, so a canvas that cannot stroke text simply fills the
+/// glyph instead.
+abstract interface class TextOutlineCanvas {
+  /// Strokes the outline of [text] with the current colour and stroke width,
+  /// anchoring it exactly as [core.Canvas.drawText] does.
+  void drawTextOutline(String text, double x, double y);
+}
+
 /// Draws the core's charts onto a Flutter canvas.
 ///
 /// Every chart in `uhabits_core` is written against [core.Canvas] and knows
@@ -13,7 +27,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 ///
 /// Flutter's logical pixels are already density-independent, so unlike
 /// AndroidCanvas and JavaCanvas this backend needs no density conversion.
-class FlutterCanvas extends core.Canvas {
+class FlutterCanvas extends core.Canvas implements TextOutlineCanvas {
   FlutterCanvas(this._canvas, this._size);
 
   final ui.Canvas _canvas;
@@ -135,15 +149,30 @@ class FlutterCanvas extends core.Canvas {
     painter.paint(_canvas, ui.Offset(left, y - painter.height / 2));
   }
 
+  /// [TextOutlineCanvas.drawTextOutline].
+  @override
+  void drawTextOutline(String text, double x, double y) {
+    final painter = _layout(text, foreground: _strokePaint);
+    final left = switch (_textAlign) {
+      core.TextAlign.left => x,
+      core.TextAlign.center => x - painter.width / 2,
+      core.TextAlign.right => x - painter.width,
+    };
+    painter.paint(_canvas, ui.Offset(left, y - painter.height / 2));
+  }
+
   @override
   double measureText(String text) => _layout(text).width;
 
-  painting.TextPainter _layout(String text) {
+  painting.TextPainter _layout(String text, {ui.Paint? foreground}) {
     final painter = painting.TextPainter(
       text: painting.TextSpan(
         text: text,
         style: painting.TextStyle(
-          color: _color,
+          // `TextStyle` rejects a colour and a foreground paint together; the
+          // paint carries the colour in that case.
+          color: foreground == null ? _color : null,
+          foreground: foreground,
           fontSize: _fontSize,
           fontFamily: _font == core.Font.fontAwesome ? 'FontAwesome' : 'NotoSans',
           fontWeight:

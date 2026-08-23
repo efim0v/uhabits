@@ -26,8 +26,6 @@
 ///    per-locale translation status has no counterpart to check.
 ///  - rule 15 (`pickers.xml`): those 21 resources are dimensions and floats of
 ///    the Android date-time picker widget, which the port does not use.
-///  - rule 8 of `platform-glue.locale-config` (instrumentation forcing en/US):
-///    there is no instrumentation harness.
 ///  - rule 3 of `platform-glue.rtl-layout` (the third factor of
 ///    `HeaderView.updateScrollDirection`). The first two — the base -1 and the
 ///    flip from `isCheckmarkSequenceReversed` — are asserted in
@@ -983,6 +981,46 @@ void main() {
         reason: 'platform-glue.locale-config#11: every other settings string '
             'is a localized message',
       );
+    });
+
+    testWidgets('#8 the test harness runs at en/US, so rendered copy is '
+        'deterministic', (WidgetTester tester) async {
+      const String rule =
+          'platform-glue.locale-config#8 — Instrumentation tests force the '
+          'locale to en/US via BaseAndroidTest.setLocale("en", "US") plus '
+          'Locale.setDefault. There is no instrumentation harness here, but '
+          'the reason the Kotlin one did it applies unchanged: a rendered-view '
+          'assertion is only stable if the locale is. `flutter test` pins '
+          'PlatformDispatcher.locale to en_US for every test, which is the '
+          'same guarantee arrived at by a different route — and it is why no '
+          'widget test in this repository passes a `locale:` unless it is '
+          'testing localization itself.';
+
+      expect(tester.platformDispatcher.locale, const Locale('en', 'US'),
+          reason: rule);
+      expect(tester.platformDispatcher.locales.first, const Locale('en', 'US'),
+          reason: '$rule The resolution list starts there too, so a delegate '
+              'that walks it lands on English.');
+
+      // And that really is what the app resolves to: an app built the way
+      // lib/main.dart builds it, with no `locale:`, answers in English.
+      late Locale resolved;
+      late L10n l10n;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: L10n.localizationsDelegates,
+        supportedLocales: L10n.supportedLocales,
+        home: Builder(builder: (BuildContext context) {
+          resolved = Localizations.localeOf(context);
+          l10n = L10n.of(context);
+          return const SizedBox.shrink();
+        }),
+      ));
+
+      expect(resolved.languageCode, 'en', reason: rule);
+      expect(l10n.mainActivityTitle, template['mainActivityTitle'],
+          reason: '$rule …so every string a widget test reads is the '
+              'template value, not a translation.');
+      expect(l10n.mainActivityTitle, 'Habits', reason: rule);
     });
   });
 

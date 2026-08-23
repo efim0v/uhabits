@@ -76,6 +76,12 @@ class WidgetSync implements CommandRunnerListener {
 
   final HomeWidgetBridge _bridge;
 
+  /// The publisher this updater drives. Exposed because the widget picker
+  /// writes through its [WidgetRegistry] — `HabitPickerDialog.confirm()` calls
+  /// `widgetPreferences.addWidget` and then `widgetUpdater.updateWidgets()`,
+  /// and both halves live behind this one object.
+  HomeWidgetBridge get bridge => _bridge;
+
   final CommandRunner _commandRunner;
 
   final TaskRunner _taskRunner;

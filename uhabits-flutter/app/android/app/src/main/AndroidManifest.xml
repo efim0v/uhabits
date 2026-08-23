@@ -20,13 +20,27 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- ================================================================== -->
+    <!-- app-identity.launcher-icon#1: the launcher entry is labelled         -->
+    <!-- @string/main_activity_title ("Habits"), NOT the store/about name     -->
+    <!-- @string/app_name ("Loop Habit Tracker"), and its icon is             -->
+    <!-- @mipmap/ic_launcher — which resolves to the adaptive icon on API     -->
+    <!-- 26+. Both strings are localized resources, so the label follows the  -->
+    <!-- Android 13 per-app language setting. The activity repeats the label, -->
+    <!-- as upstream's ListHabitsActivity and .MainActivity alias do.         -->
+    <!--                                                                      -->
+    <!-- app-identity.launcher-icon#5: no android:roundIcon and no            -->
+    <!-- <shortcuts> meta-data, so launchers get no round variant and the app -->
+    <!-- exposes no static or dynamic app shortcuts.                          -->
+    <!-- ================================================================== -->
     <application
-        android:label="uhabits"
+        android:label="@string/main_activity_title"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:label="@string/main_activity_title"
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
@@ -53,6 +67,39 @@
             android:value="2" />
 
         <!-- ============================================================== -->
+        <!-- Rescheduling reminders after a reboot                          -->
+        <!--                                                                -->
+        <!-- Port of the ReminderReceiver declaration in                    -->
+        <!-- uhabits-android/src/main/AndroidManifest.xml, whose only       -->
+        <!-- intent-filter is BOOT_COMPLETED                                -->
+        <!-- (reminders.boot-reschedule#1, intents.actions-and-extras#15).  -->
+        <!--                                                                -->
+        <!-- Upstream the receiver calls                                    -->
+        <!-- ReminderController.onBootCompleted(), which is exactly         -->
+        <!-- reminderScheduler.scheduleAll() (reminders.boot-reschedule#2,  -->
+        <!-- #3). This port has no fire-time hook: an alarm IS the finished -->
+        <!-- notification, handed to the OS by zonedSchedule. Android drops -->
+        <!-- every such alarm on reboot, and                                -->
+        <!-- ScheduledNotificationBootReceiver is what puts them all back — -->
+        <!-- the same "re-arm everything that was armed" pass, run by the   -->
+        <!-- plugin instead of by the core scheduler.                       -->
+        <!--                                                                -->
+        <!-- flutter_local_notifications does NOT declare this receiver in  -->
+        <!-- its own manifest; without the block below, reminders simply    -->
+        <!-- stop after the first reboot.                                   -->
+        <!-- ============================================================== -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ============================================================== -->
         <!-- Home-screen widgets                                            -->
         <!--                                                                -->
         <!-- Port of the widget block in                                    -->
@@ -66,11 +113,18 @@
         <!-- widgets.registration#8: every receiver is exported and         -->
         <!-- declares only the APPWIDGET_UPDATE filter.                     -->
         <!--                                                                -->
-        <!-- widgets.registration#7 (the StackWidgetService) is NOT         -->
-        <!-- reproduced: upstream removed the option to create stack        -->
-        <!-- widgets, so there is nothing left to bind a RemoteViewsService -->
-        <!-- to.                                                            -->
+        <!-- widgets.registration#7: StackWidgetService, non-exported and    -->
+        <!-- guarded by BIND_REMOTEVIEWS so only the system may bind it.    -->
+        <!-- Upstream removed the option to *create* stack widgets, but a   -->
+        <!-- placement whose stored preference holds anything other than    -->
+        <!-- exactly one habit id is still one, and those survive an app    -->
+        <!-- update — including this port. See StackWidget.kt.              -->
         <!-- ============================================================== -->
+
+        <service
+            android:name=".widgets.StackWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
         <!-- widgets.registration#6: the three configure activities. -->
         <activity

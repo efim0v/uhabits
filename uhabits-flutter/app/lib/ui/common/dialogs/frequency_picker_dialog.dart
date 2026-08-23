@@ -12,8 +12,11 @@
 /// Two things the Android version does that a Flutter dialog cannot:
 ///
 ///  * `populateViews()` runs on every `onResume`, not only on first show
-///    (`frequency-picker.options#9`). There is no resume here; the state is
-///    derived once, in [State.initState], from the frequency passed in.
+///    (`frequency-picker.options#9`). There is no resume here, so the closest
+///    equivalent is used: the state is derived in [State.initState] *and*
+///    re-derived in `didUpdateWidget`, so any reconfiguration of the dialog
+///    snaps the checked row back to the one its numerator and denominator
+///    imply, exactly as a resume does upstream.
 ///  * clicking a radio calls `requestFocus()` on the radio *and*
 ///    `setSelection(text.length)` on the row's first field
 ///    (`frequency-picker.options#6`). Both happen below: the caret moves
@@ -182,6 +185,17 @@ class _FrequencyPickerDialogState extends State<FrequencyPickerDialog> {
     _yDaysDenominatorNode.addListener(
       () => _onFocus(FrequencyRow.xTimesPerYDays),
     );
+    _populateViews();
+  }
+
+  /// `onResume()` calls `populateViews()` unconditionally, so the checked row
+  /// is re-derived from the current numerator and denominator every time the
+  /// dialog comes back — not only on first show
+  /// (`frequency-picker.options#9`). A rebuild of the widget is the closest
+  /// thing a Flutter dialog has to a resume.
+  @override
+  void didUpdateWidget(FrequencyPickerDialog oldWidget) {
+    super.didUpdateWidget(oldWidget);
     _populateViews();
   }
 

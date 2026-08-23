@@ -21,6 +21,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/app_database.dart';
+import 'package:uhabits/platform/bug_reporter.dart';
 import 'package:uhabits/platform/flutter_files.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/settings_model.dart' show SettingsResult;
@@ -287,6 +288,43 @@ void main() {
       }
     });
 
+    test('platform-glue.time-and-date-formatting#4 — the bug report log '
+        'filename uses the same pattern, built independently', () {
+      const rule = 'platform-glue.time-and-date-formatting#4 — '
+          'Bug report log filenames use SimpleDateFormat("yyyy-MM-dd HHmmss", '
+          'Locale.US) — the same pattern, constructed independently.';
+
+      // Same shape as the backup name: four-digit year, dashes in the date,
+      // nothing between the time fields.
+      expect(
+        FlutterBugReporter.logFileName(DateTime.now()),
+        matches(RegExp(r'^Log \d{4}-\d{2}-\d{2} \d{6}\.txt$')),
+        reason: '$rule — String.format("%s/Log %s.txt", dir.path, date)',
+      );
+      final DateTime local = DateTime(2015, 1, 26, 7, 4, 9);
+      expect(FlutterBugReporter.logFileName(local),
+          'Log 2015-01-26 070409.txt', reason: rule);
+      expect(FlutterBugReporter.logFileName(DateTime(2015, 12, 31, 23, 59, 59)),
+          'Log 2015-12-31 235959.txt', reason: rule);
+
+      // "constructed independently" is not cosmetic. DateFormats.fromSkeleton,
+      // which the backup name goes through, forces the formatter's time zone to
+      // UTC; AndroidBugReporter builds a bare SimpleDateFormat and so keeps the
+      // device's default zone. The two therefore disagree on one instant
+      // whenever the device is not on UTC.
+      final DateTime now = DateTime.now();
+      expect(FlutterBugReporter.logFileName(now), 'Log ${_format(now)}.txt',
+          reason: '$rule — the log name is the local wall clock…');
+      expect(backupDateString(now), _format(now.toUtc()),
+          reason: '$rule — …while the backup name is the UTC one.');
+      if (now.timeZoneOffset != Duration.zero) {
+        expect(FlutterBugReporter.logFileName(now),
+            isNot('Log ${backupDateString(now)}.txt'),
+            reason: '$rule — which is the whole content of "constructed '
+                'independently"');
+      }
+    });
+
     test('show-habit.export-csv#4 the archive goes to the share sheet as '
         'application/zip', () async {
       final scope = openScope();
@@ -467,4 +505,15 @@ void main() {
               'every path out of the import');
     });
   });
+}
+
+/// `SimpleDateFormat("yyyy-MM-dd HHmmss")` spelled out independently of the
+/// implementation, so the assertions above are not tautologies. It formats the
+/// wall clock of the value it is given, which is what SimpleDateFormat does
+/// once its time zone has been decided.
+String _format(DateTime value) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${value.year.toString().padLeft(4, '0')}-${two(value.month)}-'
+      '${two(value.day)} '
+      '${two(value.hour)}${two(value.minute)}${two(value.second)}';
 }

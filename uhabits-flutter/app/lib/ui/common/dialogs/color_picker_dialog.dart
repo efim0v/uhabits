@@ -20,11 +20,15 @@
 ///
 ///  * the progress spinner that stands in for the grid until the colours
 ///    arrive (`color-picker.dialog#11`) — the palette is known synchronously
-///    here, so the spinner would never be visible;
+///    here, so the grid is on screen from the first frame and the spinner
+///    would never be visible;
 ///  * `com.android.colorpicker.HsvColorComparator`, dead upstream
-///    (`color-picker.dialog#13`);
+///    (`color-picker.dialog#13`): the swatches are laid out in palette order,
+///    never sorted;
 ///  * the instance-state round trip (`color-picker.dialog#12`), which has no
-///    Flutter analogue: the dialog is rebuilt from its arguments.
+///    Flutter analogue: the dialog is rebuilt from its arguments, so the
+///    palette and the selected colour survive a configuration change without
+///    a Bundle.
 library;
 
 // `Color` below is Flutter's; the core one is only ever reached through the
@@ -77,9 +81,30 @@ Future<core.PaletteColor?> showColorPickerDialog(
 /// The dialog itself, exposed so it can be hosted directly by a test or by a
 /// screen that manages its own route.
 class ColorPickerDialog extends StatelessWidget {
-  const ColorPickerDialog({super.key, this.selected});
+  const ColorPickerDialog({
+    super.key,
+    this.selected,
+    this.paletteSize = ColorPickerMetrics.paletteSize,
+  });
 
   final core.PaletteColor? selected;
+
+  /// How many colours the grid holds.
+  ///
+  /// `ColorPickerDialog.newInstance` takes the palette as an `IntArray`, so a
+  /// shorter one is representable; the app always hands over the full 20, and
+  /// the only thing a shorter one changes is that the last row needs padding
+  /// (`color-picker.dialog#4`).
+  final int paletteSize;
+
+  /// `ColorStateDrawable` multiplies the colour's HSV value component by 0.70
+  /// while the swatch is pressed or focused (`color-picker.dialog#6`).
+  static const double pressedValueMultiplier = 0.70;
+
+  static Color darken(Color color) {
+    final hsv = HSVColor.fromColor(color);
+    return hsv.withValue(hsv.value * pressedValueMultiplier).toColor();
+  }
 
   /// The palette index shown at row [row], column [column] of the grid.
   ///
@@ -106,7 +131,7 @@ class ColorPickerDialog extends StatelessWidget {
     final l10n = L10n.of(context);
     final theme = coreThemeOf(context);
     const columns = ColorPickerMetrics.columns;
-    final rows = (ColorPickerMetrics.paletteSize / columns).ceil();
+    final rows = (paletteSize / columns).ceil();
 
     return AlertDialog(
       // R.string.color_picker_default_title = "Change color"
@@ -140,9 +165,9 @@ class ColorPickerDialog extends StatelessWidget {
 
     // "Create blank views to fill the row if the last row has not been
     // filled" (`color-picker.dialog#4`). With 20 colours and 4 columns this
-    // never runs, but a shorter palette would keep the grid rectangular.
-    if (index >= ColorPickerMetrics.paletteSize) {
-      return const _BlankSwatch();
+    // never runs, but a shorter palette keeps the grid rectangular.
+    if (index >= paletteSize) {
+      return _BlankSwatch(key: ValueKey<String>('color_swatch_blank_$index'));
     }
 
     final isSelected = selected?.paletteIndex == index;
@@ -179,15 +204,6 @@ class _ColorSwatch extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  /// `ColorStateDrawable` multiplies the colour's HSV value component by 0.70
-  /// while the swatch is pressed or focused (`color-picker.dialog#6`).
-  static const double pressedValueMultiplier = 0.70;
-
-  static Color darken(Color color) {
-    final hsv = HSVColor.fromColor(color);
-    return hsv.withValue(hsv.value * pressedValueMultiplier).toColor();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -204,7 +220,10 @@ class _ColorSwatch extends StatelessWidget {
             shape: const CircleBorder(),
             child: InkWell(
               customBorder: const CircleBorder(),
-              highlightColor: darken(color),
+              // Pressed and focused both darken the swatch
+              // (`color-picker.dialog#6`).
+              highlightColor: ColorPickerDialog.darken(color),
+              focusColor: ColorPickerDialog.darken(color),
               onTap: onTap,
               child: isSelected
                   ? Icon(
@@ -226,7 +245,7 @@ class _ColorSwatch extends StatelessWidget {
 
 /// `ColorPickerPalette.createBlankSpace` — an empty view of the same size.
 class _BlankSwatch extends StatelessWidget {
-  const _BlankSwatch();
+  const _BlankSwatch({super.key});
 
   @override
   Widget build(BuildContext context) => const Padding(

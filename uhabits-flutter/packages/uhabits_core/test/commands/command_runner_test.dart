@@ -25,6 +25,7 @@ import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/model_factory.dart';
 import 'package:uhabits_core/src/models/model_observable.dart';
 import 'package:uhabits_core/src/models/palette_color.dart';
+import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/test/habit_fixtures.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
@@ -1844,6 +1845,78 @@ void main() {
         <String>['recompute(Beta)', 'resort'],
         reason: 'commands.direct-run-bypass#5 — exactly one resort() follows '
             'the final recompute()',
+      );
+    });
+
+    // Port of
+    // uhabits-android/src/androidTest/.../performance/PerformanceTest.kt, whose
+    // two @Ignore'd @Test(timeout = 5000) methods each open an explicit
+    // transaction on the SQLModelFactory's database and call run() directly.
+    test('benchmarkCreateHabitCommand: 1000 CreateHabitCommand.run() calls '
+        'inside one explicit transaction', () {
+      final db = openMigratedDatabase();
+      addTearDown(db.close);
+      final factory = SQLModelFactory(db);
+      final list = factory.buildHabitList();
+      final listener = _MinimalCommandListener();
+      commandRunner.addListener(listener);
+
+      db.begin();
+      for (var i = 0; i <= 999; i++) {
+        final model = factory.buildHabit();
+        CreateHabitCommand(factory, list, model).run();
+      }
+      db.commit();
+
+      expect(
+        db.queryInt('select count(*) from Habits'),
+        1000,
+        reason: 'commands.direct-run-bypass#6 — PerformanceTest calls '
+            'CreateHabitCommand(...).run() directly inside an explicit '
+            'db.begin()/db.commit() transaction, 1000 times, confirming that '
+            'direct execution is a supported usage',
+      );
+      expect(
+        listener.received,
+        isEmpty,
+        reason: 'commands.direct-run-bypass#6 — bypassing the runner still '
+            'notifies nobody, however many commands are run',
+      );
+    });
+
+    test('benchmarkCreateRepetitionCommand: 5000 CreateRepetitionCommand.run() '
+        'calls inside one explicit transaction', () {
+      final db = openMigratedDatabase();
+      addTearDown(db.close);
+      final factory = SQLModelFactory(db);
+      final list = factory.buildHabitList();
+      final listener = _MinimalCommandListener();
+      commandRunner.addListener(listener);
+      final habit = HabitFixtures(factory, list).createEmptyHabit();
+      list.add(habit);
+
+      db.begin();
+      var date = LocalDate.ymd(2000, 1, 1);
+      for (var i = 0; i <= 4999; i++) {
+        CreateRepetitionCommand(list, habit, date, 1, '').run();
+        date = date.plus(1);
+      }
+      db.commit();
+
+      expect(
+        db.queryInt(
+          'select count(*) from Repetitions where habit = ${habit.id}',
+        ),
+        5000,
+        reason: 'commands.direct-run-bypass#6 — and 5000 '
+            'CreateRepetitionCommand(...).run() calls, likewise directly and '
+            'inside an explicit db.begin()/db.commit() transaction',
+      );
+      expect(
+        listener.received,
+        isEmpty,
+        reason: 'commands.direct-run-bypass#6 — direct execution is a '
+            'supported usage, and it still notifies nobody',
       );
     });
   });

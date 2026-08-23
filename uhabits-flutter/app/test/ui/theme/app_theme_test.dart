@@ -334,6 +334,62 @@ void main() {
       expect(amoled.colorScheme.secondary, dark.colorScheme.secondary,
           reason: 'settings.theme.pure-black#4');
     });
+
+    test('#6 flipping the flag repaints immediately, in every night mode', () {
+      const String rule =
+          'settings.theme.pure-black#6 — ListHabitsActivity captures pureBlack '
+          '= prefs.isPureBlackEnabled in onCreate, and in onResume restarts '
+          'itself with a fade if and only if prefs.theme == THEME_DARK AND '
+          'prefs.isPureBlackEnabled != the captured value. Toggling pure black '
+          'while the theme is AUTOMATIC (even if the system is dark) does NOT '
+          'trigger that automatic restart. The port has no activity to restart: '
+          'ThemeModel.apply reinstalls the theme in place and notifies, so the '
+          'tree rebuilds with the new palette (recorded as a deviation on the '
+          'settings domain). What survives is the *effect* the restart existed '
+          'to produce, and one behaviour change worth naming: the AUTOMATIC '
+          'case is no longer stale.';
+
+      // THEME_DARK — the one case Android did restart in.
+      final ThemeModel explicit = _model(theme: ThemeModel.themeDark)..apply();
+      expect(explicit.currentTheme.runtimeType, core.DarkTheme, reason: rule);
+
+      int notifications = 0;
+      explicit.addListener(() => notifications++);
+      explicit.isPureBlackEnabled = true;
+
+      expect(explicit.currentTheme.runtimeType, core.PureBlackTheme,
+          reason: '$rule Under THEME_DARK the flip lands at once.');
+      expect(notifications, 1,
+          reason: '$rule …and exactly one rebuild is asked for, which is what '
+              'the activity restart stood for.');
+      expect(explicit.themeData.scaffoldBackgroundColor,
+          const Color(0xFF000000),
+          reason: rule);
+
+      // THEME_AUTOMATIC with a dark system: Android left the old palette on
+      // screen until something else restarted the activity. Here it does not.
+      final ThemeModel automatic = _model(
+        theme: ThemeModel.themeAutomatic,
+        system: Brightness.dark,
+      )..apply();
+      expect(automatic.isNightMode, isTrue,
+          reason: '$rule The system is dark and the preference is automatic, '
+              'so this really is the case the rule singles out.');
+      expect(automatic.currentTheme.runtimeType, core.DarkTheme, reason: rule);
+
+      automatic.isPureBlackEnabled = true;
+      expect(automatic.currentTheme.runtimeType, core.PureBlackTheme,
+          reason: '$rule The deviation: AUTOMATIC repaints too, instead of '
+              'waiting for the next launch.');
+
+      // THEME_LIGHT: no restart upstream, and nothing to repaint here either —
+      // the flag is only honoured in night mode.
+      final ThemeModel light = _model(theme: ThemeModel.themeLight)..apply();
+      light.isPureBlackEnabled = true;
+      expect(light.currentTheme.runtimeType, core.LightTheme,
+          reason: '$rule Light mode is untouched, exactly as upstream, where '
+              'the restart condition also excluded it.');
+    });
   });
 
   group('the ThemeData bridge', () {

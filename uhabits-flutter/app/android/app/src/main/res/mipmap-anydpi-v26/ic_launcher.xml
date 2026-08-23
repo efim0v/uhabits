@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Port of uhabits-android/src/main/res/mipmap-anydpi-v26/ic_launcher.xml.
+
+  app-identity.launcher-icon#2: on API 26+ @mipmap/ic_launcher resolves to this
+  file — an <adaptive-icon> whose background is the flat colour
+  @color/ic_launcher_background (#1976D2), whose foreground is
+  @mipmap/ic_launcher_foreground and whose monochrome layer is
+  @mipmap/ic_launcher_monochrome.
+
+  app-identity.launcher-icon#3: the <monochrome> layer is what makes the icon
+  participate in Android 13+ themed icons; shipping only the colour icon would
+  silently lose that.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>
+</adaptive-icon>

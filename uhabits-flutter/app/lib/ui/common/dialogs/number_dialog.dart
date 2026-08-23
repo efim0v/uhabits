@@ -20,8 +20,10 @@
 ///    autofocuses here;
 ///  * `view.saveBtn.getCenter()` is dead code upstream
 ///    (`number-dialog.popup#15`) and is not ported;
-///  * `dismissCurrentAndShow` with the tag "numberDialog"
-///    (`number-dialog.popup#18`) belongs to `dialogs.single-current-dialog`.
+///  * the "dismiss whatever is tracked as current first" half of
+///    `dismissCurrentAndShow` (`number-dialog.popup#18`) belongs to
+///    `dialogs.single-current-dialog`; the tag it is shown under survives as
+///    the route name, the way `HistoryEditorDialog` keeps its own.
 ///
 /// One deliberate narrowing: Java's `NumberFormat.parse` is lenient and stops
 /// at the first character it cannot read, while `intl`'s throws. Since the
@@ -89,6 +91,7 @@ Future<NumberDialogResult?> showNumberDialog(
   final draft = NotesDraft(notes);
   final result = await showDialog<NumberDialogResult>(
     context: context,
+    routeSettings: const RouteSettings(name: NumberDialog.tag),
     builder: (context) => NumberDialog(
       value: value,
       notes: notes,
@@ -114,6 +117,10 @@ class NumberDialog extends StatefulWidget {
     required this.preferences,
     this.draft,
   });
+
+  /// The fragment tag `ListHabitsScreen` and `ShowHabitActivity` show the
+  /// popup under, reused here as the route name (`number-dialog.popup#18`).
+  static const String tag = 'numberDialog';
 
   final double value;
 

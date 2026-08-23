@@ -74,6 +74,30 @@ class SettingsScreen extends StatelessWidget {
   /// `@string/playStoreURL`.
   static const String rateAppUrl = 'market://details?id=org.isoron.uhabits';
 
+  /// `@string/bugReportTo` — the single address every bug report goes to.
+  static const String bugReportTo = 'dev@loophabits.org';
+
+  /// `@string/bugReportSubject`.
+  static const String bugReportSubject = 'Bug Report - Loop Habit Tracker';
+
+  /// `ListHabitsScreen.showSendBugReportToDeveloperScreen(log)`, which is
+  /// `Activity.showSendEmailScreen(bugReportTo, bugReportSubject, log)`:
+  /// `ACTION_SEND`, type `message/rfc822`, with `EXTRA_EMAIL`, `EXTRA_SUBJECT`
+  /// and the report as `EXTRA_TEXT`.
+  ///
+  /// Flutter addresses a mail composer with a `mailto:` URI instead of an
+  /// intent, so the three extras become the recipient and two query
+  /// parameters. `Uri` percent-encodes both values, which is what an intent
+  /// extra did not need to.
+  static Uri bugReportMailto(String log) => Uri(
+        scheme: 'mailto',
+        path: bugReportTo,
+        queryParameters: <String, String>{
+          'subject': bugReportSubject,
+          'body': log,
+        },
+      );
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<SettingsModel>(
@@ -317,7 +341,10 @@ class _SettingsView extends StatelessWidget {
       SettingsRow(
         preferenceKey: 'publicBackupFolder',
         title: l10n.selectPublicBackupFolder,
-        summary: model.publicBackupFolder ?? l10n.noPublicBackupFolderSelected,
+        // `updatePublicBackupFolderSummary()`: the human-readable path, or
+        // "No folder selected" when the key was never written.
+        summary: model.publicBackupFolderSummary ??
+            l10n.noPublicBackupFolderSelected,
         note: l10n.activityNotFound,
         enabled: false,
       ),

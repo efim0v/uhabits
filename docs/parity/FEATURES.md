@@ -457,7 +457,7 @@ written from the rules below.
 
 #### models.palette-color
 
-- [ ] `models.palette-color` — PaletteColor and the fixed 20-colour mapping
+- [x] `models.palette-color` — PaletteColor and the fixed 20-colour mapping
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/PaletteColor.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/PaletteUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/StyledResources.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`
@@ -657,7 +657,7 @@ written from the rules below.
 
 #### time.unix-conversion
 
-- [ ] `time.unix-conversion` — Unix timestamp conversion
+- [x] `time.unix-conversion` — Unix timestamp conversion
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/DatesTest.kt`
@@ -670,7 +670,7 @@ written from the rules below.
 
 #### time.today-and-day-boundary
 
-- [ ] `time.today-and-day-boundary` — Global 'today', midnight delay and day boundary
+- [x] `time.today-and-day-boundary` — Global 'today', midnight delay and day boundary
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JvmDates.kt`, `uhabits-core/src/jsMain/kotlin/org/isoron/platform/time/JsDates.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt`, `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/utils/MidnightTimer.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/DatesTest.kt`, `uhabits-core/src/jvmTest/java/org/isoron/platform/time/DateUtilsTest.kt`, `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/utils/MidnightTimerTest.kt`
@@ -724,7 +724,7 @@ written from the rules below.
 
 #### commands.no-undo-redo
 
-- [ ] `commands.no-undo-redo` — No undo/redo exists in this fork
+- [x] `commands.no-undo-redo` — No undo/redo exists in this fork
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/Command.kt`, `uhabits-android/src/main/res/values/strings.xml`, `uhabits-android/src/main/res/values/fontawesome.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/UnarchiveHabitsCommandTest.kt`
@@ -756,7 +756,7 @@ written from the rules below.
 
 #### commands.command-runner-listeners
 
-- [ ] `commands.command-runner-listeners` — CommandRunner listener registry
+- [x] `commands.command-runner-listeners` — CommandRunner listener registry
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/CommandRunner.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardListAdapter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HabitCardListCacheTest.kt`
@@ -808,7 +808,7 @@ written from the rules below.
 
 #### commands.edit-habit
 
-- [ ] `commands.edit-habit` — EditHabitCommand
+- [x] `commands.edit-habit` — EditHabitCommand
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/EditHabitCommand.kt`, `.../models/HabitNotFoundException.kt`, `.../models/Habit.kt`, `.../models/sqlite/SQLiteHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/EditHabitCommandTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`
@@ -845,7 +845,7 @@ written from the rules below.
 
 #### commands.archive-habits
 
-- [ ] `commands.archive-habits` — ArchiveHabitsCommand
+- [x] `commands.archive-habits` — ArchiveHabitsCommand
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/ArchiveHabitsCommand.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehavior.kt`, `.../ui/screens/habits/show/ShowHabitMenuPresenter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/ArchiveHabitsCommandTest.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehaviorTest.kt`
@@ -862,7 +862,7 @@ written from the rules below.
 
 #### commands.unarchive-habits
 
-- [ ] `commands.unarchive-habits` — UnarchiveHabitsCommand
+- [x] `commands.unarchive-habits` — UnarchiveHabitsCommand
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/UnarchiveHabitsCommand.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehavior.kt`, `.../ui/screens/habits/show/ShowHabitMenuPresenter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/UnarchiveHabitsCommandTest.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehaviorTest.kt`
@@ -877,7 +877,7 @@ written from the rules below.
 
 #### commands.change-habit-color
 
-- [ ] `commands.change-habit-color` — ChangeHabitColorCommand
+- [x] `commands.change-habit-color` — ChangeHabitColorCommand
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/ChangeHabitColorCommand.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehavior.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/commands/ChangeHabitColorCommandTest.kt`, `.../ui/screens/habits/list/ListHabitsSelectionMenuBehaviorTest.kt`
@@ -914,7 +914,7 @@ written from the rules below.
 
 #### commands.listener-list-habits-toasts
 
-- [ ] `commands.listener-list-habits-toasts` — Toast feedback per finished command
+- [x] `commands.listener-list-habits-toasts` — Toast feedback per finished command
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-android/src/main/res/values/strings.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenter.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -929,7 +929,7 @@ written from the rules below.
 
 #### commands.listener-screen-refresh
 
-- [ ] `commands.listener-screen-refresh` — Detail screen and history dialog refresh on any command
+- [x] `commands.listener-screen-refresh` — Detail screen and history dialog refresh on any command
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/HistoryEditorDialog.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabit.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -959,7 +959,7 @@ written from the rules below.
 
 #### commands.direct-run-bypass
 
-- [ ] `commands.direct-run-bypass` — Commands executed directly, bypassing CommandRunner
+- [x] `commands.direct-run-bypass` — Commands executed directly, bypassing CommandRunner
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/LoopDBImporter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/io/ImportTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/performance/PerformanceTest.kt`
@@ -1068,7 +1068,7 @@ written from the rules below.
 
 #### persistence.migration-runner
 
-- [ ] `persistence.migration-runner` — Migration runner and database versioning
+- [x] `persistence.migration-runner` — Migration runner and database versioning
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Database.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/Constants.kt`, `uhabits-android/build.gradle.kts`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/MigrationTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/DatabaseTest.kt`, `uhabits-core/src/jvmTest/java/org/isoron/platform/io/TestDatabaseHelper.kt`
@@ -1523,7 +1523,7 @@ written from the rules below.
 
 #### persistence.db-file-location
 
-- [ ] `persistence.db-file-location` — Database file location and test mode
+- [x] `persistence.db-file-location` — Database file location and test mode
 - **Platform:** android-only · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/DatabaseUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/Constants.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -2106,7 +2106,7 @@ written from the rules below.
 
 #### io.bug-report-dump
 
-- [ ] `io.bug-report-dump` — Bug report generation and log file dump
+- [x] `io.bug-report-dump` — Bug report generation and log file dump
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/AndroidBugReporter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsModule.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/res/values/constants.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/HabitsApplicationTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`
@@ -2129,7 +2129,7 @@ written from the rules below.
 
 #### list-habits.screen-layout
 
-- [ ] `list-habits.screen-layout` — Screen layout and visible column count
+- [x] `list-habits.screen-layout` — Screen layout and visible column count
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsRootView.kt`, `.../views/HabitCardListView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/TaskProgressBar.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `uhabits-android/src/main/res/values/dimens.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -2198,7 +2198,7 @@ written from the rules below.
 
 #### list-habits.menu.overflow-items
 
-- [ ] `list-habits.menu.overflow-items` — Main toolbar menu items
+- [x] `list-habits.menu.overflow-items` — Main toolbar menu items
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt`, `.../ListHabitsActivity.kt`, `.../ListHabitsScreen.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehavior.kt`, `uhabits-android/src/main/res/menu/list_habits.xml`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehaviorTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/ListHabitsSteps.kt`
@@ -2216,7 +2216,7 @@ written from the rules below.
 
 #### list-habits.sort-modes
 
-- [ ] `list-habits.sort-modes` — Sort modes and toggle-direction logic
+- [x] `list-habits.sort-modes` — Sort modes and toggle-direction logic
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehavior.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt`, `.../models/memory/MemoryHabitList.kt`, `.../preferences/Preferences.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt`, `.../views/HabitCardListAdapter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehaviorTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/regression/ListHabitsRegressionTest.kt`
@@ -2254,7 +2254,7 @@ written from the rules below.
 
 #### list-habits.search
 
-- [ ] `list-habits.search` — Habit search (fork feature)
+- [x] `list-habits.search` — Habit search (fork feature)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehavior.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitMatcher.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt`, `uhabits-android/src/main/res/menu/list_habits.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitMatcherTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehaviorTest.kt`
@@ -2294,7 +2294,7 @@ written from the rules below.
 
 #### list-habits.selection-menu-actions
 
-- [ ] `list-habits.selection-menu-actions` — Selection (contextual) menu actions and dispatch
+- [x] `list-habits.selection-menu-actions` — Selection (contextual) menu actions and dispatch
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsSelectionMenuBehavior.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsSelectionMenu.kt`, `.../ListHabitsScreen.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/ConfirmDeleteDialog.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/ArchiveHabitsCommand.kt`, `.../UnarchiveHabitsCommand.kt`, `.../DeleteHabitsCommand.kt`, `.../ChangeHabitColorCommand.kt`, `uhabits-android/src/main/res/menu/list_habits_selection.xml`, `uhabits-android/src/main/res/values/strings.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardListAdapter.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsSelectionMenuBehaviorTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`
@@ -2322,7 +2322,7 @@ written from the rules below.
 
 #### list-habits.drag-reorder
 
-- [ ] `list-habits.drag-reorder` — Drag-and-drop manual reordering
+- [x] `list-habits.drag-reorder` — Drag-and-drop manual reordering
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardListView.kt`, `.../HabitCardListController.kt`, `.../HabitCardListAdapter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `.../models/memory/MemoryHabitList.kt`, `.../models/sqlite/SQLiteHabitList.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/HabitListTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HabitCardListCacheTest.kt`
@@ -2356,7 +2356,7 @@ written from the rules below.
 
 #### list-habits.checkmark-button-rendering
 
-- [ ] `list-habits.checkmark-button-rendering` — Checkmark button rendering
+- [x] `list-habits.checkmark-button-rendering` — Checkmark button rendering
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/CheckmarkButtonView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `uhabits-android/src/main/res/values/dimens.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/list/views/EntryButtonViewTest.kt`, `.../EntryPanelViewTest.kt`
@@ -2377,7 +2377,7 @@ written from the rules below.
 
 #### list-habits.number-button
 
-- [ ] `list-habits.number-button` — Number (measurable) button behaviour and rendering
+- [x] `list-habits.number-button` — Number (measurable) button behaviour and rendering
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/NumberButtonView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/list/views/NumberButtonViewTest.kt`, `.../NumberPanelViewTest.kt`
@@ -2400,7 +2400,7 @@ written from the rules below.
 
 #### list-habits.entry-panels
 
-- [ ] `list-habits.entry-panels` — Entry button panels: column count, data offset, reversed order
+- [x] `list-habits.entry-panels` — Entry button panels: column count, data offset, reversed order
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/ButtonPanelView.kt`, `.../CheckmarkPanelView.kt`, `.../NumberPanelView.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/list/views/EntryPanelViewTest.kt`, `.../NumberPanelViewTest.kt`
@@ -2418,7 +2418,7 @@ written from the rules below.
 
 #### list-habits.habit-card
 
-- [ ] `list-habits.habit-card` — Habit card row rendering
+- [x] `list-habits.habit-card` — Habit card row rendering
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardView.kt`, `.../HabitCardListView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/RingView.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/list/views/HabitCardViewTest.kt`
@@ -2458,7 +2458,7 @@ written from the rules below.
 
 #### list-habits.header-scrolling
 
-- [ ] `list-habits.header-scrolling` — Horizontal scrolling of date columns
+- [x] `list-habits.header-scrolling` — Horizontal scrolling of date columns
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/ScrollableChart.kt`, `.../views/HeaderView.kt`, `.../views/HabitCardListView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsRootView.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/regression/ListHabitsRegressionTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/regression/SavedStateTest.kt`
@@ -2512,7 +2512,7 @@ written from the rules below.
 
 #### list-habits.toggle-from-row
 
-- [ ] `list-habits.toggle-from-row` — Toggling an entry directly from a row (and the list behavior dispatch)
+- [x] `list-habits.toggle-from-row` — Toggling an entry directly from a row (and the list behavior dispatch)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardView.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/CreateRepetitionCommand.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HabitCardListCache.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`, `.../HabitCardListCacheTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/regression/ListHabitsRegressionTest.kt`
@@ -2532,7 +2532,7 @@ written from the rules below.
 
 #### list-habits.confetti
 
-- [ ] `list-habits.confetti` — Confetti celebration animation
+- [x] `list-habits.confetti` — Confetti celebration animation
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `.../views/HabitCardView.kt`, `.../ListHabitsRootView.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -2546,7 +2546,7 @@ written from the rules below.
 
 #### list-habits.empty-state
 
-- [ ] `list-habits.empty-state` — Empty state view
+- [x] `list-habits.empty-state` — Empty state view
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/EmptyListView.kt`, `.../ListHabitsRootView.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HabitCardListCache.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/list/views/EmptyListViewTest.kt`
@@ -2561,7 +2561,7 @@ written from the rules below.
 
 #### list-habits.hints
 
-- [ ] `list-habits.hints` — Startup hints
+- [x] `list-habits.hints` — Startup hints
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HintList.kt`, `.../HintListFactory.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HintView.kt`, `.../ListHabitsRootView.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/HintListTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/list/views/HintViewTest.kt`
@@ -2578,7 +2578,7 @@ written from the rules below.
 
 #### list-habits.startup-lifecycle
 
-- [ ] `list-habits.startup-lifecycle` — Startup, first run, resume/pause and midnight refresh
+- [x] `list-habits.startup-lifecycle` — Startup, first run, resume/pause and midnight refresh
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`, `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/utils/MidnightTimer.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`
@@ -2614,7 +2614,7 @@ written from the rules below.
 
 #### show-habit.screen-scaffold
 
-- [ ] `show-habit.screen-scaffold` — Show habit screen: loading, toolbar, refresh lifecycle
+- [x] `show-habit.screen-scaffold` — Show habit screen: loading, toolbar, refresh lifecycle
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt`, `.../ShowHabitView.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabit.kt`, `uhabits-android/src/main/res/layout/show_habit.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `.../activities/AndroidThemeSwitcher.kt`, `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentFactory.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`, `.../acceptance/steps/CommonSteps.kt`
@@ -2854,7 +2854,7 @@ written from the rules below.
 
 #### show-habit.menu
 
-- [ ] `show-habit.menu` — Overflow menu contents and visibility rules
+- [x] `show-habit.menu` — Overflow menu contents and visibility rules
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitMenu.kt`, `uhabits-android/src/main/res/menu/show_habit.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenter.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`
@@ -2882,7 +2882,7 @@ written from the rules below.
 
 #### show-habit.archive-unarchive
 
-- [ ] `show-habit.archive-unarchive` — Archive / unarchive from the show screen
+- [x] `show-habit.archive-unarchive` — Archive / unarchive from the show screen
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/ArchiveHabitsCommand.kt`, `.../UnarchiveHabitsCommand.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`
@@ -2895,7 +2895,7 @@ written from the rules below.
 
 #### show-habit.delete
 
-- [ ] `show-habit.delete` — Delete habit from the show screen
+- [x] `show-habit.delete` — Delete habit from the show screen
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenter.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/commands/DeleteHabitsCommand.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/ConfirmDeleteDialog.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`
@@ -2924,7 +2924,7 @@ written from the rules below.
 
 #### show-habit.randomize
 
-- [ ] `show-habit.randomize` — Randomize entries (developer-only menu action)
+- [x] `show-habit.randomize` — Randomize entries (developer-only menu action)
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenter.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitMenu.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -2940,7 +2940,7 @@ written from the rules below.
 
 #### show-habit.widget-refresh
 
-- [ ] `show-habit.widget-refresh` — Widget refresh triggered by bucket spinner changes
+- [x] `show-habit.widget-refresh` — Widget refresh triggered by bucket spinner changes
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/ScoreCard.kt`, `.../views/BarCard.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3097,7 +3097,7 @@ written from the rules below.
 
 #### edit-habit.color-control
 
-- [ ] `edit-habit.color-control` — Color button and live theming of the screen
+- [x] `edit-habit.color-control` — Color button and live theming of the screen
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/Themes.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/AndroidThemeSwitcher.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`
@@ -3154,7 +3154,7 @@ written from the rules below.
 
 #### edit-habit.reminder-time
 
-- [ ] `edit-habit.reminder-time` — Reminder time picker and 'Off' state
+- [x] `edit-habit.reminder-time` — Reminder time picker and 'Off' state
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DateExtensions.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Reminder.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/EditHabitSteps.kt`
@@ -3230,7 +3230,7 @@ written from the rules below.
 
 #### habit-type-dialog.select-type
 
-- [ ] `habit-type-dialog.select-type` — HabitTypeDialog (choose Yes/No vs Measurable)
+- [x] `habit-type-dialog.select-type` — HabitTypeDialog (choose Yes/No vs Measurable)
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/HabitTypeDialog.kt`, `uhabits-android/src/main/res/layout/select_habit_type.xml`, `uhabits-android/src/main/res/values/styles.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehavior.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`, `.../acceptance/steps/CommonSteps.kt`
@@ -3246,7 +3246,7 @@ written from the rules below.
 
 #### frequency-picker.options
 
-- [ ] `frequency-picker.options` — FrequencyPickerDialog options and layout
+- [x] `frequency-picker.options` — FrequencyPickerDialog options and layout
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/FrequencyPickerDialog.kt`, `uhabits-android/src/main/res/layout/frequency_picker_dialog.xml`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/EditHabitSteps.kt`, `.../regression/ListHabitsRegressionTest.kt`
@@ -3263,7 +3263,7 @@ written from the rules below.
 
 #### frequency-picker.populate-from-frequency
 
-- [ ] `frequency-picker.populate-from-frequency` — FrequencyPickerDialog: mapping an existing Frequency onto the radio rows
+- [x] `frequency-picker.populate-from-frequency` — FrequencyPickerDialog: mapping an existing Frequency onto the radio rows
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/FrequencyPickerDialog.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3279,7 +3279,7 @@ written from the rules below.
 
 #### frequency-picker.save-and-validation
 
-- [ ] `frequency-picker.save-and-validation` — FrequencyPickerDialog: what Save returns
+- [x] `frequency-picker.save-and-validation` — FrequencyPickerDialog: what Save returns
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/FrequencyPickerDialog.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/regression/ListHabitsRegressionTest.kt`, `.../acceptance/steps/EditHabitSteps.kt`
@@ -3297,7 +3297,7 @@ written from the rules below.
 
 #### weekday-picker.dialog
 
-- [ ] `weekday-picker.dialog` — WeekdayPickerDialog
+- [x] `weekday-picker.dialog` — WeekdayPickerDialog
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/WeekdayPickerDialog.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/platform/time/JavaLocalDateFormatterTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/EditHabitSteps.kt`
@@ -3314,7 +3314,7 @@ written from the rules below.
 
 #### color-picker.dialog
 
-- [ ] `color-picker.dialog` — ColorPickerDialog (palette grid)
+- [x] `color-picker.dialog` — ColorPickerDialog (palette grid)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/ColorPickerDialog.kt`, `.../ColorPickerDialogFactory.kt`, `uhabits-android/src/main/java/com/android/colorpicker/ColorPickerDialog.java`, `.../ColorPickerPalette.java`, `.../ColorPickerSwatch.java`, `.../ColorStateDrawable.java`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/PaletteUtils.kt`, `.../utils/StyledResources.kt`, `uhabits-android/src/main/res/values/colors.xml`, `.../values/pickers.xml`, `.../layout/color_picker_dialog.xml`, `.../layout/color_picker_swatch.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsSelectionMenuBehaviorTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/HabitsTest.kt`, `.../acceptance/steps/EditHabitSteps.kt`
@@ -3336,7 +3336,7 @@ written from the rules below.
 
 #### color-picker.palette-source
 
-- [ ] `color-picker.palette-source` — Themed palette arrays used by the picker
+- [x] `color-picker.palette-source` — Themed palette arrays used by the picker
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values/colors.xml`, `.../values/styles.xml`, `.../values/attrs.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/PaletteColor.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/PaletteUtils.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3416,7 +3416,7 @@ written from the rules below.
 
 #### history-editor.dialog
 
-- [ ] `history-editor.dialog` — HistoryEditorDialog (calendar heat-map editor)
+- [x] `history-editor.dialog` — HistoryEditorDialog (calendar heat-map editor)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/HistoryEditorDialog.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/HistoryCard.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt`, `.../activities/habits/show/views/HistoryCardView.kt`, `uhabits-android/src/main/res/values/dimens.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/habits/show/views/HistoryCardViewTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/views/HistoryChartTest.kt`
@@ -3568,7 +3568,7 @@ written from the rules below.
 
 #### settings.preferences.first-weekday
 
-- [ ] `settings.preferences.first-weekday` — First day of the week (locale and preference)
+- [x] `settings.preferences.first-weekday` — First day of the week (locale and preference)
 - **Platform:** needs-native-per-platform · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt`, `uhabits-core/src/jsMain/kotlin/org/isoron/platform/time/JsDates.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/res/xml/preferences.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/DatesTest.kt`
@@ -3640,7 +3640,7 @@ written from the rules below.
 
 #### settings.preferences.skip-enabled
 
-- [ ] `settings.preferences.skip-enabled` — Enable skip days
+- [x] `settings.preferences.skip-enabled` — Enable skip days
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/CheckmarkDialog.kt`, `.../dialogs/NumberDialog.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/widgets/WidgetBehaviorTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/models/EntryTest.kt`
@@ -3668,7 +3668,7 @@ written from the rules below.
 
 #### settings.preferences.disable-animations
 
-- [ ] `settings.preferences.disable-animations` — Disable confetti animation
+- [x] `settings.preferences.disable-animations` — Disable confetti animation
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3698,7 +3698,7 @@ written from the rules below.
 
 #### settings.preferences.habit-list-orders
 
-- [ ] `settings.preferences.habit-list-orders` — Persisted habit list sort orders
+- [x] `settings.preferences.habit-list-orders` — Persisted habit list sort orders
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/preferences/PreferencesTest.kt`
@@ -3739,7 +3739,7 @@ written from the rules below.
 
 #### settings.preferences.first-run-and-launch-count
 
-- [ ] `settings.preferences.first-run-and-launch-count` — First run flag, launch count and last app version
+- [x] `settings.preferences.first-run-and-launch-count` — First run flag, launch count and last app version
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/preferences/PreferencesTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`
@@ -3753,7 +3753,7 @@ written from the rules below.
 
 #### settings.preferences.show-archived-completed
 
-- [ ] `settings.preferences.show-archived-completed` — Show archived / show completed filters
+- [x] `settings.preferences.show-archived-completed` — Show archived / show completed filters
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt`, `uhabits-android/src/main/res/menu/list_habits.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/preferences/PreferencesTest.kt`
@@ -3825,7 +3825,7 @@ written from the rules below.
 
 #### settings.theme.pure-black
 
-- [ ] `settings.theme.pure-black` — Pure black (AMOLED) dark theme
+- [x] `settings.theme.pure-black` — Pure black (AMOLED) dark theme
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/ThemeSwitcher.kt`, `.../ui/views/Themes.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/AndroidThemeSwitcher.kt`, `.../activities/habits/list/ListHabitsActivity.kt`, `uhabits-android/src/main/res/values/styles.xml`, `uhabits-android/src/main/res/xml/preferences.xml`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/preferences/PreferencesTest.kt`
@@ -3902,7 +3902,7 @@ written from the rules below.
 
 #### settings.screen.troubleshooting-and-links
 
-- [ ] `settings.screen.troubleshooting-and-links` — Troubleshooting and Links settings rows
+- [x] `settings.screen.troubleshooting-and-links` — Troubleshooting and Links settings rows
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `uhabits-android/src/main/res/values/constants.xml`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/LinksTest.kt`, `.../acceptance/AboutTest.kt`
@@ -3996,7 +3996,7 @@ written from the rules below.
 
 #### widgets.registration
 
-- [ ] `widgets.registration` — Six home-screen widget types are registered with the launcher
+- [x] `widgets.registration` — Six home-screen widget types are registered with the launcher
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-android/src/main/res/xml/widget_checkmark_info.xml`, `.../widget_frequency_info.xml`, `.../widget_history_info.xml`, `.../widget_score_info.xml`, `.../widget_streak_info.xml`, `.../widget_target_info.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/widgets/CheckmarkWidgetTest.kt`, `.../FrequencyWidgetTest.kt`, `.../HistoryWidgetTest.kt`, `.../ScoreWidgetTest.kt`, `.../StreakWidgetTest.kt`, `.../TargetWidgetTest.kt`
@@ -4031,7 +4031,7 @@ written from the rules below.
 
 #### widgets.dimensions
 
-- [ ] `widgets.dimensions` — Widget dimension resolution (portrait vs landscape)
+- [x] `widgets.dimensions` — Widget dimension resolution (portrait vs landscape)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/WidgetDimensions.kt`, `.../BaseWidgetProvider.kt`, `.../StackWidgetService.kt`, `.../BaseWidget.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/BaseViewTest.kt`
@@ -4109,7 +4109,7 @@ written from the rules below.
 
 #### widgets.checkmark-view
 
-- [ ] `widgets.checkmark-view` — Checkmark widget view rendering (ring, glyph, label)
+- [x] `widgets.checkmark-view` — Checkmark widget view rendering (ring, glyph, label)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/views/CheckmarkWidgetView.kt`, `uhabits-android/src/main/res/layout/widget_checkmark.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/RingView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/NumberButtonView.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/widgets/views/CheckmarkWidgetViewTest.kt`
@@ -4222,7 +4222,7 @@ written from the rules below.
 
 #### widgets.empty
 
-- [ ] `widgets.empty` — Empty widget (stack loading placeholder)
+- [x] `widgets.empty` — Empty widget (stack loading placeholder)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/EmptyWidget.kt`, `.../views/EmptyWidgetView.kt`, `.../StackWidgetService.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4234,7 +4234,7 @@ written from the rules below.
 
 #### widgets.stack
 
-- [ ] `widgets.stack` — Stack widget (multi-habit swipeable widget)
+- [x] `widgets.stack` — Stack widget (multi-habit swipeable widget)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/StackWidget.kt`, `.../StackWidgetType.kt`, `uhabits-android/src/main/res/layout/checkmark_stackview_widget.xml`, `.../frequency_stackview_widget.xml`, `.../score_stackview_widget.xml`, `.../history_stackview_widget.xml`, `.../streak_stackview_widget.xml`, `.../target_stackview_widget.xml`, `uhabits-core/src/commonMain/kotlin/org/isoron/platform/utils/StringUtils.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4255,7 +4255,7 @@ written from the rules below.
 
 #### widgets.stack-service
 
-- [ ] `widgets.stack-service` — StackWidgetService / RemoteViewsFactory item construction
+- [x] `widgets.stack-service` — StackWidgetService / RemoteViewsFactory item construction
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/StackWidgetService.kt`, `.../StackWidgetType.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4273,7 +4273,7 @@ written from the rules below.
 
 #### widgets.config-picker
 
-- [ ] `widgets.config-picker` — Widget configuration flow: habit picker dialog
+- [x] `widgets.config-picker` — Widget configuration flow: habit picker dialog
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/activities/HabitPickerDialog.kt`, `uhabits-android/src/main/res/layout/widget_configure_activity.xml`, `.../layout/widget_empty_activity.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/AndroidThemeSwitcher.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/WidgetTest.kt`
@@ -4355,7 +4355,7 @@ written from the rules below.
 
 #### widgets.error-states
 
-- [ ] `widgets.error-states` — Widget error and empty states
+- [x] `widgets.error-states` — Widget error and empty states
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/BaseWidgetProvider.kt`, `uhabits-android/src/main/res/layout/widget_error.xml`, `uhabits-android/src/main/res/drawable/widget_background.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/widgets/activities/HabitPickerDialog.kt`, `.../StackWidget.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/WidgetSteps.kt`
@@ -4438,7 +4438,7 @@ written from the rules below.
 
 #### reminders.reschedule-on-command
 
-- [ ] `reminders.reschedule-on-command` — Automatic rescheduling when the model changes
+- [x] `reminders.reschedule-on-command` — Automatic rescheduling when the model changes
 - **Platform:** core · **Port risk:** high
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4472,7 +4472,7 @@ written from the rules below.
 
 #### reminders.snooze-by-delay
 
-- [ ] `reminders.snooze-by-delay` — Snoozing by a fixed delay
+- [x] `reminders.snooze-by-delay` — Snoozing by a fixed delay
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderController.kt`, `uhabits-android/src/main/res/values/constants.xml`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/uhabits/core/reminders/ReminderSchedulerTest.kt`
@@ -4566,7 +4566,7 @@ written from the rules below.
 
 #### notifications.content
 
-- [ ] `notifications.content` — Reminder notification content
+- [x] `notifications.content` — Reminder notification content
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4603,7 +4603,7 @@ written from the rules below.
 
 #### notifications.channel
 
-- [ ] `notifications.channel` — Notification channel creation
+- [x] `notifications.channel` — Notification channel creation
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4679,7 +4679,7 @@ written from the rules below.
 
 #### reminders.exact-alarm-scheduling
 
-- [ ] `reminders.exact-alarm-scheduling` — Exact alarm scheduling and its refusal cases
+- [x] `reminders.exact-alarm-scheduling` — Exact alarm scheduling and its refusal cases
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentScheduler.kt`, `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateFormats.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/intents/IntentSchedulerTest.kt`
@@ -4821,7 +4821,7 @@ written from the rules below.
 
 #### reminders.boot-reschedule
 
-- [ ] `reminders.boot-reschedule` — Rescheduling reminders after reboot
+- [x] `reminders.boot-reschedule` — Rescheduling reminders after reboot
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderReceiver.kt`, `.../receivers/ReminderController.kt`, `uhabits-android/src/main/AndroidManifest.xml`
 - **Kotlin tests:** `uhabits-android/src/test/java/org/isoron/uhabits/receivers/ReminderControllerTest.kt`
@@ -4835,7 +4835,7 @@ written from the rules below.
 
 #### reminders.app-start-and-permission
 
-- [ ] `reminders.app-start-and-permission` — Rescheduling at app start and POST_NOTIFICATIONS permission flow
+- [x] `reminders.app-start-and-permission` — Rescheduling at app start and POST_NOTIFICATIONS permission flow
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4879,7 +4879,7 @@ written from the rules below.
 
 #### reminders.edit-ui
 
-- [ ] `reminders.edit-ui` — Setting a habit's reminder in the edit screen
+- [x] `reminders.edit-ui` — Setting a habit's reminder in the edit screen
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/WeekdayPickerDialog.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DateExtensions.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/EditHabitSteps.kt`
@@ -5383,7 +5383,7 @@ written from the rules below.
 
 #### charts-canvas-theming.frequency-chart
 
-- [ ] `charts-canvas-theming.frequency-chart` — FrequencyChart (weekday x month bubble chart)
+- [x] `charts-canvas-theming.frequency-chart` — FrequencyChart (weekday x month bubble chart)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/FrequencyChart.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt`, `uhabits-android/src/main/res/layout/show_habit_frequency.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/common/views/FrequencyChartTest.kt`, `.../habits/show/views/FrequencyCardViewTest.kt`
@@ -5406,7 +5406,7 @@ written from the rules below.
 
 #### charts-canvas-theming.streak-chart
 
-- [ ] `charts-canvas-theming.streak-chart` — StreakChart (best streaks bar chart)
+- [x] `charts-canvas-theming.streak-chart` — StreakChart (best streaks bar chart)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/StreakChart.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Streak.kt`, `uhabits-android/src/main/res/layout/show_habit_streak.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/common/views/StreakChartTest.kt`, `.../habits/show/views/StreakCardViewTest.kt`
@@ -5517,7 +5517,7 @@ written from the rules below.
 
 #### charts-canvas-theming.task-progress-bar
 
-- [ ] `charts-canvas-theming.task-progress-bar` — TaskProgressBar background-work indicator
+- [x] `charts-canvas-theming.task-progress-bar` — TaskProgressBar background-work indicator
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/TaskProgressBar.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5530,7 +5530,7 @@ written from the rules below.
 
 #### charts-canvas-theming.screenshot-baselines
 
-- [ ] `charts-canvas-theming.screenshot-baselines` — Screenshot baseline assets and golden conventions
+- [x] `charts-canvas-theming.screenshot-baselines` — Screenshot baseline assets and golden conventions
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/assets/test/views/CanvasTest.png`, `.../BarChart/base.png`, `.../HistoryChart/base.png`, `.../CheckmarkButton/explicit.png`, `.../NumberButton/render_above.png`, `.../HabitListHeader/light.png`, `.../Ring/draw1.png`, `uhabits-android/src/androidTest/assets/views/CanvasTest.png`, `.../common/ScoreChart/render.png`, `.../common/FrequencyChart/render.png`, `.../common/StreakChart/render.png`, `.../common/RingView/render.png`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/CanvasTest.kt`, `.../gui/ViewTestHelper.kt`, `.../ui/views/BarChartTest.kt`, `.../ui/views/HistoryChartTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/platform/gui/AndroidCanvasTest.kt`, `.../uhabits/BaseViewTest.kt`
@@ -5569,7 +5569,7 @@ written from the rules below.
 
 #### platform-glue.permissions
 
-- [ ] `platform-glue.permissions` — Declared permissions and runtime notification permission flow
+- [x] `platform-glue.permissions` — Declared permissions and runtime notification permission flow
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5584,7 +5584,7 @@ written from the rules below.
 
 #### platform-glue.app-startup-order
 
-- [ ] `platform-glue.app-startup-order` — Application startup sequence (HabitsApplication.onCreate)
+- [x] `platform-glue.app-startup-order` — Application startup sequence (HabitsApplication.onCreate)
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DatabaseUtils.kt`, `.../HabitsDatabaseOpener.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JvmDates.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/BaseAndroidTest.kt`
@@ -5773,7 +5773,7 @@ written from the rules below.
 
 #### platform-glue.crash-handler
 
-- [ ] `platform-glue.crash-handler` — Uncaught exception handler (BaseExceptionHandler)
+- [x] `platform-glue.crash-handler` — Uncaught exception handler (BaseExceptionHandler)
 - **Platform:** android-only · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/BaseExceptionHandler.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5788,7 +5788,7 @@ written from the rules below.
 
 #### platform-glue.dir-finder
 
-- [ ] `platform-glue.dir-finder` — External storage directory resolution (AndroidDirFinder / FileUtils.getDir)
+- [x] `platform-glue.dir-finder` — External storage directory resolution (AndroidDirFinder / FileUtils.getDir)
 - **Platform:** android-only · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/AndroidDirFinder.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/FileUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/HabitsDirFinder.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/database/AutoBackupTest.kt`
@@ -5827,7 +5827,7 @@ written from the rules below.
 
 #### platform-glue.locale-config
 
-- [ ] `platform-glue.locale-config` — Per-app language (locales_config.xml) and its drift from the resource dirs
+- [x] `platform-glue.locale-config` — Per-app language (locales_config.xml) and its drift from the resource dirs
 - **Platform:** android-only · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/res/xml/locales_config.xml`, `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-android/src/main/res/xml/preferences.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/BaseAndroidTest.kt`
@@ -5880,7 +5880,7 @@ written from the rules below.
 
 #### platform-glue.time-and-date-formatting
 
-- [ ] `platform-glue.time-and-date-formatting` — Locale-aware time and date formatting helpers
+- [x] `platform-glue.time-and-date-formatting` — Locale-aware time and date formatting helpers
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/DateExtensions.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateFormats.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/AndroidBugReporter.kt`
 - **Kotlin tests:** `uhabits-core/src/jvmTest/java/org/isoron/platform/time/JavaLocalDateFormatterTest.kt`, `uhabits-core/src/jvmTest/java/org/isoron/platform/time/DateUtilsTest.kt`
@@ -6082,7 +6082,7 @@ written from the rules below.
 
 #### app-identity.launcher-icon
 
-- [ ] `app-identity.launcher-icon` — App launcher icon (adaptive + Android 13 themed/monochrome) and launcher label
+- [x] `app-identity.launcher-icon` — App launcher icon (adaptive + Android 13 themed/monochrome) and launcher label
 - **Platform:** needs-native-per-platform · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`, `uhabits-android/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png`, `.../mipmap-xxxhdpi/ic_launcher_monochrome.png`, `.../mipmap-xxxhdpi/ic_launcher.png`, `uhabits-android/src/main/AndroidManifest.xml`, `uhabits-android/src/main/res/values/colors.xml`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6111,7 +6111,7 @@ written from the rules below.
 
 #### settings.theme.system-night-window-background
 
-- [ ] `settings.theme.system-night-window-background` — Pre-theme window background follows the system night mode; force-dark opted out
+- [x] `settings.theme.system-night-window-background` — Pre-theme window background follows the system night mode; force-dark opted out
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values-night/colors.xml`, `uhabits-android/src/main/res/values/colors.xml`, `uhabits-android/src/main/res/values/styles.xml`, `uhabits-android/src/main/AndroidManifest.xml`
 - **Kotlin tests:** none — write Dart test from rules

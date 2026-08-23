@@ -34,8 +34,13 @@ class FrequencyWidget(
     context: Context,
     widgetId: Int,
     private val habit: HabitData,
-    private val today: LocalDate
-) : BaseWidget(context, widgetId) {
+    private val today: LocalDate,
+    /**
+     * `widgets.stack#9`: true when this widget is one page of a StackWidget,
+     * which forces it opaque (`widgets.card-chrome#5`).
+     */
+    stacked: Boolean = false
+) : BaseWidget(context, widgetId, stacked) {
 
     override val defaultHeight: Int get() = 200
     override val defaultWidth: Int get() = 200

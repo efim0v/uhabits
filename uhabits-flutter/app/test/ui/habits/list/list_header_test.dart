@@ -648,6 +648,149 @@ void main() {
               'still yields a resolved name, never the skeleton');
     });
   });
+
+  group('list-habits.header-scrolling, revisited', () {
+    testWidgets('#6 a fling keeps scrolling after the finger leaves',
+        (tester) async {
+      // A slow drag of 96 px is exactly two columns.
+      final dragged = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        reported: dragged,
+        applyOffset: true,
+      );
+      await _dragBy(tester, -96);
+      await tester.pumpAndSettle();
+      expect(dragged.last, 2, reason: 'list-habits.header-scrolling#6');
+
+      // The same 96 px thrown rather than dragged goes further: `onFling`
+      // hands the scroller `direction * velocityX / 2` and animates for as
+      // long as the scroller says.
+      final flung = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        reported: flung,
+        applyOffset: true,
+      );
+      await tester.fling(find.byType(ListHeader), const Offset(-96, 0), 2000);
+      await tester.pumpAndSettle();
+
+      expect(flung.last, greaterThan(dragged.last),
+          reason: 'list-habits.header-scrolling#6 — the fling carried the '
+              'scroller past where the finger let go');
+      // …and it never leaves the scrollable range: `fling(…, 0, maxX, 0, 0)`.
+      expect(flung.last, lessThanOrEqualTo(60 - 5),
+          reason: 'list-habits.header-scrolling#6');
+      expect(flung.every((offset) => offset >= 0), isTrue,
+          reason: 'list-habits.header-scrolling#6');
+    });
+
+    testWidgets('#6 a fling is bounded by maxX at both ends', (tester) async {
+      // Towards the past, hard: the trajectory is constrained to x <= maxX,
+      // which for two visible columns is column 58.
+      final forwards = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 2,
+        maxDataOffset: 3,
+        reported: forwards,
+        applyOffset: true,
+      );
+      await tester.fling(find.byType(ListHeader), const Offset(-600, 0), 8000);
+      await tester.pumpAndSettle();
+      expect(forwards.last, 3,
+          reason: 'list-habits.header-scrolling#6 — x is constrained to '
+              '[0, maxX]');
+
+      // …and towards the future it stops at column 0 rather than going
+      // negative.
+      final backwards = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        dataOffset: 3,
+        reported: backwards,
+        applyOffset: true,
+      );
+      await tester.fling(find.byType(ListHeader), const Offset(600, 0), 8000);
+      await tester.pumpAndSettle();
+      expect(backwards.last, 0, reason: 'list-habits.header-scrolling#6');
+      expect(backwards.every((offset) => offset >= 0), isTrue,
+          reason: 'list-habits.header-scrolling#6');
+    });
+  });
+
+  group('list-habits.header-dates, right to left', () {
+    testWidgets('#5 every column rect is mirrored about the canvas width',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5);
+      final ltr = _draw(tester);
+      await _pumpHeader(tester, buttonCount: 5,
+          textDirection: TextDirection.rtl);
+      final rtl = _draw(tester);
+
+      // The same dates, in the same order…
+      expect(rtl.texts, ltr.texts, reason: 'list-habits.header-dates#5');
+      // …each one reflected about the canvas width.
+      for (final text in ltr.texts) {
+        expect(rtl.xOf(text), closeTo(600.0 - ltr.xOf(text), 1e-9),
+            reason: 'list-habits.header-dates#5 — "$text"');
+      }
+      // Today is leftmost in an LTR layout and rightmost in an RTL one.
+      expect(rtl.xOf('25'), greaterThan(rtl.xOf('21')),
+          reason: 'list-habits.header-dates#5');
+      expect(ltr.xOf('25'), lessThan(ltr.xOf('21')),
+          reason: 'list-habits.header-dates#5');
+
+      // The background and the hairline span the whole strip and do not move.
+      expect(rtl.ops.first.args, ltr.ops.first.args,
+          reason: 'list-habits.header-dates#5');
+      expect(rtl.opsNamed('drawLine').single.args,
+          ltr.opsNamed('drawLine').single.args,
+          reason: 'list-habits.header-dates#5');
+    });
+
+    testWidgets('#5 a reversed sequence mirrors on top of the RTL mirror',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5, reversed: true);
+      final ltr = _draw(tester);
+      await _pumpHeader(tester, buttonCount: 5, reversed: true,
+          textDirection: TextDirection.rtl);
+      final rtl = _draw(tester);
+
+      for (final text in ltr.texts) {
+        expect(rtl.xOf(text), closeTo(600.0 - ltr.xOf(text), 1e-9),
+            reason: 'list-habits.header-dates#5');
+      }
+      // Reversed *and* RTL puts today back on the left.
+      expect(rtl.xOf('25'), lessThan(rtl.xOf('21')),
+          reason: 'list-habits.header-dates#5');
+    });
+
+    testWidgets('#4 an RTL layout flips the scroll direction back',
+        (tester) async {
+      // direction starts at -1, the reversed sequence makes it +1, and RTL
+      // makes it -1 again, so a leftward drag scrolls into the past exactly as
+      // it does in a plain LTR layout.
+      final reported = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        reversed: true,
+        reported: reported,
+        applyOffset: true,
+        textDirection: TextDirection.rtl,
+      );
+
+      await _dragBy(tester, -96);
+      await tester.pumpAndSettle();
+      expect(reported.last, 2,
+          reason: 'list-habits.header-scrolling#4 and '
+              'list-habits.header-dates#11 — the two flips cancel out');
+    });
+  });
 }
 
 /// Pumps a [ListHeader] inside a 600dp-wide slot, the width the Android
@@ -666,29 +809,37 @@ Future<void> _pumpHeader(
   bool applyOffset = false,
   Brightness brightness = Brightness.light,
   Locale locale = const Locale('en'),
+  TextDirection textDirection = TextDirection.ltr,
+  String? restorationId,
+  String? restorationScopeId,
 }) async {
   var offset = dataOffset;
   await tester.pumpWidget(
     MaterialApp(
       locale: locale,
+      restorationScopeId: restorationScopeId,
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: L10n.supportedLocales,
       theme: ThemeData(brightness: brightness),
-      home: Align(
-        alignment: Alignment.topLeft,
-        child: SizedBox(
-          width: 600,
-          child: StatefulBuilder(
-            builder: (context, setState) => ListHeader(
-              buttonCount: buttonCount,
-              dataOffset: offset,
-              isCheckmarkSequenceReversed: reversed,
-              maxDataOffset: maxDataOffset,
-              today: headerToday,
-              onDataOffsetChanged: (value) {
-                reported?.add(value);
-                if (applyOffset) setState(() => offset = value);
-              },
+      home: Directionality(
+        textDirection: textDirection,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 600,
+            child: StatefulBuilder(
+              builder: (context, setState) => ListHeader(
+                restorationId: restorationId,
+                buttonCount: buttonCount,
+                dataOffset: offset,
+                isCheckmarkSequenceReversed: reversed,
+                maxDataOffset: maxDataOffset,
+                today: headerToday,
+                onDataOffsetChanged: (value) {
+                  reported?.add(value);
+                  if (applyOffset) setState(() => offset = value);
+                },
+              ),
             ),
           ),
         ),

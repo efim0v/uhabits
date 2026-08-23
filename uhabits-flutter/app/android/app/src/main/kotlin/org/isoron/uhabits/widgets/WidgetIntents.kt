@@ -20,7 +20,9 @@ package org.isoron.uhabits.widgets
 
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import org.isoron.uhabits.MainActivity
 
@@ -151,6 +153,86 @@ object WidgetIntents {
     /** The deep link `HabitPickerDialog` hands to the Flutter picker. */
     fun configureUri(widgetId: Int, filter: String): Uri =
         uri(ACTION_CONFIGURE, widgetId) { it.appendQueryParameter("filter", filter) }
+
+    // -----------------------------------------------------------------------
+    // Stack widget templates and fill-ins
+    // -----------------------------------------------------------------------
+    //
+    // A StackView cannot carry one PendingIntent per page: it carries a single
+    // *template*, and each page contributes a fill-in Intent that is merged
+    // into it when the user taps. That is why the templates below are mutable
+    // (`widgets.stack#11`) and why the fill-ins carry only data
+    // (`widgets.stack-service#8`) — `Intent.fillIn` copies the data across
+    // precisely because the template has none of its own.
+    //
+    // The request codes are upstream's: 0 for the habit screen, 1 for the value
+    // picker, 2 for the toggle. Upstream needed them because its three
+    // templates pointed at three different components; here they all point at
+    // MainActivity, so the codes are the only thing keeping the three
+    // PendingIntents distinct — which the launcher relies on when a home screen
+    // holds several stacks of different types.
+
+    /** `widgets.stack#10`: the template for the five graph stacks. */
+    fun showHabitTemplate(context: Context): PendingIntent = template(context, 0)
+
+    /** `widgets.stack#10`: the template for a Checkmark stack with a numerical habit. */
+    fun showNumberPickerTemplate(context: Context): PendingIntent = template(context, 1)
+
+    /** `widgets.stack#10`: the template for an all-boolean Checkmark stack. */
+    fun toggleCheckmarkTemplate(context: Context): PendingIntent = template(context, 2)
+
+    /** `widgets.stack-service#8`: `showHabitFillIn(habit)`. */
+    fun showHabitFillIn(widgetId: Int, habit: HabitData): Intent =
+        fillIn(uri(ACTION_SHOW, widgetId) { it.appendQueryParameter("habit", habit.id.toString()) })
+
+    /** `widgets.stack-service#8`: `toggleCheckmarkFillIn(habit, date)`. */
+    fun toggleCheckmarkFillIn(widgetId: Int, habit: HabitData, date: LocalDate): Intent =
+        fillIn(
+            uri(ACTION_TOGGLE, widgetId) {
+                it.appendQueryParameter("habit", habit.id.toString())
+                it.appendQueryParameter("date", date.toString())
+            }
+        )
+
+    /** `widgets.stack-service#8`: `showNumberPickerFillIn(habit, date)`. */
+    fun showNumberPickerFillIn(widgetId: Int, habit: HabitData, date: LocalDate): Intent =
+        fillIn(
+            uri(ACTION_EDIT, widgetId) {
+                it.appendQueryParameter("habit", habit.id.toString())
+                it.appendQueryParameter("date", date.toString())
+            }
+        )
+
+    private fun fillIn(uri: Uri): Intent = Intent().apply { data = uri }
+
+    /**
+     * The bare, argument-less counterpart of [activity]: everything that
+     * identifies the tap arrives later, in the fill-in.
+     */
+    private fun template(context: Context, requestCode: Int): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            requestCode,
+            Intent(context, MainActivity::class.java).apply {
+                action = HomeWidgetLaunchIntent.HOME_WIDGET_LAUNCH_ACTION
+            },
+            intentTemplateFlags()
+        )
+
+    /**
+     * `widgets.stack#11`, and `PendingIntentFactory.getIntentTemplateFlags()`
+     * verbatim: mutable from API 31, plain 0 below it.
+     *
+     * A template that is not mutable cannot have anything filled into it, so
+     * every page of a stack would open the same habit.
+     */
+    private fun intentTemplateFlags(): Int {
+        var flags = 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            flags = flags or PendingIntent.FLAG_MUTABLE
+        }
+        return flags
+    }
 
     private fun uri(action: String, widgetId: Int, build: (Uri.Builder) -> Unit): Uri {
         val builder = Uri.Builder()
