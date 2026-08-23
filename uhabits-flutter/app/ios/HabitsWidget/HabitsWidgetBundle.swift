@@ -22,12 +22,20 @@ import WidgetKit
 
 /// The iOS half of the home-screen widgets.
 ///
-/// Android registers six providers in the manifest (`widgets.registration#1`);
-/// this bundle offers three of them — Checkmark, History and Score — in the
-/// small and medium families. Frequency, Streak and Target are not built yet,
-/// which on iOS simply means the launcher's widget gallery does not list them;
-/// `HomeWidgetBridge` still calls `WidgetCenter.reloadTimelines(ofKind:)` for
-/// all six names, and a reload for a kind no bundle declares is a no-op.
+/// Android registers six providers in the manifest (`widgets.registration#1`)
+/// and this bundle offers the same six — Checkmark, History, Score, Streaks,
+/// Frequency and Target — in the small and medium families. The order below is
+/// `HomeWidgetBridge.providerNames`, which is also the order the manifest
+/// declares them in; each entry's `kind` is that provider's name spelled
+/// identically, because `HomeWidgetBridge.publish` calls
+/// `WidgetCenter.reloadTimelines(ofKind:)` for all six and a reload for a kind
+/// no bundle declares is a silent no-op — which is exactly how three of them
+/// went missing unnoticed (`audit3.ios-ships-only-three-of-the#1`).
+///
+/// Three of the six are configured by a filtered picker upstream
+/// (`widgets.registration#6`). iOS has no configuration activity, so the
+/// filter lives in the entity query the widget's intent parameter is typed
+/// with; see `HabitSelection.swift`.
 ///
 /// Two things about the widget sizes are worth stating, because they read like
 /// omissions against `widgets.registration#2`..`#5`:
@@ -47,5 +55,8 @@ struct HabitsWidgetBundle: WidgetBundle {
         CheckmarkWidget()
         HistoryWidget()
         ScoreWidget()
+        StreakWidget()
+        FrequencyWidget()
+        TargetWidget()
     }
 }

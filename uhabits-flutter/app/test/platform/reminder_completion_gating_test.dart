@@ -1,0 +1,378 @@
+/// The two halves of `NotificationTray`'s first gate, in the places this port
+/// had to move them to.
+///
+/// `test/journeys/reminder_completion_journey_test.dart` drives both rules from
+/// `main()` — a habit checked off in the morning, and a value entered that does
+/// not complete one. What is left here is what a journey cannot reach without
+/// inventing a user: an AT_MOST habit, a reminder that covers one weekday a
+/// week, and the exact order in which the tray talks to the platform.
+///
+///  * `audit3.a-habit-already-completed-today-still` — gate 1 itself:
+///    `if (isCompleted && habit.targetType != NumericalHabitType.AT_MOST)
+///    return`, which upstream runs when the alarm fires and this port has to
+///    run when the alarm is armed.
+///  * `audit3.recording-a-non-completing-entry-silently` — the cancel that
+///    takes the day's alarm down with the notification, and the re-arm behind
+///    it.
+library;
+
+// The classes under test implement core interfaces reached by their `src`
+// path, exactly as lib/state/app_scope.dart reaches them.
+// ignore_for_file: implementation_imports
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:uhabits/platform/flutter_alarm_scheduler.dart';
+import 'package:uhabits/platform/flutter_notification_tray.dart';
+import 'package:uhabits_core/src/io/logging.dart';
+import 'package:uhabits_core/src/models/entry.dart';
+import 'package:uhabits_core/src/models/habit.dart';
+import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
+import 'package:uhabits_core/src/models/reminder.dart';
+import 'package:uhabits_core/src/models/weekday_list.dart';
+import 'package:uhabits_core/src/preferences/memory_storage.dart';
+import 'package:uhabits_core/src/preferences/preferences.dart';
+import 'package:uhabits_core/src/test/habit_fixtures.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
+import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/notification_tray.dart';
+
+// ---------------------------------------------------------------------------
+// Test doubles
+// ---------------------------------------------------------------------------
+
+class _ScheduledAlarm {
+  _ScheduledAlarm(this.spec, this.whenMillis);
+
+  final NotificationSpec spec;
+  final int whenMillis;
+}
+
+class _FakeAlarmPlugin implements AlarmPlugin {
+  final List<_ScheduledAlarm> scheduled = <_ScheduledAlarm>[];
+  final List<int> cancelled = <int>[];
+
+  /// Every call, in the order the platform saw it.
+  final List<String> order = <String>[];
+
+  @override
+  Future<void> scheduleExact({
+    required NotificationSpec spec,
+    required int whenMillis,
+  }) async {
+    scheduled.add(_ScheduledAlarm(spec, whenMillis));
+    order.add('scheduleExact');
+  }
+
+  @override
+  Future<void> cancel(int id) async {
+    cancelled.add(id);
+    order.add('cancelAlarm');
+  }
+
+  @override
+  Future<bool> canScheduleExactAlarms() async => true;
+
+  @override
+  Future<bool> requestExactAlarmsPermission() async => true;
+}
+
+/// `NotificationManagerCompat`, recording into a shared call log.
+class _RecordingPresenter implements NotificationPresenter {
+  _RecordingPresenter(this.order);
+
+  final List<String> order;
+  final List<int> cancelled = <int>[];
+
+  @override
+  Future<void> show(NotificationSpec spec) async => order.add('show');
+
+  @override
+  Future<void> cancel(int id) async {
+    cancelled.add(id);
+    order.add('cancelNotification');
+  }
+}
+
+/// The narrow scheduler interface the tray is handed, recording into the same
+/// log so that "which reached the platform first" is answerable.
+class _RecordingScheduler implements ReminderSchedulerApi {
+  _RecordingScheduler(this.order);
+
+  final List<String> order;
+  int scheduleAllCount = 0;
+
+  @override
+  void scheduleAll() {
+    scheduleAllCount++;
+    order.add('scheduleAll');
+  }
+
+  @override
+  void snoozeReminder(Habit habit, int minutes) {}
+
+  @override
+  void scheduleAtTime(Habit habit, int reminderTime) {}
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  const TimeZone gmt = FixedTimeZone(0);
+
+  const NotificationStrings strings = NotificationStrings(
+    yes: 'Yes',
+    no: 'No',
+    enter: 'Enter',
+    snooze: 'Later',
+    defaultReminderQuestion: 'Have you completed this habit today?',
+    channelName: 'Reminder',
+  );
+
+  int unixTime(int year, int month, int day, [int hour = 0, int minute = 0]) =>
+      DateTime.utc(year, month, day, hour, minute).millisecondsSinceEpoch;
+
+  // 2015-01-26 is a Monday, which is index (daysSinceSunday + 1) % 7 = 2.
+  final LocalDate monday = LocalDate.ymd(2015, 1, 26);
+  final LocalDate tuesday = LocalDate.ymd(2015, 1, 27);
+  final LocalDate nextMonday = LocalDate.ymd(2015, 2, 2);
+
+  late MemoryModelFactory modelFactory;
+  late MemoryHabitList habitList;
+  late HabitFixtures fixtures;
+  late Preferences preferences;
+  late _FakeAlarmPlugin plugin;
+
+  setUp(() {
+    setToday(monday);
+    DateUtils.setFixedTimeZone(gmt);
+    modelFactory = MemoryModelFactory();
+    habitList = MemoryHabitList();
+    fixtures = HabitFixtures(modelFactory, habitList);
+    preferences = Preferences(MemoryStorage());
+    plugin = _FakeAlarmPlugin();
+  });
+
+  tearDown(() {
+    DateUtils.setFixedLocalTime(null);
+    DateUtils.setFixedTimeZone(null);
+    resetToday();
+  });
+
+  ReminderNotificationBuilder buildBuilder() => ReminderNotificationBuilder(
+        preferences: preferences,
+        strings: strings,
+      );
+
+  /// 06:00 on the Monday: two and a half hours before every reminder below.
+  FlutterAlarmScheduler buildScheduler() => FlutterAlarmScheduler(
+        plugin: plugin,
+        builder: buildBuilder(),
+        logging: StandardLogging(out: StringBuffer(), err: StringBuffer()),
+        nowMillis: () => unixTime(2015, 1, 26, 6, 0),
+      );
+
+  Habit yesNoHabit({Reminder? reminder}) {
+    final habit = fixtures.createEmptyHabit();
+    habit.id = 10;
+    habit.reminder = reminder ?? Reminder(8, 30, WeekdayList.everyDay);
+    return habit;
+  }
+
+  Habit numericalHabit(NumericalHabitType targetType, {double target = 10}) {
+    final habit = fixtures.createEmptyNumericalHabit(targetType);
+    habit.id = 11;
+    habit.targetValue = target;
+    habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+    return habit;
+  }
+
+  void record(Habit habit, LocalDate date, int value) {
+    habit.originalEntries.add(Entry(date, value));
+    habit.recompute();
+  }
+
+  /// Arms [habit]'s reminder for [date] at 08:30 and returns the alarms filed.
+  ///
+  /// The arguments are the pair `ReminderScheduler.scheduleAtTime` computes:
+  /// the alarm instant, and that instant floored to local midnight.
+  Future<List<_ScheduledAlarm>> armFor(Habit habit, LocalDate date) async {
+    final scheduler = buildScheduler();
+    scheduler.scheduleShowReminder(
+      unixTime(date.year, date.month, date.day, 8, 30),
+      habit,
+      date.unixTime,
+    );
+    await scheduler.settle();
+    return plugin.scheduled;
+  }
+
+  // -------------------------------------------------------------------------
+  // audit3.a-habit-already-completed-today-still — gate 1 at schedule time
+  // -------------------------------------------------------------------------
+
+  group('the completion gate', () {
+    test('a habit already checked off today is not given today\'s alarm',
+        () async {
+      final habit = yesNoHabit();
+      record(habit, monday, Entry.yesManual);
+
+      final alarms = await armFor(habit, monday);
+
+      expect(alarms.single.whenMillis, unixTime(2015, 1, 27, 8, 30),
+          reason: 'audit3.a-habit-already-completed-today-still#1: gate 1 '
+              'computes habit.isCompletedToday() and drops the notification '
+              'when the habit is done for the day. This port files the '
+              'notification with the alarm, so the day gate 1 would reject is '
+              'skipped and the alarm lands on the next one.');
+      expect(
+        ReminderPayload.decode(alarms.single.spec.payload)?.date,
+        tuesday,
+        reason: 'audit3.a-habit-already-completed-today-still#1: and the '
+            'notification carries that day, so the checkmark it writes is '
+            'that day\'s',
+      );
+    });
+
+    test('an entry that does not complete the habit keeps today\'s alarm',
+        () async {
+      final habit = numericalHabit(NumericalHabitType.atLeast, target: 10);
+      record(habit, monday, 3000);
+
+      final alarms = await armFor(habit, monday);
+
+      expect(habit.isCompletedToday(), isFalse,
+          reason: 'the precondition: 3 is below the AT_LEAST target of 10');
+      expect(alarms.single.whenMillis, unixTime(2015, 1, 26, 8, 30),
+          reason: 'audit3.recording-a-non-completing-entry-silently#1: a '
+              'numeric value below an AT_LEAST target does not complete the '
+              'habit, so the alarm still fires later that day and the reminder '
+              'is still shown');
+    });
+
+    test('an AT_MOST habit is never "completed", so its reminder always fires',
+        () async {
+      final habit = numericalHabit(NumericalHabitType.atMost, target: 10);
+      record(habit, monday, 3000);
+
+      final alarms = await armFor(habit, monday);
+
+      expect(alarms.single.whenMillis, unixTime(2015, 1, 26, 8, 30),
+          reason: 'audit3.a-habit-already-completed-today-still#1: gate 1 is '
+              '"isCompleted && habit.targetType != NumericalHabitType.AT_MOST" '
+              '— an AT_MOST habit is never dropped by it '
+              '(notifications.show-gating#11), whatever was entered today');
+    });
+
+    test('tomorrow\'s alarm is not judged by today\'s entry', () async {
+      final habit = yesNoHabit();
+      record(habit, monday, Entry.yesManual);
+
+      // What ReminderScheduler files once today's 08:30 has passed.
+      final alarms = await armFor(habit, tuesday);
+
+      expect(alarms.single.whenMillis, unixTime(2015, 1, 27, 8, 30),
+          reason: 'audit3.a-habit-already-completed-today-still#1: gate 1 asks '
+              'isCompletedToday(), and what tomorrow\'s entry will be is '
+              'unknowable now — upstream asks the question when the alarm '
+              'fires, by which time tomorrow is today');
+    });
+
+    test('a weekly reminder completed on its own day moves a week, not off the '
+        'calendar', () async {
+      final mondaysOnly = WeekdayList.fromArray(
+        <bool>[false, false, true, false, false, false, false],
+      );
+      final habit = yesNoHabit(reminder: Reminder(8, 30, mondaysOnly));
+      record(habit, monday, Entry.yesManual);
+
+      final alarms = await armFor(habit, monday);
+
+      expect(alarms, hasLength(1),
+          reason: 'audit3.a-habit-already-completed-today-still#1: the habit '
+              'still has a reminder — only today\'s firing is suppressed — so '
+              'the scan has to look a full week past the day gate 1 rejected, '
+              'not six days');
+      expect(alarms.single.whenMillis, unixTime(2015, 2, 2, 8, 30),
+          reason: 'notifications.show-gating#6 and #7: the next Monday');
+      expect(
+        ReminderPayload.decode(alarms.single.spec.payload)?.date,
+        nextMonday,
+      );
+      expect(plugin.cancelled, isEmpty,
+          reason: 'audit3.a-habit-already-completed-today-still#1: this is not '
+              'the "not supposed to run on any day" case, so nothing is '
+              'disarmed');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // audit3.recording-a-non-completing-entry-silently — the tray's re-arm
+  // -------------------------------------------------------------------------
+
+  group('cancelling a reminder', () {
+    late List<String> order;
+    late _RecordingPresenter presenter;
+    late _RecordingScheduler scheduler;
+    late FlutterNotificationTray tray;
+
+    setUp(() {
+      order = <String>[];
+      presenter = _RecordingPresenter(order);
+      scheduler = _RecordingScheduler(order);
+      tray = FlutterNotificationTray(
+        presenter: presenter,
+        builder: buildBuilder(),
+        scheduler: scheduler,
+      );
+    });
+
+    test('re-arms the day\'s alarm, because the cancel disarmed it', () async {
+      tray.removeNotification(10);
+      await tray.settle();
+
+      expect(presenter.cancelled, <int>[10],
+          reason: 'notifications.id-and-registry#3: cancel(habit) still calls '
+              'NotificationManagerCompat.cancel(getNotificationId(habit))');
+      expect(scheduler.scheduleAllCount, 1,
+          reason: 'audit3.recording-a-non-completing-entry-silently#1: '
+              'upstream the AlarmManager alarm is untouched by the cancel, so '
+              'a reminder the user has not completed still fires later that '
+              'day. Here the alarm IS the notification that cancel just '
+              'removed, so it has to be armed again — and gate 1, in '
+              'FlutterAlarmScheduler, is what then decides whether it lands '
+              'today or on the next day the habit is not already done for.');
+    });
+
+    test('the platform sees the cancel before the alarm that replaces it',
+        () async {
+      tray.removeNotification(10);
+      await tray.settle();
+
+      expect(order, <String>['cancelNotification', 'scheduleAll'],
+          reason: 'audit3.recording-a-non-completing-entry-silently#1: the '
+              'plugin cancels and schedules by the same id, so a re-arm that '
+              'reached it first would be the alarm that disappeared. The '
+              're-arm is queued behind the cancel for that reason — and it is '
+              'also why ReminderController.onSnoozeDelayPicked, which snoozes '
+              'first and cancels second, still ends up with its snoozed alarm: '
+              'scheduleAll re-reads the snooze from WidgetPreferences.');
+    });
+
+    test('a tray with no scheduler behind it still cancels', () async {
+      final lonely = FlutterNotificationTray(
+        presenter: presenter,
+        builder: buildBuilder(),
+      );
+
+      lonely.removeNotification(10);
+      await lonely.settle();
+
+      expect(presenter.cancelled, <int>[10],
+          reason: 'the scheduler is optional: a host without the alarm half of '
+              'the pipeline is still a working notification tray');
+      expect(scheduler.scheduleAllCount, 0);
+    });
+  });
+}

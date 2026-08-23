@@ -23,7 +23,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../platform/flutter_canvas.dart' show TransparencyCanvas;
-import '../../../core_view.dart';
+import '../../../common/scrollable_chart.dart';
 import '../../list/list_header.dart' show IntlLocalDateFormatter;
 
 export 'package:uhabits_core/src/ui/screens/habits/show/views/score_card.dart'
@@ -235,8 +235,9 @@ List<String> bucketLabelsWithoutDay(L10n l10n) => <String>[
 ///
 /// A line of ring markers over a five-row percentage grid, with a one- or
 /// two-line date footer. Android draws it with `android.graphics.Paint` onto a
-/// `View`; this rewrite speaks the core [core.Canvas] so [CoreView] can host
-/// it, which forces three substitutions and nothing else:
+/// `View`; this rewrite speaks the core [core.Canvas] so the `CoreView` inside
+/// [ScrollableChart] can host it, which forces three substitutions and nothing
+/// else:
 ///
 ///  * `paint.fontSpacing` becomes [chartFontSpacing] times the text size, and
 ///    every baseline goes through [chartTextCenter];
@@ -253,7 +254,7 @@ List<String> bucketLabelsWithoutDay(L10n l10n) => <String>[
 /// Everything else — the integer truncations, the shared `maxDayWidth` /
 /// `maxMonthWidth` getters that both measure month names, the marker drawn one
 /// column late — is kept as it is upstream.
-class ScoreChartView extends core.View {
+class ScoreChartView extends core.DataView {
   ScoreChartView({
     this.scores,
     required this.color,
@@ -281,9 +282,26 @@ class ScoreChartView extends core.View {
   /// One of [ScoreCardPresenter.bucketSizes]; only the footer reads it.
   final int bucketSize;
 
-  /// Columns scrolled into the past. Horizontal scrolling itself is not wired
-  /// up yet (`show-habit.chart-scrolling`), so the host always passes 0.
-  final int dataOffset;
+  /// Columns scrolled into the past, written back by the host on every scroll
+  /// (`show-habit.chart-scrolling#2`). A fresh chart opens on the newest
+  /// column, and `ScoreCardView.setState` calls `reset()` to put it back there
+  /// (`show-habit.chart-scrolling#5`).
+  @override
+  int dataOffset;
+
+  /// `setScrollerBucketSize(columnWidth.toInt())`.
+  ///
+  /// Android computes the bucket in `onSizeChanged`, before anything is drawn;
+  /// the port has no size callback, so the column width is remembered as it is
+  /// worked out in [draw] and a chart that has never been painted reports 0 —
+  /// which the host reads as "nothing to scroll yet".
+  ///
+  /// Not truncated to an `int`: the scroller of the port counts logical pixels
+  /// as doubles, all the way through (see scrollable_chart.dart).
+  @override
+  double get dataColumnWidth => _dataColumnWidth;
+
+  double _dataColumnWidth = 0.0;
 
   /// `setIsTransparencyEnabled(enabled)`.
   ///
@@ -349,6 +367,9 @@ class ScoreChartView extends core.View {
     final nColumns = (width / columnWidth).toInt();
     if (nColumns <= 0) return;
     columnWidth = width / nColumns;
+    // `setScrollerBucketSize(columnWidth.toInt())`, the last thing
+    // onSizeChanged does with columnWidth.
+    _dataColumnWidth = columnWidth;
     final columnHeight = 8 * baseSize;
 
     _drawGrid(canvas, nColumns * columnWidth, paddingTop, columnHeight, em,
@@ -554,7 +575,16 @@ class ScoreChartView extends core.View {
 /// widget renders [state] and reports a spinner choice through
 /// [onSpinnerPosition], which the screen hands to
 /// `ScoreCardPresenter.onSpinnerPosition`.
-class ScoreCardView extends StatelessWidget {
+///
+/// `show_habit_score.xml` gives `@+id/scoreView` as a `ScoreChart`, which *is*
+/// a `ScrollableChart`: a horizontal drag walks the chart backwards by whole
+/// columns, at most `maxDataOffset = 12 * 200` of them
+/// (`show-habit.chart-scrolling#2`,
+/// `audit3.charts-on-the-habit-detail-screen#1`). `setState` calls
+/// `binding.scoreView.reset()`, which is why the card is a [StatefulWidget]:
+/// the scroller outlives a rebuild and a new [ScoreCardState] is what snaps it
+/// back to the newest bucket (`show-habit.chart-scrolling#5`).
+class ScoreCardView extends StatefulWidget {
   const ScoreCardView({
     required this.state,
     this.onSpinnerPosition,
@@ -576,34 +606,61 @@ class ScoreCardView extends StatelessWidget {
   /// counterpart of `JavaLocalDateFormatter(Locale.getDefault())`.
   final core.LocalDateFormatter? dateFormatter;
 
+  /// The column the chart opens on, before anything is dragged.
+  ///
+  /// `binding.scoreView.reset()` runs on every `setState`, so the screen always
+  /// passes 0 (`show-habit.chart-scrolling#5`).
   final int dataOffset;
+
+  @override
+  State<ScoreCardView> createState() => _ScoreCardViewState();
+}
+
+class _ScoreCardViewState extends State<ScoreCardView> {
+  /// `binding.scoreView`, in as much as the card ever talks to it: `reset()`.
+  final ScrollableChartController _controller = ScrollableChartController();
+
+  @override
+  void didUpdateWidget(ScoreCardView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // `setState` ends with `binding.scoreView.reset()`, so any refresh at all
+    // — a new bucket from the spinner included — jumps back to the newest
+    // column (`show-habit.chart-scrolling#5`).
+    if (!identical(widget.state, oldWidget.state)) _controller.reset();
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
+    final state = widget.state;
     final color = state.theme.colorOf(state.color);
     return ChartCard(
       theme: state.theme,
       title: l10n.score,
       titleColor: color,
       spinner: BucketSpinner(
-        key: spinnerKey,
+        key: ScoreCardView.spinnerKey,
         labels: bucketLabels(l10n),
         value: state.spinnerPosition,
         theme: state.theme,
-        onChanged: onSpinnerPosition,
+        onChanged: widget.onSpinnerPosition,
       ),
       child: SizedBox(
-        height: chartHeight,
-        child: CoreView(
+        height: ScoreCardView.chartHeight,
+        // ScoreChart is itself the ScrollableChart, and its bucket is the
+        // column width it measured while drawing.
+        child: ScrollableChart(
           view: ScoreChartView(
             scores: state.scores,
             color: color,
             theme: state.theme,
-            dateFormatter: dateFormatter ?? IntlLocalDateFormatter.of(context),
+            dateFormatter:
+                widget.dateFormatter ?? IntlLocalDateFormatter.of(context),
             bucketSize: state.bucketSize,
-            dataOffset: dataOffset,
+            dataOffset: widget.dataOffset,
           ),
+          controller: _controller,
+          initialDataOffset: widget.dataOffset,
         ),
       ),
     );

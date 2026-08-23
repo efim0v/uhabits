@@ -11,7 +11,8 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/time/date_utils.dart';
-import 'package:uhabits_core/uhabits_core.dart' show Habit, LocalDate;
+import 'package:uhabits_core/uhabits_core.dart'
+    show Habit, LocalDate, NumericalHabitType, getToday;
 
 import 'flutter_notification_tray.dart';
 
@@ -38,11 +39,13 @@ import 'flutter_notification_tray.dart';
 ///     what reproduces `notifications.show-gating#3`: checking a habit off runs
 ///     `CreateRepetitionCommand`, the core tray cancels, and the pending alarm
 ///     disappears with it.
-///  2. **The weekday gate has to run here.** `notifications.show-gating#6`
-///     lives at fire time upstream. With no fire-time hook, an alarm set for a
-///     day the reminder does not cover would show a notification the Android
-///     build suppresses, so [scheduleShowReminder] advances to the next day the
-///     weekday set does cover — see [_advanceToReminderDay].
+///  2. **The gates have to run here.** `notifications.show-gating#6` and gate 1
+///     (`if (isCompleted && targetType != AT_MOST) return`) both live at fire
+///     time upstream. With no fire-time hook, an alarm set for a day the
+///     reminder does not cover — or for a day the habit is already done for —
+///     would show a notification the Android build suppresses, so
+///     [scheduleShowReminder] advances to the next day that survives both
+///     gates. See [_advanceToReminderDay].
 ///  3. **Nothing re-arms itself.** `reminders.on-show-reminder#2` — every
 ///     firing schedules the next one — has no counterpart. `scheduleAll()` at
 ///     app start and after every command is what keeps the chain alive.
@@ -216,14 +219,19 @@ class FlutterAlarmScheduler implements SystemScheduler {
         '${two(local.hour)}${two(local.minute)}${two(local.second)}';
   }
 
-  /// Moves the alarm forward to the first day the reminder's weekday set
-  /// covers, returning null when it covers none.
+  /// Moves the alarm forward to the first day that survives the two gates a
+  /// scheduled notification cannot run for itself, returning null when no day
+  /// does.
   ///
-  /// Port of `NotificationTray.ShowNotificationTask.shouldShowReminderToday`
-  /// (`notifications.show-gating#6`, `#7` and `#8`) moved from fire time to
-  /// schedule time, for the reason given in the class comment. The date tested
-  /// is the one the alarm carries — the checkmark day the core computed — not
-  /// today.
+  /// Port of `NotificationTray.ShowNotificationTask`'s
+  /// `shouldShowReminderToday` (`notifications.show-gating#6`, `#7` and `#8`)
+  /// and of its first gate (`#1`, `audit3.a-habit-already-completed-today
+  /// -still#1`), both moved from fire time to schedule time for the reason
+  /// given in the class comment. The date tested is the one the alarm carries —
+  /// the checkmark day the core computed — not today.
+  ///
+  /// Eight days, not seven: gate 1 can reject the first one, and the next day
+  /// the weekday set covers is then a full week out.
   ///
   /// One day is one [DateUtils.dayLength] here; across a DST boundary the alarm
   /// therefore lands an hour off the habit's wall-clock reminder, which the
@@ -239,14 +247,50 @@ class FlutterAlarmScheduler implements SystemScheduler {
     final days = reminder.days.toArray();
     var date = LocalDate.fromUnixTime(timestamp);
     var time = reminderTime;
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < 8; i++) {
       // notifications.show-gating#7: SUNDAY -> 1, MONDAY -> 2, ..., SATURDAY -> 0.
       final weekday = (date.dayOfWeek.daysSinceSunday + 1) % 7;
-      if (days[weekday]) return _ReminderTarget(time, date);
+      if (days[weekday] && !_isAlreadyCompleted(habit, date)) {
+        return _ReminderTarget(time, date);
+      }
       date = LocalDate(date.daysSince2000 + 1);
       time += DateUtils.dayLength;
     }
     return null;
+  }
+
+  /// Gate 1 of `NotificationTray.ShowNotificationTask.onPostExecute`:
+  ///
+  /// ```kotlin
+  /// if (isCompleted && habit.targetType != NumericalHabitType.AT_MOST) {
+  ///     systemTray.log("Habit ${habit.id} already checked. Skipping.")
+  ///     return
+  /// }
+  /// ```
+  ///
+  /// `audit3.a-habit-already-completed-today-still#1`: on Android the alarm
+  /// still fires and this gate drops the notification, so a habit checked off
+  /// in the morning never shows its evening reminder — however many times the
+  /// app is opened in between, since every `scheduleAll()` only re-arms the
+  /// same alarm the gate will drop again. Here the alarm *is* the notification,
+  /// so a day this gate would reject has to be skipped before the alarm is
+  /// filed; otherwise the OS posts a reminder Android would have suppressed.
+  ///
+  /// Only the alarm's own day can be judged, and only when that day is the
+  /// current one: `isCompletedToday` reads [getToday], and what tomorrow's
+  /// entry will be is unknowable now. An alarm already armed for today is
+  /// re-armed by the tray after every entry
+  /// (`audit3.recording-a-non-completing-entry-silently`), which is what brings
+  /// this gate a fresh answer as soon as the answer changes.
+  bool _isAlreadyCompleted(Habit habit, LocalDate date) {
+    if (date != getToday()) return false;
+    // Redundant on its own — the core's isCompletedToday already answers false
+    // for every AT_MOST habit (`notifications.show-gating#11`) — but it is half
+    // of the Kotlin condition and states which habits this gate never touches.
+    if (habit.targetType == NumericalHabitType.atMost) return false;
+    if (!habit.isCompletedToday()) return false;
+    log(_loggerName, 'Habit ${habit.id} already checked. Skipping.');
+    return true;
   }
 }
 

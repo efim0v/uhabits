@@ -46,24 +46,41 @@ struct HabitTimelineEntry: TimelineEntry {
     }
 }
 
-/// The provider all three widgets share.
+/// The provider all six widgets share.
 ///
 /// On Android `BaseWidgetProvider.onUpdate` reads the habit list out of the
 /// application component in the launcher's process and redraws
 /// (`widgets.provider-lifecycle#1`). Here there is no habit list and no
 /// process to read it from: the provider reads the App Group document the
 /// bridge published and turns it into an entry.
-struct HabitTimelineProvider: AppIntentTimelineProvider {
+///
+/// It is generic over the configuration because three of the six are
+/// configured by a *filtered* picker upstream (`widgets.registration#6`), and
+/// on iOS a filtered picker is a different intent type — see
+/// `HabitSelectionIntent`. Nothing below depends on which of the three it is.
+struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
+    AppIntentTimelineProvider {
 
     typealias Entry = HabitTimelineEntry
-    typealias Intent = SelectHabitIntent
+    typealias Intent = Configuration
+
+    /// The habits this widget's picker would have offered, which is also the
+    /// set its unconfigured fallback may choose from: a Streak widget falls
+    /// back onto a boolean habit and a Target widget onto a measurable one,
+    /// because that is all `BooleanHabitPickerDialog` and
+    /// `NumericalHabitPickerDialog` ever let the user pick.
+    let eligible: (WidgetHabit) -> Bool
+
+    init(eligible: @escaping (WidgetHabit) -> Bool = { _ in true }) {
+        self.eligible = eligible
+    }
 
     func placeholder(in context: Context) -> HabitTimelineEntry {
-        entry(for: SelectHabitIntent())
+        entry(for: Configuration())
     }
 
     func snapshot(
-        for configuration: SelectHabitIntent,
+        for configuration: Configuration,
         in context: Context
     ) async -> HabitTimelineEntry {
         entry(for: configuration)
@@ -84,17 +101,17 @@ struct HabitTimelineProvider: AppIntentTimelineProvider {
     /// user with the 3-hour delay enabled sees the widget roll over up to
     /// three hours early, until the app's next publish corrects it.
     func timeline(
-        for configuration: SelectHabitIntent,
+        for configuration: Configuration,
         in context: Context
     ) async -> Timeline<HabitTimelineEntry> {
         let current = entry(for: configuration)
         return Timeline(entries: [current], policy: .after(Self.startOfTomorrow()))
     }
 
-    private func entry(for configuration: SelectHabitIntent) -> HabitTimelineEntry {
+    private func entry(for configuration: Configuration) -> HabitTimelineEntry {
         let store = WidgetStore()
         let today = store.today() ?? Calendar.current.startOfDay(for: Date())
-        if let habit = store.resolve(configuration) {
+        if let habit = store.resolve(configuration, eligible: eligible) {
             return HabitTimelineEntry(date: Date(), state: .habit(habit), today: today)
         }
         // A habit that was picked and then deleted is a different failure from

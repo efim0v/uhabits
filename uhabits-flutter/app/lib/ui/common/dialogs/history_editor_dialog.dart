@@ -17,7 +17,13 @@
 ///    single-dialog mechanism, so it can stay visible *under* the number and
 ///    check-mark popups (`history-editor.dialog#10`, `#16`);
 ///  * a tap on a day goes to the same [HistoryCardPresenter] the History card
-///    uses (`history-editor.dialog#11`, `#17`).
+///    uses (`history-editor.dialog#11`, `#17`);
+///  * `setContentView(dataView)` is an `AndroidDataView`, so the calendar is
+///    scrollable: a horizontal drag walks it backwards through weeks, which is
+///    the only way to reach — and edit — a day that is not on screen
+///    (`show-habit.chart-scrolling#1`,
+///    `audit3.charts-on-the-habit-detail-screen#1`). The chart object outlives
+///    every `refreshData()`, so the scroll position does too.
 ///
 /// The Android lifecycle maps onto the widget lifecycle: `onCreateDialog` is
 /// [State.didChangeDependencies] (the first time round), `onResume` is
@@ -46,9 +52,9 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart'
 import 'package:uhabits_core/src/ui/views/history_chart.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
-import '../../core_view.dart';
 import '../../habits/list/list_header.dart' show IntlLocalDateFormatter;
 import '../../theme/app_theme.dart' show coreThemeOf, toFlutterColor;
+import '../scrollable_chart.dart';
 import 'checkmark_dialog.dart';
 import 'number_dialog.dart';
 
@@ -341,8 +347,12 @@ class _HistoryEditorDialogState extends State<HistoryEditorDialog>
       child: SizedBox(
         width: size.width,
         height: size.height,
-        // `setContentView(dataView)`: the chart is the whole content.
-        child: CoreView(view: chart),
+        // `setContentView(dataView)`: the AndroidDataView is the whole
+        // content, and the chart is the view it scrolls.
+        child: ScrollableChart(
+          view: chart,
+          maxDataOffset: ScrollableChart.dataViewMaxDataOffset,
+        ),
       ),
     );
   }

@@ -276,18 +276,12 @@ class AppScope {
       onBackgroundResponse: reminderBackgroundResponse,
     );
 
-    final flutterTray = FlutterNotificationTray(
-      presenter: presenter,
-      builder: builder,
-      logging: logging,
-    );
-    final tray = NotificationTray(
-      taskRunner,
-      commandRunner,
-      preferences,
-      flutterTray,
-    );
-
+    // The scheduler is built before the tray, because the tray needs it: an
+    // alarm here IS the notification the tray cancels, filed under the same id,
+    // so every cancel has to re-arm the day's alarm behind it
+    // (`audit3.recording-a-non-completing-entry-silently#1`). Upstream the two
+    // are independent and `AndroidNotificationTray` knows nothing of the
+    // scheduler.
     final scheduler = ReminderScheduler(
       commandRunner,
       habitList,
@@ -298,6 +292,19 @@ class AppScope {
         logging: logging,
       ),
       WidgetPreferences(preferencesStorage),
+    );
+
+    final flutterTray = FlutterNotificationTray(
+      presenter: presenter,
+      builder: builder,
+      logging: logging,
+      scheduler: scheduler,
+    );
+    final tray = NotificationTray(
+      taskRunner,
+      commandRunner,
+      preferences,
+      flutterTray,
     );
 
     final sync = WidgetSync(

@@ -15,7 +15,7 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/frequency_card.dar
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../../l10n/app_localizations.dart';
-import '../../../core_view.dart';
+import '../../../common/scrollable_chart.dart';
 import '../../list/list_header.dart' show IntlLocalDateFormatter;
 import 'score_card_view.dart';
 
@@ -47,7 +47,7 @@ export 'package:uhabits_core/src/ui/screens/habits/show/views/frequency_card.dar
 ///    same `RectF` for its cells and hands the last, `baseSize`-wide one to
 ///    `drawFooter`. When the month names are wider than `baseSize` the column
 ///    is wider too, and the label sits left of centre.
-class FrequencyChartView extends core.View {
+class FrequencyChartView extends core.DataView {
   FrequencyChartView({
     required this.frequency,
     required this.color,
@@ -73,10 +73,23 @@ class FrequencyChartView extends core.View {
 
   final bool isNumerical;
 
-  /// Months scrolled into the past. `FrequencyChart` never resets its scroll
-  /// on refresh (`show-habit.chart-scrolling#6`); scrolling itself is not
-  /// wired up yet, so the host passes 0.
-  final int dataOffset;
+  /// Months scrolled into the past, written back by the host on every scroll
+  /// (`show-habit.chart-scrolling#2`). `FrequencyChart` never resets its
+  /// scroll on refresh, so the position survives a new state
+  /// (`show-habit.chart-scrolling#6`).
+  @override
+  int dataOffset;
+
+  /// `setScrollerBucketSize(baseSize)`, one month per `height / 8`.
+  ///
+  /// Android computes it in `onSizeChanged`, before anything is drawn; the port
+  /// has no size callback, so the value is remembered as [draw] works it out
+  /// and a chart that has never been painted reports 0 — which the host reads
+  /// as "nothing to scroll yet".
+  @override
+  double get dataColumnWidth => _dataColumnWidth;
+
+  double _dataColumnWidth = 0.0;
 
   final core.LocalDate? _today;
 
@@ -87,6 +100,9 @@ class FrequencyChartView extends core.View {
     // onSizeChanged: `if (height < 9) height = 200`.
     if (height < 9) height = 200.0;
     final baseSize = height ~/ 8;
+    // `setScrollerBucketSize(baseSize)`, the second statement of
+    // onSizeChanged: the bucket is a month, and a month is baseSize wide.
+    _dataColumnWidth = baseSize.toDouble();
     if (baseSize <= 0 || width <= 0) return;
 
     final textSize = baseSize * 0.4;
@@ -320,7 +336,19 @@ core.LocalDate _stepMonth(core.LocalDate date, int months) {
   return core.LocalDate.ymd(year, month, 1);
 }
 
-/// The Frequency card: a title and a 200dp [FrequencyChartView].
+/// The Frequency card: a title and a 200dp [FrequencyChartView] inside its
+/// scroller.
+///
+/// `show_habit_frequency.xml` gives `@+id/frequencyChart` as a
+/// `FrequencyChart`, which *is* a `ScrollableChart`: a horizontal drag walks
+/// the chart backwards a month at a time
+/// (`show-habit.chart-scrolling#2`,
+/// `audit3.charts-on-the-habit-detail-screen#1`).
+///
+/// Nothing here ever calls `reset()` — `FrequencyCardView.setState` does not,
+/// and that is the whole of `show-habit.chart-scrolling#6`. The scroll position
+/// therefore survives a refresh, which is what keeping the [ScrollableChart]
+/// state across rebuilds gives for free.
 class FrequencyCardView extends StatelessWidget {
   const FrequencyCardView({
     required this.state,
@@ -337,6 +365,11 @@ class FrequencyCardView extends StatelessWidget {
 
   final core.LocalDateFormatter? dateFormatter;
 
+  /// The month the chart opens on, before anything is dragged.
+  ///
+  /// Nothing resets this card, so the offset the scroller reaches is the one it
+  /// keeps (`show-habit.chart-scrolling#6`); the screen opens on the newest
+  /// month.
   final int dataOffset;
 
   /// The chart reads `getToday()` itself upstream; an explicit date is only
@@ -353,7 +386,7 @@ class FrequencyCardView extends StatelessWidget {
       child: SizedBox(
         height: chartHeight,
         width: double.infinity,
-        child: CoreView(
+        child: ScrollableChart(
           view: FrequencyChartView(
             frequency: state.frequency,
             color: state.theme.colorOf(state.color),
@@ -364,6 +397,7 @@ class FrequencyCardView extends StatelessWidget {
             dataOffset: dataOffset,
             today: today,
           ),
+          initialDataOffset: dataOffset,
         ),
       ),
     );

@@ -40,7 +40,9 @@
 ///    pixel already is a density-independent one).
 ///  * `onSaveInstanceState`/`onRestoreInstanceState` have no equivalent: the
 ///    [State] outlives every rebuild, and Flutter has no configuration-change
-///    teardown to restore from.
+///    teardown to restore from. What survives of the restore half is
+///    [ScrollableChart.initialDataOffset], the column a chart is allowed to
+///    open on.
 library;
 
 import 'dart:math' as math;
@@ -108,6 +110,7 @@ class ScrollableChart extends StatefulWidget {
     this.bucketSize,
     this.controller,
     this.onDataOffsetChanged,
+    this.initialDataOffset = 0,
     this.maxDataOffset = defaultMaxDataOffset,
     this.direction = defaultDirection,
     this.onTap,
@@ -130,6 +133,17 @@ class ScrollableChart extends StatefulWidget {
 
   /// `private var maxDataOffset = 12 * 200`.
   static const int defaultMaxDataOffset = 12 * 200;
+
+  /// The bound to give a chart hosted the `AndroidDataView` way.
+  ///
+  /// `AndroidDataView.updateDataOffset` clamps the offset from below only
+  /// (`max(0, …)`) — its Score/Frequency counterpart is the one with a
+  /// `maxDataOffset`. The single widget always has an upper bound, so the
+  /// DataView hosts get the only number Android names on that side: the
+  /// `Integer.MAX_VALUE` handed to `scroller.fling(…, 0, Integer.MAX_VALUE, 0,
+  /// 0)`. It is millions of times more columns than a habit has days, which is
+  /// what "no bound" means in practice.
+  static const int dataViewMaxDataOffset = 0x7FFFFFFF;
 
   /// `private var direction = 1`.
   static const int defaultDirection = 1;
@@ -161,6 +175,19 @@ class ScrollableChart extends StatefulWidget {
   /// `ScrollController.onDataOffsetChanged`: called with each new offset, and
   /// only when it actually changed.
   final ValueChanged<int>? onDataOffsetChanged;
+
+  /// The column the chart opens on, before anything is dragged.
+  ///
+  /// Android has no such setter: a freshly inflated chart always starts at
+  /// column 0, and a chart coming back from a configuration change has its
+  /// scroller pushed to `bundle.getInt("x")` by `onRestoreInstanceState`. The
+  /// show-habit cards take a `dataOffset` for the same reason — a caller that
+  /// already knows which column the chart should open on — and hand it here.
+  ///
+  /// Only the offset is seeded eagerly. The scroller position it stands for is
+  /// `initialDataOffset * bucketSize`, and a chart that has never been painted
+  /// has no bucket size yet, so that half waits for the first gesture.
+  final int initialDataOffset;
 
   /// The oldest reachable column.
   final int maxDataOffset;
@@ -196,6 +223,12 @@ class _ScrollableChartState extends State<ScrollableChart>
   /// `ScrollableChart.dataOffset` / `DataView.dataOffset`.
   int _dataOffset = 0;
 
+  /// Whether [_scrollX] has caught up with [ScrollableChart.initialDataOffset].
+  ///
+  /// A seed of 0 is already true of a fresh scroller, so only a card that opens
+  /// on an older column ever has to wait for a bucket size.
+  bool _scrollXSeeded = true;
+
   late final AnimationController _fling;
 
   @override
@@ -203,7 +236,26 @@ class _ScrollableChartState extends State<ScrollableChart>
     super.initState();
     _fling = AnimationController.unbounded(vsync: this)
       ..addListener(_onFlingTick);
+    _dataOffset =
+        math.min(widget.maxDataOffset, math.max(0, widget.initialDataOffset));
+    _scrollXSeeded = _dataOffset == 0;
+    _seedScrollX();
     widget.controller?._attach(this);
+  }
+
+  /// Puts the scroller where [_dataOffset] says it is.
+  ///
+  /// The counterpart of `onRestoreInstanceState`'s `scroller.startScroll(0, 0,
+  /// x, y, 0)`, except that Android saved the pixel position and this has to
+  /// derive it — which is only possible once something has measured a column.
+  /// Until then the offset is a number the chart is drawn at and the scroller
+  /// is left alone; the first gesture is where the two have to agree.
+  void _seedScrollX() {
+    if (_scrollXSeeded) return;
+    final bucket = _bucketSize;
+    if (bucket <= 0.0) return;
+    _scrollXSeeded = true;
+    _scrollX = _dataOffset * bucket;
   }
 
   @override
@@ -245,10 +297,14 @@ class _ScrollableChartState extends State<ScrollableChart>
   /// `private val maxX get() = maxDataOffset * scrollerBucketSize`.
   double get _maxX => widget.maxDataOffset * _bucketSize;
 
-  void _onDragStart(DragStartDetails details) => _fling.stop();
+  void _onDragStart(DragStartDetails details) {
+    _fling.stop();
+    _seedScrollX();
+  }
 
   void _onDragUpdate(DragUpdateDetails details) {
     if (_bucketSize <= 0.0) return;
+    _seedScrollX();
     // Kotlin reads `dx *= -direction` because Android's onScroll hands out the
     // distance the content moved, the negative of the finger's; Flutter's
     // delta is the finger's, so the negation cancels out.
@@ -295,6 +351,9 @@ class _ScrollableChartState extends State<ScrollableChart>
   void _reset() {
     _fling.stop();
     _scrollX = 0.0;
+    // Wherever the seed would have put the scroller, `finalX = 0` is where it
+    // is now.
+    _scrollXSeeded = true;
     _updateDataOffset();
   }
 

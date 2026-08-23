@@ -509,25 +509,46 @@ class _HabitListViewState extends State<_HabitListView>
     // which Scaffold gives its AppBar for free, and the bottom one is consumed
     // by the card list (`#8`).
     final padding = MediaQuery.paddingOf(context);
-    return ColoredBox(
-      color: Colors.black,
-      child: Padding(
-        padding: EdgeInsets.only(left: padding.left, right: padding.right),
-        child: MediaQuery.removePadding(
-          context: context,
-          removeLeft: true,
-          removeRight: true,
-          child: Stack(
-            children: <Widget>[
-              _buildScaffold(context, l10n, model, theme, toolbarColor,
-                  bottomInset: padding.bottom),
-              // `addAtTop(konfettiView)` with `translationZ = 10f`: the burst
-              // covers the whole root, toolbar included, and its origin is the
-              // window position of the tapped button less the left inset the
-              // root padding above already took out
-              // (`list-habits.screen-layout#1`, `list-habits.confetti#5`).
-              Positioned.fill(child: ConfettiOverlay(key: _confettiKey)),
-            ],
+    // The contextual action bar is an Android `ActionMode`, and the system
+    // Back key destroys an active ActionMode before the activity ever sees
+    // the press: `ListHabitsSelectionMenu.onDestroyActionMode` ->
+    // `listController.onSelectionFinished()` -> `cancelSelection()`
+    // (`list-habits.selection-mode#6`, "e.g. system back";
+    // `audit3.the-android-system-back-button-does#1`). So while a selection is
+    // live, Back cancels it and the user stays on the list.
+    //
+    // With nothing selected there is no ActionMode to swallow the press, and
+    // `ListHabitsActivity` is the root activity — Back finishes it, which is
+    // what letting the pop bubble out of the root route does.
+    return PopScope<Object?>(
+      canPop: model.isSelectionEmpty,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop || model.isSelectionEmpty) return;
+        // The very same call the action bar's close button makes; it clears
+        // the selection, resets the controller to NormalMode and asks the
+        // screen to put the normal toolbar back.
+        model.listController.onSelectionFinished();
+      },
+      child: ColoredBox(
+        color: Colors.black,
+        child: Padding(
+          padding: EdgeInsets.only(left: padding.left, right: padding.right),
+          child: MediaQuery.removePadding(
+            context: context,
+            removeLeft: true,
+            removeRight: true,
+            child: Stack(
+              children: <Widget>[
+                _buildScaffold(context, l10n, model, theme, toolbarColor,
+                    bottomInset: padding.bottom),
+                // `addAtTop(konfettiView)` with `translationZ = 10f`: the
+                // burst covers the whole root, toolbar included, and its
+                // origin is the window position of the tapped button less the
+                // left inset the root padding above already took out
+                // (`list-habits.screen-layout#1`, `list-habits.confetti#5`).
+                Positioned.fill(child: ConfettiOverlay(key: _confettiKey)),
+              ],
+            ),
           ),
         ),
       ),

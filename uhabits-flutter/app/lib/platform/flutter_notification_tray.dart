@@ -509,8 +509,10 @@ class FlutterNotificationTray implements SystemTray {
     required NotificationPresenter presenter,
     required ReminderNotificationBuilder builder,
     Logging? logging,
+    ReminderSchedulerApi? scheduler,
   })  : _presenter = presenter,
         _builder = builder,
+        _scheduler = scheduler,
         _logger = (logging ?? StandardLogging()).getLogger(_loggerName);
 
   static const String _loggerName = 'AndroidNotificationTray';
@@ -518,6 +520,15 @@ class FlutterNotificationTray implements SystemTray {
   final NotificationPresenter _presenter;
 
   final ReminderNotificationBuilder _builder;
+
+  /// The alarm half of the pipeline, or null where there is none — a widget
+  /// test that only inspects what is posted, for instance.
+  ///
+  /// `AndroidNotificationTray` has no such collaborator and needs none: on
+  /// Android the alarm and the notification are separate objects, so cancelling
+  /// one leaves the other armed. Here they are the same object under the same
+  /// id, which is what [removeNotification] has to make up for.
+  final ReminderSchedulerApi? _scheduler;
 
   final Logger _logger;
 
@@ -567,11 +578,39 @@ class FlutterNotificationTray implements SystemTray {
   @override
   void log(String msg) => _logger.debug(msg);
 
+  /// `NotificationManagerCompat.cancel(id)` — and then the alarm that call
+  /// also took down.
+  ///
+  /// `audit3.recording-a-non-completing-entry-silently#1`: upstream, entering a
+  /// value cancels the notification currently in the shade and nothing else.
+  /// The `AlarmManager` alarm `IntentScheduler` filed is untouched, so an entry
+  /// that does not *complete* the habit — "No" on a yes/no habit, a value below
+  /// an AT_LEAST target, any value at all on an AT_MOST habit — still gets its
+  /// reminder later that day, because gate 1 lets it through at fire time.
+  ///
+  /// This port has no fire-time hook, so the alarm is the finished notification
+  /// filed under this very id (see `FlutterAlarmScheduler`): the cancel below
+  /// is also what disarms it, and without the re-arm the day's reminder would
+  /// be silently destroyed by any entry at all. `scheduleAll` puts it back —
+  /// and puts it back on the *next* day the gates allow, so a completing entry
+  /// still ends the day's reminder. Which of the two happened is decided in
+  /// `FlutterAlarmScheduler._advanceToReminderDay`, the one place that can read
+  /// the habit; all this tray is handed is an id.
+  ///
+  /// Order matters twice over, which is why the re-arm sits inside the queued
+  /// operation rather than beside it:
+  ///
+  ///  * the platform has to see the cancel *before* the alarm that replaces it,
+  ///    or the fresh alarm is the one that disappears;
+  ///  * `ReminderController.onSnoozeDelayPicked` snoozes first and cancels
+  ///    second, on purpose. `scheduleAll` re-reads the snooze from
+  ///    `WidgetPreferences`, so the alarm that comes back is the snoozed one.
   @override
   void removeNotification(int notificationId) {
     _enqueue(() async {
       await _presenter.cancel(notificationId);
       _active.remove(notificationId);
+      _scheduler?.scheduleAll();
     });
   }
 

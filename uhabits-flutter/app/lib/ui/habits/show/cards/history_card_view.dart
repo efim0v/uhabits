@@ -23,14 +23,21 @@ import 'package:uhabits_core/src/ui/views/history_chart.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../../l10n/app_localizations.dart';
-import '../../../core_view.dart';
+import '../../../common/scrollable_chart.dart';
 import '../../list/list_header.dart' show IntlLocalDateFormatter;
 import 'score_card_view.dart';
 
 export 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart'
     show HistoryCardPresenter, HistoryCardScreen, HistoryCardState;
 
-class HistoryCardView extends StatelessWidget {
+/// The Calendar card: a title, a scrollable 160dp `HistoryChart` and the Edit
+/// button.
+///
+/// `show_habit_history.xml` gives `@+id/chart` as an `AndroidDataView`, so a
+/// horizontal drag walks the calendar backwards through weeks
+/// (`show-habit.chart-scrolling#1`,
+/// `audit3.charts-on-the-habit-detail-screen#1`).
+class HistoryCardView extends StatefulWidget {
   const HistoryCardView({
     required this.state,
     this.onClickEditButton,
@@ -57,23 +64,52 @@ class HistoryCardView extends StatelessWidget {
 
   final core.LocalDateFormatter? dateFormatter;
 
+  /// The column the calendar opens on, before anything is dragged.
+  ///
   /// `setState` replaces the whole `HistoryChart`, which resets its own
-  /// `dataOffset` to 0 (`show-habit.chart-scrolling#7`).
+  /// `dataOffset` to 0 (`show-habit.chart-scrolling#7`), so the screen always
+  /// passes 0.
   final int dataOffset;
+
+  @override
+  State<HistoryCardView> createState() => _HistoryCardViewState();
+}
+
+class _HistoryCardViewState extends State<HistoryCardView> {
+  /// `binding.chart`, the scroller the fresh chart is put back on.
+  final ScrollableChartController _controller = ScrollableChartController();
+
+  @override
+  void didUpdateWidget(HistoryCardView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // `setState` builds a brand-new HistoryChart, whose `dataOffset` starts at
+    // 0: any refresh puts the calendar back on this week
+    // (`show-habit.chart-scrolling#7`).
+    //
+    // Known deviation: upstream leaves the AndroidDataView scroller where it
+    // was, so the *next* drag makes the calendar jump back to the column it had
+    // been scrolled to before continuing. The port's host re-applies its
+    // position to every fresh view it is handed (that is what
+    // `show-habit.chart-scrolling#6` pins), so the two objects cannot disagree
+    // here; resetting the scroller is what produces the visible half of #7.
+    if (!identical(widget.state, oldWidget.state)) _controller.reset();
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
+    final state = widget.state;
     final chart = HistoryChart(
       today: state.today,
       paletteColor: state.color,
       theme: state.theme,
-      dateFormatter: dateFormatter ?? IntlLocalDateFormatter.of(context),
+      dateFormatter:
+          widget.dateFormatter ?? IntlLocalDateFormatter.of(context),
       series: state.series,
       defaultSquare: state.defaultSquare,
       notesIndicators: state.notesIndicators,
       firstWeekday: state.firstWeekday,
-    )..dataOffset = dataOffset;
+    )..dataOffset = widget.dataOffset;
 
     return ChartCard(
       theme: state.theme,
@@ -85,19 +121,26 @@ class HistoryCardView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SizedBox(
-            height: chartHeight,
+            height: HistoryCardView.chartHeight,
             width: double.infinity,
-            child: CoreView(view: chart),
+            // `android:id="@+id/chart"` is an AndroidDataView, and the chart is
+            // the view it scrolls (`show-habit.chart-scrolling#1`).
+            child: ScrollableChart(
+              view: chart,
+              controller: _controller,
+              initialDataOffset: widget.dataOffset,
+              maxDataOffset: ScrollableChart.dataViewMaxDataOffset,
+            ),
           ),
           // `style="?android:borderlessButtonStyle"`, `layout_gravity="center"`.
           TextButton(
-            key: editButtonKey,
-            onPressed: onClickEditButton,
+            key: HistoryCardView.editButtonKey,
+            onPressed: widget.onClickEditButton,
             child: Text(
               l10n.edit,
               style: const TextStyle(
-                color: editButtonColor,
-                fontSize: editButtonFontSize,
+                color: HistoryCardView.editButtonColor,
+                fontSize: HistoryCardView.editButtonFontSize,
               ),
             ),
           ),

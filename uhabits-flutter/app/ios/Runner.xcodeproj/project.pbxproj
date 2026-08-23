@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		14DF3CB66D23ED6B5F7F23A8 /* ScoreWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B66A0F434EEBE2197A87CCB /* ScoreWidget.swift */; };
+		B1A7C2D3E4F5061728394A5C /* StreakWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A7C2D3E4F5061728394A5B /* StreakWidget.swift */; };
+		B2A7C2D3E4F5061728394A5C /* FrequencyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A7C2D3E4F5061728394A5B /* FrequencyWidget.swift */; };
+		B3A7C2D3E4F5061728394A5C /* TargetWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A7C2D3E4F5061728394A5B /* TargetWidget.swift */; };
 		177D07231EC342B8EA07E82F /* HistoryWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC7E77A68CBA4228922BF1D /* HistoryWidget.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -89,6 +92,9 @@
 		4BC7E77A68CBA4228922BF1D /* HistoryWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryWidget.swift; sourceTree = "<group>"; };
 		6AA9B5213C37E7BE98CA3B7F /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B66A0F434EEBE2197A87CCB /* ScoreWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScoreWidget.swift; sourceTree = "<group>"; };
+		B1A7C2D3E4F5061728394A5B /* StreakWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StreakWidget.swift; sourceTree = "<group>"; };
+		B2A7C2D3E4F5061728394A5B /* FrequencyWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FrequencyWidget.swift; sourceTree = "<group>"; };
+		B3A7C2D3E4F5061728394A5B /* TargetWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TargetWidget.swift; sourceTree = "<group>"; };
 		74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		74858FAE1ED2DC5600515810 /* AppDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		74B01A5CA78296A0D4BFD133 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -292,6 +298,9 @@
 				8C6B93D8F59FB1D44081CEF0 /* CheckmarkWidget.swift */,
 				4BC7E77A68CBA4228922BF1D /* HistoryWidget.swift */,
 				6B66A0F434EEBE2197A87CCB /* ScoreWidget.swift */,
+				B1A7C2D3E4F5061728394A5B /* StreakWidget.swift */,
+				B2A7C2D3E4F5061728394A5B /* FrequencyWidget.swift */,
+				B3A7C2D3E4F5061728394A5B /* TargetWidget.swift */,
 				A25BE1B7DCA9660AA3E9097D /* HabitTimeline.swift */,
 				84CF314FDA924B31959F3EEA /* HabitSelection.swift */,
 				4522FE9DE3C9B2CEB7AFB9B3 /* WidgetCard.swift */,
@@ -590,6 +599,9 @@
 				9489CC0220C992ED479E0B47 /* CheckmarkWidget.swift in Sources */,
 				177D07231EC342B8EA07E82F /* HistoryWidget.swift in Sources */,
 				14DF3CB66D23ED6B5F7F23A8 /* ScoreWidget.swift in Sources */,
+				B1A7C2D3E4F5061728394A5C /* StreakWidget.swift in Sources */,
+				B2A7C2D3E4F5061728394A5C /* FrequencyWidget.swift in Sources */,
+				B3A7C2D3E4F5061728394A5C /* TargetWidget.swift in Sources */,
 				6C2799DE5D1805718939A035 /* HabitTimeline.swift in Sources */,
 				6E2EE4947E2B2536B44E8B4B /* HabitSelection.swift in Sources */,
 				C57768897EC660B696B1FD35 /* WidgetCard.swift in Sources */,

@@ -6539,7 +6539,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.charts-on-the-habit-detail-screen
 
-- [ ] `audit3.charts-on-the-habit-detail-screen` — Charts on the habit detail screen and in the history editor cannot be scrolled into the past — the port's ScrollableChart replacement is never wired to any card
+- [x] `audit3.charts-on-the-habit-detail-screen` — Charts on the habit detail screen and in the history editor cannot be scrolled into the past — the port's ScrollableChart replacement is never wired to any card
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/platform/gui/AndroidDataView.kt (onScroll/onFling/updateDataOffset/resetDataOffset); uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/ScrollableChart.kt; ScoreChart.kt:44 and FrequencyChart.kt:42 (`class X : ScrollableChart`); res/layout/show_habit_bar.xml and show_habit_history.xml h`
 - **Where the port should do it:** `app/lib/ui/habits/show/cards/bar_card_view.dart:110, history_card_view.dart:92, score_card_view.dart:598, frequency_card_view.dart:356, app/lib/ui/common/dialogs/history_editor_dialog.dart:345 — all use bare `CoreView` (app/lib/ui/core_view.dart, which registers only onTapUp/onLongPressStart). app/lib/ui/common/scrollable_chart.dart exists, is the `
@@ -6550,7 +6550,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.a-habit-already-completed-today-still
 
-- [ ] `audit3.a-habit-already-completed-today-still` — A habit already completed today still gets its reminder — gate 1 of NotificationTray is never reached on the port's alarm path
+- [x] `audit3.a-habit-already-completed-today-still` — A habit already completed today still gets its reminder — gate 1 of NotificationTray is never reached on the port's alarm path
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt — ShowNotificationTask.doInBackground/onPostExecute (`if (isCompleted && habit.targetType != NumericalHabitType.AT_MOST) return`), reached from uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderReceiver.kt (ACTION_SHOW_REMINDER) via ReminderController`
 - **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart — FlutterAlarmScheduler.scheduleShowReminder / _advanceToReminderDay (should apply the completion gate here); re-armed unconditionally from uhabits-flutter/app/lib/state/reminder_permission_gate.dart:154-176 (ReminderPermissionGate.onResume -> scheduler.scheduleAll())`
@@ -6561,7 +6561,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.recording-a-non-completing-entry-silently
 
-- [ ] `audit3.recording-a-non-completing-entry-silently` — Recording a non-completing entry silently destroys that day's pending reminder
+- [x] `audit3.recording-a-non-completing-entry-silently` — Recording a non-completing entry silently destroys that day's pending reminder
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt — onCommandFinished -> cancel(habit) -> SystemTray.removeNotification (only removes a posted notification; the AlarmManager alarm set by uhabits-android/.../intents/IntentScheduler.kt is untouched), plus ReminderScheduler.onCommandFinished which returns early for Crea`
 - **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_notification_tray.dart — FlutterNotificationTray.removeNotification -> LocalNotificationsPresenter.cancel -> FlutterLocalNotificationsPlugin.cancel(id); the id is the same reminderNotificationId the alarm was filed under in app/lib/platform/flutter_alarm_scheduler.dart`
@@ -6583,7 +6583,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.the-android-system-back-button-does
 
-- [ ] `audit3.the-android-system-back-button-does` — The Android system Back button does not cancel habit-list selection mode; it closes the app instead
+- [x] `audit3.the-android-system-back-button-does` — The Android system Back button does not cancel habit-list selection mode; it closes the app instead
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsSelectionMenu.kt — `onDestroyActionMode(mode)` -> `listController.value.onSelectionFinished()`; the contextual ActionMode is destroyed by the system Back key (ledger rule `list-habits.selection-mode#6`, "e.g. system back")`
 - **Where the port should do it:** `app/lib/ui/habits/list/habit_list_screen.dart (the Scaffold that swaps in `ListHabitsSelectionMenu` when `!model.isSelectionEmpty`) — there is no PopScope/WillPopScope anywhere in app/lib, and app/lib/main.dart mounts HabitListScreen as `MaterialApp.home`, i.e. the root route.`
@@ -6627,7 +6627,7 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### audit3.ios-ships-only-three-of-the
 
-- [ ] `audit3.ios-ships-only-three-of-the` — iOS ships only three of the six widget types; Streaks, Frequency and Target are missing and undocumented
+- [x] `audit3.ios-ships-only-three-of-the` — iOS ships only three of the six widget types; Streaks, Frequency and Target are missing and undocumented
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/res/xml/widget_streak_info.xml, widget_frequency_info.xml, widget_target_info.xml (and their three <receiver> declarations in uhabits-android/src/main/AndroidManifest.xml)`
 - **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/HabitsWidgetBundle.swift — the WidgetBundle body lists only CheckmarkWidget(), HistoryWidget(), ScoreWidget(); there is no StreakWidget.swift, FrequencyWidget.swift or TargetWidget.swift in app/ios/HabitsWidget/`
@@ -6737,12 +6737,12 @@ exercises the wiring. The countermeasure is `verify.integration-harness` below.
 
 #### verify.integration-harness
 
-- [ ] `verify.integration-harness` — Nothing exercises the app's own wiring
+- [x] `verify.integration-harness` — Nothing exercises the app's own wiring
 - **Platform:** ui · **Port risk:** high
 - **Source:** `three audit passes, 48 findings, all of one shape`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/`
 - **Severity:** blocker
 
-1. `verify.integration-harness#1` — Every widget test in this port builds its subject and passes it the collaborators it needs, so a capability that is never constructed, or constructed without its callback, passes every test and does nothing on a device. Three audits found 48 such defects, including reminders that never fired and a Settings screen whose every row was a dead end.
+1. `verify.integration-harness#1` — Every widget test in this port builds its subject and passes it the collaborators it needs, so a capability that is never constructed, or constructed without its callback, passes every test and does nothing on a device. Three audits found 48 such defects, including reminders that never fired and a Settings screen whose every row was a dead end. — **не применимо к порту:** правило описывает причину дефекта, а не требование к приложению: утверждать его — значит утверждать, что тесты по-прежнему конструируют свой предмет. Требование несёт `#2`, а перечень сценариев — `#3`.
 2. `verify.integration-harness#2` — The port needs tests that start from the application entry point — `AppScope.boot()` and `UhabitsApp` with nothing supplied — and drive real user journeys through the real widget tree, the way `uhabits-android/src/androidTest/.../acceptance/` does upstream. A journey must fail when a capability is unreachable, not when a class is wrong.
 3. `verify.integration-harness#3` — At minimum the journeys must cover: first run through the intro to an empty list; create a habit and see it listed; tick a checkmark and see the entry persist; open the habit screen and its cards; edit and delete a habit; open settings and change a preference that repaints the app; export data; and receive a reminder response.
