@@ -30,6 +30,126 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- ============================================================== -->
+        <!-- Home-screen widgets                                            -->
+        <!--                                                                -->
+        <!-- Port of the widget block in                                    -->
+        <!-- uhabits-android/src/main/AndroidManifest.xml.                  -->
+        <!--                                                                -->
+        <!-- widgets.registration#1: exactly six providers, with the        -->
+        <!-- launcher labels 'Checkmark', 'History', 'Score', 'Streaks',    -->
+        <!-- 'Frequency' and 'Target'. The labels are literals rather than  -->
+        <!-- @string resources because this project has no strings.xml.     -->
+        <!--                                                                -->
+        <!-- widgets.registration#8: every receiver is exported and         -->
+        <!-- declares only the APPWIDGET_UPDATE filter.                     -->
+        <!--                                                                -->
+        <!-- widgets.registration#7 (the StackWidgetService) is NOT         -->
+        <!-- reproduced: upstream removed the option to create stack        -->
+        <!-- widgets, so there is nothing left to bind a RemoteViewsService -->
+        <!-- to.                                                            -->
+        <!-- ============================================================== -->
+
+        <!-- widgets.registration#6: the three configure activities. -->
+        <activity
+            android:name=".widgets.activities.HabitPickerDialog"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.Alert">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widgets.activities.BooleanHabitPickerDialog"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.Alert">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".widgets.activities.NumericalHabitPickerDialog"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.Alert">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".widgets.CheckmarkWidgetProvider"
+            android:exported="true"
+            android:label="Checkmark">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_checkmark_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.HistoryWidgetProvider"
+            android:exported="true"
+            android:label="History">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_history_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.ScoreWidgetProvider"
+            android:exported="true"
+            android:label="Score">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_score_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.StreakWidgetProvider"
+            android:exported="true"
+            android:label="Streaks">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_streak_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.FrequencyWidgetProvider"
+            android:exported="true"
+            android:label="Frequency">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_frequency_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.TargetWidgetProvider"
+            android:exported="true"
+            android:label="Target">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_target_info" />
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

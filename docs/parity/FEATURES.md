@@ -2967,7 +2967,7 @@ written from the rules below.
 
 #### show-habit.chart-scrolling
 
-- [ ] `show-habit.chart-scrolling` — Horizontal scrolling of the show-screen charts
+- [x] `show-habit.chart-scrolling` — Horizontal scrolling of the show-screen charts
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/platform/gui/AndroidDataView.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/ScrollableChart.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/BarCardView.kt`, `.../ScoreCardView.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/views/HistoryChart.kt`, `.../views/BarChart.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4326,7 +4326,7 @@ written from the rules below.
 
 #### widgets.behavior
 
-- [ ] `widgets.behavior` — WidgetBehavior: core logic behind widget taps
+- [x] `widgets.behavior` — WidgetBehavior: core logic behind widget taps
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/widgets/WidgetBehavior.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Entry.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/widgets/WidgetBehaviorTest.kt`
@@ -5318,7 +5318,7 @@ written from the rules below.
 
 #### charts-canvas-theming.scrollable-chart
 
-- [ ] `charts-canvas-theming.scrollable-chart` — ScrollableChart paging base class (legacy Android charts)
+- [x] `charts-canvas-theming.scrollable-chart` — ScrollableChart paging base class (legacy Android charts)
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/ScrollableChart.kt`, `.../views/BundleSavedState.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/activities/common/views/ScoreChartTest.kt`, `.../FrequencyChartTest.kt`

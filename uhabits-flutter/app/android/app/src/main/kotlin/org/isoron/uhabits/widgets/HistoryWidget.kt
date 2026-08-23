@@ -1,0 +1,70 @@
+/*
+ * Copyright (C) 2016-2025 Álinson Santos Xavier <git@axavier.org>
+ *
+ * This file is part of Loop Habit Tracker.
+ *
+ * Loop Habit Tracker is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version.
+ *
+ * Loop Habit Tracker is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.isoron.uhabits.widgets
+
+import android.app.PendingIntent
+import android.content.Context
+import android.view.View
+import org.isoron.uhabits.widgets.views.GraphWidgetView
+import org.isoron.uhabits.widgets.views.HistoryChartView
+
+/**
+ * Port of `uhabits-android/.../widgets/HistoryWidget.kt`.
+ *
+ * `widgets.history#1`: default 250x250 px, a GraphWidgetView wrapping the core
+ * HistoryChart. `widgets.history#3`: the title is the habit name.
+ *
+ * The one widget of the six the v1 contract can draw in full: 60 days of
+ * `computedEntries` is exactly what the grid needs at every size the launcher
+ * offers.
+ */
+class HistoryWidget(
+    context: Context,
+    widgetId: Int,
+    private val habit: HabitData,
+    private val today: LocalDate
+) : BaseWidget(context, widgetId) {
+
+    override val defaultHeight: Int get() = 250
+    override val defaultWidth: Int get() = 250
+
+    /** `widgets.history#5`. */
+    override fun getOnClickPendingIntent(context: Context): PendingIntent =
+        WidgetIntents.showHabit(context, id, habit)
+
+    /** `widgets.history#4`. */
+    override fun refreshData(widgetView: View) {
+        (widgetView as GraphWidgetView).apply {
+            setBackgroundAlpha(preferedBackgroundAlpha)
+            if (preferedBackgroundAlpha >= 255) setShadowAlpha(0x4f)
+            (dataView as HistoryChartView).apply {
+                this.today = this@HistoryWidget.today
+                paletteColor = habit.color
+                series = HistoryChartView.seriesOf(habit)
+                defaultSquare = HistoryChartView.Square.OFF
+            }
+        }
+    }
+
+    override fun buildView(): View = GraphWidgetView(context, HistoryChartView(context)).apply {
+        // Upstream sets the title here, not in refreshData, so the first
+        // measuring pass already accounts for its height.
+        setTitle(habit.name)
+    }
+}

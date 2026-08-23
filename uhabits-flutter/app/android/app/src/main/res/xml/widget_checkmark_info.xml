@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/xml/widget_checkmark_info.xml.
+  ~
+  ~ widgets.registration#2: minWidth 50dp, minHeight 50dp, initialLayout
+  ~ widget_wrapper, and deliberately no minResizeWidth/minResizeHeight.
+  ~ widgets.registration#4: resizeMode vertical|horizontal, updatePeriodMillis
+  ~ 3600000, widgetCategory home_screen.
+  ~ widgets.registration#6: configure activity HabitPickerDialog.
+  ~ widgets.registration#5 (previewImage) is NOT reproduced: the six
+  ~ widget_preview_* bitmaps are Android drawables that do not exist in this
+  ~ project and cannot be authored from the Kotlin sources.
+  -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="org.isoron.uhabits.widgets.activities.HabitPickerDialog"
+    android:initialLayout="@layout/widget_wrapper"
+    android:minHeight="50dp"
+    android:minWidth="50dp"
+    android:resizeMode="vertical|horizontal"
+    android:updatePeriodMillis="3600000"
+    android:widgetCategory="home_screen" />

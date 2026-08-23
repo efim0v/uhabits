@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/xml/widget_target_info.xml.
+  ~
+  ~ widgets.registration#3: minWidth/minHeight/minResizeWidth/minResizeHeight
+  ~ all 100dp, initialLayout widget_graph.
+  ~ widgets.registration#4: resizeMode vertical|horizontal, updatePeriodMillis
+  ~ 3600000, widgetCategory home_screen.
+  ~ widgets.registration#6: configure activity NumericalHabitPickerDialog.
+  ~ widgets.registration#5 (previewImage) is NOT reproduced; see
+  ~ widget_checkmark_info.xml.
+  -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="org.isoron.uhabits.widgets.activities.NumericalHabitPickerDialog"
+    android:initialLayout="@layout/widget_graph"
+    android:minHeight="100dp"
+    android:minResizeHeight="100dp"
+    android:minResizeWidth="100dp"
+    android:minWidth="100dp"
+    android:resizeMode="vertical|horizontal"
+    android:updatePeriodMillis="3600000"
+    android:widgetCategory="home_screen" />

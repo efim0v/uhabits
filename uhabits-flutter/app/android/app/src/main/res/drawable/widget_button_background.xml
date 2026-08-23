@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/drawable/widget_button_background.xml.
+  ~
+  ~ widgets.remoteviews-rendering#7: a layer-list inset top=1dp, left=1dp,
+  ~ bottom=3dp, right=3dp holding a #60ffffff ripple whose mask is an 18dp
+  ~ rounded rectangle, so the touch ripple matches the card and leaves room for
+  ~ the drop shadow.
+  -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:left="1dp"
+        android:top="1dp"
+        android:right="3dp"
+        android:bottom="3dp">
+        <ripple android:color="#60ffffff">
+            <item android:id="@android:id/mask">
+                <shape android:shape="rectangle">
+                    <corners android:radius="18dp" />
+                    <solid android:color="#ffffffff" />
+                </shape>
+            </item>
+        </ripple>
+    </item>
+</layer-list>

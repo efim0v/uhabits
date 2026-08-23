@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Stand-in for uhabits-android/src/main/res/layout/widget_configure_activity.xml.
+  ~
+  ~ Upstream this is a ListView of habit names (widgets.config-picker#8). The
+  ~ port cannot build that list: the habit catalogue is not part of the JSON
+  ~ contract the Flutter side publishes, only the per-widget documents are. So
+  ~ the configure activity hands the widget id to the Flutter picker and shows
+  ~ this while the app comes up. See HabitPickerDialog for the whole story.
+  -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="250dp"
+    android:layout_height="150dp"
+    android:gravity="center"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="16dp"
+        android:textSize="16sp" />
+
+</LinearLayout>

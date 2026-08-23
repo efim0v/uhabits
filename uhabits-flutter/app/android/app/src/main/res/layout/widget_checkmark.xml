@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/layout/widget_checkmark.xml.
+  ~
+  ~ widgets.checkmark-view#1: vertical, centre-gravity LinearLayout id=frame with
+  ~ a RingView id=scoreRing (height 0dp, weight 0.9, marginTop 8dp,
+  ~ marginLeft/Right 4dp) and a TextView id=label (weight 0.1, 12sp, white,
+  ~ centred, maxLines 2, ellipsize end, marginLeft/Right 6dp, marginTop/Bottom
+  ~ 4dp, sans-serif-condensed, breakStrategy balanced).
+  ~
+  ~ The ring's thickness / textSize / enableFontAwesome are set from
+  ~ CheckmarkWidgetView instead of the upstream `habit:` attributes: onMeasure
+  ~ overwrites the first two on every pass anyway, so the XML values were never
+  ~ observable.
+  -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/frame"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical">
+
+    <org.isoron.uhabits.widgets.views.RingView
+        android:id="@+id/scoreRing"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.9"
+        android:layout_marginLeft="4dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginRight="4dp" />
+
+    <TextView
+        android:id="@+id/label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.1"
+        android:layout_marginLeft="6dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginRight="6dp"
+        android:layout_marginBottom="4dp"
+        android:breakStrategy="balanced"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif-condensed"
+        android:gravity="center"
+        android:maxLines="2"
+        android:scrollHorizontally="true"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
+
+</LinearLayout>

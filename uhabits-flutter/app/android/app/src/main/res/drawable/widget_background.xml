@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/drawable/widget_background.xml.
+  ~ widgets.error-states#3: solid #3f000000, corner radius 4dp.
+  -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <solid android:color="#3f000000" />
+    <corners android:radius="4dp" />
+</shape>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/layout/widget_error.xml.
+  ~
+  ~ widgets.provider-lifecycle#5 / widgets.error-states#3: a full-bleed
+  ~ LinearLayout on drawable widget_background with a centred white TextView
+  ~ whose default text is the literal 'Error drawing widget'; paddingTop 4dp,
+  ~ left/right 8dp, bottom 0dp; no click target.
+  -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingLeft="8dp"
+    android:paddingTop="4dp"
+    android:paddingRight="8dp"
+    android:paddingBottom="0dp">
+
+    <TextView
+        android:id="@+id/label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="Error drawing widget"
+        android:textColor="#ffffff" />
+
+</LinearLayout>

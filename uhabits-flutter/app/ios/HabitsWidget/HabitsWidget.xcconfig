@@ -1,0 +1,10 @@
+// Base configuration for the HabitsWidgetExtension target.
+//
+// The extension is not a CocoaPods target, so it must not include
+// Pods-Runner.*.xcconfig — it links no pods and inheriting the Runner's
+// framework search paths would only make it look for frameworks it does not
+// embed. What it does need is FLUTTER_BUILD_NAME and FLUTTER_BUILD_NUMBER:
+// an app extension whose CFBundleShortVersionString and CFBundleVersion differ
+// from the containing app's is rejected at submission, and both Info.plists
+// read those two variables.
+#include "../Flutter/Generated.xcconfig"

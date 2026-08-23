@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Port of uhabits-android/src/main/res/layout/widget_graph.xml.
+  ~
+  ~ widgets.graph-view#1: FrameLayout id=frame holding a vertical LinearLayout
+  ~ id=innerFrame (paddingTop 4dp, left/right 8dp, bottom 8dp) whose first child
+  ~ is a TextView id=title (match_parent, wrap_content, gravity center, textSize
+  ~ smallTextSize = 14sp, maxLines 2, white).
+  ~
+  ~ Doubles as the initialLayout of the five graph widgets, so every view here
+  ~ has to stay RemoteViews-safe.
+  -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/frame"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:id="@+id/innerFrame"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingLeft="8dp"
+        android:paddingTop="4dp"
+        android:paddingRight="8dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:maxLines="2"
+            android:textColor="#ffffff"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+</FrameLayout>
