@@ -35,7 +35,7 @@
     <!-- ================================================================== -->
     <!-- ================================================================== -->
     <!-- platform-glue.manifest-components#1: upstream's <application>        -->
-    <!-- carries eight attributes. Six of them survive here:                 -->
+    <!-- carries eight attributes. Seven of them survive here:               -->
     <!--                                                                     -->
     <!--   android:name        — ".HabitsApplication" becomes                -->
     <!--                         ${applicationName}, the Flutter embedding's -->
@@ -57,17 +57,28 @@
     <!--                         LaunchTheme/NormalTheme (settings.theme.      -->
     <!--                         system-night-window-background).              -->
     <!--                                                                     -->
-    <!-- Two are deliberately absent:                                        -->
+    <!--   android:localeConfig — @xml/locales_config, as upstream. It was      -->
+    <!--                         once left out here on the reading that         -->
+    <!--                         MaterialApp.supportedLocales replaced it;      -->
+    <!--                         that reading was wrong                         -->
+    <!--                         (audit4.android-localeconfig-is-dropped-so-    -->
+    <!--                         the#1). supportedLocales decides which         -->
+    <!--                         translation the app picks once Android has     -->
+    <!--                         told it what the locale is; only this          -->
+    <!--                         attribute makes Android offer the choice, by   -->
+    <!--                         listing the app under Settings > System >      -->
+    <!--                         Languages > App languages. And                 -->
+    <!--                         platform-glue.locale-config#10 records that    -->
+    <!--                         there is deliberately no in-app language row,  -->
+    <!--                         so that system picker is the ONLY way to run   -->
+    <!--                         Loop in a language other than the phone's.     -->
+    <!--                         The list itself is res/xml/locales_config.xml. -->
+    <!--                                                                     -->
+    <!-- One is deliberately absent:                                          -->
     <!--                                                                     -->
     <!--   android:backupAgent — there is no BackupAgentHelper; see the       -->
     <!--                         ledger note on platform-glue.backup-agent.   -->
     <!--                         allowBackup on its own gives Auto Backup.    -->
-    <!--   the per-app locale list — replaced by                             -->
-    <!--                         MaterialApp.supportedLocales, which          -->
-    <!--                         platform-glue.locale-config#1 pins; that     -->
-    <!--                         rule asserts this manifest names no such     -->
-    <!--                         attribute, so it is not spelled out here     -->
-    <!--                         either.                                      -->
     <!--                                                                     -->
     <!-- platform-glue.manifest-components#11: and no                         -->
     <!-- com.google.android.backup.api_key meta-data, because the Android     -->
@@ -78,6 +89,7 @@
         android:label="@string/main_activity_title"
         android:name="${applicationName}"
         android:allowBackup="true"
+        android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:icon="@mipmap/ic_launcher">
         <activity

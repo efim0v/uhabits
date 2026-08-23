@@ -69,6 +69,28 @@ String get pbxproj =>
     File('${appDir.path}/ios/Runner.xcodeproj/project.pbxproj')
         .readAsStringSync();
 
+/// The English `Localizable.strings` table of the widget extension, which is
+/// where the gallery names and descriptions live now.
+Map<String, String> englishTable() => <String, String>{
+      for (final RegExpMatch m in RegExp(
+        r'^\s*"([^"]+)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;',
+        multiLine: true,
+      ).allMatches(
+          File('${widgetDir.path}/en.lproj/Localizable.strings')
+              .readAsStringSync()))
+        m.group(1)!: m
+            .group(2)!
+            .replaceAllMapped(RegExp(r'\\(.)'), (Match e) => e.group(1)!),
+    };
+
+/// The English text of one key, or a failure naming the key — never a silent
+/// null that turns into a passing test.
+String english(String key) {
+  final String? value = englishTable()[key];
+  if (value == null) fail('en.lproj/Localizable.strings has no "$key"');
+  return value;
+}
+
 /// The `<string name="...">value</string>` pairs of the Android resource file
 /// whose values are the launcher labels of the same six widgets.
 Map<String, String> androidStrings() => <String, String>{
@@ -135,15 +157,26 @@ class IosWidget {
   String get kind => capture(source, RegExp(r'static let kind = "([^"]+)"'),
       what: '$structName.kind');
 
-  /// `.configurationDisplayName("…")` — the name shown in the widget gallery,
-  /// the counterpart of `android:label` on the provider's receiver.
-  String get displayName => capture(
-      source, RegExp(r'\.configurationDisplayName\("([^"]*)"\)'),
-      what: '$structName.configurationDisplayName');
+  /// The name shown in the widget gallery, the counterpart of `android:label`
+  /// on the provider's receiver.
+  ///
+  /// It is a `LocalizedStringKey` rather than a literal since
+  /// `audit4.ios-every-string-the-widget-surface#1` — the gallery has to read
+  /// "Häkchen" on a German phone, the way the launcher does — so the name is
+  /// resolved through the extension's own English table here. The comparison
+  /// the tests below make is unchanged: the gallery name is still the Android
+  /// label, it just travels through `en.lproj/Localizable.strings` on the way.
+  /// The table itself, and its 46 translations, are asserted in
+  /// test/platform/ios_widget_strings_test.dart.
+  String get displayName => english(capture(
+      source,
+      RegExp(r'\.configurationDisplayName\(LocalizedStringKey\("([^"]*)"\)\)'),
+      what: '$structName.configurationDisplayName'));
 
-  /// `.description("…")` — the gallery's one-line explanation.
-  String get description => capture(source, RegExp(r'\.description\("([^"]*)"\)'),
-      what: '$structName.description');
+  /// The gallery's one-line explanation, likewise a key.
+  String get description => english(capture(
+      source, RegExp(r'\.description\(LocalizedStringKey\("([^"]*)"\)\)'),
+      what: '$structName.description'));
 
   /// `intent: X.self` — the configuration the user edits, i.e. the iOS
   /// counterpart of the provider's configure activity.

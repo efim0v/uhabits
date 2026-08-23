@@ -59,7 +59,13 @@ class StreakWidget(
             if (preferedBackgroundAlpha >= 255) setShadowAlpha(0x4f)
             (dataView as StreakChartView).apply {
                 color = WidgetTheme.color(habit.color)
-                streaks = habit.streaks?.take(maxStreakCount)
+                // `habit.streaks.getBest(chart.maxStreakCount)`: the document
+                // carries the best thirty over the habit's whole history, and
+                // `bestOf` is `getBest` again over that superset — the same
+                // answer for any count a widget can show. The fallback rebuilds
+                // runs from the 60 published days and is reached only by a
+                // document that predates the field.
+                streaks = habit.streaks?.let { StreakChartView.bestOf(it, maxStreakCount) }
                     ?: StreakChartView.streaksFrom(habit, today, maxStreakCount)
             }
         }

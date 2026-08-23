@@ -71,9 +71,10 @@ class CheckmarkWidget(
                 // `widgets.checkmark#3`
                 entryState = habit.value
             }
-            // `widgets.checkmark#2`: percentage is habit.scores[today].value.
-            // Not published; see HabitData.score. The ring reads empty until it
-            // is.
+            // `widgets.checkmark#2`: percentage is habit.scores[today].value,
+            // which the document carries (`HabitData.score`). A document from a
+            // build that predates the field draws an empty ring rather than a
+            // guessed one — the score cannot be recomputed here.
             percentage = (habit.score ?: 0.0).toFloat()
             refresh()
         }

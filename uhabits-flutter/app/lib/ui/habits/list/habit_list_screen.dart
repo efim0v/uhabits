@@ -691,11 +691,14 @@ class _HabitListViewState extends State<_HabitListView>
     required int dataOffset,
     required double bottomInset,
   }) {
-    // The Android list has no top padding; the bottom one keeps the last card
-    // clear of the floating action button. `applyBottomInset` adds the bottom
-    // systemBars inset to the last card, exactly once
-    // (`list-habits.screen-layout#8`).
-    final padding = EdgeInsets.only(top: 0, bottom: 88 + bottomInset);
+    // The Android list has no top padding, and its bottom padding is exactly
+    // the systemBars inset: `applyBottomInset()` adds one ItemDecoration that
+    // gives the LAST item `outRect.bottom = systemBarsInsets.bottom` and
+    // nothing more (`list-habits.screen-layout#8`). Scrolling to the end puts
+    // the last habit row flush against the navigation bar. The 88 that used to
+    // be added here was clearance for a floating action button neither app has
+    // (`audit4.habit-list-keeps-88dp-of-dead#1`).
+    final padding = EdgeInsets.only(top: 0, bottom: bottomInset);
     Widget buildRow(
       BuildContext context,
       int index, {

@@ -24,6 +24,7 @@ library;
 
 // ignore_for_file: implementation_imports
 
+import 'package:flutter/painting.dart' show TextScaler;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/flutter_canvas.dart' show TextOutlineCanvas;
 import 'package:uhabits/ui/habits/list/entry_button_views.dart';
@@ -288,6 +289,96 @@ void main() {
             .color,
         habitColor,
         reason: 'list-habits.checkmark-button-rendering#8',
+      );
+    });
+  });
+
+  group('audit4.check-mark-cell-glyphs-no-longer', () {
+    // Android's system font-size slider, two notches up.
+    const scaler = TextScaler.linear(1.5);
+
+    CheckmarkButtonView scaled(int value, {bool areQuestionMarksEnabled = false}) =>
+        CheckmarkButtonView(
+          value: value,
+          color: habitColor,
+          theme: theme,
+          areQuestionMarksEnabled: areQuestionMarksEnabled,
+          textScaler: scaler,
+        );
+
+    test('#1 all three sp sizes follow the OS text-scale setting', () {
+      const reason = 'audit4.check-mark-cell-glyphs-no-longer#1 — '
+          '`paint.textSize = when { … sp(12f) / sp(13f) / sp(14f) }`: every '
+          'branch goes through spToPixels, so the check, cross, skip and '
+          'question-mark glyphs grow and shrink with the system font-size / '
+          'accessibility text-scale setting. A branch left at its literal '
+          'ignores the setting.';
+
+      // The question mark, 12sp.
+      expect(
+        draw(scaled(core.Entry.unknown, areQuestionMarksEnabled: true))
+            .opsNamed('drawText')
+            .single
+            .fontSize,
+        12.0 * 1.5,
+        reason: reason,
+      );
+      // The hollow YES_AUTO check, 13sp — the stroked pass and the fill on top
+      // are both at the scaled size.
+      for (final op in draw(scaled(core.Entry.yesAuto)).drawOps) {
+        expect(op.fontSize, 13.0 * 1.5, reason: reason);
+      }
+      // Everything else, 14sp.
+      for (final value in <int>[
+        core.Entry.skip,
+        core.Entry.no,
+        core.Entry.yesManual,
+        core.Entry.unknown,
+      ]) {
+        expect(
+          draw(scaled(value)).opsNamed('drawText').single.fontSize,
+          14.0 * 1.5,
+          reason: '$reason (value $value)',
+        );
+      }
+    });
+
+    test('#1 the em the notes dot is placed by is measured under the scaled '
+        'paint', () {
+      // `val em = paint.measureText("m")` is taken *after* the textSize
+      // assignment, so the dot moves with the glyph rather than staying put.
+      final dot = draw(
+        CheckmarkButtonView(
+          value: core.Entry.yesManual,
+          color: habitColor,
+          theme: theme,
+          notes: 'ran 5k',
+          textScaler: scaler,
+        ),
+      ).opsNamed('fillCircle').single;
+      expect(dot.args[1], closeTo(0.8 * _em(14.0 * 1.5), 1e-9),
+          reason: 'audit4.check-mark-cell-glyphs-no-longer#1 — the em is '
+              'measured under the paint the glyph is drawn with.');
+    });
+
+    test('#1 no scaler is fontScale 1, where sp and dp agree', () {
+      // `NumberButtonView` keeps its literals whatever the slider says:
+      // upstream sizes it from `getDimension` / `dim(...)`, never `sp(...)`.
+      expect(
+        draw(checkmark(core.Entry.yesManual)).opsNamed('drawText').single
+            .fontSize,
+        smallTextSize,
+        reason: 'audit4.check-mark-cell-glyphs-no-longer#1 — a cell built '
+            'without a scaler still draws the 14sp of '
+            '`list-habits.checkmark-button-rendering#4`.',
+      );
+      expect(
+        draw(number(value: 5.0, threshold: 3.0)).opsNamed('drawText').first
+            .fontSize,
+        smallTextSize,
+        reason: 'audit4.check-mark-cell-glyphs-no-longer#1 — the rule names '
+            'CheckmarkButtonView.kt:170-174; NumberButtonView is sized from '
+            'getDimension/dim, so it takes no scaler.',
       );
     });
   });

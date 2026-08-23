@@ -540,6 +540,12 @@ class _EditHabitViewState extends State<_EditHabitView> {
         theme: theme,
         hintText: l10n.measurableUnitsExample,
         maxLines: 1,
+        // unitInput is the one input of the form that declares no
+        // `android:inputType`, so it has no capitalization mode: the hinted
+        // example types back as "miles", lower case, and that is the string
+        // the Target card and the list subtitle render next to the number
+        // (`audit4.the-unit-field-auto-capitalizes-which#1`).
+        textCapitalization: TextCapitalization.none,
       ),
     );
   }
@@ -936,6 +942,7 @@ class _FormInput extends StatelessWidget {
     this.maxLines = 1,
     this.maxLength,
     this.keyboardType,
+    this.textCapitalization = TextCapitalization.sentences,
   });
 
   final TextEditingController controller;
@@ -946,6 +953,16 @@ class _FormInput extends StatelessWidget {
   final int? maxLength;
   final TextInputType? keyboardType;
 
+  /// The `textCapSentences` half of `android:inputType`.
+  ///
+  /// Three of the form's inputs declare
+  /// `android:inputType="textCapSentences|textMultiLine"` — nameInput,
+  /// questionInput and notesInput — which is why this defaults to
+  /// [TextCapitalization.sentences]. unitInput declares no `android:inputType`
+  /// at all and is therefore a plain text field with no capitalization mode
+  /// (`audit4.the-unit-field-auto-capitalizes-which#1`).
+  final TextCapitalization textCapitalization;
+
   @override
   Widget build(BuildContext context) {
     return TextField(
@@ -953,8 +970,9 @@ class _FormInput extends StatelessWidget {
       maxLines: maxLines,
       maxLength: maxLength,
       keyboardType: keyboardType,
-      // `android:inputType="textCapSentences|..."`.
-      textCapitalization: TextCapitalization.sentences,
+      // `android:inputType="textCapSentences|..."`, where the layout declares
+      // one.
+      textCapitalization: textCapitalization,
       inputFormatters: maxLength == null
           ? null
           : <TextInputFormatter>[

@@ -30,5 +30,11 @@ class FrequencyWidgetProvider : BaseWidgetProvider() {
         widgetId: Int,
         document: WidgetDocument
     ) =
-        FrequencyWidget(context, widgetId, document.singleHabit(), document.today)
+        FrequencyWidget(
+            context,
+            widgetId,
+            document.singleHabit(),
+            document.today,
+            document.firstWeekday
+        )
 }

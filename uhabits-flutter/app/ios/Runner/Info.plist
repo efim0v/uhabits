@@ -71,6 +71,26 @@
 	<string>Habits</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<!-- The scheme every home-screen widget taps into. `WidgetLink` in
+	     ios/HabitsWidget/WidgetData.swift builds uhabits://widget/toggle,
+	     /edit and /show, exactly as WidgetIntents.kt does on Android, and
+	     app/lib/state/widget_link.dart routes them. iOS delivers a URL to an
+	     app only if the app claims its scheme here, so without this entry
+	     every widget tap is inert. The Android counterpart is the
+	     <intent-filter> on MainActivity. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>org.isoron.uhabits.widget</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>uhabits</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>

@@ -30,10 +30,14 @@ import org.isoron.uhabits.widgets.views.ScoreChartView
  * `widgets.score#1`: default 300x300 px — the largest of any widget.
  * `widgets.score#2`: the title is the habit name.
  *
- * `widgets.score#3` also says the widget honours `scoreCardSpinnerPosition`, the
- * bucket the user last picked on the detail screen. That preference is not in
- * the document either, so the bucket falls back to the preference's own default
- * of 1 — weekly (`widgets.score#4`).
+ * `widgets.score#3`: the widget honours `scoreCardSpinnerPosition`, the bucket
+ * the user last picked on the detail screen. The bridge builds the series with
+ * `ScoreCardPresenter.buildState(habit, firstWeekday, spinnerPosition =
+ * prefs.scoreCardSpinnerPosition, WidgetTheme())` — the same presenter the card
+ * uses — and publishes the result with the bucket it was built at, so the two
+ * can never disagree. A document from a build that predates those fields leaves
+ * the chart empty at the preference's own default bucket of 7
+ * (`widgets.score#4`).
  */
 class ScoreWidget(
     context: Context,

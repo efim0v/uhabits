@@ -135,16 +135,29 @@ abstract class BaseWidgetProvider : AppWidgetProvider() {
      * app's own SharedPreferences. The mapping now lives on the Dart side, in
      * `WidgetRegistry`, which is the only thing that may write it — a native
      * writer would race the Flutter one and there is no lock between the two
-     * processes. So this drops the published document (the launcher's copy of
-     * the data, which is unambiguously ours) and leaves the registry entry for
-     * the Dart side to reap: `HomeWidgetBridge.publish` already clears documents
-     * for widget ids that disappeared.
+     * processes. So this does the two things that are unambiguously ours: it
+     * drops the published document (the launcher's copy of the data), and it
+     * *records the ids* under [WidgetData.DELETED_KEY].
+     *
+     * That record is the whole point. Without it the Dart registry never learns
+     * the widget is gone: it keeps the `widget-%06d-habit` binding, keeps
+     * listing the widget in the published index, and republishes a document for
+     * it after every command, forever
+     * (`audit4.deleting-a-widget-from-the-launcher#1`). Dropping the document
+     * alone does not help — `HomeWidgetBridge.publish` only clears documents for
+     * ids the *registry* no longer has, and nothing was ever going to remove one
+     * from the registry. `HomeWidgetBridge.reapDeletedWidgets` consumes this
+     * record at the start of the next publish and calls
+     * `WidgetRegistry.removeWidget` for each id, which is
+     * `WidgetPreferences.removeWidget` again, one process over.
      */
     override fun onDeleted(context: Context?, ids: IntArray?) {
         if (context == null) throw RuntimeException("context is null")
         if (ids == null) throw RuntimeException("ids is null")
-        val editor = WidgetData.storage(context).edit()
+        val storage = WidgetData.storage(context)
+        val editor = storage.edit()
         for (id in ids) editor.remove(WidgetData.documentKey(id))
+        editor.putString(WidgetData.DELETED_KEY, WidgetData.recordDeleted(storage, ids))
         editor.apply()
     }
 

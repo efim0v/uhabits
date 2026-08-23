@@ -35,6 +35,7 @@ library;
 // The core package does not re-export lib/src/ui/views or lib/src/gui/view.
 // ignore_for_file: implementation_imports
 
+import 'package:flutter/painting.dart' show TextScaler;
 import 'package:uhabits_core/src/ui/views/number_button.dart' as core_views;
 import 'package:uhabits_core/src/ui/views/ring.dart' as core_ring;
 import 'package:uhabits_core/uhabits_core.dart' as core;
@@ -85,6 +86,7 @@ class CheckmarkButtonView extends core.View {
     required this.theme,
     this.notes = '',
     this.areQuestionMarksEnabled = false,
+    this.textScaler = TextScaler.noScaling,
   });
 
   /// A [core.Entry] value: SKIP(3), YES_MANUAL(2), YES_AUTO(1), NO(0) or
@@ -100,6 +102,25 @@ class CheckmarkButtonView extends core.View {
 
   /// `preferences.areQuestionMarksEnabled`.
   final bool areQuestionMarksEnabled;
+
+  /// The OS font-size / accessibility text-scale setting
+  /// (`audit4.check-mark-cell-glyphs-no-longer#1`).
+  ///
+  /// The three sizes this drawer paints with are **sp**, not dp: upstream sets
+  /// them through `sp(12f)` / `sp(13f)` / `sp(14f)`, i.e.
+  /// `InterfaceUtils.spToPixels`, which converts against the *scaled* density
+  /// (`platform-glue.dimension-utils#2`). A Flutter logical pixel is already a
+  /// dp, so the one conversion the port still owes is the font-scale one — and
+  /// nothing below `core.Canvas` consults the ambient scaler the way a `Text`
+  /// widget does. `EntryPanel` passes `MediaQuery.textScalerOf(context)` here,
+  /// so the check, cross, skip and question-mark glyphs of every habit row grow
+  /// and shrink with the setting again.
+  ///
+  /// [core_views.NumberButton] deliberately gets none: upstream sizes
+  /// `NumberButtonView` from `getDimension` / `dim(...)`, never `sp(...)`.
+  ///
+  /// Defaults to [TextScaler.noScaling] — fontScale 1, where sp and dp agree.
+  final TextScaler textScaler;
 
   /// `paint.color = when (value) { ... }`
   /// (`list-habits.checkmark-button-rendering#2`).
@@ -135,12 +156,15 @@ class CheckmarkButtonView extends core.View {
     }
   }
 
-  /// `paint.textSize = when { ... }`
-  /// (`list-habits.checkmark-button-rendering#4`).
+  /// `paint.textSize = when { ... }`, each branch through `sp(...)`
+  /// (`list-habits.checkmark-button-rendering#4`,
+  /// `audit4.check-mark-cell-glyphs-no-longer#1`).
   double get fontSize {
-    if (glyph == core.FontAwesome.question) return smallerTextSize;
-    if (value == core.Entry.yesAuto) return yesAutoTextSize;
-    return smallTextSize;
+    if (glyph == core.FontAwesome.question) {
+      return textScaler.scale(smallerTextSize);
+    }
+    if (value == core.Entry.yesAuto) return textScaler.scale(yesAutoTextSize);
+    return textScaler.scale(smallTextSize);
   }
 
   @override

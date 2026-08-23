@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Port of uhabits-android/src/main/res/xml/locales_config.xml, named by
+  android:localeConfig on <application> in ../../AndroidManifest.xml.
+
+  This resource is the whole Android 13+ per-app language mechanism
+  (audit4.android-localeconfig-is-dropped-so-the#1): Android lists the app under
+  Settings > System > Languages > App languages only because the manifest points
+  here, and it offers exactly the locales named below. It matters more in this
+  port than upstream, because platform-glue.locale-config#10 records that there
+  is deliberately no in-app language row — the system picker is the only way a
+  user can run Loop in a language other than the phone's.
+
+  It is NOT a copy of the upstream list. The catalogue here is the ARB set in
+  app/lib/l10n, so:
+
+    * the four locales upstream forgot are present (gu, is, ka, ml), which
+      platform-glue.locale-config#3 records as a bug to fix rather than
+      reproduce;
+    * Slovenian is the bare "sl" rather than upstream's "sl-SL", which named no
+      shipped resource directory at all (platform-glue.locale-config#4);
+    * the region subtags upstream carried are dropped wherever only one variant
+      ships: res/values-de/ resolves for de-DE, de-AT and de-CH alike, and a
+      picker entry of "de" is what makes all three reach it;
+    * "in" and "iw" keep the deprecated ISO codes
+      (platform-glue.locale-config#5). Android resolves resources under those
+      subtags and res/values-in/ and res/values-iw/ use them, so an entry
+      spelled "id" or "he" would leave the launcher label and the six widget
+      names in English for the one locale the user chose. Dart canonicalises the
+      other way, which is why L10n.supportedLocales says "id"/"he"; the two
+      spellings are the same locale and app/test/platform/locale_config_test.dart
+      is what keeps them in step.
+
+  Kept sorted with "en" — the default resource set — first, as upstream's was.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />      <!-- English -->
+    <locale android:name="af" />      <!-- Afrikaans -->
+    <locale android:name="ar" />      <!-- Arabic -->
+    <locale android:name="bg" />      <!-- Bulgarian -->
+    <locale android:name="ca" />      <!-- Catalan -->
+    <locale android:name="cs" />      <!-- Czech -->
+    <locale android:name="da" />      <!-- Danish -->
+    <locale android:name="de" />      <!-- German -->
+    <locale android:name="el" />      <!-- Greek -->
+    <locale android:name="eo" />      <!-- Esperanto -->
+    <locale android:name="es" />      <!-- Spanish -->
+    <locale android:name="eu" />      <!-- Basque -->
+    <locale android:name="fa" />      <!-- Farsi -->
+    <locale android:name="fi" />      <!-- Finnish -->
+    <locale android:name="fr" />      <!-- French -->
+    <locale android:name="gu" />      <!-- Gujarati -->
+    <locale android:name="hi" />      <!-- Hindi -->
+    <locale android:name="hr" />      <!-- Croatian -->
+    <locale android:name="hu" />      <!-- Hungarian -->
+    <locale android:name="hy" />      <!-- Armenian -->
+    <locale android:name="in" />      <!-- Indonesian -->
+    <locale android:name="is" />      <!-- Icelandic -->
+    <locale android:name="it" />      <!-- Italian -->
+    <locale android:name="iw" />      <!-- Hebrew -->
+    <locale android:name="ja" />      <!-- Japanese -->
+    <locale android:name="ka" />      <!-- Georgian -->
+    <locale android:name="ko" />      <!-- Korean -->
+    <locale android:name="ml" />      <!-- Malayalam -->
+    <locale android:name="nl" />      <!-- Dutch -->
+    <locale android:name="no" />      <!-- Norwegian -->
+    <locale android:name="pl" />      <!-- Polish -->
+    <locale android:name="pt" />      <!-- Portuguese -->
+    <locale android:name="pt-BR" />   <!-- Portuguese (Brazil) -->
+    <locale android:name="pt-PT" />   <!-- Portuguese (Portugal) -->
+    <locale android:name="ro" />      <!-- Romanian -->
+    <locale android:name="ru" />      <!-- Russian -->
+    <locale android:name="sk" />      <!-- Slovak -->
+    <locale android:name="sl" />      <!-- Slovenian -->
+    <locale android:name="sr" />      <!-- Serbian (Cyrillic) -->
+    <locale android:name="sr-Latn" /> <!-- Serbian (Latin) -->
+    <locale android:name="sv" />      <!-- Swedish -->
+    <locale android:name="ta" />      <!-- Tamil -->
+    <locale android:name="te" />      <!-- Telugu -->
+    <locale android:name="tr" />      <!-- Turkish -->
+    <locale android:name="ug" />      <!-- Uyghur -->
+    <locale android:name="uk" />      <!-- Ukrainian -->
+    <locale android:name="vi" />      <!-- Vietnamese -->
+    <locale android:name="zh" />      <!-- Chinese -->
+    <locale android:name="zh-CN" />   <!-- Chinese (Simplified) -->
+    <locale android:name="zh-TW" />   <!-- Chinese (Traditional) -->
+</locale-config>

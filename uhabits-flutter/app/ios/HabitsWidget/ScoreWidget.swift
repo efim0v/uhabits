@@ -36,8 +36,8 @@ struct ScoreWidget: Widget {
         ) { entry in
             ScoreWidgetView(entry: entry)
         }
-        .configurationDisplayName("Score")
-        .description("Charts how the habit's score has moved over time.")
+        .configurationDisplayName(LocalizedStringKey("widget_name_score"))
+        .description(LocalizedStringKey("widget_description_score"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -58,6 +58,10 @@ struct ScoreWidgetView: View {
                 ScoreChartView(habit: habit, today: entry.today)
             }
             .widgetCard()
+            // `widgets.score#7`: the card opens ShowHabitActivity for this
+            // habit — `IntentFactory.startShowHabitActivity`, which
+            // both platforms send as `uhabits://widget/show`.
+            .widgetURL(WidgetLink.show(habit))
         }
     }
 }

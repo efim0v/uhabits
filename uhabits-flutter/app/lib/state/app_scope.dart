@@ -36,6 +36,7 @@ import 'app_preferences.dart';
 import 'intent_router.dart';
 import 'reminder_link.dart';
 import 'widget_sync.dart';
+import 'widget_toggle_queue.dart';
 
 /// This build's `BuildConfig.VERSION_CODE`.
 ///
@@ -307,11 +308,31 @@ class AppScope {
       flutterTray,
     );
 
+    // The App Group the iOS widget extension reads, named before anything is
+    // published. `HomeWidgetPlugin()` used to be built with no argument and
+    // `ensureInitialized()` had no caller at all, so on iOS every publish went
+    // into the app's own UserDefaults, the extension read an empty suite, and
+    // all six home-screen widgets stayed permanently blank
+    // (`audit4.ios-the-app-group-is-never#1`). It is a no-op on Android.
+    final widgetPlatform = HomeWidgetPlugin(
+      appGroupId: HomeWidgetPlugin.iosAppGroupId,
+    );
+    await widgetPlatform.ensureInitialized();
+
+    // The core of `WidgetReceiver`: one instance, because a widget tap and a
+    // notification button are the same behaviour reached two ways.
+    final widgetBehavior = WidgetBehavior(
+      habitList: habitList,
+      commandRunner: commandRunner,
+      notificationTray: tray,
+      preferences: preferences,
+    );
+
     final sync = WidgetSync(
       bridge: HomeWidgetBridge(
         habitList: habitList,
         registry: WidgetRegistry(preferencesStorage),
-        platform: HomeWidgetPlugin(),
+        platform: widgetPlatform,
         // `settings.preferences.widget-opacity#4`: the settings row writes
         // `pref_widget_opacity` and asks for a republish; this is the half
         // that carries the new value to the launcher's process.
@@ -321,6 +342,16 @@ class AppScope {
       taskRunner: taskRunner,
       midnightTimer: midnightTimer,
       preferences: preferences,
+      // The taps an iOS widget performed in place while the app was closed.
+      // Drained on the way to every publish, which is where upstream's
+      // `WidgetReceiver` broadcast would have arrived
+      // (`audit4.tapping-a-boolean-checkmark-widget-now#1`).
+      pendingToggles: WidgetToggleQueue(
+        store: HomeWidgetStore(plugin: widgetPlatform),
+        habitList: habitList,
+        behavior: widgetBehavior,
+        logging: logging,
+      ),
     );
 
     // `ReminderReceiver` + `ReminderController` + the two `WidgetReceiver`
@@ -333,12 +364,7 @@ class AppScope {
       controller: controller,
       checkmarks: WidgetIntentReceiver(
         parser: IntentParser(habitList),
-        controller: WidgetBehavior(
-          habitList: habitList,
-          commandRunner: commandRunner,
-          notificationTray: tray,
-          preferences: preferences,
-        ),
+        controller: widgetBehavior,
         preferences: preferences,
         updateWidgets: sync.updateWidgets,
         scheduleStartDayWidgetUpdate: sync.scheduleStartDayWidgetUpdate,

@@ -30,15 +30,24 @@ import org.isoron.uhabits.widgets.views.HistoryChartView
  * `widgets.history#1`: default 250x250 px, a GraphWidgetView wrapping the core
  * HistoryChart. `widgets.history#3`: the title is the habit name.
  *
- * The one widget of the six the v1 contract can draw in full: 60 days of
- * `computedEntries` is exactly what the grid needs at every size the launcher
- * offers.
+ * The one widget of the six whose *series* the entry window can supply in full:
+ * 60 days of `computedEntries` is exactly what the grid needs at every size the
+ * launcher offers. Its origin is a preference, though, and that has to be
+ * published too — see [firstWeekday].
  */
 class HistoryWidget(
     context: Context,
     widgetId: Int,
     private val habit: HabitData,
     private val today: LocalDate,
+    /**
+     * `widgets.history#4`: `HistoryCardPresenter.buildState(habit, firstWeekday
+     * = prefs.firstWeekday, …)` — the weekday the grid's rows start on, as
+     * `daysSinceSunday`. It arrives on the document
+     * (`audit4.history-and-frequency-home-screen-widgets#1`); a widget cannot
+     * read the preference store, which lives in the app's process.
+     */
+    private val firstWeekday: Int = WidgetDocument.DEFAULT_FIRST_WEEKDAY,
     /**
      * `widgets.stack#9`: true when this widget is one page of a StackWidget,
      * which forces it opaque (`widgets.card-chrome#5`).
@@ -60,6 +69,7 @@ class HistoryWidget(
             if (preferedBackgroundAlpha >= 255) setShadowAlpha(0x4f)
             (dataView as HistoryChartView).apply {
                 this.today = this@HistoryWidget.today
+                this.firstWeekday = this@HistoryWidget.firstWeekday
                 paletteColor = habit.color
                 series = HistoryChartView.seriesOf(habit)
                 defaultSquare = HistoryChartView.Square.OFF

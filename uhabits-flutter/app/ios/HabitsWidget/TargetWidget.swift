@@ -43,8 +43,8 @@ struct TargetWidget: Widget {
         ) { entry in
             TargetWidgetView(entry: entry)
         }
-        .configurationDisplayName("Target")
-        .description("Shows how much of the target is done this day, week, month, quarter and year.")
+        .configurationDisplayName(LocalizedStringKey("widget_name_target"))
+        .description(LocalizedStringKey("widget_description_target"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -68,6 +68,10 @@ struct TargetWidgetView: View {
                 )
             }
             .widgetCard()
+            // `widgets.target#9`: the card opens ShowHabitActivity for this
+            // habit — `IntentFactory.startShowHabitActivity`, which
+            // both platforms send as `uhabits://widget/show`.
+            .widgetURL(WidgetLink.show(habit))
         }
     }
 }

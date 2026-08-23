@@ -6759,7 +6759,7 @@ the work to close it.
 
 #### audit4.ios-home-screen-widgets-never-receive
 
-- [ ] `audit4.ios-home-screen-widgets-never-receive` — iOS home-screen widgets never receive any data: the App Group id is never set
+- [x] `audit4.ios-home-screen-widgets-never-receive` — iOS home-screen widgets never receive any data: the App Group id is never set
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/WidgetUpdater.kt (updateWidgets → context.sendBroadcast to the six providers, which then read habitList in the launcher's process)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/state/app_scope.dart:314 (`platform: HomeWidgetPlugin()`) and /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart:381-421 (`HomeWidgetPlugin.ensureInitialized`)`
@@ -6770,7 +6770,7 @@ the work to close it.
 
 #### audit4.ios-the-app-group-is-never
 
-- [ ] `audit4.ios-the-app-group-is-never` — iOS: the App Group is never set, so nothing the app publishes ever reaches the widget extension — all six iOS home-screen widgets stay permanently empty
+- [x] `audit4.ios-the-app-group-is-never` — iOS: the App Group is never set, so nothing the app publishes ever reaches the widget extension — all six iOS home-screen widgets stay permanently empty
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/BaseWidgetProvider.kt (onUpdate → getHabitsFromWidgetId) and uhabits-android/src/main/java/org/isoron/uhabits/widgets/WidgetUpdater.kt (updateWidgets)`
 - **Where the port should do it:** `uhabits-flutter/app/lib/state/app_scope.dart:314 (`platform: HomeWidgetPlugin()`) and uhabits-flutter/app/lib/platform/home_widget_bridge.dart:382-392 (`HomeWidgetPlugin({this.appGroupId})` / `ensureInitialized()`)`
@@ -6781,7 +6781,7 @@ the work to close it.
 
 #### audit4.checkmark-widget-s-score-ring-is
 
-- [ ] `audit4.checkmark-widget-s-score-ring-is` — Checkmark widget's score ring is always empty — the score is never published
+- [x] `audit4.checkmark-widget-s-score-ring-is` — Checkmark widget's score ring is always empty — the score is never published
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/CheckmarkWidget.kt — `refreshData`: `percentage = habit.scores[today].value.toFloat()` (widgets.checkmark#2, widgets.checkmark-view#5)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart — `HomeWidgetBridge._habitDocument``
@@ -6792,7 +6792,7 @@ the work to close it.
 
 #### audit4.score-widget-draws-an-empty-chart
 
-- [ ] `audit4.score-widget-draws-an-empty-chart` — Score widget draws an empty chart — the score series is never published
+- [x] `audit4.score-widget-draws-an-empty-chart` — Score widget draws an empty chart — the score series is never published
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/ScoreWidget.kt — `refreshData` builds `ScoreCardPresenter.buildState(habit, firstWeekday, spinnerPosition = prefs.scoreCardSpinnerPosition, WidgetTheme())` and sets bucketSize + the score list (widgets.score#3, #5, #6)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart — `HomeWidgetBridge._habitDocument``
@@ -6803,7 +6803,7 @@ the work to close it.
 
 #### audit4.target-widget-shows-the-wrong-rows
 
-- [ ] `audit4.target-widget-shows-the-wrong-rows` — Target widget shows the wrong rows, wrong targets and wrong window sums
+- [x] `audit4.target-widget-shows-the-wrong-rows` — Target widget shows the wrong rows, wrong targets and wrong window sums
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/TargetWidget.kt + uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/TargetCard.kt (`TargetCardPresenter.buildState`) — widgets.target#5, #6, #7`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart (`_habitDocument`, `entryCount = 60`) and /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/TargetWidget.kt`
@@ -6814,7 +6814,7 @@ the work to close it.
 
 #### audit4.streak-and-frequency-widgets-only-see
 
-- [ ] `audit4.streak-and-frequency-widgets-only-see` — Streak and Frequency widgets only see the last 60 days, and Frequency reads the wrong entry list
+- [x] `audit4.streak-and-frequency-widgets-only-see` — Streak and Frequency widgets only see the last 60 days, and Frequency reads the wrong entry list
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/StreakWidget.kt (`streaks = habit.streaks.getBest(chart.maxStreakCount)`, widgets.streak#3) and .../FrequencyWidget.kt (`setFrequency(habit.originalEntries.computeWeekdayFrequency(...))`, widgets.frequency#3)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart (`entryCount = 60`, `_habitDocument` publishes `computedEntries` only)`
@@ -6825,7 +6825,7 @@ the work to close it.
 
 #### audit4.history-and-frequency-home-screen-widgets
 
-- [ ] `audit4.history-and-frequency-home-screen-widgets` — History and Frequency home-screen widgets ignore the first-weekday preference
+- [x] `audit4.history-and-frequency-home-screen-widgets` — History and Frequency home-screen widgets ignore the first-weekday preference
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/HistoryWidget.kt (`HistoryCardPresenter.buildState(habit, firstWeekday = prefs.firstWeekday, …)` and `HistoryChart(firstWeekday = prefs.firstWeekday)`) and .../FrequencyWidget.kt (`chart.setFirstWeekday(firstWeekday)`)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart (`_habitDocument` / `buildWidgetDocument` publish no firstWeekday) and app/android/.../widgets/HistoryWidget.kt, FrequencyWidget.kt`
@@ -6836,7 +6836,7 @@ the work to close it.
 
 #### audit4.android-13-per-app-language-picker
 
-- [ ] `audit4.android-13-per-app-language-picker` — Android 13+ per-app language picker is gone: the port's manifest declares no localeConfig
+- [x] `audit4.android-13-per-app-language-picker` — Android 13+ per-app language picker is gone: the port's manifest declares no localeConfig
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/AndroidManifest.xml — `android:localeConfig="@xml/locales_config"` on <application>, plus uhabits-android/src/main/res/xml/locales_config.xml (platform-glue.locale-config#1, #9, #10)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (and app/android/app/build.gradle.kts, which sets no `androidResources { generateLocaleConfig = true }`)`
@@ -6847,7 +6847,7 @@ the work to close it.
 
 #### audit4.tapping-a-boolean-checkmark-widget-now
 
-- [ ] `audit4.tapping-a-boolean-checkmark-widget-now` — Tapping a boolean Checkmark widget now brings the whole app to the foreground
+- [x] `audit4.tapping-a-boolean-checkmark-widget-now` — Tapping a boolean Checkmark widget now brings the whole app to the foreground
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt — `toggleCheckmark(habit, timestamp)` builds `getBroadcast(... WidgetReceiver ... ACTION_TOGGLE_REPETITION)` (widgets.checkmark#6)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/WidgetIntents.kt — `toggleCheckmark` returns `HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java, uri)``
@@ -6858,7 +6858,7 @@ the work to close it.
 
 #### audit4.ios-home-screen-widgets-have-no
 
-- [ ] `audit4.ios-home-screen-widgets-have-no` — iOS: home-screen widgets have no tap target — a Checkmark widget cannot be toggled and a graph widget cannot open the habit
+- [x] `audit4.ios-home-screen-widgets-have-no` — iOS: home-screen widgets have no tap target — a Checkmark widget cannot be toggled and a graph widget cannot open the habit
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/BaseWidget.kt (getOnClickPendingIntent) with uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt (toggleCheckmark:137, showNumberPicker:159, showHabit:84)`
 - **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/CheckmarkWidget.swift, HistoryWidget.swift, ScoreWidget.swift, StreakWidget.swift, FrequencyWidget.swift, TargetWidget.swift (absent — no `widgetURL`, `Link` or `Button(intent:)`), and uhabits-flutter/app/ios/Runner/Info.plist (no CFBundleURLTypes)`
@@ -6869,7 +6869,7 @@ the work to close it.
 
 #### audit4.deleting-a-widget-from-the-launcher
 
-- [ ] `audit4.deleting-a-widget-from-the-launcher` — Deleting a widget from the launcher never clears its habit binding, and the app keeps republishing its document
+- [x] `audit4.deleting-a-widget-from-the-launcher` — Deleting a widget from the launcher never clears its habit binding, and the app keeps republishing its document
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/BaseWidgetProvider.kt — `onDeleted` → `BaseWidget.delete()` → `WidgetPreferences.removeWidget(id)` (widgets.provider-lifecycle#8)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart — `WidgetRegistry.removeWidget` (never called from anywhere in app/lib)`
@@ -6880,7 +6880,7 @@ the work to close it.
 
 #### audit4.habit-detail-screen-never-applies-the
 
-- [ ] `audit4.habit-detail-screen-never-applies-the` — Habit detail screen never applies the bottom window inset — the last card sits under the navigation bar
+- [x] `audit4.habit-detail-screen-never-applies-the` — Habit detail screen never applies the bottom window inset — the last card sits under the navigation bar
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitView.kt — `setState()`'s last statement, `binding.linearLayout.applyBottomInset()` (helper at utils/ViewExtensions.kt:274)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart:574 (`body: SingleChildScrollView(child: Column(...))` in `_buildScaffold`)`
@@ -6891,7 +6891,7 @@ the work to close it.
 
 #### audit4.coloraccent-aboutscreencolor-is-never-mapped-so
 
-- [ ] `audit4.coloraccent-aboutscreencolor-is-never-mapped-so` — colorAccent (= ?aboutScreenColor) is never mapped, so every switch, radio and dialog button loses the blue accent
+- [x] `audit4.coloraccent-aboutscreencolor-is-never-mapped-so` — colorAccent (= ?aboutScreenColor) is never mapped, so every switch, radio and dialog button loses the blue accent
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/values/styles.xml — <style name="AppBaseTheme"> / <style name="AppBaseThemeDark"> / <style name="AppBaseThemeDark.PureBlack">, item colorAccent bound to ?aboutScreenColor (@color/blue_800 #1565C0 light, @color/blue_300 #64B5F6 dark), consumed by the SwitchPreferenceCompat rows of res/xml/pr`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/theme/app_theme.dart — appThemeData, which builds the ColorScheme (primary := theme.statusBarBackgroundColor, secondary := theme.colorOf(defaultPaletteColor)); consumers uhabits-flutter/app/lib/ui/settings/settings_screen.dart `_switch` and uhabits-flutter/app/lib/ui/common/dialogs/frequency_`
@@ -6902,7 +6902,7 @@ the work to close it.
 
 #### audit4.android-localeconfig-is-dropped-so-the
 
-- [ ] `audit4.android-localeconfig-is-dropped-so-the` — android:localeConfig is dropped, so the app no longer appears in the Android 13+ per-app language picker
+- [x] `audit4.android-localeconfig-is-dropped-so-the` — android:localeConfig is dropped, so the app no longer appears in the Android 13+ per-app language picker
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/xml/locales_config.xml (44 <locale> entries), wired by android:localeConfig="@xml/locales_config" on <application> in uhabits-android/src/main/AndroidManifest.xml:33`
 - **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (declares no localeConfig; there is no app/android/app/src/main/res/xml/locales_config.xml)`
@@ -6913,7 +6913,7 @@ the work to close it.
 
 #### audit4.ios-every-string-the-widget-surface
 
-- [ ] `audit4.ios-every-string-the-widget-surface` — iOS: every string the widget surface shows is a hard-coded English Swift literal, losing the 43 translations Android now has
+- [x] `audit4.ios-every-string-the-widget-surface` — iOS: every string the widget surface shows is a hard-coded English Swift literal, losing the 43 translations Android now has
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/AndroidManifest.xml (the six <receiver android:label="@string/checkmark|history|score|streaks|frequency|target">) and uhabits-android/src/main/res/values*/strings.xml (habit_not_found, and the six names translated in 44 locale folders)`
 - **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/CheckmarkWidget.swift:46-47 and the five sibling widgets (`.configurationDisplayName("Checkmark")`, `.description("Shows today's checkmark…")`), uhabits-flutter/app/ios/HabitsWidget/WidgetCard.swift:55-70 (WidgetPlaceholder.habitNotFound / errorDrawing / noHabits)`
@@ -6924,7 +6924,7 @@ the work to close it.
 
 #### audit4.the-midnight-day-rollover-timer-is
 
-- [ ] `audit4.the-midnight-day-rollover-timer-is` — The midnight day-rollover timer is armed only when the reminder scheduler exists
+- [x] `audit4.the-midnight-day-rollover-timer-is` — The midnight day-rollover timer is armed only when the reminder scheduler exists
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt:114-137 (onResume) and uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/utils/MidnightTimer.kt (onResume/notifyListeners -> setToday(computeToday(midnightDelayHours, 0)))`
 - **Where the port should do it:** `uhabits-flutter/app/lib/main.dart:272-296 (_ThemedAppState._onResume) and :325-327 (_resumeMidnightTimer); the gate it depends on is uhabits-flutter/app/lib/state/app_scope.dart:232-243 (startPlatformServices, which catches and swallows any failure) and :412 (reminderScheduler => _started?.scheduler)`
@@ -6935,7 +6935,7 @@ the work to close it.
 
 #### audit4.empty-list-star-beach-icon-is
 
-- [ ] `audit4.empty-list-star-beach-icon-is` — Empty-list star/beach icon is drawn at half the upstream size
+- [x] `audit4.empty-list-star-beach-icon-is` — Empty-list star/beach icon is drawn at half the upstream size
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/EmptyListView.kt:48 — `iconTextView = TextView(context).apply { textSize = sp(40.0f) }``
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/list_habits_root_view.dart:94 (`EmptyListView.build`, `TextStyle(fontSize: 40, fontFamily: fontAwesomeFamily)`)`
@@ -6946,7 +6946,7 @@ the work to close it.
 
 #### audit4.check-mark-cell-glyphs-no-longer
 
-- [ ] `audit4.check-mark-cell-glyphs-no-longer` — Check-mark cell glyphs no longer follow the OS font-scale setting, and the recorded deviation says no such call sites exist
+- [x] `audit4.check-mark-cell-glyphs-no-longer` — Check-mark cell glyphs no longer follow the OS font-scale setting, and the recorded deviation says no such call sites exist
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/CheckmarkButtonView.kt:170-174 — `paint.textSize = when { id == R.string.fa_question -> sp(12f); value == YES_AUTO -> sp(13f); else -> sp(14f) }`; also EmptyListView.kt:48`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/entry_button_views.dart:45-52 (`smallTextSize = 14.0`, `smallerTextSize = 12.0`, `yesAutoTextSize = 13.0`, fed to `canvas.setFontSize`); app/lib/platform/flutter_canvas.dart:248 applies `_fontSize` with no `textScaler``
@@ -6957,7 +6957,7 @@ the work to close it.
 
 #### audit4.habit-list-keeps-88dp-of-dead
 
-- [ ] `audit4.habit-list-keeps-88dp-of-dead` — Habit list keeps 88dp of dead space below the last card, left over from the deleted floating action button
+- [x] `audit4.habit-list-keeps-88dp-of-dead` — Habit list keeps 88dp of dead space below the last card, left over from the deleted floating action button
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/HabitCardListView.kt:85-107 — `applyBottomInset()` adds an ItemDecoration that gives the LAST item `outRect.bottom = systemBarsInsets.bottom` and nothing more`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart:698 (`final padding = EdgeInsets.only(top: 0, bottom: 88 + bottomInset);`)`
@@ -6968,7 +6968,7 @@ the work to close it.
 
 #### audit4.the-unit-field-auto-capitalizes-which
 
-- [ ] `audit4.the-unit-field-auto-capitalizes-which` — The Unit field auto-capitalizes, which its Android counterpart does not
+- [x] `audit4.the-unit-field-auto-capitalizes-which` — The Unit field auto-capitalizes, which its Android counterpart does not
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/layout/activity_edit_habit.xml — @+id/unitInput (style FormInput, maxLines=1, ems=10, hint @string/measurable_units_example); compare its siblings nameInput / questionInput / notesInput, each of which declares android:inputType="textCapSentences|textMultiLine"`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/edit/edit_habit_screen.dart — _FormInput.build sets textCapitalization: TextCapitalization.sentences unconditionally; _buildUnitBox uses it for the unit field`
@@ -6979,11 +6979,11 @@ the work to close it.
 
 #### audit4.harness-blind-spots
 
-- [ ] `audit4.harness-blind-spots` — The harness cannot see the native layer or the widget data contract
+- [x] `audit4.harness-blind-spots` — The harness cannot see the native layer or the widget data contract
 - **Platform:** ui · **Port risk:** high
 - **Source:** `four audit passes; this one found 9 of 20 defects in a layer the journeys cannot enter`
 - **Severity:** major
 
-1. `audit4.harness-blind-spots#1` — A journey drives the Flutter tree, so it can prove a screen is reachable and cannot say anything about Swift, Kotlin, AndroidManifest.xml or Info.plist. Both blockers of this pass live there: the iOS App Group is never set, so every iOS widget is permanently empty.
+1. `audit4.harness-blind-spots#1` — A journey drives the Flutter tree, so it can prove a screen is reachable and cannot say anything about Swift, Kotlin, AndroidManifest.xml or Info.plist. Both blockers of this pass live there: the iOS App Group is never set, so every iOS widget is permanently empty. — **не применимо к порту:** правило описывает границу возможностей сценария, а не требование к приложению: утверждать его — значит утверждать, что Dart-тест умеет читать Swift. Работа несёт `#2` (контракт данных виджета) и `#3` (нативные декларации), обе процитированы.
 2. `audit4.harness-blind-spots#2` — The widget bridge is Dart and still escaped every test, because no journey places a widget and inspects what it was given. The port needs a test that asserts the published document against what each widget kind needs to draw: the score for the checkmark ring, the score series for the score widget, enough history for the streak and frequency widgets, and the first-weekday preference.
 3. `audit4.harness-blind-spots#3` — Native declarations that carry behaviour must be asserted from a test that reads them: the App Group id shared by the app and the extension, the URL scheme the widgets tap into, localeConfig, and the widget labels. Reading the file is enough; it is what catches a declaration that silently disappears.

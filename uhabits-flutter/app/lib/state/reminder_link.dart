@@ -81,7 +81,22 @@ export 'intent_router.dart' show ReminderIntentActions, ReminderIntentReceiver;
 /// calls the background entry point there. That isolate has no scope, no
 /// database handle and no screen; when the app is alive, the only thing worth
 /// doing with the response is handing it to the isolate that has all three.
-const String reminderResponsePortName = 'org.isoron.uhabits/reminder-responses';
+/// The name is fixed in production, and has to be: the background entry point
+/// runs in a second engine with no reference to the app and can only find it by
+/// a name both halves already agree on.
+///
+/// It is a variable, not a constant, for one reason. `IsolateNameServer` is
+/// global to the *process*, and `flutter test` runs many test files in one
+/// process — so two files that each boot an app fight over this single name,
+/// and the loser's notification responses are delivered into the winner's
+/// isolate. A test that boots an app gives itself a unique name here and
+/// restores this default afterwards.
+String reminderResponsePortName = defaultReminderResponsePortName;
+
+/// The production name. Never changes; [reminderResponsePortName] is what code
+/// reads.
+const String defaultReminderResponsePortName =
+    'org.isoron.uhabits/reminder-responses';
 
 /// The background half of the response callback.
 ///

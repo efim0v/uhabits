@@ -36,6 +36,12 @@ class FrequencyWidget(
     private val habit: HabitData,
     private val today: LocalDate,
     /**
+     * `widgets.frequency#3`: `chart.setFirstWeekday(firstWeekday)` — the
+     * weekday the seven rows start on, as `daysSinceSunday`. Published with the
+     * document (`audit4.history-and-frequency-home-screen-widgets#1`).
+     */
+    private val firstWeekday: Int = WidgetDocument.DEFAULT_FIRST_WEEKDAY,
+    /**
      * `widgets.stack#9`: true when this widget is one page of a StackWidget,
      * which forces it opaque (`widgets.card-chrome#5`).
      */
@@ -57,9 +63,17 @@ class FrequencyWidget(
             if (preferedBackgroundAlpha >= 255) setShadowAlpha(0x4f)
             (dataView as FrequencyChartView).apply {
                 this.today = this@FrequencyWidget.today
+                this.firstWeekday = this@FrequencyWidget.firstWeekday
                 color = WidgetTheme.color(habit.color)
                 isNumerical = habit.isNumerical
-                frequency = FrequencyChartView.computeWeekdayFrequency(habit, this@FrequencyWidget.today)
+                // `widgets.frequency#3`: the buckets are
+                // `habit.originalEntries.computeWeekdayFrequency(...)` over the
+                // habit's whole history, which the bridge publishes. The
+                // fallback rebuilds them from the 60 published days — right
+                // for the last two months and blind to everything before, and
+                // reached only by a document that predates the field.
+                frequency = habit.weekdayFrequency
+                    ?: FrequencyChartView.computeWeekdayFrequency(habit, this@FrequencyWidget.today)
             }
         }
     }

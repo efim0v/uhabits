@@ -114,7 +114,7 @@ internal class StackRemoteViewsFactory(private val context: Context, intent: Int
             document.habits.firstOrNull { it.id == habitId } ?: throw HabitNotFoundException()
         }
         val h = habits[position]
-        val widget = constructWidget(h, document.today)
+        val widget = constructWidget(h, document.today, document.firstWeekday)
         widget.setDimensions(getDimensionsFromOptions(context, options))
         val landscapeViews = widget.landscapeRemoteViews
         val portraitViews = widget.portraitRemoteViews
@@ -131,17 +131,21 @@ internal class StackRemoteViewsFactory(private val context: Context, intent: Int
      * `widgets.stack-service#5`: every child is built stacked, which is what
      * forces it opaque (`widgets.card-chrome#5`).
      *
-     * Upstream hands `FrequencyWidget` the `prefs.firstWeekday` preference. It
-     * is not part of the published document, so this port's `FrequencyWidget`
-     * takes the document's today instead and buckets from there, exactly as the
-     * non-stacked one does.
+     * Upstream hands `FrequencyWidget` and `HistoryWidget` the
+     * `prefs.firstWeekday` preference; here it rides on the document
+     * (`audit4.history-and-frequency-home-screen-widgets#1`) and a page of a
+     * stack gets the same one a standalone widget does.
      */
-    private fun constructWidget(habit: HabitData, today: LocalDate): BaseWidget {
+    private fun constructWidget(
+        habit: HabitData,
+        today: LocalDate,
+        firstWeekday: Int
+    ): BaseWidget {
         return when (widgetType) {
             StackWidgetType.CHECKMARK -> CheckmarkWidget(context, widgetId, habit, today, true)
-            StackWidgetType.FREQUENCY -> FrequencyWidget(context, widgetId, habit, today, true)
+            StackWidgetType.FREQUENCY -> FrequencyWidget(context, widgetId, habit, today, firstWeekday, true)
             StackWidgetType.SCORE -> ScoreWidget(context, widgetId, habit, today, true)
-            StackWidgetType.HISTORY -> HistoryWidget(context, widgetId, habit, today, true)
+            StackWidgetType.HISTORY -> HistoryWidget(context, widgetId, habit, today, firstWeekday, true)
             StackWidgetType.STREAKS -> StreakWidget(context, widgetId, habit, today, true)
             StackWidgetType.TARGET -> TargetWidget(context, widgetId, habit, today, true)
         }

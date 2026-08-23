@@ -37,20 +37,22 @@ import kotlin.math.roundToInt
  * minus the scrolling (`dataOffset` is pinned at 0: a widget bitmap has no
  * gestures).
  *
- * ## What the contract cannot supply
+ * ## Where the buckets come from
  *
- * `widgets.frequency#3` and `#4` want
+ * `widgets.frequency#3`, `#4` and `#5` want
  * `habit.originalEntries.computeWeekdayFrequency(...)` — a bucket per weekday
- * per month over the habit's **whole history**. The published document carries
- * 60 days, so [computeWeekdayFrequency] below sees roughly two months and every
- * older column draws empty. The widget is therefore correct in shape and wrong
- * in extent, and it will stay that way until the bridge publishes the buckets.
+ * per month over the habit's **whole history**, counting the user's own marks
+ * and not the YES_AUTO days a non-daily frequency generates. The bridge runs
+ * exactly that call and publishes the result as `weekdayFrequency`
+ * (`audit4.streak-and-frequency-widgets-only-see`), so [FrequencyWidget] hands
+ * it straight to [frequency].
  *
- * `widgets.frequency#5` — the widget reads `originalEntries`, so YES_AUTO days
- * must not count — is also unmet, and in the opposite direction: the document
- * carries `computedEntries`, in which those days are already filled in. The
- * YES_MANUAL test below is what keeps the damage to boolean habits down to the
- * auto-satisfied days only.
+ * [computeWeekdayFrequency] below is the fallback for a document written before
+ * that field existed: it rebuilds the buckets from the 60 published days of
+ * `computedEntries`, which is right for the last two months, blind to every
+ * older column, and — for a boolean habit — kept honest only by its YES_MANUAL
+ * test, since the entries it reads already have the auto-satisfied days filled
+ * in.
  */
 class FrequencyChartView(context: Context) : View(context) {
 

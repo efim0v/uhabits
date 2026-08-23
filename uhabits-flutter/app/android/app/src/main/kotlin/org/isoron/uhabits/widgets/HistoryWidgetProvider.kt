@@ -30,5 +30,11 @@ class HistoryWidgetProvider : BaseWidgetProvider() {
         widgetId: Int,
         document: WidgetDocument
     ) =
-        HistoryWidget(context, widgetId, document.singleHabit(), document.today)
+        HistoryWidget(
+            context,
+            widgetId,
+            document.singleHabit(),
+            document.today,
+            document.firstWeekday
+        )
 }

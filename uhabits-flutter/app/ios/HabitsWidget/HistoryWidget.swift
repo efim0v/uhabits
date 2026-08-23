@@ -36,8 +36,8 @@ struct HistoryWidget: Widget {
         ) { entry in
             HistoryWidgetView(entry: entry)
         }
-        .configurationDisplayName("History")
-        .description("Shows a calendar of the habit's recent history.")
+        .configurationDisplayName(LocalizedStringKey("widget_name_history"))
+        .description(LocalizedStringKey("widget_description_history"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -58,6 +58,10 @@ struct HistoryWidgetView: View {
                 HistoryChartView(habit: habit, today: entry.today)
             }
             .widgetCard()
+            // `widgets.history#5`: the card opens ShowHabitActivity for this
+            // habit — `IntentFactory.startShowHabitActivity`, which
+            // both platforms send as `uhabits://widget/show`.
+            .widgetURL(WidgetLink.show(habit))
         }
     }
 }

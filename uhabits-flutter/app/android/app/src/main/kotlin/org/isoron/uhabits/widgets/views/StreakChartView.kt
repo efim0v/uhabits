@@ -39,14 +39,18 @@ import kotlin.math.min
 /**
  * Port of `uhabits-android/.../activities/common/views/StreakChart.kt`.
  *
- * ## What the contract cannot supply
+ * ## Where the streaks come from
  *
- * `widgets.streak#3` wants `habit.streaks.getBest(chart.maxStreakCount)`, and
- * the streak list is not published. [streaksFrom] rebuilds it from the 60 daily
- * values that are, which is right for recent streaks and wrong for anything
- * older or longer: a streak that started before the window is reported as
- * starting at its edge, and streaks that ended before it vanish. The best-streak
- * ordering is therefore only the best of the last 60 days.
+ * `widgets.streak#3` wants `habit.streaks.getBest(chart.maxStreakCount)`, over
+ * the habit's whole history. The bridge publishes `getBest(30)` and [bestOf]
+ * narrows that to the bars this widget's height admits
+ * (`audit4.streak-and-frequency-widgets-only-see`).
+ *
+ * [streaksFrom] is the fallback for a document written before that field
+ * existed: it rebuilds runs from the 60 daily values the contract has always
+ * carried, which is right for recent streaks and wrong for anything older or
+ * longer — a streak that started before the window is reported as starting at
+ * its edge, and streaks that ended before it vanish.
  */
 class StreakChartView(context: Context) : View(context) {
 
@@ -193,6 +197,24 @@ class StreakChartView(context: Context) : View(context) {
     }
 
     companion object {
+        /**
+         * `StreakList.getBest(limit)` over an already-published list: the
+         * [limit] longest streaks — ties broken by the later end date, as
+         * `Streak.compareLonger` does — re-sorted newest-ending first, which is
+         * the order the chart draws them in.
+         *
+         * The bridge publishes the best thirty; every count a widget can show
+         * is smaller, and the longest k of the longest thirty are the longest k
+         * outright, so this is the same list upstream's
+         * `habit.streaks.getBest(chart.maxStreakCount)` would produce.
+         */
+        fun bestOf(streaks: List<StreakData>, limit: Int): List<StreakData> = streaks
+            .sortedWith(
+                compareByDescending<StreakData> { it.length }.thenByDescending { it.end }
+            )
+            .take(max(0, limit))
+            .sortedByDescending { it.end }
+
         /**
          * Rebuilds `habit.streaks` from the published 60-day window.
          *

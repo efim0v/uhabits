@@ -35,21 +35,22 @@ import kotlin.math.min
  * the habit name. `widgets.target#8`: the configure activity is
  * NumericalHabitPickerDialog, so a boolean habit can never reach this widget.
  *
- * ## What the contract cannot supply
+ * ## Where the rows come from
  *
- * `widgets.target#5` makes the row list depend on `habit.frequency.denominator`:
- * 'Today' only for a daily habit, 'Week' only for a habit at most weekly, and
- * Month/Quarter/Year always. The frequency is not in the published document, so
- * the denominator is assumed to be 1 and all five rows are drawn — a weekly
- * habit shows a 'Today' row it should not have.
+ * Upstream `refreshData` builds `TargetCardPresenter.buildState(habit,
+ * firstWeekday = prefs.firstWeekdayInt, WidgetTheme())` and draws its three
+ * parallel lists. That presenter needs three things this process does not have:
+ * `habit.frequency.denominator`, which decides *which* rows exist
+ * (`widgets.target#5`) and scales every target (`widgets.target#7`), and the
+ * habit's whole history, over which the window sums are calendar-truncated
+ * (`widgets.target#6`). So the bridge runs the same presenter and publishes its
+ * rows (`audit4.target-widget-shows-the-wrong-rows`), and this class draws
+ * them.
  *
- * `widgets.target#7` reduces each target by `dailyTarget * skippedDays`, where
- * `dailyTarget = targetValue / frequency.denominator`. Same missing field: the
- * daily target is taken to be the target value itself.
- *
- * The window sums (`widgets.target#6`) come out of the 60 published days, so
- * Today, Week and Month are right and Quarter and Year are truncated at 60 days.
- * The bars for those two therefore read low.
+ * [windowSum] and [windowTarget] remain as the fallback for a document written
+ * before `targetRows` existed: all five rows, `dailyTarget` taken to be the
+ * target value itself, and sums clamped to the 60 published days — so Quarter
+ * and Year read low.
  */
 class TargetWidget(
     context: Context,
@@ -77,9 +78,16 @@ class TargetWidget(
             if (preferedBackgroundAlpha >= 255) setShadowAlpha(0x4f)
             (dataView as TargetChartView).apply {
                 color = WidgetTheme.color(habit.color)
-                labels = INTERVALS.map { intervalToLabel(it) }
-                values = INTERVALS.map { windowSum(it) }
-                targets = INTERVALS.map { windowTarget(it) }
+                val rows = habit.targetRows
+                if (rows != null) {
+                    labels = rows.map { intervalToLabel(it.interval) }
+                    values = rows.map { it.value }
+                    targets = rows.map { it.target }
+                } else {
+                    labels = INTERVALS.map { intervalToLabel(it) }
+                    values = INTERVALS.map { windowSum(it) }
+                    targets = INTERVALS.map { windowTarget(it) }
+                }
             }
         }
     }

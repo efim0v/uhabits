@@ -278,9 +278,14 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     // which Dart is running again.
     await scope.reminderResponses?.onResumed();
     if (!mounted) return;
+    // `ListHabitsActivity.onResume` arms the timer as its fourth statement,
+    // before the reminder block and independently of it: the day boundary has
+    // to move even on a run where the notification subsystem failed to start,
+    // or `getToday()` stays frozen and a tap on the newest column writes the
+    // entry to yesterday.
+    _resumeMidnightTimer(scope);
     final scheduler = scope.reminderScheduler;
     if (scheduler != null) {
-      _resumeMidnightTimer(scope);
       final gate = _permissionGate ??= ReminderPermissionGate(
         scheduler: scheduler,
         permissions: LocalNotificationsPermissions(

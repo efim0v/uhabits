@@ -72,6 +72,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/main.dart';
 import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/state/reminder_link.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
 import 'package:uhabits/ui/habits/list/list_habits_menu.dart';
@@ -240,11 +241,22 @@ class TestDevice {
   factory TestDevice.create([String name = 'uhabits_journey']) {
     final TestDevice device =
         TestDevice._(Directory.systemTemp.createTempSync(name));
+    // IsolateNameServer is global to the process and `flutter test` runs test
+    // files in one process, so two files that each boot an app would fight over
+    // the single production port name and deliver one file's notification
+    // responses into the other's isolate. Each device gets its own.
+    reminderResponsePortName =
+        '$defaultReminderResponsePortName/${device.root.path}';
     Directory(device.supportPath).createSync(recursive: true);
     Directory(device.cachePath).createSync(recursive: true);
     Directory(device.documentsPath).createSync(recursive: true);
     device._install();
     return device;
+  }
+
+  /// Restores the production port name. Called from [dispose].
+  void _releasePortName() {
+    reminderResponsePortName = defaultReminderResponsePortName;
   }
 
   /// The device's storage. Everything the app writes lands under here.
@@ -347,6 +359,7 @@ class TestDevice {
     }
     core_time.systemCurrentTimeMillis = core_time.defaultCurrentTimeMillis;
     core_time.DateUtils.setFixedLocalTime(null);
+    _releasePortName();
     core_time.DateUtils.setFixedTimeZone(null);
     resetToday();
     if (root.existsSync()) root.deleteSync(recursive: true);

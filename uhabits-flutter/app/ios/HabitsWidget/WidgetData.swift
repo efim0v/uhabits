@@ -17,7 +17,9 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+import AppIntents
 import Foundation
+import WidgetKit
 
 /// The reading half of the contract that `lib/platform/home_widget_bridge.dart`
 /// writes.
@@ -43,6 +45,15 @@ enum WidgetContract {
         "\(keyPrefix).widget.\(widgetId)"
     }
 
+    /// `WidgetToggleQueue.key` — the taps this extension has performed in place
+    /// and the app has not applied yet.
+    ///
+    /// The queue is written here and read by
+    /// `app/lib/state/widget_toggle_queue.dart`, which is the only thing that
+    /// may turn one into an entry. It shares [schemaVersion]: both documents
+    /// are this same contract.
+    static let pendingKey = "\(keyPrefix).pending"
+
     /// The App Group both the app and this extension belong to.
     ///
     /// `HomeWidgetPlugin.ensureInitialized()` passes the same string to
@@ -53,6 +64,92 @@ enum WidgetContract {
     static let appGroupId = "group.org.isoron.uhabits"
 }
 
+// MARK: - Links
+
+/// The deep links a tap on a widget sends into the app.
+///
+/// This is the iOS half of `app/android/.../widgets/WidgetIntents.kt`, and it
+/// is deliberately the same vocabulary: the same scheme, the same authority and
+/// the same three action names, so both platforms land in the one router,
+/// `app/lib/state/widget_link.dart`. Upstream these are three different
+/// `PendingIntent`s addressed to three different components
+/// (`BaseWidget.getOnClickPendingIntent` with `PendingIntentFactory`); neither
+/// platform can reach Dart from the widget's process, so both send a URI
+/// instead and let the app rebuild the intent.
+///
+/// ```
+/// uhabits://widget/toggle?habit=<id>&homeWidget=true
+/// uhabits://widget/edit?habit=<id>&date=<yyyy-MM-dd>&homeWidget=true
+/// uhabits://widget/show?habit=<id>&homeWidget=true
+/// ```
+///
+/// Two differences from the Android URIs, both forced:
+///
+///  - There is no `widgetId`. A WidgetKit widget has no id — it is configured
+///    by an App Intent, not by the launcher — and `WidgetLink.parse` already
+///    reads a missing id as 0 (`widgets.config-picker#1`).
+///  - There is a `homeWidget` query item. `SwiftHomeWidgetPlugin.isWidgetUrl`
+///    forwards a URL to Dart only if it carries a query item with that name;
+///    without it the tap opens the app and the URL is dropped, which looks to
+///    the user exactly like the tap doing nothing.
+///
+/// The scheme is claimed by `ios/Runner/Info.plist` (`CFBundleURLTypes`).
+/// Without that claim iOS refuses to deliver any of these at all.
+enum WidgetLink {
+
+    /// `WidgetIntents.SCHEME` / `WidgetLink.scheme`.
+    static let scheme = "uhabits"
+
+    /// `WidgetIntents.AUTHORITY` / `WidgetLink.authority`.
+    static let authority = "widget"
+
+    /// `widgets.checkmark#6` — toggle today's entry.
+    static let actionToggle = "toggle"
+
+    /// `widgets.checkmark#7` — open the value picker for a day.
+    static let actionEdit = "edit"
+
+    /// `widgets.history#5`, `widgets.score#7`, `widgets.streak#6`,
+    /// `widgets.frequency#6`, `widgets.target#9` — open the habit screen.
+    static let actionShow = "show"
+
+    /// The query item name `SwiftHomeWidgetPlugin.isWidgetUrl` filters on.
+    static let pluginMarker = "homeWidget"
+
+    static func toggle(_ habit: WidgetHabit) -> URL? {
+        link(actionToggle, habit: habit)
+    }
+
+    /// [date] is the published `today` — the app-wide today, already offset by
+    /// the midnight-delay preference. A widget must not compute it itself
+    /// (`widgets.checkmark#5`).
+    static func edit(_ habit: WidgetHabit, date: String) -> URL? {
+        link(actionEdit, habit: habit, date: date)
+    }
+
+    static func show(_ habit: WidgetHabit) -> URL? {
+        link(actionShow, habit: habit)
+    }
+
+    private static func link(
+        _ action: String,
+        habit: WidgetHabit,
+        date: String? = nil
+    ) -> URL? {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = authority
+        components.path = "/\(action)"
+        var items = [URLQueryItem(name: "habit", value: String(habit.id))]
+        if let date {
+            items.append(URLQueryItem(name: "date", value: date))
+        }
+        items.append(URLQueryItem(name: pluginMarker, value: "true"))
+        components.queryItems = items
+        return components.url
+    }
+}
+
 // MARK: - Documents
 
 /// The `uhabits.index` document.
@@ -61,6 +158,32 @@ struct WidgetIndex: Decodable {
     let today: String
     let providers: [String]
     let widgets: [WidgetBinding]
+
+    /// Every habit the app knows, in habit-list order, independent of any
+    /// widget binding — `HomeWidgetBridge.buildIndexDocument`'s `habits`.
+    ///
+    /// This is the list `HabitEntityQuery` offers in a widget's edit sheet, and
+    /// the list an unconfigured widget falls back on. It exists because
+    /// [widgets] cannot serve either purpose here: a binding is created by
+    /// `HabitPickerDialog`, which is an Android configure activity reached
+    /// through the `uhabits://widget/configure` deep link, and nothing on iOS
+    /// ever sends one. Without the catalogue the query has nothing to list, so
+    /// no widget can be configured, so no binding is ever created — the empty
+    /// case is self-sustaining.
+    ///
+    /// Optional so that a document written by a build that predates it still
+    /// decodes: an extension outlives an app update for as long as the widget
+    /// sits on the home screen, and the per-widget documents below still carry
+    /// the habits an Android-configured widget was bound to.
+    let habits: [WidgetHabit]?
+
+    /// `Preferences.isSkipEnabled` — the two inputs of
+    /// `Entry.nextToggleValue` (`widgets.behavior#3`), published because
+    /// `ToggleHabitIntent` has to predict the value the app will write.
+    let isSkipEnabled: Bool?
+
+    /// `Preferences.areQuestionMarksEnabled`.
+    let areQuestionMarksEnabled: Bool?
 
     struct WidgetBinding: Decodable {
         let id: Int
@@ -175,18 +298,26 @@ struct WidgetStore {
         )
     }
 
-    /// Every habit the app has published, in the order the documents list them,
-    /// deduplicated by habit id.
+    /// Every habit the app has published, in habit-list order, deduplicated by
+    /// habit id.
     ///
     /// This is the closest thing iOS has to `HabitPickerDialog`'s list. On
     /// Android the launcher hands each widget an id and `WidgetPreferences`
     /// maps it to habits; WidgetKit has no widget id at all, so the habit is
     /// chosen in the widget's own edit sheet (see `HabitEntityQuery`) out of
     /// whatever the app has published.
+    ///
+    /// The catalogue comes first because it is the whole list; the per-widget
+    /// documents are read after it only to keep a widget that an Android
+    /// install had bound working against an index that predates the catalogue.
     func allHabits() -> [WidgetHabit] {
         guard let index = index() else { return [] }
         var seen = Set<Int>()
         var result: [WidgetHabit] = []
+        for habit in index.habits ?? [] where !seen.contains(habit.id) {
+            seen.insert(habit.id)
+            result.append(habit)
+        }
         for binding in index.widgets {
             guard let document = document(widgetId: binding.id) else { continue }
             for habit in document.habits where !seen.contains(habit.id) {
@@ -204,6 +335,10 @@ struct WidgetStore {
         guard let raw = index()?.today else { return nil }
         return Self.parseDate(raw)
     }
+
+    /// The same day as [today], in the wire format, for the links that carry a
+    /// date back to the app.
+    func todayText() -> String? { index()?.today }
 
     func habit(id: Int) -> WidgetHabit? {
         allHabits().first { $0.id == id }
@@ -237,6 +372,19 @@ struct WidgetStore {
     /// The wire format is `HomeWidgetBridge.formatDate`: a plain ISO-8601
     /// calendar date, no time and no zone. It is parsed in the current calendar
     /// so that "today" here means the same civil day it meant in Dart.
+    /// The inverse of [parseDate]: `HomeWidgetBridge.formatDate`'s output for a
+    /// day, used when nothing has been published and the device's own today is
+    /// the best a link can carry.
+    static func formatDate(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            parts.year ?? 0,
+            parts.month ?? 0,
+            parts.day ?? 0
+        )
+    }
+
     static func parseDate(_ raw: String) -> Date? {
         let parts = raw.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
@@ -245,5 +393,162 @@ struct WidgetStore {
         components.month = parts[1]
         components.day = parts[2]
         return Calendar.current.date(from: components)
+    }
+}
+
+// MARK: - Toggling in place
+
+/// Where a tap on a boolean Checkmark widget is recorded.
+///
+/// Upstream the tap is a broadcast: `WidgetReceiver` runs
+/// `WidgetBehavior.onToggleRepetition` inside the app's process and the widget
+/// flips where it stands, with nothing appearing on screen
+/// (`widgets.checkmark#6`). Nothing here can run that code — a widget
+/// extension has no Flutter engine, and the engine `home_widget`'s background
+/// service would start registers no plugins, so it could open neither the
+/// database nor the directory it lives in.
+///
+/// So the extension does the half it can: it advances the value the card draws,
+/// and it appends the tap to `WidgetContract.pendingKey`. The app applies the
+/// queue through `CommandRunner` at its next publish — startup, resume, any
+/// command, the day rollover — so the entry is still created by the one writer
+/// upstream uses. What is written here is a request, never an entry.
+extension WidgetStore {
+
+    /// `Entry.nextToggleValue`, ported value for value.
+    ///
+    /// The two preferences arrive in the index because they belong to the user,
+    /// not to the widget: without them a card with skip disabled would show
+    /// SKIP for a moment and then correct itself to NO on the next publish.
+    static func nextToggleValue(
+        _ value: Int,
+        isSkipEnabled: Bool,
+        areQuestionMarksEnabled: Bool
+    ) -> Int {
+        switch value {
+        case EntryValue.yesAuto:
+            return EntryValue.yesManual
+        case EntryValue.yesManual:
+            return isSkipEnabled ? EntryValue.skip : EntryValue.no
+        case EntryValue.skip:
+            return EntryValue.no
+        case EntryValue.no:
+            return areQuestionMarksEnabled
+                ? EntryValue.unknown
+                : EntryValue.yesManual
+        case EntryValue.unknown:
+            return EntryValue.yesManual
+        default:
+            return EntryValue.yesManual
+        }
+    }
+
+    /// Records one tap and repaints the habit, atomically enough.
+    ///
+    /// The index is rewritten rather than re-encoded from `WidgetIndex`: the
+    /// document belongs to the app, this side understands only part of it, and
+    /// anything it does not understand has to survive the round trip untouched.
+    /// That is what `JSONSerialization` on the raw dictionary buys.
+    ///
+    /// Nothing here throws. An extension that traps is killed by the system and
+    /// the user is left with a blank card and no way to tell why.
+    func stageToggle(habitId: Int) {
+        guard
+            let defaults,
+            var index = object(forKey: WidgetContract.indexKey, in: defaults),
+            (index["version"] as? Int) == WidgetContract.schemaVersion
+        else { return }
+
+        let today = index["today"] as? String ?? ""
+        let isSkipEnabled = index["isSkipEnabled"] as? Bool ?? false
+        let areQuestionMarksEnabled = index["areQuestionMarksEnabled"] as? Bool ?? false
+
+        // The optimistic half: the card the user is looking at.
+        if var habits = index["habits"] as? [[String: Any]] {
+            for position in habits.indices
+            where habits[position]["id"] as? Int == habitId {
+                let current = habits[position]["value"] as? Int ?? EntryValue.unknown
+                let next = Self.nextToggleValue(
+                    current,
+                    isSkipEnabled: isSkipEnabled,
+                    areQuestionMarksEnabled: areQuestionMarksEnabled
+                )
+                habits[position]["value"] = next
+                if var entries = habits[position]["entries"] as? [Int],
+                   !entries.isEmpty {
+                    entries[0] = next
+                    habits[position]["entries"] = entries
+                }
+            }
+            index["habits"] = habits
+            write(index, forKey: WidgetContract.indexKey, in: defaults)
+        }
+
+        // The durable half: the request the app will act on.
+        var queue = object(forKey: WidgetContract.pendingKey, in: defaults) ?? [:]
+        if (queue["version"] as? Int) != WidgetContract.schemaVersion {
+            queue = ["version": WidgetContract.schemaVersion, "toggles": []]
+        }
+        var toggles = queue["toggles"] as? [[String: Any]] ?? []
+        // `seq` is what makes the app's drain idempotent, and what lets a tap
+        // that arrives mid-drain survive it.
+        let seq = (toggles.compactMap { $0["seq"] as? Int }.max() ?? 0) + 1
+        toggles.append(["seq": seq, "habit": habitId, "date": today])
+        queue["toggles"] = toggles
+        write(queue, forKey: WidgetContract.pendingKey, in: defaults)
+    }
+
+    private func object(forKey key: String, in defaults: UserDefaults) -> [String: Any]? {
+        guard
+            let raw = defaults.string(forKey: key),
+            let data = raw.data(using: .utf8),
+            let decoded = try? JSONSerialization.jsonObject(with: data)
+        else { return nil }
+        return decoded as? [String: Any]
+    }
+
+    private func write(_ value: [String: Any], forKey key: String, in defaults: UserDefaults) {
+        guard
+            JSONSerialization.isValidJSONObject(value),
+            let data = try? JSONSerialization.data(withJSONObject: value),
+            let text = String(data: data, encoding: .utf8)
+        else { return }
+        defaults.set(text, forKey: key)
+    }
+}
+
+/// The tap itself: `widgets.checkmark#6`, as close as iOS allows.
+///
+/// A widget `Button(intent:)` runs this inside the extension. `openAppWhenRun`
+/// is false, so nothing is brought to the foreground — the user stays on the
+/// home screen, which is the entire point of the Checkmark widget — and the
+/// reload below is the redraw `BaseWidgetProvider.onUpdate` performs after the
+/// broadcast upstream. Every widget is reloaded, not just this kind, because
+/// `WidgetUpdater.updateWidgets(habitId)` refreshes all six providers.
+struct ToggleHabitIntent: AppIntent {
+
+    static var title: LocalizedStringResource = "Toggle Habit"
+
+    /// The whole point: the tap opens nothing.
+    static var openAppWhenRun: Bool = false
+
+    /// It is not an action a user assembles shortcuts out of; it exists only
+    /// as the widget's button, so it stays out of the Shortcuts gallery (and
+    /// out of the widget-surface strings that have to be translated).
+    static var isDiscoverable: Bool = false
+
+    @Parameter(title: "Habit")
+    var habitId: Int
+
+    init() {}
+
+    init(habitId: Int) {
+        self.habitId = habitId
+    }
+
+    func perform() async throws -> some IntentResult {
+        WidgetStore().stageToggle(habitId: habitId)
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
     }
 }

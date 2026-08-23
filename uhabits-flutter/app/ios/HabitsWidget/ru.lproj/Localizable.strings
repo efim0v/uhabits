@@ -1,0 +1,31 @@
+/*
+ * The text the widget gallery and the widget cards show, for one locale.
+ *
+ * Generated from app/lib/l10n/app_ru.arb, the one catalogue both platforms
+ * read: the widget names and `habit_not_found` are the same strings
+ * android/app/src/main/res/values-<locale>/strings.xml mirrors for the
+ * Android widgets (audit.android-widget-chrome-text-is-hard#1). A widget
+ * extension cannot read the ARB files — it runs outside the Flutter engine, in the
+ * widget gallery's process, often before the app has ever launched — so the
+ * translations travel as a compiled `.strings` table instead.
+ *
+ * Every key appears in every table. A key missing from a localized table is
+ * not resolved against English: iOS hands the key itself back, and the user
+ * reads "widget_name_checkmark" on their home screen.
+ */
+
+"widget_name_checkmark" = "Галочка";
+"widget_name_history" = "История";
+"widget_name_score" = "Результат";
+"widget_name_streaks" = "Рекорды";
+"widget_name_frequency" = "Частота";
+"widget_name_target" = "Цель";
+"widget_description_checkmark" = "Shows today's checkmark and the habit's score.";
+"widget_description_history" = "Shows a calendar of the habit's recent history.";
+"widget_description_score" = "Charts how the habit's score has moved over time.";
+"widget_description_streaks" = "Shows the habit's longest streaks.";
+"widget_description_frequency" = "Shows which weekdays the habit is performed on.";
+"widget_description_target" = "Shows how much of the target is done this day, week, month, quarter and year.";
+"habit_not_found" = "Привычка удалена / не найдена";
+"widget_not_configured" = "Open Loop Habit Tracker to set up this widget";
+"widget_error_drawing" = "Error drawing widget";

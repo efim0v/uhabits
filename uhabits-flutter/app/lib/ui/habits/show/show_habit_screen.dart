@@ -52,6 +52,7 @@ import '../../common/dialogs/confirm_delete_dialog.dart';
 // `Screen.showHistoryEditorDialog` override have the same name.
 import '../../common/dialogs/history_editor_dialog.dart' as editor;
 import '../../common/dialogs/number_dialog.dart';
+import '../../common/window_insets.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
 import '../edit/edit_habit_screen.dart';
 import 'cards/bar_card_view.dart';
@@ -571,14 +572,26 @@ class _ShowHabitViewState extends State<_ShowHabitView>
           ),
         ],
       ),
+      // `ShowHabitView.setState()`'s last statement is
+      // `binding.linearLayout.applyBottomInset()`
+      // (`audit4.habit-detail-screen-never-applies-the#1`). The LinearLayout is
+      // the ScrollView's *child* — and both declare
+      // `android:clipToPadding="false"` — so the inset travels with the cards
+      // rather than shrinking the viewport: the last card scrolls under the
+      // navigation bar and then clear of it, instead of never reaching it.
+      // That is why [BottomInset] is inside the scroll view here and outside it
+      // on the About screen, whose layout applies the same helper to the view
+      // that scrolls.
       body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          // `show-habit.card-order-and-visibility#1`: the column follows
-          // ShowHabitCard's declaration order, and #2/#3/#4 decide which of
-          // them survive.
-          children: _buildCards(context, model),
+        child: BottomInset(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            // `show-habit.card-order-and-visibility#1`: the column follows
+            // ShowHabitCard's declaration order, and #2/#3/#4 decide which of
+            // them survive.
+            children: _buildCards(context, model),
+          ),
         ),
       ),
     );

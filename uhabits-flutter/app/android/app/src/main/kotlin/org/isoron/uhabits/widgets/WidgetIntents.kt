@@ -64,7 +64,24 @@ import org.isoron.uhabits.MainActivity
  *
  * A boolean Checkmark tap now brings the app to the foreground, where upstream
  * toggled in place. That is the one visible regression, and it is not a small
- * one: the widget's whole point is toggling without opening anything. The rest
+ * one: the widget's whole point is toggling without opening anything
+ * (`audit4.tapping-a-boolean-checkmark-widget-now#1`). It is still the case
+ * here, and it is *not* the case on iOS any more: WidgetKit lets a widget run
+ * an `AppIntent` in the extension's own process, so `ToggleHabitIntent`
+ * (`app/ios/HabitsWidget/WidgetData.swift`) flips the card where it stands and
+ * records the tap in the App Group for `WidgetToggleQueue` to apply through
+ * the `CommandRunner` at the app's next publish.
+ *
+ * Android has no equivalent of that intent. The one interactive path the
+ * plugin offers — `HomeWidgetBackgroundIntent.getBroadcast` plus
+ * `HomeWidget.registerInteractivityCallback` — runs the callback in a
+ * `FlutterEngine` that `HomeWidgetBackgroundService` builds without
+ * `GeneratedPluginRegistrant`, so that isolate has no `path_provider` to find
+ * the database with and no channel behind `AppDatabase`; and the alternative,
+ * a `BroadcastReceiver` of our own writing that stages the toggle the way the
+ * iOS intent does, would have to reimplement `nextToggleValue` and the
+ * document rewrite in Kotlin as well. Until one of those is done, the Android
+ * tap keeps opening the app. The rest
  * of `widgets.checkmark#6` survives intact — the toggle action, the habit the
  * link addresses and the absent day that makes it target today — because the
  * link is handed straight to the ported `WidgetReceiver`. Everything else lands

@@ -40,6 +40,11 @@ struct HabitTimelineEntry: TimelineEntry {
     /// device's today when no document has been published.
     let today: Date
 
+    /// The same day in the wire format, which is what a `uhabits://widget/edit`
+    /// link carries: the value picker has to open on the day the *app* calls
+    /// today, not on the day this process would compute.
+    let todayText: String
+
     var habit: WidgetHabit? {
         if case .habit(let habit) = state { return habit }
         return nil
@@ -111,14 +116,25 @@ struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
     private func entry(for configuration: Configuration) -> HabitTimelineEntry {
         let store = WidgetStore()
         let today = store.today() ?? Calendar.current.startOfDay(for: Date())
+        let todayText = store.todayText() ?? WidgetStore.formatDate(today)
         if let habit = store.resolve(configuration, eligible: eligible) {
-            return HabitTimelineEntry(date: Date(), state: .habit(habit), today: today)
+            return HabitTimelineEntry(
+                date: Date(),
+                state: .habit(habit),
+                today: today,
+                todayText: todayText
+            )
         }
         // A habit that was picked and then deleted is a different failure from
         // never having had one, and upstream draws a different card for it.
         let state: HabitTimelineEntry.State =
             store.isDeleted(configuration) ? .deleted : .noHabits
-        return HabitTimelineEntry(date: Date(), state: state, today: today)
+        return HabitTimelineEntry(
+            date: Date(),
+            state: state,
+            today: today,
+            todayText: todayText
+        )
     }
 
     static func startOfTomorrow(from now: Date = Date()) -> Date {

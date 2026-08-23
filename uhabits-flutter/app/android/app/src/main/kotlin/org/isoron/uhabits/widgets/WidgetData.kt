@@ -21,6 +21,7 @@ package org.isoron.uhabits.widgets
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.GregorianCalendar
@@ -64,8 +65,44 @@ object WidgetData {
      */
     const val SCHEMA_VERSION = 1
 
+    /**
+     * `HomeWidgetPlugin.deletedKey`.
+     *
+     * Where [recordDeleted] leaves the widget ids the launcher reported gone,
+     * as a JSON array, for `HomeWidgetBridge.reapDeletedWidgets` to consume
+     * (`audit4.deleting-a-widget-from-the-launcher#1`).
+     *
+     * It has to be a record rather than a call: `onDeleted` arrives in a
+     * broadcast receiver that may well have started this process, long before
+     * any Dart exists to be told. And the registry it corrects is written only
+     * by the Flutter side — two writers, two processes, no lock — so this side
+     * reports and the other side edits.
+     */
+    const val DELETED_KEY = "$KEY_PREFIX.deleted"
+
     /** `HomeWidgetBridge.documentKey`. */
     fun documentKey(widgetId: Int): String = "$KEY_PREFIX.widget.$widgetId"
+
+    /**
+     * Appends [ids] to [DELETED_KEY], preserving whatever is already recorded.
+     *
+     * The app may not run again for days, and every deletion in between has to
+     * survive: overwriting would leave the registry bound to widgets that no
+     * longer exist. Anything already there that is not a JSON array of ids is
+     * a record this code cannot read, and it is dropped rather than guessed at
+     * — the same call the Dart reader makes.
+     */
+    fun recordDeleted(storage: SharedPreferences, ids: IntArray): String {
+        val array = JSONArray()
+        try {
+            val existing = JSONArray(storage.getString(DELETED_KEY, "[]") ?: "[]")
+            for (i in 0 until existing.length()) array.put(existing.optInt(i))
+        } catch (e: JSONException) {
+            // Not ours, or truncated. The ids below are still worth recording.
+        }
+        for (id in ids) array.put(id)
+        return array.toString()
+    }
 
     fun storage(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -125,7 +162,17 @@ class WidgetDocument(
      * `android:defaultValue` on the row — is what the preference itself
      * defaults to.
      */
-    val widgetOpacity: Int = DEFAULT_WIDGET_OPACITY
+    val widgetOpacity: Int = DEFAULT_WIDGET_OPACITY,
+    /**
+     * `Preferences.firstWeekday` as `daysSinceSunday` (0 = Sunday … 6 =
+     * Saturday) — the weekday the History grid and the Frequency grid start on
+     * (`widgets.history#4`, `widgets.frequency#3`).
+     *
+     * A preference, not a habit property, so it rides on the document rather
+     * than on [HabitData]. Read defensively: a document written before the
+     * field existed carries no key, and Sunday is what both charts default to.
+     */
+    val firstWeekday: Int = DEFAULT_FIRST_WEEKDAY
 ) {
     /**
      * `widgets.stack#1`: upstream returns a single-habit widget only when
@@ -151,6 +198,9 @@ class WidgetDocument(
         /** `HomeWidgetBridge.defaultWidgetOpacity`. */
         const val DEFAULT_WIDGET_OPACITY = 255
 
+        /** Sunday, the default of `HistoryChartView.firstWeekday`. */
+        const val DEFAULT_FIRST_WEEKDAY = 0
+
         fun parse(json: JSONObject): WidgetDocument {
             val habits = json.optJSONArray("habits") ?: JSONArray()
             val missing = json.optJSONArray("missingHabitIds") ?: JSONArray()
@@ -161,7 +211,8 @@ class WidgetDocument(
                     HabitData.parse(habits.getJSONObject(it))
                 },
                 missingHabitIds = (0 until missing.length()).map { missing.getLong(it) },
-                widgetOpacity = json.optInt("widgetOpacity", DEFAULT_WIDGET_OPACITY)
+                widgetOpacity = json.optInt("widgetOpacity", DEFAULT_WIDGET_OPACITY),
+                firstWeekday = json.optInt("firstWeekday", DEFAULT_FIRST_WEEKDAY)
             )
         }
     }
@@ -170,10 +221,17 @@ class WidgetDocument(
 /**
  * One habit inside a widget document.
  *
- * The optional fields at the bottom are the ones a faithful render needs and the
- * v1 contract does not carry; see the KDoc on each. They are read defensively so
- * that the day the bridge starts publishing them, these widgets pick them up
- * without a native change.
+ * The fields below [entries] are the ones a widget *draws* and cannot compute:
+ * the score algorithm needs the habit's whole history and its frequency, the
+ * streak list needs every entry ever recorded, the frequency buckets are the
+ * user's manual marks month by month, and the target rows are calendar
+ * truncated sums whose row list depends on `frequency.denominator`. The bridge
+ * derives all of them from the same presenters the detail screen uses and
+ * publishes the result (`audit4.harness-blind-spots#2`).
+ *
+ * Every one is still read defensively — a widget can outlive an app update by
+ * as long as the user leaves it on the home screen, so a document written by an
+ * older build carries none of them and each widget names its fallback.
  */
 class HabitData(
     val id: Long,
@@ -197,28 +255,42 @@ class HabitData(
      * Today's score, 0..1 — `habit.scores[today].value`, which
      * `widgets.checkmark#2` sets the ring percentage from.
      *
-     * NOT in schema v1. Scores cannot be recomputed here: the algorithm needs
-     * the habit's whole history and its frequency, and the contract carries
-     * neither. Absent, the ring is drawn empty.
+     * Null only in a document written before the field existed; the ring is
+     * then drawn empty rather than guessed at.
      */
     val score: Double?,
     /**
      * The score series the Score widget plots, newest first, one entry per
-     * bucket of `bucketSize` days.
-     *
-     * NOT in schema v1, and not derivable from [entries] for the same reason as
-     * [score].
+     * bucket of [bucketSize] days (`widgets.score#5`, `#6`).
      */
     val scores: DoubleArray?,
-    /** Bucket size in days for [scores]; `widgets.score#4`. */
+    /**
+     * Bucket size in days for [scores] — the interval the user last chose on
+     * the detail screen (`widgets.score#3`, `#4`).
+     */
     val bucketSize: Int,
     /**
-     * Streak lengths, longest first — `habit.streaks.getBest(n)`.
+     * The habit's best streaks, computed over its whole history
+     * (`widgets.streak#3`). Ordered newest-ending first among the longest, i.e.
+     * `StreakList.getBest`.
      *
-     * NOT in schema v1. [entries] only reaches back 60 days, so streaks derived
-     * from it are truncated; [StreakWidget] falls back to that and says so.
+     * [entries] only reaches back 60 days, so a widget that rebuilt these from
+     * it would lose every older run; [StreakWidget] falls back to that only for
+     * a document that predates the field.
      */
-    val streaks: List<StreakData>?
+    val streaks: List<StreakData>?,
+    /**
+     * The Frequency chart's buckets: one 7-slot array per month, indexed by
+     * `(dayOfWeek.daysSinceSunday + 1) % 7`, counted from the habit's ORIGINAL
+     * entries over its whole history (`widgets.frequency#3`, `#4`, `#5`).
+     */
+    val weekdayFrequency: Map<LocalDate, IntArray>?,
+    /**
+     * The Target chart's rows: the windows this habit's frequency admits, each
+     * with its calendar-truncated sum and its scaled, skip-reduced target
+     * (`widgets.target#5`, `#6`, `#7`).
+     */
+    val targetRows: List<TargetRow>?
 ) {
     /** `habit.isCompletedToday()`; `widgets.checkmark#4`. */
     fun isCompletedToday(): Boolean =
@@ -230,6 +302,8 @@ class HabitData(
             val entries = IntArray(entriesJson.length()) { entriesJson.getInt(it) }
             val scoresJson = json.optJSONArray("scores")
             val streaksJson = json.optJSONArray("streaks")
+            val frequencyJson = json.optJSONObject("weekdayFrequency")
+            val targetRowsJson = json.optJSONArray("targetRows")
             return HabitData(
                 id = json.optLong("id", -1L),
                 name = json.optString("name"),
@@ -249,6 +323,18 @@ class HabitData(
                 bucketSize = json.optInt("bucketSize", 7),
                 streaks = streaksJson?.let { arr ->
                     (0 until arr.length()).map { StreakData.parse(arr.getJSONObject(it)) }
+                },
+                weekdayFrequency = frequencyJson?.let { obj ->
+                    val buckets = HashMap<LocalDate, IntArray>()
+                    for (key in obj.keys()) {
+                        val slots = obj.optJSONArray(key) ?: continue
+                        buckets[LocalDate.parse(key)] =
+                            IntArray(slots.length()) { slots.getInt(it) }
+                    }
+                    buckets
+                },
+                targetRows = targetRowsJson?.let { arr ->
+                    (0 until arr.length()).map { TargetRow.parse(arr.getJSONObject(it)) }
                 }
             )
         }
@@ -262,6 +348,23 @@ class StreakData(val start: LocalDate, val end: LocalDate, val length: Int) {
             start = LocalDate.parse(json.optString("start")),
             end = LocalDate.parse(json.optString("end")),
             length = json.optInt("length", 0)
+        )
+    }
+}
+
+/**
+ * One row of the optional `targetRows` array: a window, what the habit has
+ * accumulated in it, and what it should have (`widgets.target#4`, `#6`, `#7`).
+ *
+ * [interval] is the row's key rather than its length in days: 1 -> today, 7 ->
+ * week, 30 -> month, 91 -> quarter, anything else -> year.
+ */
+class TargetRow(val interval: Int, val value: Double, val target: Double) {
+    companion object {
+        fun parse(json: JSONObject) = TargetRow(
+            interval = json.optInt("interval", 0),
+            value = json.optDouble("value", 0.0),
+            target = json.optDouble("target", 0.0)
         )
     }
 }

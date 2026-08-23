@@ -155,14 +155,24 @@ void main() {
             "activity's theme here.",
       );
 
-      // The two that are deliberately gone.
+      // The one that is deliberately gone.
       expect(app.containsKey('android:backupAgent'), isFalse,
           reason: '$rule There is no BackupAgentHelper to name — see the '
               'ledger note on platform-glue.backup-agent. allowBackup on its '
               'own still gives Auto Backup.');
-      expect(app.containsKey('android:localeConfig'), isFalse,
-          reason: '$rule MaterialApp.supportedLocales replaced it; '
-              'platform-glue.locale-config#1 pins that substitution.');
+
+      // This assertion used to read `isFalse`, on the reading that
+      // MaterialApp.supportedLocales replaced the attribute. It does not:
+      // supportedLocales decides which translation the app picks once Android
+      // has told it what the locale is, while this attribute is the only thing
+      // that makes Android *offer* the choice — and
+      // platform-glue.locale-config#10 records that there is deliberately no
+      // in-app language row, so the system picker is the only way to change the
+      // app's language at all. See
+      // `audit4.android-localeconfig-is-dropped-so-the#1` and
+      // app/test/platform/locale_config_test.dart, which owns the list.
+      expect(app['android:localeConfig'], '@xml/locales_config',
+          reason: '$rule The per-app locale list is declared, as upstream.');
     });
 
     test('#2 exactly one launcher entry, and it is still .MainActivity', () {

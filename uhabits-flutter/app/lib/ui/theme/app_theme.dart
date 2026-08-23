@@ -24,6 +24,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 /// | toolbarColor              | colorScheme.onPrimary — on the toolbar   |
 /// | colorOf(defaultPalette)   | colorScheme.secondary                    |
 /// | color(0)                  | colorScheme.error — the palette red      |
+/// | aboutScreenColor          | colorAccent — switch/radio/checkbox tint |
 ///
 /// `statusBarBackgroundColor` (0x333333) and `toolbarColor` (0xffffff) are the
 /// two tokens `Themes.kt` names after the toolbar, and together they reproduce
@@ -95,6 +96,36 @@ core.Theme coreThemeOf(BuildContext context) {
 /// as the constant it is upstream.
 const Color navigationBarColorLight = Color(0xFF363636);
 
+/// `@style/DialogButtonStyle`'s `android:textColor` — `@color/grey_100`.
+///
+/// `AppBaseThemeDark` points `buttonBarPositiveButtonStyle` and
+/// `buttonBarNegativeButtonStyle` at that style, and `AppBaseThemeDark.
+/// PureBlack` inherits the pair. It is the one control the dark themes take
+/// *off* `colorAccent` (`audit4.coloraccent-aboutscreencolor-is-never-mapped-
+/// so#1`), and it is a literal upstream rather than a theme token, so it is one
+/// here too.
+const Color dialogButtonColorDark = Color(0xFFF5F5F5);
+
+/// The `SwitchCompat` track's opacity.
+///
+/// AppCompat tints `abc_switch_track_mtrl_alpha` with `colorControlActivated`
+/// and the drawable carries ~30% alpha, which is what makes a checked switch a
+/// solid accent thumb riding a pale accent track. Flutter's `Switch` paints the
+/// two from `thumbColor` and `trackColor` instead, so the alpha has to be
+/// applied here.
+const double switchTrackOpacity = 0.3;
+
+/// A [WidgetStateProperty] that answers [color] only while the control is
+/// activated, and defers to the widget's own default otherwise.
+///
+/// This is `colorControlActivated`: an Android theme attribute tints the
+/// *checked* state of a compound button and leaves the unchecked one to
+/// `colorControlNormal`, which the port already supplies as
+/// `unselectedWidgetColor`.
+WidgetStateProperty<Color?> _whenSelected(Color color) =>
+    WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) =>
+        states.contains(WidgetState.selected) ? color : null);
+
 /// The system-UI overlay style a core [theme] installs, or null when it
 /// installs none.
 ///
@@ -137,6 +168,26 @@ ThemeData appThemeData(core.Theme theme) {
   final onToolbar = toFlutterColor(theme.toolbarColor);
   final accent = toFlutterColor(theme.colorOf(core.defaultPaletteColor));
 
+  // `<item name="colorAccent">?aboutScreenColor</item>`, declared by
+  // AppBaseTheme and AppBaseThemeDark alike — blue_800 (#1565C0) in the light
+  // theme, blue_300 (#64B5F6) in both dark ones, which
+  // AppBaseThemeDark.PureBlack inherits because it restates neither
+  // (`audit4.coloraccent-aboutscreencolor-is-never-mapped-so#1`). It is
+  // deliberately the same token the About card headers and the Settings
+  // category headers read, so the screens read as one palette.
+  //
+  // It is NOT colorScheme.primary: that is the toolbar (#333333), and pointing
+  // Material's accent role at it would repaint the toolbar with every control's
+  // colour or the controls with the toolbar's. The three controls the attribute
+  // actually tints are named one by one below instead.
+  final colorAccent = toFlutterColor(theme.aboutScreenColor);
+
+  // `buttonBarPositiveButtonStyle` / `buttonBarNegativeButtonStyle`: the light
+  // theme leaves the dialog buttons on colorAccent; both dark themes override
+  // them with @style/DialogButtonStyle.
+  final dialogButtonColor =
+      brightness == Brightness.dark ? dialogButtonColorDark : colorAccent;
+
   final colorScheme = ColorScheme(
     brightness: brightness,
     primary: toolbar,
@@ -169,6 +220,24 @@ ThemeData appThemeData(core.Theme theme) {
       scrolledUnderElevation: 2,
     ),
     cardTheme: CardThemeData(color: card),
+    // The three compound controls `colorAccent` tints when activated: the seven
+    // SwitchPreferenceCompat rows in Settings, the five radio buttons in the
+    // frequency picker, and — the same attribute, the same rule — a checkbox.
+    switchTheme: SwitchThemeData(
+      thumbColor: _whenSelected(colorAccent),
+      trackColor: _whenSelected(
+        colorAccent.withValues(alpha: switchTrackOpacity),
+      ),
+    ),
+    radioTheme: RadioThemeData(fillColor: _whenSelected(colorAccent)),
+    checkboxTheme: CheckboxThemeData(fillColor: _whenSelected(colorAccent)),
+    // The dialog buttons. Upstream the override is on
+    // `buttonBarPositiveButtonStyle` / `buttonBarNegativeButtonStyle` rather
+    // than on every borderless button, but every `TextButton` this app builds
+    // is a dialog action, so the two sets are the same set here.
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: dialogButtonColor),
+    ),
     dialogTheme: DialogThemeData(backgroundColor: card),
     dividerTheme: DividerThemeData(color: lowContrast),
     iconTheme: IconThemeData(color: mediumContrast),

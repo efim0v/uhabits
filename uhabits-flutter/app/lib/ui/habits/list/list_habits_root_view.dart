@@ -46,8 +46,8 @@ enum EmptyListMode { hidden, empty, done }
 
 /// Port of uhabits-android/.../habits/list/views/EmptyListView.kt.
 ///
-/// A vertically centred column: the FontAwesome glyph at 40sp over the message,
-/// both in `?attr/contrast60`, separated by 20dp of padding
+/// A vertically centred column: the FontAwesome glyph over the message, both in
+/// `?attr/contrast60`, separated by 20dp of padding
 /// (`list-habits.empty-state#5`).
 class EmptyListView extends StatelessWidget {
   const EmptyListView({
@@ -59,6 +59,23 @@ class EmptyListView extends StatelessWidget {
   });
 
   final core.Theme theme;
+
+  /// `iconTextView.textSize = sp(40.0f)` — 80, not 40
+  /// (`audit4.empty-list-star-beach-icon-is#1`).
+  ///
+  /// `sp()` is `InterfaceUtils.spToPixels`, which already returns *pixels*
+  /// (`40 * scaledDensity`); the result is then handed to the one-argument
+  /// `TextView.textSize` setter, which is `setTextSize(COMPLEX_UNIT_SP, …)` and
+  /// scales it a second time. The glyph the Android user sees is therefore
+  /// `40 * density * fontScale²` dp — 80dp on the density-2 device the checked
+  /// in baseline was captured on (androidTest/assets/views/habits/list/
+  /// EmptyListView/empty.png, where the half-star spans ~85dp of a 200dp view),
+  /// twice the 40 this port used to draw.
+  ///
+  /// 80 is the density-2 rendering, which is the one the baseline pins. The
+  /// remaining `fontScale` factor arrives on its own: a Flutter [Text] applies
+  /// the ambient `textScaler`, exactly as the SP setter does.
+  static const double iconTextSize = 80.0;
 
   /// Defaults to [EmptyListMode.hidden]: `visibility = GONE` in the `init`
   /// block, before any of `showEmpty` / `showDone` / `hide` has run.
@@ -91,7 +108,7 @@ class EmptyListView extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: color,
-              fontSize: 40,
+              fontSize: iconTextSize,
               fontFamily: core.FontAssets.fontAwesomeFamily,
             ),
           ),

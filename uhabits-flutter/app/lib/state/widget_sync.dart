@@ -18,6 +18,7 @@ import 'package:uhabits_core/src/ui/notification_tray.dart';
 import 'package:uhabits_core/src/utils/midnight_timer.dart';
 
 import '../platform/home_widget_bridge.dart';
+import 'widget_toggle_queue.dart';
 
 /// Port of `uhabits-android/.../widgets/WidgetUpdater.kt`.
 ///
@@ -66,15 +67,26 @@ class WidgetSync implements CommandRunnerListener {
     required TaskRunner taskRunner,
     required MidnightTimer midnightTimer,
     required Preferences preferences,
+    WidgetToggleQueue? pendingToggles,
   })  : _bridge = bridge,
         _commandRunner = commandRunner,
         _taskRunner = taskRunner,
         _midnightTimer = midnightTimer,
-        _preferences = preferences {
+        _preferences = preferences,
+        _pendingToggles = pendingToggles {
     midnightListener = MidnightListener.of(_onMidnight);
   }
 
   final HomeWidgetBridge _bridge;
+
+  /// The taps an iOS widget performed in place while the app was closed,
+  /// applied on the way to a publish.
+  ///
+  /// Here rather than anywhere else because this is the one thing that runs at
+  /// every moment the queue could need draining: startup, every command, every
+  /// resume (`ListHabitsActivity.onResume`'s task block) and the day rollover.
+  /// Null for a host that never staged anything — every widget test.
+  final WidgetToggleQueue? _pendingToggles;
 
   /// The publisher this updater drives. Exposed because the widget picker
   /// writes through its [WidgetRegistry] — `HabitPickerDialog.confirm()` calls
@@ -153,7 +165,8 @@ class WidgetSync implements CommandRunnerListener {
   /// The work runs on the [TaskRunner], as upstream, and the returned future
   /// completes when the publish has reached the platform.
   Future<void> updateWidgets([int? modifiedHabitId]) {
-    final _PublishTask task = _PublishTask(_bridge, modifiedHabitId);
+    final _PublishTask task =
+        _PublishTask(_bridge, modifiedHabitId, _pendingToggles);
     _taskRunner.execute(task);
     final Future<void> done = task.completed.future;
     _pending.add(done);
@@ -206,17 +219,24 @@ class WidgetSync implements CommandRunnerListener {
 
 /// The `taskRunner.execute { ... }` block of `WidgetUpdater.updateWidgets`.
 class _PublishTask extends Task {
-  _PublishTask(this._bridge, this._modifiedHabitId);
+  _PublishTask(this._bridge, this._modifiedHabitId, this._pendingToggles);
 
   final HomeWidgetBridge _bridge;
 
   final int? _modifiedHabitId;
+
+  final WidgetToggleQueue? _pendingToggles;
 
   final Completer<void> completed = Completer<void>();
 
   @override
   Future<void> doInBackground() async {
     try {
+      // Before the publish, never after: applying a staged tap runs a command,
+      // and the document that goes out has to be the one the command produced.
+      // (The command also asks for a publish of its own; that inner pass finds
+      // the queue already being drained and does nothing but publish.)
+      await _pendingToggles?.drain();
       await _bridge.publish(_modifiedHabitId);
     } catch (error, stackTrace) {
       // A throwing task escapes the runner without reaching onPostExecute, so

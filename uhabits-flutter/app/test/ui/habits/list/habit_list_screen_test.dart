@@ -162,12 +162,16 @@ void main() {
       expect(find.text(FontAwesome.starHalfO), findsOneWidget,
           reason: 'list-habits.empty-state#2');
 
-      // EmptyListView is a centred column: the 40sp glyph over the message,
-      // both in ?attr/contrast60.
+      // EmptyListView is a centred column: the glyph over the message, both in
+      // ?attr/contrast60.
       final dim = _toFlutterColor(LightTheme().mediumContrastTextColor);
       final icon = tester.widget<Text>(find.text(FontAwesome.starHalfO));
       final message = tester.widget<Text>(find.text('You have no active habits'));
-      expect(icon.style?.fontSize, 40.0,
+      // `textSize = sp(40f)`, where `sp()` already returns pixels and the
+      // one-argument `TextView.textSize` setter converts a second time: the
+      // glyph the Android user sees is twice the 40 it is declared at
+      // (`audit4.empty-list-star-beach-icon-is#1`).
+      expect(icon.style?.fontSize, 80.0,
           reason: 'list-habits.empty-state#5');
       expect(icon.style?.color, dim, reason: 'list-habits.empty-state#5');
       expect(message.style?.color, dim, reason: 'list-habits.empty-state#5');
@@ -784,7 +788,10 @@ void main() {
         find.byType(ReorderableListView),
       );
       final padding = list.padding!;
-      expect(padding.bottom, 88 + 32,
+      // Exactly the inset and nothing else: the 88 that used to be added on
+      // top of it was clearance for a floating action button neither app has
+      // (`audit4.habit-list-keeps-88dp-of-dead#1`).
+      expect(padding.bottom, 32.0,
           reason: 'list-habits.screen-layout#8');
       expect(padding.top, 0.0, reason: 'list-habits.screen-layout#8');
 
@@ -800,7 +807,7 @@ void main() {
             .widget<ReorderableListView>(find.byType(ReorderableListView))
             .padding!
             .bottom,
-        88 + 32,
+        32.0,
         reason: 'list-habits.screen-layout#8',
       );
     });

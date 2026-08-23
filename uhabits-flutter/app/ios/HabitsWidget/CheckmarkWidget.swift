@@ -43,8 +43,8 @@ struct CheckmarkWidget: Widget {
         ) { entry in
             CheckmarkWidgetView(entry: entry)
         }
-        .configurationDisplayName("Checkmark")
-        .description("Shows today's checkmark and the habit's score.")
+        .configurationDisplayName(LocalizedStringKey("widget_name_checkmark"))
+        .description(LocalizedStringKey("widget_description_checkmark"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -64,8 +64,30 @@ struct CheckmarkWidgetView: View {
             WidgetMessageView(message: WidgetPlaceholder.habitNotFound)
                 .widgetCard()
         case .habit(let habit):
-            CheckmarkContent(habit: habit)
+            // `widgets.checkmark#6`, `#7`: which action a tap carries is
+            // decided by the habit type — exactly the branch
+            // `CheckmarkWidget.refreshData` takes when it chooses between
+            // `toggleCheckmark` and `showNumberPicker`.
+            if habit.isNumerical {
+                // The value picker is an app screen and always was, so this
+                // half is a link.
+                CheckmarkContent(habit: habit)
+                    .widgetCard(Self.cardColor(habit))
+                    .widgetURL(WidgetLink.edit(habit, date: entry.todayText))
+            } else {
+                // The boolean half opens nothing: the button runs
+                // `ToggleHabitIntent` inside this extension, which advances the
+                // card and records the tap for the app to apply
+                // (`audit4.tapping-a-boolean-checkmark-widget-now#1`).
+                Button(intent: ToggleHabitIntent(habitId: habit.id)) {
+                    CheckmarkContent(habit: habit)
+                }
+                .buttonStyle(.plain)
                 .widgetCard(Self.cardColor(habit))
+                // The margin the button does not cover, and any system that
+                // will not run it: the same toggle, by way of the app.
+                .widgetURL(WidgetLink.toggle(habit))
+            }
         }
     }
 

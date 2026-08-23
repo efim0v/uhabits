@@ -775,21 +775,39 @@ void main() {
             .join('_'))
         .toList();
 
-    test('#1 supportedLocales is what replaced locales_config.xml', () {
+    test('#1 supportedLocales and locales_config.xml are the same catalogue',
+        () {
       expect(L10n.supportedLocales, isNotEmpty,
           reason: 'platform-glue.locale-config#1 — '
               'android:localeConfig="@xml/locales_config" enables the Android '
-              '13+ per-app language picker in system settings. A Flutter app '
-              'has no per-locale resource tree for that file to point at: the '
-              'catalogue is the ARB set and the picker is whatever '
-              'MaterialApp.supportedLocales says, which is this list.');
+              '13+ per-app language picker in system settings. The catalogue '
+              'the port draws that list from is the ARB set, and this is what '
+              'the delegate offers once Android has said which locale to use.');
 
-      final File manifest = File(
-        '${arbDir.parent.parent.path}/android/app/src/main/AndroidManifest.xml',
+      // This assertion used to be `isNot(contains('localeConfig'))`, on the
+      // reading that MaterialApp.supportedLocales *replaced* the manifest
+      // attribute. It does not, and the difference is the whole feature:
+      // supportedLocales chooses a translation for a locale Android hands over,
+      // while the attribute is the only thing that makes Android offer the
+      // per-app choice in the first place — and platform-glue.locale-config#10
+      // records that there is deliberately no in-app language row, so nothing
+      // else can. Corrected under
+      // `audit4.android-localeconfig-is-dropped-so-the#1`; the list itself is
+      // asserted by app/test/platform/locale_config_test.dart.
+      final Directory androidMain = Directory(
+        '${arbDir.parent.parent.path}/android/app/src/main',
       );
-      expect(manifest.readAsStringSync(), isNot(contains('localeConfig')),
-          reason: 'platform-glue.locale-config#1: so the manifest declares '
-              'none');
+      expect(
+        File('${androidMain.path}/AndroidManifest.xml').readAsStringSync(),
+        contains('android:localeConfig="@xml/locales_config"'),
+        reason: 'platform-glue.locale-config#1: so the manifest declares it',
+      );
+      expect(
+        File('${androidMain.path}/res/xml/locales_config.xml').existsSync(),
+        isTrue,
+        reason: 'platform-glue.locale-config#1: and the resource it names '
+            'ships',
+      );
     });
 
     test('#2 the list starts at "en" and carries every locale that ships', () {

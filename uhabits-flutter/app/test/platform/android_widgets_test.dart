@@ -2161,12 +2161,14 @@ void main() {
         expect(positions[i], greaterThan(positions[i - 1]),
             reason: 'widgets.checkmark#2: step $i follows step ${i - 1}');
       }
-      // The score the ring reads is not in the v1 document, so it falls back
-      // to an empty ring rather than inventing a number.
+      // `audit4.checkmark-widget-s-score-ring-is#1`: the ring is the widget's
+      // main piece of information beyond the tick, and the score behind it is
+      // published (app/test/journeys/widget_publication_journey_test.dart
+      // proves the app produces it). A document from an older build carries
+      // none, and then the ring reads empty rather than guessed.
       expect(body, contains('percentage = (habit.score ?: 0.0).toFloat()'),
-          reason: 'widgets.checkmark#2: percentage comes from the habit score, '
-              'which the v1 contract does not publish — the ring reads empty '
-              'until it does');
+          reason: 'widgets.checkmark#2: percentage comes from the habit score '
+              'the document carries');
     });
 
     test('a boolean habit shows its entry value as the state', () {
@@ -2805,15 +2807,30 @@ void main() {
               'colour = WidgetTheme().color(habit.color), isNumerical = '
               'habit.isNumerical, and frequency = '
               'habit.originalEntries.computeWeekdayFrequency(habit.isNumerical). '
-              'pref_first_weekday is not in the published document, so the '
-              'chart keeps the preference default (Sunday).');
+              'Both the weekday and the buckets ride on the published document '
+              '(`audit4.history-and-frequency-home-screen-widgets#1`, '
+              '`audit4.streak-and-frequency-widgets-only-see#1`); a widget '
+              'process can read neither the preference store nor the habit\'s '
+              'history.');
       expect(body, contains('isNumerical = habit.isNumerical'),
           reason: 'widgets.frequency#3');
       expect(
         body,
-        contains('frequency = FrequencyChartView.computeWeekdayFrequency('
+        contains('this.firstWeekday = this@FrequencyWidget.firstWeekday'),
+        reason: 'widgets.frequency#3: the weekday the seven rows start on',
+      );
+      expect(
+        body,
+        contains('frequency = habit.weekdayFrequency'),
+        reason: 'widgets.frequency#3: the buckets the bridge computed with '
+            'computeWeekdayFrequency over the habit\'s whole history',
+      );
+      expect(
+        body,
+        contains('?: FrequencyChartView.computeWeekdayFrequency('
             'habit, this@FrequencyWidget.today)'),
-        reason: 'widgets.frequency#3',
+        reason: 'widgets.frequency#3: with the 60-day rebuild left as the '
+            'fallback for a document written before the field existed',
       );
       expect(
         capture(widgetViewKotlin('FrequencyChartView.kt'),
@@ -2821,6 +2838,13 @@ void main() {
         '0',
         reason: 'widgets.frequency#3: firstWeekday as daysSinceSunday, '
             'defaulting to Sunday',
+      );
+      expect(
+        capture(widgetKotlin('FrequencyWidgetProvider.kt'),
+            RegExp(r'document\.(\w+)\n\s*\)')),
+        'firstWeekday',
+        reason: 'widgets.frequency#3: resolved by the provider at construction '
+            'time, out of the document',
       );
     });
 
@@ -2960,6 +2984,21 @@ void main() {
               'the same series from the published entries.');
       expect(body, contains('defaultSquare = HistoryChartView.Square.OFF'),
           reason: 'widgets.history#4: and the default square');
+      expect(
+        body,
+        contains('this.firstWeekday = this@HistoryWidget.firstWeekday'),
+        reason: 'audit4.history-and-frequency-home-screen-widgets#1 — the grid '
+            'starts on the weekday the user chose in Settings, which reaches '
+            'this process only through the document; without it every grid '
+            'silently starts on Sunday',
+      );
+      expect(
+        capture(widgetKotlin('HistoryWidgetProvider.kt'),
+            RegExp(r'document\.(\w+)\n\s*\)')),
+        'firstWeekday',
+        reason: 'audit4.history-and-frequency-home-screen-widgets#1: and the '
+            'provider is where it is read off the document',
+      );
 
       final String chart = widgetViewKotlin('HistoryChartView.kt');
       final String series = chart.substring(chart.indexOf('fun seriesOf'));
@@ -3048,12 +3087,13 @@ void main() {
         '7',
         reason: 'widgets.score#4 — BUCKET_SIZES = [1, 7, 31, 92, 365] indexed by '
             'spinnerPosition; scoreCardSpinnerPosition is clamped to 0..4 and '
-            'defaults to 1 (weekly buckets). The preference is not in the '
-            'published document, so the widget can only ever use the default '
-            'position, whose bucket size is 7.',
+            'defaults to 1 (weekly buckets). The bridge builds the series at '
+            'the position the preference holds and publishes the bucket with '
+            'it (`audit4.score-widget-draws-an-empty-chart#1`); 7 is what the '
+            'chart falls back to for a document that carries neither.',
       );
       expect(widget, contains('bucketSize = habit.bucketSize'),
-          reason: 'widgets.score#4: read from the document when it appears');
+          reason: 'widgets.score#4: read from the document');
       expect(
         capture(widgetKotlin('WidgetData.kt'),
             RegExp(r'bucketSize = json.optInt\("bucketSize", (\d+)\)')),
@@ -3137,11 +3177,16 @@ void main() {
           reason: 'widgets.streak#3 — refreshData sets colour = '
               'WidgetTheme().color(habit.color) and streaks = '
               'habit.streaks.getBest(chart.maxStreakCount). The streak list is '
-              'not in the v1 contract, so the chart rebuilds it from the 60 '
-              'published days and truncates to the same count.');
-      expect(body, contains('habit.streaks?.take(maxStreakCount)'),
-          reason: 'widgets.streak#3: getBest(maxStreakCount) when it is '
-              'published');
+              'computed over the habit\'s whole history and published with the '
+              'document (`audit4.streak-and-frequency-widgets-only-see#1`), '
+              'because 60 daily values cannot show a run older than 60 days.');
+      expect(
+        body,
+        contains('habit.streaks?.let { StreakChartView.bestOf(it, '
+            'maxStreakCount) }'),
+        reason: 'widgets.streak#3: getBest(maxStreakCount), narrowed here out '
+            'of the best thirty the bridge published',
+      );
       expect(
         body,
         contains('StreakChartView.streaksFrom(habit, today, maxStreakCount)'),
@@ -3151,6 +3196,14 @@ void main() {
         widgetViewKotlin('StreakChartView.kt'),
         contains('.sortedByDescending { it.length }.take(max(0, limit))'),
         reason: 'widgets.streak#3: longest first, which is what getBest means',
+      );
+      final String bestOf = widgetViewKotlin('StreakChartView.kt');
+      expect(
+        bestOf.substring(bestOf.indexOf('fun bestOf')),
+        contains('.take(max(0, limit))\n            .sortedByDescending '
+            '{ it.end }'),
+        reason: 'widgets.streak#3: and then newest-ending first among those, '
+            'which is the second half of StreakList.getBest',
       );
     });
 
@@ -3255,15 +3308,18 @@ void main() {
               'builds state via TargetCardPresenter.buildState(habit, '
               'firstWeekday = prefs.firstWeekdayInt, theme = WidgetTheme()), '
               'then sets chart colour, targets, labels and values. The '
-              'presenter is Dart; the launcher process derives the same four '
-              'from the published entries, so there is nothing to block on and '
-              'no runBlocking.');
-      expect(body, contains('labels = INTERVALS.map { intervalToLabel(it) }'),
-          reason: 'widgets.target#3: labels');
-      expect(body, contains('values = INTERVALS.map { windowSum(it) }'),
+              'presenter is Dart and stays there: the bridge runs it and '
+              'publishes its rows (`audit4.target-widget-shows-the-wrong-rows'
+              '#1`), so there is nothing to block on and no runBlocking.');
+      expect(body, contains('labels = rows.map { intervalToLabel(it.interval) }'),
+          reason: 'widgets.target#3: labels, one per published row');
+      expect(body, contains('values = rows.map { it.value }'),
           reason: 'widgets.target#3: values');
-      expect(body, contains('targets = INTERVALS.map { windowTarget(it) }'),
+      expect(body, contains('targets = rows.map { it.target }'),
           reason: 'widgets.target#3: targets');
+      expect(body, contains('val rows = habit.targetRows'),
+          reason: 'widgets.target#3: all three come from the presenter\'s own '
+              'output rather than being re-derived here from the entry window');
     });
 
     test('the interval labels are today / week / month / quarter / year', () {
@@ -3293,23 +3349,33 @@ void main() {
       );
     });
 
-    test('the interval list is the full five, because the frequency is not '
-        'published', () {
+    test('the interval list is whatever the document says it is', () {
+      final String body =
+          widget.substring(widget.indexOf('override fun refreshData'));
+
+      expect(
+        body,
+        contains('if (rows != null) {'),
+        reason: 'widgets.target#5 — The interval list is dynamic: interval 1 '
+            '(today) is included only when habit.frequency.denominator <= 1; '
+            'interval 7 (week) only when denominator <= 7; intervals 30, 91 and '
+            '365 are always included. So a weekly habit shows 4 bars and a '
+            'monthly habit shows 3. The frequency is not in the document and '
+            'does not need to be: the rows are '
+            '(`audit4.target-widget-shows-the-wrong-rows#1`), one per window '
+            'the presenter kept, so drawing one row per published row is what '
+            'reproduces the rule.',
+      );
       expect(
         capture(widget, RegExp(r'private val INTERVALS = listOf\(([^)]*)\)'))
             .split(',')
             .map((String s) => s.trim())
             .toList(),
         <String>['1', '7', '30', '91', '365'],
-        reason: 'widgets.target#5 — The interval list is dynamic: interval 1 '
-            '(today) is included only when habit.frequency.denominator <= 1; '
-            'interval 7 (week) only when denominator <= 7; intervals 30, 91 and '
-            '365 are always included. So a weekly habit shows 4 bars and a '
-            'monthly habit shows 3. The frequency is NOT in the v1 contract, so '
-            'the denominator is assumed to be 1 and all five rows are drawn — a '
-            'weekly habit shows a Today row it should not have. Named in the '
-            'class KDoc; it closes the moment the bridge publishes the '
-            'frequency.',
+        reason: 'widgets.target#5: the full five remain as the fallback for a '
+            'document written before targetRows existed — the denominator is '
+            'then assumed to be 1 and a weekly habit shows a Today row it '
+            'should not have',
       );
     });
 
@@ -3319,12 +3385,15 @@ void main() {
       expect(body, contains('return total / 1e3'),
           reason: 'widgets.target#6 — Values are the grouped sums divided by '
               '1000 (milli-units to units) for day/week/month/quarter/year '
-              'windows.');
+              'windows. A published row already carries that number in units '
+              '(`audit4.target-widget-shows-the-wrong-rows#1`); this is the '
+              'fallback, and it is the arithmetic it has to do.');
       expect(
         capture(body, RegExp(r'val days = min\(([^)]*)\)')),
         'interval, habit.entries.size',
         reason: 'widgets.target#6: over the window, clamped to what was '
-            'published — Quarter and Year read low because only 60 days ship',
+            'published — a fallback Quarter and Year read low because only 60 '
+            'days ship',
       );
       expect(body, contains('if (value > 0) total += value'),
           reason: 'widgets.target#6: only positive entries contribute');
@@ -3339,8 +3408,11 @@ void main() {
         'habit.target * interval - habit.target * skipped',
         reason: 'widgets.target#7 — Targets are reduced by dailyTarget * '
             'skippedDays for each window and floored at 0.0, where dailyTarget '
-            '= habit.targetValue / habit.frequency.denominator. The denominator '
-            'is not published, so dailyTarget is the target value itself.',
+            '= habit.targetValue / habit.frequency.denominator. A published row '
+            'carries that already reduced target '
+            '(`audit4.target-widget-shows-the-wrong-rows#1`); in this fallback '
+            'the denominator is unknown and dailyTarget is the target value '
+            'itself.',
       );
       expect(
         capture(body, RegExp(r'\.count \{ habit.entries\[it\] == Entry\.(\w+) \}')),
@@ -4129,8 +4201,9 @@ void main() {
             'prefs.firstWeekday), SCORE -> ScoreWidget, HISTORY -> '
             'HistoryWidget, STREAKS -> StreakWidget, TARGET -> TargetWidget. '
             'The habits are resolved against the published document rather '
-            'than a habit list, and the first weekday is not part of that '
-            'document, so FrequencyWidget takes the document\'s today instead.',
+            'than a habit list, and so is the first weekday '
+            '(`audit4.history-and-frequency-home-screen-widgets#1`): a page of '
+            'a stack gets the same one a standalone widget does.',
       );
       expect(
         body,
@@ -4143,11 +4216,11 @@ void main() {
         service.indexOf('private fun constructWidget'),
         service.indexOf('override fun getLoadingView'),
       );
+      // The two grid widgets take the document's first weekday as well, so
+      // their argument list is one longer.
       for (final MapEntry<String, String> entry in <String, String>{
         'CHECKMARK': 'CheckmarkWidget',
-        'FREQUENCY': 'FrequencyWidget',
         'SCORE': 'ScoreWidget',
-        'HISTORY': 'HistoryWidget',
         'STREAKS': 'StreakWidget',
         'TARGET': 'TargetWidget',
       }.entries) {
@@ -4159,6 +4232,25 @@ void main() {
               '${entry.value}, stacked',
         );
       }
+      for (final MapEntry<String, String> entry in <String, String>{
+        'FREQUENCY': 'FrequencyWidget',
+        'HISTORY': 'HistoryWidget',
+      }.entries) {
+        expect(
+          construct,
+          contains('${entry.value}(context, widgetId, habit, today, '
+              'firstWeekday, true)'),
+          reason: 'widgets.stack-service#5: ${entry.key} builds a '
+              '${entry.value}, stacked and laid out from the weekday the user '
+              'chose (`audit4.history-and-frequency-home-screen-widgets#1`)',
+        );
+      }
+      expect(
+        body,
+        contains('constructWidget(h, document.today, document.firstWeekday)'),
+        reason: 'widgets.stack-service#5: and that weekday comes off the '
+            'document, which is the only thing this process can read',
+      );
     });
 
     test('both orientations are built and both carry the fill-in intent', () {

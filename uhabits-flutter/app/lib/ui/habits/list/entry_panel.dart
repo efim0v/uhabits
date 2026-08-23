@@ -294,6 +294,12 @@ class _EntryPanelState extends State<EntryPanel> {
         theme: widget.theme,
         notes: note,
         areQuestionMarksEnabled: widget.preferences.areQuestionMarksEnabled,
+        // `paint.textSize = sp(...)`: the glyph sizes are sp, so they follow
+        // the OS font-size / accessibility text-scale setting
+        // (`audit4.check-mark-cell-glyphs-no-longer#1`). This is the same
+        // scaler a `Text` widget would read, and depending on it here is what
+        // repaints the row when the user moves the slider.
+        textScaler: MediaQuery.textScalerOf(context),
       ),
       onTap: shortToggle ? toggle : edit,
       onLongPress: shortToggle ? edit : toggle,

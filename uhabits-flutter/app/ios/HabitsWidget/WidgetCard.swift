@@ -52,27 +52,40 @@ struct GraphWidgetView<Chart: View>: View {
 /// `widgets.error-states#3` describes the Android layout: a centred white
 /// label on a rounded #3f000000 plate. WidgetKit paints the card itself, so
 /// the plate here is the container background and only the label is drawn.
+/// Every one of them is a key into `Localizable.strings`, not a sentence.
+///
+/// Upstream these are string resources — `R.string.habit_not_found` and the
+/// two the port added beside it — which the launcher resolves in the device
+/// language before any app code runs, per-app language override included. A
+/// Swift literal here would be English on every phone in the world, so the
+/// same seven strings are mirrored from the ARB catalogue into
+/// `ios/HabitsWidget/*.lproj/Localizable.strings` and named by key.
 enum WidgetPlaceholder {
 
     /// `widgets.error-states#1` — the stored habit id no longer resolves.
     /// The wording is `R.string.habit_not_found`.
-    static let habitNotFound = "Habit deleted / not found"
+    static let habitNotFound = LocalizedStringKey("habit_not_found")
 
     /// `widgets.error-states#2` — the catch-all. Anything this extension
     /// cannot render falls back to the same text the `widget_error` layout
     /// carries by default.
-    static let errorDrawing = "Error drawing widget"
+    static let errorDrawing = LocalizedStringKey("widget_error_drawing")
 
     /// The analogue of `widgets.error-states#6`: upstream, a launcher drop with
     /// no eligible habits shows a message and never creates the widget. iOS
-    /// creates the widget regardless, so the message lands here instead.
-    static let noHabits = "Open Loop Habit Tracker to set up this widget"
+    /// creates the widget regardless, so the message lands here instead. The
+    /// key is the one Android already carries for it,
+    /// `R.string.widget_not_configured`.
+    static let noHabits = LocalizedStringKey("widget_not_configured")
 }
 
 /// The centred label those states are drawn as.
 struct WidgetMessageView: View {
 
-    let message: String
+    /// A key, so that `Text` resolves it against the extension's bundle.
+    /// `Text(String)` would render whatever it was handed, verbatim, which is
+    /// how the English literals survived translation.
+    let message: LocalizedStringKey
 
     var body: some View {
         Text(message)

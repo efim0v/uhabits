@@ -399,6 +399,130 @@ void main() {
               'minus 60 falls outside it');
     });
 
+    test('a habit document also carries what the other five widgets draw, '
+        'over the whole history', () async {
+      // 44 marks spread over 120 days, at three times a week: two thirds of
+      // them older than the published entry window.
+      final habit = fixtures.createLongHabit();
+      habitList.add(habit);
+      final today = getToday();
+      registry.addWidget(3, <int>[habit.id!]);
+
+      await bridge.publish();
+      final json = (decode(platform.data[HomeWidgetBridge.documentKey(3)])[
+          'habits']! as List<Object?>).single! as Map<String, Object?>;
+
+      expect(json['score'], habit.scores[today].value,
+          reason: 'audit4.checkmark-widget-s-score-ring-is#1 — the ring fills '
+              'proportionally to habit.scores[today].value, which no widget '
+              'process can recompute: the algorithm needs the whole history '
+              'and the frequency, and the document carries neither.');
+
+      expect(json['bucketSize'], 7,
+          reason: 'audit4.score-widget-draws-an-empty-chart#1 — the bucket is '
+              'Preferences.scoreCardSpinnerPosition, defaulting to 1 = weekly');
+      final scores = (json['scores']! as List<Object?>).cast<double>();
+      expect(scores.length, greaterThan(HomeWidgetBridge.entryCount ~/ 7),
+          reason: 'audit4.score-widget-draws-an-empty-chart#1 — the series is '
+              'bucketed from the oldest known entry, so a habit with 120 days '
+              'of history has more buckets than the 60-day entry window could '
+              'ever produce');
+      expect(scores.first, closeTo(habit.scores[today].value, 0.5),
+          reason: 'newest bucket first, and it is the one holding today');
+
+      // The day the published entry window opens: everything before it is a
+      // day no widget could rebuild anything from.
+      final windowStart = HomeWidgetBridge.formatDate(
+          today.minus(HomeWidgetBridge.entryCount));
+      String oldest(Iterable<String> dates) =>
+          dates.reduce((String a, String b) => a.compareTo(b) < 0 ? a : b);
+
+      final streaks = (json['streaks']! as List<Object?>)
+          .cast<Map<String, Object?>>();
+      expect(streaks, isNotEmpty,
+          reason: 'audit4.streak-and-frequency-widgets-only-see#1 — streaks '
+              'come from habit.streaks, computed over the whole history');
+      expect(
+        oldest(streaks.map((Map<String, Object?> s) => s['end']! as String))
+            .compareTo(windowStart),
+        isNegative,
+        reason: 'audit4.streak-and-frequency-widgets-only-see#1: at least one '
+            'of them ended before the published entry window opens, which is '
+            'the run a widget rebuilding from those entries would have lost',
+      );
+
+      final frequency = json['weekdayFrequency']! as Map<String, Object?>;
+      expect(
+        oldest(frequency.keys).compareTo(windowStart),
+        isNegative,
+        reason: 'audit4.streak-and-frequency-widgets-only-see#1 — the '
+            'Frequency chart buckets the user\'s own marks across every month '
+            'the habit has existed, and the oldest column here is older than '
+            'the entry window',
+      );
+      expect(
+        frequency.values.fold<int>(
+            0,
+            (int sum, Object? bucket) =>
+                sum +
+                (bucket! as List<Object?>)
+                    .cast<int>()
+                    .fold<int>(0, (int a, int b) => a + b)),
+        44,
+        reason: 'audit4.streak-and-frequency-widgets-only-see#1: exactly the '
+            '44 marks the user made — originalEntries, so the YES_AUTO days '
+            'this 3-times-a-week frequency generates are not counted',
+      );
+
+      expect(
+        (json['targetRows']! as List<Object?>)
+            .map((Object? row) => (row! as Map<String, Object?>)['interval'])
+            .toList(),
+        <int>[7, 30, 91, 365],
+        reason: 'audit4.target-widget-shows-the-wrong-rows#1 — "Today" only '
+            'when frequency.denominator <= 1, and this habit is 3 times every '
+            '7 days, so the row list starts at Week',
+      );
+    });
+
+    test('the derived fields are bounded, however long the history is',
+        () async {
+      // Three years of daily marks, charted daily: without a cap the series
+      // alone would be a thousand numbers in every document, and the catalogue
+      // carries one document per habit.
+      storage.putInt('pref_score_view_interval', 0);
+      final bridge = HomeWidgetBridge(
+        habitList: habitList,
+        registry: registry,
+        platform: platform,
+        preferences: preferences,
+      );
+      final habit = addHabit();
+      final today = getToday();
+      for (int day = 0; day < 1000; day++) {
+        // Every third day off, so there are hundreds of separate streaks.
+        if (day % 3 == 2) continue;
+        habit.originalEntries.add(Entry(today.minus(day), Entry.yesManual));
+      }
+      habit.recompute();
+      registry.addWidget(5, <int>[habit.id!]);
+
+      await bridge.publish();
+      final json = (decode(platform.data[HomeWidgetBridge.documentKey(5)])[
+          'habits']! as List<Object?>).single! as Map<String, Object?>;
+
+      expect(json['bucketSize'], 1,
+          reason: 'the spinner is at Day, so the buckets are single days');
+      expect((json['scores']! as List<Object?>).length,
+          HomeWidgetBridge.scoreBucketCount,
+          reason: 'the newest sixty buckets, which is more than any of the six '
+              'widget sizes can plot');
+      expect((json['streaks']! as List<Object?>).length,
+          HomeWidgetBridge.streakCount,
+          reason: 'and the thirty best streaks, which covers a 600dp-tall '
+              'widget at the chart\'s 20dp per bar');
+    });
+
     test('habit ids the list no longer holds are reported, not dropped '
         'silently', () async {
       final habit = addHabit();

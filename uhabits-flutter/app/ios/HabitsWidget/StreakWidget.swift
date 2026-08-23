@@ -45,8 +45,8 @@ struct StreakWidget: Widget {
         ) { entry in
             StreakWidgetView(entry: entry)
         }
-        .configurationDisplayName("Streaks")
-        .description("Shows the habit's longest streaks.")
+        .configurationDisplayName(LocalizedStringKey("widget_name_streaks"))
+        .description(LocalizedStringKey("widget_description_streaks"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -67,6 +67,10 @@ struct StreakWidgetView: View {
                 StreakChartView(habit: habit, today: entry.today)
             }
             .widgetCard()
+            // `widgets.streak#6`: the card opens ShowHabitActivity for this
+            // habit — `IntentFactory.startShowHabitActivity`, which
+            // both platforms send as `uhabits://widget/show`.
+            .widgetURL(WidgetLink.show(habit))
         }
     }
 }

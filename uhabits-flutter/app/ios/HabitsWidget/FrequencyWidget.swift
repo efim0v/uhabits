@@ -40,8 +40,8 @@ struct FrequencyWidget: Widget {
         ) { entry in
             FrequencyWidgetView(entry: entry)
         }
-        .configurationDisplayName("Frequency")
-        .description("Shows which weekdays the habit is performed on.")
+        .configurationDisplayName(LocalizedStringKey("widget_name_frequency"))
+        .description(LocalizedStringKey("widget_description_frequency"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -62,6 +62,10 @@ struct FrequencyWidgetView: View {
                 FrequencyChartView(habit: habit, today: entry.today)
             }
             .widgetCard()
+            // `widgets.frequency#6`: the card opens ShowHabitActivity for this
+            // habit — `IntentFactory.startShowHabitActivity`, which
+            // both platforms send as `uhabits://widget/show`.
+            .widgetURL(WidgetLink.show(habit))
         }
     }
 }
