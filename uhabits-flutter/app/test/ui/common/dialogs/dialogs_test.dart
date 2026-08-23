@@ -918,22 +918,32 @@ void main() {
       expect(
         find.byKey(const ValueKey<String>('checkmark_yes_button')),
         findsOneWidget,
-        reason: 'checkmark-dialog.popup#3',
+        reason: 'checkmark-dialog.popup#3 and '
+            'list-habits.entry-edit-popup-boolean#2 — the popup offers the four '
+            'end states as glyph buttons',
       );
       expect(
         find.byKey(const ValueKey<String>('checkmark_no_button')),
         findsOneWidget,
-        reason: 'checkmark-dialog.popup#3',
+        reason: 'checkmark-dialog.popup#3 and '
+            'list-habits.entry-edit-popup-boolean#2 — the popup offers the four '
+            'end states as glyph buttons',
       );
       expect(
         find.byKey(const ValueKey<String>('checkmark_skip_button')),
         findsNothing,
-        reason: 'checkmark-dialog.popup#5',
+        reason: 'checkmark-dialog.popup#5, '
+            'list-habits.entry-edit-popup-boolean#3 and '
+            'settings.preferences.skip-enabled#4 — CheckmarkDialog hides its '
+            'skip button when isSkipEnabled is false',
       );
       expect(
         find.byKey(const ValueKey<String>('checkmark_unknown_button')),
         findsNothing,
-        reason: 'checkmark-dialog.popup#5',
+        reason: 'checkmark-dialog.popup#5, '
+            'list-habits.entry-edit-popup-boolean#3 and '
+            'settings.preferences.question-marks#6 — and its unknown button '
+            'when areQuestionMarksEnabled is false',
       );
     });
 
@@ -965,7 +975,12 @@ void main() {
         core.FontAwesome.skipped,
         core.FontAwesome.times,
         core.FontAwesome.question,
-      ], reason: 'checkmark-dialog.popup#3');
+      ], reason: 'checkmark-dialog.popup#3, '
+          'list-habits.entry-edit-popup-boolean#2, '
+          'list-habits.entry-edit-popup-boolean#3, '
+          'settings.preferences.skip-enabled#4 and '
+          'settings.preferences.question-marks#6 — turning the two '
+          'preferences on is what reveals the skip and unknown buttons');
 
       // Left to right: YES, SKIP, NO, UNKNOWN.
       final xs = <double>[
@@ -979,7 +994,9 @@ void main() {
       expect(
         xs,
         orderedEquals(<double>[...xs]..sort()),
-        reason: 'checkmark-dialog.popup#3',
+        reason: 'checkmark-dialog.popup#3 and '
+            'list-habits.entry-edit-popup-boolean#2 — the popup offers the four '
+            'end states as glyph buttons',
       );
     });
 
@@ -1001,22 +1018,26 @@ void main() {
       expect(
         _glyphColor(tester, 'yes'),
         toFlutterColor(habitColor),
-        reason: 'checkmark-dialog.popup#4',
+        reason: 'checkmark-dialog.popup#4 and '
+            'list-habits.entry-edit-popup-boolean#4',
       );
       expect(
         _glyphColor(tester, 'skip'),
         toFlutterColor(habitColor),
-        reason: 'checkmark-dialog.popup#4',
+        reason: 'checkmark-dialog.popup#4 and '
+            'list-habits.entry-edit-popup-boolean#4',
       );
       expect(
         _glyphColor(tester, 'no'),
         dim,
-        reason: 'checkmark-dialog.popup#4',
+        reason: 'checkmark-dialog.popup#4 and '
+            'list-habits.entry-edit-popup-boolean#4',
       );
       expect(
         _glyphColor(tester, 'unknown'),
         dim,
-        reason: 'checkmark-dialog.popup#4',
+        reason: 'checkmark-dialog.popup#4 and '
+            'list-habits.entry-edit-popup-boolean#4',
       );
     });
 
@@ -1051,7 +1072,9 @@ void main() {
       expect(
         find.text('went well'),
         findsOneWidget,
-        reason: 'checkmark-dialog.popup#6',
+        reason: 'checkmark-dialog.popup#6 and '
+            'list-habits.entry-edit-popup-boolean#2 — the notes field is '
+            'prefilled with the current notes',
       );
     });
 
@@ -1085,7 +1108,10 @@ void main() {
         expect(
           result.value,
           CheckmarkDialogResult(pair[1] as int, 'spaced'),
-          reason: 'checkmark-dialog.popup#7',
+          reason: 'checkmark-dialog.popup#7 and '
+              'list-habits.entry-edit-popup-boolean#5 — Yes saves '
+              'YES_MANUAL(2), No saves NO(0), Skip saves SKIP(3), Unknown '
+              'saves UNKNOWN(-1), with the notes trimmed',
         );
         expect(
           find.byType(CheckmarkDialog),
@@ -1112,7 +1138,9 @@ void main() {
       expect(
         result.value,
         const CheckmarkDialogResult(core.Entry.skip, 'after'),
-        reason: 'checkmark-dialog.popup#8',
+        reason: 'checkmark-dialog.popup#8 and '
+            'list-habits.entry-edit-popup-boolean#6 — the editor action saves '
+            'with the ORIGINAL value and the trimmed notes',
       );
     });
 
@@ -1135,7 +1163,9 @@ void main() {
       expect(
         result.value,
         const CheckmarkDialogResult(core.Entry.yesManual, 'after'),
-        reason: 'checkmark-dialog.popup#9',
+        reason: 'checkmark-dialog.popup#9 and '
+            'list-habits.entry-edit-popup-boolean#7 — a dismissal still saves '
+            'the original value when the trimmed notes differ',
       );
     });
 
@@ -1152,7 +1182,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(result.completed, isTrue, reason: 'checkmark-dialog.popup#9');
-      expect(result.value, isNull, reason: 'checkmark-dialog.popup#9');
+      expect(result.value, isNull,
+          reason: 'checkmark-dialog.popup#9 and '
+              'list-habits.entry-edit-popup-boolean#7 — unchanged notes write '
+              'nothing at all');
     });
 
     testWidgets('entry-values#10 the four end states are offered directly', (
@@ -1213,7 +1246,9 @@ void main() {
       expect(
         NumberDialog.formatValue(core.Entry.unknown / 1000.0, 'en'),
         '0',
-        reason: 'number-dialog.popup#4',
+        reason: 'number-dialog.popup#4 and '
+            'list-habits.entry-edit-popup-numeric#2 — "0" below 0.01, '
+            "DecimalFormat('#.##') above it",
       );
       expect(
         NumberDialog.formatValue(core.Entry.skip / 1000.0, 'en'),
@@ -1225,7 +1260,9 @@ void main() {
     testWidgets('#4 the field opens on the formatted value', (tester) async {
       await _openNumber(tester, value: 12.345);
 
-      expect(_numberValue(tester), '12.35', reason: 'number-dialog.popup#4');
+      expect(_numberValue(tester), '12.35',
+          reason: 'number-dialog.popup#4 and '
+              'list-habits.entry-edit-popup-numeric#2');
     });
 
     testWidgets('#2 #3 value, Save, Skip, question mark — in that order', (
@@ -1263,12 +1300,18 @@ void main() {
       expect(
         find.byKey(const ValueKey<String>('number_skip_button')),
         findsNothing,
-        reason: 'number-dialog.popup#3',
+        reason: 'number-dialog.popup#3, '
+            'list-habits.entry-edit-popup-numeric#6 and '
+            'settings.preferences.skip-enabled#4 — NumberDialog hides '
+            'skipBtnNumber under the same condition',
       );
       expect(
         find.byKey(const ValueKey<String>('number_unknown_button')),
         findsNothing,
-        reason: 'number-dialog.popup#3',
+        reason: 'number-dialog.popup#3, '
+            'list-habits.entry-edit-popup-numeric#6 and '
+            'settings.preferences.question-marks#6 — and unknownBtnNumber '
+            'when question marks are off',
       );
     });
 
@@ -1299,7 +1342,9 @@ void main() {
       expect(
         result.value,
         const NumberDialogResult(2.5, 'n'),
-        reason: 'number-dialog.popup#8',
+        reason: 'number-dialog.popup#8 and '
+            'list-habits.entry-edit-popup-numeric#7 — pressing Enter in the '
+            'value field saves',
       );
     });
 
@@ -1324,7 +1369,9 @@ void main() {
       expect(
         (result.value!.value * 1000).round(),
         core.Entry.skip,
-        reason: 'number-dialog.popup#9',
+        reason: 'number-dialog.popup#9 and '
+            'list-habits.entry-edit-popup-numeric#6 — the Skip shortcut fills '
+            'the field with Entry.SKIP / 1000 and saves',
       );
     });
 
@@ -1350,7 +1397,9 @@ void main() {
       expect(
         (result.value!.value * 1000).round(),
         core.Entry.unknown,
-        reason: 'number-dialog.popup#10',
+        reason: 'number-dialog.popup#10 and '
+            'list-habits.entry-edit-popup-numeric#6 — and the Unknown '
+            'shortcut with Entry.UNKNOWN / 1000',
       );
     });
 
@@ -1375,7 +1424,9 @@ void main() {
       expect(
         result.value!.value,
         closeTo(-0.001, 1e-9),
-        reason: 'number-dialog.popup#11',
+        reason: 'number-dialog.popup#11 and '
+            'list-habits.entry-edit-popup-numeric#4 — an empty value field is '
+            'stored as Entry.UNKNOWN / 1000',
       );
       expect(result.value!.notes, 'note', reason: 'number-dialog.popup#11');
       expect(
@@ -1400,7 +1451,10 @@ void main() {
       expect(
         result.value,
         const NumberDialogResult(7.0, 'after'),
-        reason: 'number-dialog.popup#12',
+        reason: 'number-dialog.popup#12 and '
+            'list-habits.entry-edit-popup-numeric#8 — dismissing without '
+            'saving still writes the entry when the trimmed notes changed, '
+            'keeping the original value',
       );
     });
 
@@ -1437,7 +1491,32 @@ void main() {
       expect(
         result.value!.value,
         closeTo(2.5, 1e-9),
-        reason: 'number-dialog.popup#5',
+        reason: 'number-dialog.popup#5 and '
+            'list-habits.entry-edit-popup-numeric#10 — the decimal separator '
+            'accepted by the value field follows the current locale',
+      );
+    });
+
+    testWidgets('unparseable input leaves the value unchanged', (tester) async {
+      final result = await _openNumber(tester, value: 7.0);
+
+      // The keypad filter lets a second separator through, and
+      // NumberFormat.parse then throws — `save()` swallows it and keeps the
+      // value the popup opened on.
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('number_value')),
+        '1.2.3',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('number_save_button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        result.value,
+        const NumberDialogResult(7.0, ''),
+        reason: 'list-habits.entry-edit-popup-numeric#5 — unparseable input '
+            'leaves the value unchanged',
       );
     });
   });

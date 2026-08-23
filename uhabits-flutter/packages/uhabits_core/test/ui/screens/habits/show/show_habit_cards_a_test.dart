@@ -1010,4 +1010,64 @@ void main() {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  // show-habit.screen-scaffold — the pieces of ShowHabit.kt that live in core
+  // -------------------------------------------------------------------------
+  group('show-habit.screen-scaffold', () {
+    test('#10 ShowHabitState defaults are "", false and PaletteColor(1), and '
+        'buildState always overrides all three', () {
+      final habit = _buildHabit();
+      final bare = ShowHabitState(
+        subtitle: SubtitleCardPresenter.buildState(habit: habit, theme: _theme),
+        overview: OverviewCardPresenter.buildState(habit: habit, theme: _theme),
+        notes: NotesCardPresenter.buildState(habit: habit),
+        target: _buildTargetState(habit),
+        theme: _theme,
+      );
+
+      expect(bare.title, '',
+          reason: 'show-habit.screen-scaffold#10 — title defaults to ""');
+      expect(bare.isNumerical, isFalse,
+          reason: 'show-habit.screen-scaffold#10 — isNumerical defaults to '
+              'false');
+      expect(bare.color, const PaletteColor(1),
+          reason: 'show-habit.screen-scaffold#10 — color defaults to '
+              'PaletteColor(1)');
+
+      // In practice buildState never leaves one of them alone: a numerical
+      // habit with a name and a colour comes back with all three replaced.
+      habit
+        ..name = 'Run'
+        ..type = HabitType.numerical
+        ..color = const PaletteColor(14);
+      final built = ShowHabitPresenter.buildState(
+        habit: habit,
+        preferences: _preferences,
+        theme: _theme,
+      );
+      expect(built.title, 'Run',
+          reason: 'show-habit.screen-scaffold#10 — buildState takes the title '
+              'from habit.name');
+      expect(built.isNumerical, isTrue,
+          reason: 'show-habit.screen-scaffold#10');
+      expect(built.color, const PaletteColor(14),
+          reason: 'show-habit.screen-scaffold#10');
+      expect(built.theme, same(_theme),
+          reason: 'show-habit.screen-scaffold#10 — and the theme is the one it '
+              'was handed');
+
+      // Even the untouched habit gets all three written from the model rather
+      // than left at the class defaults: a new habit is teal, not
+      // PaletteColor(1).
+      final fresh = ShowHabitPresenter.buildState(
+        habit: _buildHabit(),
+        preferences: _preferences,
+        theme: _theme,
+      );
+      expect(fresh.color, const PaletteColor(8),
+          reason: 'show-habit.screen-scaffold#10 — the PaletteColor(1) default '
+              'is never what a built state carries');
+    });
+  });
 }

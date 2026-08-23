@@ -29,6 +29,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/habit_list_model.dart';
 import '../../about/about_screen.dart';
+import '../../common/dialogs/checkmark_dialog.dart';
+import '../../common/dialogs/number_dialog.dart';
 import '../../settings/settings_screen.dart';
 import '../edit/edit_habit_screen.dart';
 import '../show/show_habit_screen.dart';
@@ -306,24 +308,42 @@ class _HabitListViewState extends State<_HabitListView> {
     );
   }
 
-  /// Stands in for `NumberDialog` until the dialogs slice lands.
+  /// `ListHabitsScreen.showNumberPopup(value, notes, callback)`.
+  ///
+  /// The real `NumberDialog` port, not a stand-in: the value field, the Skip
+  /// and question-mark shortcuts, the notes field and the dismissal rules all
+  /// come from `ui/common/dialogs/number_dialog.dart`
+  /// (`list-habits.entry-edit-popup-numeric#2` .. `#10`). A dismissal that did
+  /// not touch the notes completes with null, which is the presenter's
+  /// `onNumberPickerDismissed` — the no-op that runs no command.
   Future<void> _showNumberPopup(
     double value,
     String notes,
     NumberPickerCallback callback,
   ) async {
-    final picked = await showDialog<double>(
-      context: context,
-      builder: (context) => _NumberPickerDialog(initialValue: value),
+    final theme = _coreThemeOf(context);
+    final result = await showNumberDialog(
+      context,
+      value: value,
+      notes: notes,
+      // NumberDialog tints only the buttons of the boolean row, which stays
+      // hidden here; the colour is passed because the Android arguments carry
+      // it (`number-dialog.popup#1`).
+      color: theme.colorOf(const core.PaletteColor(0)),
+      preferences: _model.scope.preferences,
     );
-    if (picked == null) {
+    if (result == null) {
       callback.onNumberPickerDismissed();
       return;
     }
-    callback.onNumberPicked(picked, notes);
+    callback.onNumberPicked(result.value, result.notes);
   }
 
-  /// Stands in for `CheckmarkDialog` until the dialogs slice lands.
+  /// `ListHabitsScreen.showCheckmarkPopup(value, notes, color, callback)`.
+  ///
+  /// The real `CheckmarkDialog` port: four glyph buttons over a notes field,
+  /// with Skip and Unknown gated on the preferences
+  /// (`list-habits.entry-edit-popup-boolean#2` .. `#7`).
   Future<void> _showCheckmarkPopup(
     int selectedValue,
     String notes,
@@ -331,21 +351,18 @@ class _HabitListViewState extends State<_HabitListView> {
     CheckMarkDialogCallback callback,
   ) async {
     final theme = _coreThemeOf(context);
-    final picked = await showDialog<int>(
-      context: context,
-      builder: (context) => _CheckmarkDialog(
-        selectedValue: selectedValue,
-        color: _toFlutterColor(theme.colorOf(color)),
-        isSkipEnabled: _model.scope.preferences.isSkipEnabled,
-        areQuestionMarksEnabled:
-            _model.scope.preferences.areQuestionMarksEnabled,
-      ),
+    final result = await showCheckmarkDialog(
+      context,
+      value: selectedValue,
+      notes: notes,
+      color: theme.colorOf(color),
+      preferences: _model.scope.preferences,
     );
-    if (picked == null) {
+    if (result == null) {
       callback.onNotesDismissed();
       return;
     }
-    callback.onNotesSaved(picked, notes);
+    callback.onNotesSaved(result.value, result.notes);
   }
 }
 
@@ -394,101 +411,6 @@ class _EmptyListView extends StatelessWidget {
   }
 }
 
-class _CheckmarkDialog extends StatelessWidget {
-  const _CheckmarkDialog({
-    required this.selectedValue,
-    required this.color,
-    required this.isSkipEnabled,
-    required this.areQuestionMarksEnabled,
-  });
-
-  final int selectedValue;
-  final Color color;
-  final bool isSkipEnabled;
-  final bool areQuestionMarksEnabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = L10n.of(context);
-    final options = <int, String>{
-      core.Entry.yesManual: l10n.yes,
-      core.Entry.no: l10n.no,
-      if (isSkipEnabled) core.Entry.skip: l10n.skipDay,
-      // No ARB entry describes the unknown state; `clear` is the closest one.
-      if (areQuestionMarksEnabled) core.Entry.unknown: l10n.clear,
-    };
-    return SimpleDialog(
-      children: <Widget>[
-        for (final option in options.entries)
-          SimpleDialogOption(
-            onPressed: () => Navigator.of(context).pop(option.key),
-            child: Row(
-              children: <Widget>[
-                Icon(
-                  option.key == selectedValue
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  color: color,
-                ),
-                const SizedBox(width: 16),
-                Text(option.value),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _NumberPickerDialog extends StatefulWidget {
-  const _NumberPickerDialog({required this.initialValue});
-
-  final double initialValue;
-
-  @override
-  State<_NumberPickerDialog> createState() => _NumberPickerDialogState();
-}
-
-class _NumberPickerDialogState extends State<_NumberPickerDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialValue == 0 ? '' : _format(widget.initialValue),
-  );
-
-  static String _format(double value) =>
-      value == value.roundToDouble() ? value.round().toString() : '$value';
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final value = double.tryParse(_controller.text.trim());
-    Navigator.of(context).pop(value ?? 0.0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = L10n.of(context);
-    return AlertDialog(
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(labelText: l10n.value),
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-        ),
-        TextButton(onPressed: _submit, child: Text(l10n.save)),
-      ],
-    );
-  }
-}
 
 /// Same rounding as `FlutterCanvas.setColor` and `core.Color.toInt`.
 Color _toFlutterColor(core.Color color) => Color.fromARGB(

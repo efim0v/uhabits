@@ -1055,6 +1055,1172 @@ void main() {
       expect(material.elevation, 1.0, reason: 'show-habit.theme-colors#4');
     });
   });
+  // -------------------------------------------------------------------------
+  // Score chart: the sizing arithmetic and the footer state machine
+  // -------------------------------------------------------------------------
+
+  group('charts-canvas-theming.score-chart (sizing)', () {
+    _RecordingCanvas drawScoreAt(
+      ScoreCardState state, {
+      double width = 300,
+      double height = 220,
+    }) {
+      final view = ScoreChartView(
+        scores: state.scores,
+        color: theme.colorOf(state.color),
+        theme: theme,
+        dateFormatter: formatter,
+        bucketSize: state.bucketSize,
+      );
+      final canvas = _RecordingCanvas(width: width, height: height);
+      view.draw(canvas);
+      return canvas;
+    }
+
+    testWidgets('#1 a line of markers over a five-row percentage grid, with a '
+        'date footer underneath', (tester) async {
+      final canvas = drawScoreAt(scoreState());
+
+      expect(canvas.texts.take(5).toList(),
+          <String>['100%', '80%', '60%', '40%', '20%'],
+          reason: 'charts-canvas-theming.score-chart#1 — a 5-row percentage '
+              'grid');
+      // Two concentric circles per marker, one per score.
+      expect(canvas.opsNamed('fillCircle').length ~/ 2, 3,
+          reason: 'charts-canvas-theming.score-chart#1 — one marker per score');
+      expect(
+          canvas
+              .opsNamed('drawLine')
+              .where((op) => op.strokeWidth != 1.0)
+              .length,
+          2,
+          reason: 'charts-canvas-theming.score-chart#1 — joined by a line');
+      expect(canvas.texts.skip(5).toList(), <String>['2015', 'Jan', '18', '25'],
+          reason: 'charts-canvas-theming.score-chart#1 — and a date footer '
+              'below the plot');
+    });
+
+    testWidgets('#2 a height under 9 is treated as 200, and the text size, em, '
+        'footer, padding and baseSize follow from the height',
+        (tester) async {
+      // 220 tall: textSize = min(13.2, 10) = 10, em = 11.71, footer = 35,
+      // paddingTop = 11, baseSize = (220 - 35 - 11) ~/ 8 = 21.
+      final canvas = drawScoreAt(scoreState());
+      final grid = canvas
+          .opsNamed('drawLine')
+          .where((op) => op.strokeWidth == 1.0)
+          .toList();
+      expect(grid.first.args[1], closeTo(11.0, 1e-9),
+          reason: 'charts-canvas-theming.score-chart#2 — internalPaddingTop = '
+              'em.toInt()');
+      expect(grid.last.args[1] - grid.first.args[1], closeTo(8 * 21.0, 1e-9),
+          reason: 'charts-canvas-theming.score-chart#2 — the plot is '
+              '8 * baseSize tall');
+      expect(canvas.opsNamed('drawText').first.fontSize, 10.0,
+          reason: 'charts-canvas-theming.score-chart#2 — pText.textSize = '
+              'min(height * 0.06, tinyTextSize)');
+
+      // 100 tall: 100 * 0.06 = 6 is under the 10sp ceiling, so the whole
+      // layout shrinks with it. em = 7.026, footer = 21, paddingTop = 7,
+      // baseSize = (100 - 21 - 7) ~/ 8 = 9.
+      final small = drawScoreAt(scoreState(), height: 100);
+      expect(small.opsNamed('drawText').first.fontSize, closeTo(6.0, 1e-9),
+          reason: 'charts-canvas-theming.score-chart#2');
+      final smallGrid = small
+          .opsNamed('drawLine')
+          .where((op) => op.strokeWidth == small.opsNamed('drawLine').first.strokeWidth)
+          .toList();
+      expect(smallGrid.first.args[1], closeTo(7.0, 1e-9),
+          reason: 'charts-canvas-theming.score-chart#2');
+
+      // Under 9 the height is replaced by 200 outright, so the chart draws
+      // exactly as if it had been given 200.
+      final tiny = drawScoreAt(scoreState(), height: 5);
+      final asIf200 = drawScoreAt(scoreState(), height: 200);
+      expect(tiny.ops.map((op) => op.toString()).toList(),
+          asIf200.ops.map((op) => op.toString()).toList(),
+          reason: 'charts-canvas-theming.score-chart#2 — a height < 9 is '
+              'replaced by 200');
+    });
+
+    testWidgets('#3 #4 the column pitch comes from the month name, and the '
+        'columns tile the view exactly', (tester) async {
+      final canvas = drawScoreAt(scoreState());
+
+      // maxMonthWidth is 3 glyphs * 10 * 0.6 = 18, so columnWidth starts at
+      // baseSize 21, is raised to 18*1.5 = 27 and left alone by 18*1.2 = 21.6.
+      // nColumns = (300 / 27).toInt() = 11, then columnWidth = 300 / 11.
+      const columnWidth = 300.0 / 11;
+      final circles = canvas.opsNamed('fillCircle');
+      // Markers sit at k*columnWidth + (columnWidth - baseSize)/2 + baseSize/2.
+      final newest = circles[4].args[0];
+      final previous = circles[2].args[0];
+      expect(newest - previous, closeTo(columnWidth, 1e-9),
+          reason: 'charts-canvas-theming.score-chart#3 — columnWidth is reset '
+              'to width / nColumns so the columns tile the view');
+      expect(newest,
+          closeTo(10 * columnWidth + (columnWidth - 21) / 2 + 10.5, 1e-9),
+          reason: 'charts-canvas-theming.score-chart#3');
+      // The pitch is 27.27, not the 21 that baseSize alone would have given:
+      // the day-width term measured a month name (the upstream getter never
+      // looks at a day number) and 1.5 * 18 won.
+      expect(columnWidth, greaterThan(21.0),
+          reason: 'charts-canvas-theming.score-chart#4 — maxDayWidth is a '
+              'month measurement, so the 1.5 factor applies to it');
+      expect(columnWidth, closeTo(18.0 * 1.5 + (300 - 11 * 27) / 11, 1e-9),
+          reason: 'charts-canvas-theming.score-chart#4');
+    });
+
+    testWidgets('#14 previousMonth, previousYear and skipYear restart on every '
+        'draw', (tester) async {
+      final view = ScoreChartView(
+        scores: scoreState().scores,
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        bucketSize: 7,
+      );
+      final first = _RecordingCanvas(width: 300, height: 220);
+      view.draw(first);
+      final second = _RecordingCanvas(width: 300, height: 220);
+      view.draw(second);
+
+      expect(second.texts, first.texts,
+          reason: 'charts-canvas-theming.score-chart#14 — the same view drawn '
+              'twice prints the same footer, so nothing carries over');
+      expect(second.texts.skip(5).toList(), <String>['2015', 'Jan', '18', '25'],
+          reason: 'charts-canvas-theming.score-chart#14 — the leftmost drawn '
+              'column always prints its year and month afresh');
+    });
+
+    testWidgets('#17 the presenter supplies exactly {1, 7, 31, 92, 365}',
+        (tester) async {
+      expect(ScoreCardPresenter.bucketSizes, <int>[1, 7, 31, 92, 365],
+          reason: 'charts-canvas-theming.score-chart#17');
+      for (var position = 0; position < 5; position++) {
+        expect(ScoreCardPresenter.bucketSizes[position],
+            <int>[1, 7, 31, 92, 365][position],
+            reason: 'charts-canvas-theming.score-chart#17 — indexed by the '
+                'spinner position 0..4 (day, week, month, quarter, year)');
+      }
+    });
+
+    testWidgets('show-habit.score-card#9 #10 and '
+        'show-habit.number-formatting#6: the grid labels and the footer rules',
+        (tester) async {
+      final canvas = drawScoreAt(scoreState());
+
+      expect(canvas.texts.take(5).toList(),
+          <String>['100%', '80%', '60%', '40%', '20%'],
+          reason: 'show-habit.score-card#9 — five rows labelled 100 - i*100/5');
+      expect(canvas.texts.take(5).toList(),
+          <String>['100%', '80%', '60%', '40%', '20%'],
+          reason: 'show-habit.number-formatting#6 — String.format("%d%%", '
+              '100 - i*100/5)');
+
+      // A score of 1.0 lands on the top row: the plot is 8 * baseSize tall.
+      final circles = canvas.opsNamed('fillCircle');
+      expect(circles[4].args[1], closeTo(11.5, 1e-9),
+          reason: 'show-habit.score-card#9 — the plot area is 8*baseSize tall, '
+              'so a score of 1.0 reaches the top row');
+
+      // Footer: the year prints on change, then the month on change, then day
+      // numbers.
+      expect(canvas.texts.skip(5).toList(), <String>['2015', 'Jan', '18', '25'],
+          reason: 'show-habit.score-card#10 — the short month name is printed '
+              'when the month changes, otherwise the day number');
+
+      // Yearly buckets skip odd years and the column right after a year.
+      final yearly = drawScoreAt(scoreState(
+        bucketSize: 365,
+        scores: <core.Score>[
+          score(core.LocalDate.ymd(2015, 1, 1), 1.0),
+          score(core.LocalDate.ymd(2014, 1, 1), 1.0),
+          score(core.LocalDate.ymd(2013, 1, 1), 1.0),
+          score(core.LocalDate.ymd(2012, 1, 1), 1.0),
+        ],
+      ));
+      expect(yearly.texts.skip(5).toList(), <String>['2012', '2014'],
+          reason: 'show-habit.score-card#10 — the year is skipped when '
+              'bucketSize >= 365 and the year is odd, and for one column '
+              'immediately after a year was printed');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Frequency chart
+  // -------------------------------------------------------------------------
+
+  group('charts-canvas-theming.frequency-chart', () {
+    testWidgets('#1 #2 #3 one column per month, seven weekday rows, sized off '
+        'the height', (tester) async {
+      final canvas = drawFrequency(frequencyState());
+
+      // baseSize = 200 ~/ 8 = 25; textSize = 10; columnWidth = max(25, 18*1.2)
+      // = 25; nColumns = (300 / 25).toInt() = 12.
+      expect(canvas.opsNamed('drawText').first.fontSize, closeTo(10.0, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#2 — pText.textSize = '
+              'baseSize * 0.4');
+      final rows = canvas.opsNamed('drawLine').map((op) => op.args[1]).toList();
+      expect(rows, <double>[0, 25, 50, 75, 100, 125, 150, 175],
+          reason: 'charts-canvas-theming.frequency-chart#3 — columnHeight = '
+              '8 * baseSize and internalPaddingTop = 0');
+      expect(canvas.texts.take(7).toList(),
+          <String>['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+          reason: 'charts-canvas-theming.frequency-chart#1 — seven weekday '
+              'rows');
+      expect(
+          canvas.texts.skip(7).where((t) => int.tryParse(t) == null).length, 11,
+          reason: 'charts-canvas-theming.frequency-chart#1 — one column per '
+              'month');
+
+      // A height under 9 is replaced by 200 outright.
+      final view = FrequencyChartView(
+        frequency: frequencyState().frequency,
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        firstWeekday: core.DayOfWeek.sunday,
+        isNumerical: false,
+      );
+      final tiny = _RecordingCanvas(width: 300, height: 4);
+      view.draw(tiny);
+      expect(tiny.ops.map((op) => op.toString()).toList(),
+          canvas.ops.map((op) => op.toString()).toList(),
+          reason: 'charts-canvas-theming.frequency-chart#2 — a height < 9 is '
+              'replaced by 200');
+    });
+
+    testWidgets('#4 only nColumns - 1 months are drawn; the last column is the '
+        'weekday gutter', (tester) async {
+      final canvas = drawFrequency(frequencyState());
+
+      final months =
+          canvas.texts.skip(7).where((t) => int.tryParse(t) == null).toList();
+      expect(months, hasLength(11),
+          reason: 'charts-canvas-theming.frequency-chart#4 — 12 columns fit, '
+              'but the rightmost is reserved');
+      for (final op in canvas.opsNamed('drawText').take(7)) {
+        expect(op.args[0], closeTo(300.0 - 25.0, 1e-9),
+            reason: 'charts-canvas-theming.frequency-chart#4 — the weekday '
+                'names live in that reserved column');
+      }
+    });
+
+    testWidgets('#5 the leftmost month is the current one stepped back '
+        'nColumns - 2 + dataOffset months, wrapping the year', (tester) async {
+      final canvas = drawFrequency(frequencyState());
+      final months =
+          canvas.texts.skip(7).where((t) => int.tryParse(t) == null).toList();
+      // 12 columns, so -12 + 2 = -10 months from January 2015 is March 2014.
+      expect(months.first, 'Mar',
+          reason: 'charts-canvas-theming.frequency-chart#5 — the year wraps '
+              'backwards when the month number drops below 1');
+      expect(months.last, 'Jan',
+          reason: 'charts-canvas-theming.frequency-chart#5 — and each column '
+              'steps forward one month');
+
+      final june = drawFrequency(
+        frequencyState(),
+        chartToday: core.LocalDate.ymd(2015, 6, 25),
+      );
+      final juneMonths =
+          june.texts.skip(7).where((t) => int.tryParse(t) == null).toList();
+      expect(juneMonths.first, 'Aug',
+          reason: 'charts-canvas-theming.frequency-chart#5 — June 2015 minus '
+              '10 months is August 2014');
+      expect(juneMonths.last, 'Jun',
+          reason: 'charts-canvas-theming.frequency-chart#5');
+    });
+
+    testWidgets('#6 the grid: weekday names left-aligned in contrast60, '
+        'hairlines in contrast20 at every row top', (tester) async {
+      final canvas = drawFrequency(frequencyState());
+
+      for (final op in canvas.opsNamed('drawText').take(7)) {
+        expect(op.textAlign, core.TextAlign.left,
+            reason: 'charts-canvas-theming.frequency-chart#6');
+        expect(op.color, theme.mediumContrastTextColor,
+            reason: 'charts-canvas-theming.frequency-chart#6 — contrast60');
+      }
+      final lines = canvas.opsNamed('drawLine');
+      expect(lines, hasLength(8),
+          reason: 'charts-canvas-theming.frequency-chart#6 — one line per row '
+              'plus one after the loop');
+      for (final op in lines) {
+        expect(op.color, theme.lowContrastTextColor,
+            reason: 'charts-canvas-theming.frequency-chart#6 — contrast20');
+        expect(op.strokeWidth, 1.0,
+            reason: 'charts-canvas-theming.frequency-chart#6 — strokeWidth is '
+                'forced to 1');
+      }
+    });
+
+    testWidgets('#7 row j is getWeekdaySequence(firstWeekday)[j], read at '
+        'index (daysSinceSunday + 1) % 7', (tester) async {
+      // The fixture puts 4 in index 1 (Sunday) and 2 in index 2 (Monday).
+      final sunday = drawFrequency(frequencyState());
+      final sundayBubbles = sunday.opsNamed('fillCircle');
+      expect(sundayBubbles[0].args[2], closeTo(7.5, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#7 — row 0 of a '
+              'Sunday-first week reads index (0 + 1) % 7 = 1');
+      expect(sundayBubbles[1].args[2], closeTo(3.75, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#7 — row 1 reads '
+              'index 2');
+
+      final monday = drawFrequency(
+        FrequencyCardState(
+          color: habitColor,
+          firstWeekday: core.DayOfWeek.monday,
+          frequency: frequencyState().frequency,
+          theme: theme,
+          isNumerical: false,
+        ),
+      );
+      expect(monday.texts.take(7).toList(),
+          <String>['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          reason: 'charts-canvas-theming.frequency-chart#7 — the row order '
+              'follows getWeekdaySequence(firstWeekday)');
+      final mondayBubbles = monday.opsNamed('fillCircle');
+      // Monday is now row 0 and Sunday row 6.
+      expect(mondayBubbles[0].args[2], closeTo(3.75, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#7');
+      expect(mondayBubbles[6].args[2], closeTo(7.5, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#7');
+    });
+
+    testWidgets('#8 a month absent from the map draws no bubbles but keeps its '
+        'footer', (tester) async {
+      final canvas = drawFrequency(frequencyState());
+
+      expect(canvas.opsNamed('fillCircle'), hasLength(7),
+          reason: 'charts-canvas-theming.frequency-chart#8 — only the one '
+              'month in the map draws its seven rows');
+      expect(
+          canvas.texts.skip(7).where((t) => int.tryParse(t) == null).length, 11,
+          reason: 'charts-canvas-theming.frequency-chart#8 — every column '
+              'still draws its footer');
+    });
+
+    testWidgets('#9 #11 bubble radius, the two scaling factors and the maxFreq '
+        'floor', (tester) async {
+      // Boolean: the divisor is how often that weekday occurred in the month.
+      final boolean = drawFrequency(frequencyState()).opsNamed('fillCircle');
+      // padding = 25 * 0.2 = 5, maxRadius = (25 - 10) / 2 = 7.5.
+      expect(boolean[0].args[2], closeTo(7.5, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#9 — 4 of the 4 '
+              'Sundays in January 2015');
+      expect(boolean[1].args[2], closeTo(3.75, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#9 — 2 of 4 Mondays');
+      expect(boolean[2].args[2], 0.0,
+          reason: 'charts-canvas-theming.frequency-chart#9 — a weekday never '
+              'performed has radius 0');
+
+      // Numerical: the divisor is maxFreq over the whole map.
+      final numerical =
+          drawFrequency(frequencyState(isNumerical: true)).opsNamed('fillCircle');
+      expect(numerical[0].args[2], closeTo(7.5, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#9');
+      expect(numerical[1].args[2], closeTo(3.75, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#9');
+
+      // maxFreq is floored at 1, so an all-zero map divides by 1 rather than
+      // by 0 and every bubble collapses to nothing.
+      final zeros = drawFrequency(frequencyState(
+        isNumerical: true,
+        frequency: <core.LocalDate, List<int>>{
+          core.LocalDate.ymd(2015, 1, 1): <int>[0, 0, 0, 0, 0, 0, 0],
+        },
+      ));
+      expect(zeros.opsNamed('fillCircle').map((op) => op.args[2]).toSet(),
+          <double>{0.0},
+          reason: 'charts-canvas-theming.frequency-chart#11 — maxFreq has a '
+              'floor of 1');
+      expect(zeros.opsNamed('fillCircle'), hasLength(7),
+          reason: 'charts-canvas-theming.frequency-chart#11');
+
+      // A negative (skipped) entry is clamped to zero rather than inverting
+      // the bubble.
+      final negative = drawFrequency(frequencyState(
+        isNumerical: true,
+        frequency: <core.LocalDate, List<int>>{
+          core.LocalDate.ymd(2015, 1, 1): <int>[0, -4, 2, 0, 0, 0, 0],
+        },
+      ));
+      expect(negative.opsNamed('fillCircle')[0].args[2], 0.0,
+          reason: 'charts-canvas-theming.frequency-chart#9 — max(0, value)');
+    });
+
+    testWidgets('#10 the four-step colour ramp is mixed with ColorUtils',
+        (tester) async {
+      final canvas = drawFrequency(frequencyState());
+      final bubbles = canvas.opsNamed('fillCircle');
+      final grid = theme.lowContrastTextColor;
+
+      // scale 1.0 -> index min(3, round(3)) = 3.
+      expect(bubbles[0].color, green,
+          reason: 'charts-canvas-theming.frequency-chart#10 — colors[3] is the '
+              'habit colour');
+      // scale 0.5 -> index round(1.5) = 2.
+      expect(
+        bubbles[1].color,
+        core.Color.fromRgb(
+          core.ColorUtils.mixColors(grid.toInt(), green.toInt(), 0.33),
+        ),
+        reason: 'charts-canvas-theming.frequency-chart#10 — colors[2] is '
+            'mixColors(grid, habit, 0.33), i.e. 67% habit colour',
+      );
+      // scale 0 -> index 0.
+      expect(bubbles[2].color, grid,
+          reason: 'charts-canvas-theming.frequency-chart#10 — colors[0] is the '
+              'grid colour');
+
+      final quarter = drawFrequency(frequencyState(
+        frequency: <core.LocalDate, List<int>>{
+          core.LocalDate.ymd(2015, 1, 1): <int>[0, 1, 0, 0, 0, 0, 0],
+        },
+      ));
+      // 1 of 4 -> scale 0.25 -> index round(0.75) = 1.
+      expect(
+        quarter.opsNamed('fillCircle')[0].color,
+        core.Color.fromRgb(
+          core.ColorUtils.mixColors(grid.toInt(), green.toInt(), 0.66),
+        ),
+        reason: 'charts-canvas-theming.frequency-chart#10 — colors[1] is '
+            'mixColors(grid, habit, 0.66), i.e. 66% grid colour',
+      );
+    });
+
+    testWidgets('#12 the footer centres the month name, and February also '
+        'carries the year', (tester) async {
+      final canvas = drawFrequency(frequencyState());
+      final footer = canvas
+          .opsNamed('drawText')
+          .skip(7)
+          .where((op) => int.tryParse(op.text!) == null)
+          .toList();
+      for (final op in footer) {
+        expect(op.textAlign, core.TextAlign.center,
+            reason: 'charts-canvas-theming.frequency-chart#12');
+      }
+      // cellCentreY = 6*25 + 25 + 12.5 = 187.5, em = 11.71.
+      expect(footer.first.args[1],
+          closeTo(187.5 - 0.1 * 11.71 - 0.34 * 10, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#12 — the month name '
+              'sits at cellCentreY - 0.1*em');
+
+      final withFebruary = drawFrequency(
+        frequencyState(),
+        chartToday: core.LocalDate.ymd(2015, 6, 25),
+      );
+      final year = withFebruary
+          .opsNamed('drawText')
+          .firstWhere((op) => op.text == '2015');
+      expect(year.args[1], closeTo(187.5 + 0.9 * 11.71 - 0.34 * 10, 1e-9),
+          reason: 'charts-canvas-theming.frequency-chart#12 — February adds '
+              'the year at cellCentreY + 0.9*em');
+      expect(withFebruary.texts.where((t) => t == '2015'), hasLength(1),
+          reason: 'charts-canvas-theming.frequency-chart#12 — and only '
+              'February does');
+    });
+
+    testWidgets('show-habit.frequency-card#5 #10: maxFreq is floored at 1 and '
+        'the scroll position survives a rebuild', (tester) async {
+      final zeros = drawFrequency(frequencyState(
+        isNumerical: true,
+        frequency: <core.LocalDate, List<int>>{
+          core.LocalDate.ymd(2015, 1, 1): <int>[0, 0, 0, 0, 0, 0, 0],
+        },
+      ));
+      expect(zeros.opsNamed('fillCircle'), hasLength(7),
+          reason: 'show-habit.frequency-card#5 — a maxFreq of 0 would divide '
+              'by zero; the floor of 1 keeps the bubbles at radius 0');
+
+      final months =
+          drawFrequency(frequencyState()).texts.skip(7).toList();
+      expect(months.first, 'Mar',
+          reason: 'show-habit.frequency-card#10 — columns start at the current '
+              'month minus (nColumns - 2 + dataOffset) months');
+      final scrolled = drawFrequency(frequencyState());
+      expect(scrolled.texts.skip(7).toList(), months,
+          reason: 'show-habit.frequency-card#10');
+
+      // The card hands its dataOffset straight to the chart and never resets
+      // it, so a rebuild with fresh state keeps the same scroll position.
+      await _pump(
+        tester,
+        FrequencyCardView(state: frequencyState(), dataOffset: 3, today: today),
+      );
+      expect(_viewOf<FrequencyChartView>(tester).dataOffset, 3,
+          reason: 'show-habit.frequency-card#10 — the frequency chart is not '
+              'reset on refresh');
+      await _pump(
+        tester,
+        FrequencyCardView(
+          state: frequencyState(isNumerical: true),
+          dataOffset: 3,
+          today: today,
+        ),
+      );
+      expect(_viewOf<FrequencyChartView>(tester).dataOffset, 3,
+          reason: 'show-habit.frequency-card#10');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Streak chart
+  // -------------------------------------------------------------------------
+
+  group('charts-canvas-theming.streak-chart', () {
+    _RecordingCanvas drawStreaks(
+      List<core.Streak> streaks, {
+      double width = 300,
+      double? height,
+    }) {
+      final view = StreakChartView(
+        streaks: streaks,
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+      );
+      final canvas = _RecordingCanvas(
+        width: width,
+        height: height ?? streaks.length * StreakChartView.baseSize,
+      );
+      view.draw(canvas);
+      return canvas;
+    }
+
+    testWidgets('#1 #4 one 20dp row per streak, top to bottom, each centred',
+        (tester) async {
+      final streaks = streakState().bestStreaks;
+      final canvas = drawStreaks(streaks);
+
+      expect(StreakChartView.baseSize, 20.0,
+          reason: 'charts-canvas-theming.streak-chart#1 — baseSize is 20dp');
+      final bars = canvas.opsNamed('fillRoundRect');
+      expect(bars, hasLength(3),
+          reason: 'charts-canvas-theming.streak-chart#1 — one bar per Streak');
+      for (var i = 0; i < bars.length; i++) {
+        expect(bars[i].args[1], closeTo(i * 20.0 + 1.0, 1e-9),
+            reason: 'charts-canvas-theming.streak-chart#1 — rows run top to '
+                'bottom, one baseSize apart');
+        expect(bars[i].args[0] + bars[i].args[2] / 2, closeTo(150.0, 1e-9),
+            reason: 'charts-canvas-theming.streak-chart#1 — every bar is '
+                'horizontally centred');
+      }
+
+      await _pump(tester, StreakCardView(state: streakState()));
+      expect(tester.getSize(find.byType(CoreView)).height, 60.0,
+          reason: 'charts-canvas-theming.streak-chart#4 — a wrap_content chart '
+              'measures streaks.size * baseSize');
+    });
+
+    testWidgets('#2 an empty streak list draws nothing at all', (tester) async {
+      expect(drawStreaks(const <core.Streak>[], height: 60).ops, isEmpty,
+          reason: 'charts-canvas-theming.streak-chart#2 — onDraw returns '
+              'immediately when the list is empty');
+      await _pump(
+        tester,
+        StreakCardView(state: streakState(streaks: const <core.Streak>[])),
+      );
+      expect(tester.getSize(find.byType(CoreView)).height, 0.0,
+          reason: 'charts-canvas-theming.streak-chart#2 — the default streak '
+              'list after construction is empty');
+    });
+
+    testWidgets('#5 #6 the text size, em and textMargin, and the zero-length '
+        'guard', (tester) async {
+      final canvas = drawStreaks(streakState().bestStreaks);
+      // max(min(20 * 0.5, 17), 10) = 10, em = 11.71, textMargin = 5.855.
+      expect(canvas.opsNamed('drawText').first.fontSize, closeTo(10.0, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#5');
+      // availableWidth = 300 - 2*72 - 2*5.855.
+      const available = 300.0 - 2 * 72.0 - 11.71;
+      expect(canvas.opsNamed('fillRoundRect').first.args[2],
+          closeTo(available, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#5 — textMargin is '
+              '0.5 * em');
+
+      // percentage = streak.length / maxLength, and Streak.length counts both
+      // endpoints.
+      expect(streakState().bestStreaks.first.length, 10,
+          reason: 'charts-canvas-theming.streak-chart#6');
+      expect(canvas.opsNamed('fillRoundRect')[1].args[2],
+          closeTo(0.8 * available, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#6 — 8 / 10');
+
+      // maxLength == 0 makes drawRow bail on every row.
+      final zero = core.Streak(today, today.minus(-0));
+      expect(drawStreaks(<core.Streak>[zero]).opsNamed('fillRoundRect'),
+          hasLength(1),
+          reason: 'charts-canvas-theming.streak-chart#6 — a one-day streak '
+              'still has length 1, so it draws');
+    });
+
+    testWidgets('#7 the bar never shrinks below its own number', (tester) async {
+      // A single one-day streak among a very long one: 1/100 of the available
+      // width is far narrower than the label.
+      final canvas = drawStreaks(<core.Streak>[
+        core.Streak(today.minus(99), today),
+        core.Streak(today.minus(200), today.minus(200)),
+      ]);
+      final bars = canvas.opsNamed('fillRoundRect');
+      // measureText("1") + em = 6 + 11.71.
+      expect(bars[1].args[2], closeTo(6.0 + 11.71, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#7 — barWidth = '
+              'max(percentage * availableWidth, measureText(length) + em)');
+      expect(bars[1].args[0], closeTo((300.0 - bars[1].args[2]) / 2, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#7 — gap = '
+              '(viewWidth - barWidth) / 2');
+    });
+
+    testWidgets('#8 the bar is a 2dp round rect inset by baseSize*0.05',
+        (tester) async {
+      final canvas = drawStreaks(streakState().bestStreaks);
+      for (final bar in canvas.opsNamed('fillRoundRect')) {
+        expect(bar.args[4], 2.0,
+            reason: 'charts-canvas-theming.streak-chart#8 — corner radius 2dp');
+        expect(bar.args[3], closeTo(20.0 - 2 * 1.0, 1e-9),
+            reason: 'charts-canvas-theming.streak-chart#8 — inset vertically '
+                'by baseSize * 0.05 on both sides');
+      }
+    });
+
+    testWidgets('#9 #10 the bar and number colour ramps', (tester) async {
+      final canvas = drawStreaks(<core.Streak>[
+        core.Streak(today.minus(9), today), // 10 -> 1.0
+        core.Streak(today.minus(8), today), // 9  -> 0.9
+        core.Streak(today.minus(5), today), // 6  -> 0.6
+        core.Streak(today.minus(2), today), // 3  -> 0.3
+      ]);
+      final bars = canvas.opsNamed('fillRoundRect');
+      expect(bars[0].color, green,
+          reason: 'charts-canvas-theming.streak-chart#9 — >= 1.0');
+      expect(bars[1].color, green.withAlpha(192 / 255),
+          reason: 'charts-canvas-theming.streak-chart#9 — >= 0.8');
+      expect(bars[2].color, green.withAlpha(96 / 255),
+          reason: 'charts-canvas-theming.streak-chart#9 — >= 0.5');
+      expect(bars[3].color, theme.lowContrastTextColor,
+          reason: 'charts-canvas-theming.streak-chart#9 — contrast20 below '
+              '0.5');
+
+      final numbers = canvas
+          .opsNamed('drawText')
+          .where((op) => int.tryParse(op.text!) != null)
+          .toList();
+      expect(numbers.map((op) => op.text).toList(),
+          <String>['10', '9', '6', '3'],
+          reason: 'charts-canvas-theming.streak-chart#10');
+      expect(numbers[0].color, theme.cardBackgroundColor,
+          reason: 'charts-canvas-theming.streak-chart#10 — contrast0 at '
+              '>= 0.5');
+      expect(numbers[3].color, theme.mediumContrastTextColor,
+          reason: 'charts-canvas-theming.streak-chart#10 — contrast60 below '
+              'it');
+      for (var i = 0; i < numbers.length; i++) {
+        expect(numbers[i].textAlign, core.TextAlign.center,
+            reason: 'charts-canvas-theming.streak-chart#10 — drawn CENTER');
+        expect(numbers[i].args[0], closeTo(150.0, 1e-9),
+            reason: 'charts-canvas-theming.streak-chart#10 — at the row '
+                'centre');
+        expect(numbers[i].args[1],
+            closeTo(i * 20.0 + 10.0 + 0.3 * 11.71 - 0.34 * 10.0, 1e-9),
+            reason: 'charts-canvas-theming.streak-chart#10 — rowCentreY + '
+                '0.3 * em');
+      }
+    });
+
+    testWidgets('#11 #12 the flanking dates, and when they disappear',
+        (tester) async {
+      final canvas = drawStreaks(streakState().bestStreaks);
+      final labels = canvas
+          .opsNamed('drawText')
+          .where((op) => int.tryParse(op.text!) == null)
+          .toList();
+      expect(labels.map((op) => op.text).take(2).toList(),
+          <String>['Jan 16, 2015', 'Jan 25, 2015'],
+          reason: 'charts-canvas-theming.streak-chart#11 — the start date to '
+              'the left and the end date to the right');
+      expect(labels[0].textAlign, core.TextAlign.right,
+          reason: 'charts-canvas-theming.streak-chart#11');
+      expect(labels[1].textAlign, core.TextAlign.left,
+          reason: 'charts-canvas-theming.streak-chart#11');
+      final bar = canvas.opsNamed('fillRoundRect').first;
+      expect(labels[0].args[0], closeTo(bar.args[0] - 5.855, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#11 — at gap - '
+              'textMargin');
+      expect(labels[1].args[0],
+          closeTo(300.0 - bar.args[0] + 5.855, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#11 — and at '
+              'viewWidth - gap + textMargin');
+      for (final label in labels) {
+        expect(label.color, theme.mediumContrastTextColor,
+            reason: 'charts-canvas-theming.streak-chart#11 — both in '
+                'contrast60');
+      }
+
+      // 100 wide: 100 - 2*72 is negative, well below 100 * 0.25.
+      final squeezed = drawStreaks(streakState().bestStreaks, width: 100);
+      expect(squeezed.texts, <String>['10', '8', '4'],
+          reason: 'charts-canvas-theming.streak-chart#12 — labels are '
+              'suppressed and maxLabelWidth reset to 0');
+      // With the gutter gone the longest bar can use the whole width.
+      expect(squeezed.opsNamed('fillRoundRect').first.args[2],
+          closeTo(100.0, 1e-9),
+          reason: 'charts-canvas-theming.streak-chart#12');
+    });
+
+    testWidgets('show-habit.number-formatting#7: a streak label is the plain '
+        'length integer', (tester) async {
+      final canvas = drawStreaks(<core.Streak>[
+        core.Streak(today.minus(1233), today),
+        core.Streak(today.minus(2), today),
+      ]);
+      final numbers = canvas
+          .opsNamed('drawText')
+          .where((op) => int.tryParse(op.text!) != null)
+          .map((op) => op.text)
+          .toList();
+      expect(numbers, <String>['1234', '3'],
+          reason: 'show-habit.number-formatting#7 — no grouping separator and '
+              'no toShortString abbreviation');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Target chart
+  // -------------------------------------------------------------------------
+
+  group('charts-canvas-theming.target-chart', () {
+    testWidgets('#1 #2 one labelled bar per row from three parallel lists, and '
+        'nothing at all when there are no labels', (tester) async {
+      final canvas = _drawTarget(
+        values: const <double>[1.0, 2.0, 3.0],
+        targets: const <double>[10.0, 20.0, 30.0],
+        labels: const <String>['Week', 'Month', 'Year'],
+        color: green,
+        theme: theme,
+      );
+      // Two round rects per row: the track and the completed part.
+      expect(canvas.opsNamed('fillRoundRect'), hasLength(6),
+          reason: 'charts-canvas-theming.target-chart#1 — one progress bar per '
+              'row');
+      expect(
+          canvas
+              .opsNamed('drawText')
+              .where((op) => op.textAlign == core.TextAlign.right)
+              .map((op) => op.text)
+              .toList(),
+          <String>['Week', 'Month', 'Year'],
+          reason: 'charts-canvas-theming.target-chart#1 — labelled from the '
+              'labels list, in order');
+
+      final empty = _drawTarget(
+        values: const <double>[],
+        targets: const <double>[],
+        labels: const <String>[],
+        color: green,
+        theme: theme,
+      );
+      expect(empty.ops, isEmpty,
+          reason: 'charts-canvas-theming.target-chart#2 — onDraw returns '
+              'immediately when labels is empty');
+    });
+
+    testWidgets('#4 the block of rows is vertically centred', (tester) async {
+      final view = TargetChartView(
+        values: const <double>[1.0],
+        targets: const <double>[10.0],
+        labels: const <String>['Week'],
+        color: green,
+        theme: theme,
+      );
+      final canvas = _RecordingCanvas(width: 300, height: 100);
+      view.draw(canvas);
+
+      // marginTop = (100 - 20 * 1) / 2 = 40.
+      final track = canvas.opsNamed('fillRoundRect').first;
+      expect(track.args[1], closeTo(40.0 + 20.0 * 0.05, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#4 — marginTop = '
+              '(viewHeight - baseSize*labels.size) / 2');
+    });
+
+    testWidgets('#5 #6 the label gutter is the widest label plus 2*padding, '
+        'right-aligned in contrast60', (tester) async {
+      final canvas = _drawTarget(
+        values: const <double>[50.0],
+        targets: const <double>[100.0],
+        labels: const <String>['Quarter'],
+        color: green,
+        theme: theme,
+      );
+      // 7 glyphs at tinyTextSize 10 * 0.6 = 42, stop = 42 + 8 = 50.
+      final label = canvas.opsNamed('drawText').first;
+      expect(label.fontSize, theme.smallTextSize,
+          reason: 'charts-canvas-theming.target-chart#5 — measured at '
+              'tinyTextSize');
+      expect(label.args[0], closeTo(50.0 - 4.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#6 — drawn at '
+              'rowLeft + stop - padding');
+      expect(label.textAlign, core.TextAlign.right,
+          reason: 'charts-canvas-theming.target-chart#6');
+      expect(label.color, theme.mediumContrastTextColor,
+          reason: 'charts-canvas-theming.target-chart#6 — contrast60');
+      expect(canvas.opsNamed('fillRoundRect').first.args[0],
+          closeTo(50.0 + 4.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#5 — the bar starts one '
+              'padding past the gutter');
+    });
+
+    testWidgets('#7 #13 the background bar is a 2dp round rect in contrast20',
+        (tester) async {
+      final canvas = _drawTarget(
+        values: const <double>[50.0],
+        targets: const <double>[100.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      final track = canvas.opsNamed('fillRoundRect').first;
+      // maxLabelSize = 5 * 6 = 30, stop = 38, so the track runs 42 .. 296.
+      expect(track.args[0], closeTo(42.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#7');
+      expect(track.args[0] + track.args[2], closeTo(300.0 - 4.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#7 — to rowRight - '
+              'padding');
+      expect(track.args[1], closeTo(20.0 * 0.05, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#7');
+      expect(track.args[3], closeTo(20.0 - 2 * 20.0 * 0.05, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#7');
+      expect(track.args[4], 2.0,
+          reason: 'charts-canvas-theming.target-chart#7 — radius 2dp');
+      expect(track.color, theme.lowContrastTextColor,
+          reason: 'charts-canvas-theming.target-chart#13 — '
+              'lowContrastTextColor is contrast20');
+    });
+
+    testWidgets('#8 #10 percentage is clamped above but not below, and a '
+        'non-positive target counts as complete', (tester) async {
+      final half = _drawTarget(
+        values: const <double>[50.0],
+        targets: const <double>[100.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      expect(half.opsNamed('fillRoundRect')[1].args[2], closeTo(127.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#8 — values/targets');
+      expect(half.opsNamed('fillRoundRect')[1].color, green,
+          reason: 'charts-canvas-theming.target-chart#10 — the completed part '
+              'is the habit colour, from the bar left edge');
+      expect(half.opsNamed('fillRoundRect')[1].args[0],
+          closeTo(half.opsNamed('fillRoundRect')[0].args[0], 1e-9),
+          reason: 'charts-canvas-theming.target-chart#10');
+
+      final over = _drawTarget(
+        values: const <double>[500.0],
+        targets: const <double>[100.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      expect(over.opsNamed('fillRoundRect')[1].args[2], closeTo(254.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#8 — clamped with '
+              'min(1.0, percentage)');
+
+      final zeroTarget = _drawTarget(
+        values: const <double>[0.0],
+        targets: const <double>[0.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      expect(zeroTarget.opsNamed('fillRoundRect')[1].args[2],
+          closeTo(254.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#8 — a target of 0 gives '
+              'a percentage of 1.0');
+
+      final negative = _drawTarget(
+        values: const <double>[-50.0],
+        targets: const <double>[100.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      expect(negative.opsNamed('fillRoundRect')[1].args[2],
+          closeTo(-127.0, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#8 — but never clamped '
+              'below, so a negative value gives a negative width');
+    });
+
+    testWidgets('#9 a sliver of progress is bumped up to 2*round',
+        (tester) async {
+      final canvas = _drawTarget(
+        values: const <double>[1.0],
+        targets: const <double>[100000.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      expect(canvas.opsNamed('fillRoundRect')[1].args[2], 4.0,
+          reason: 'charts-canvas-theming.target-chart#9 — a completedWidth '
+              'strictly between 0 and 2*round becomes 2*round');
+
+      final none = _drawTarget(
+        values: const <double>[0.0],
+        targets: const <double>[100.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      expect(none.opsNamed('fillRoundRect')[1].args[2], 0.0,
+          reason: 'charts-canvas-theming.target-chart#9 — exactly zero is left '
+              'alone');
+    });
+
+    testWidgets('#11 #12 the two value texts, and the width conditions on them',
+        (tester) async {
+      final canvas = _drawTarget(
+        values: const <double>[50.0],
+        targets: const <double>[100.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+      );
+      final texts = canvas.opsNamed('drawText');
+      expect(texts.map((op) => op.text).toList(),
+          <String>['Today', '50', '50'],
+          reason: 'charts-canvas-theming.target-chart#11 — the completed value '
+              'and the remainder');
+      expect(texts[1].color, theme.cardBackgroundColor,
+          reason: 'charts-canvas-theming.target-chart#11 — contrast0 inside '
+              'the completed box');
+      expect(texts[1].textAlign, core.TextAlign.center,
+          reason: 'charts-canvas-theming.target-chart#11');
+      expect(texts[1].args[0], closeTo(42.0 + 127.0 / 2, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#11 — centred inside the '
+              'completed box');
+      expect(texts[2].color, theme.mediumContrastTextColor,
+          reason: 'charts-canvas-theming.target-chart#12 — contrast60 in the '
+              'remaining region');
+      expect(texts[2].args[0], closeTo((42.0 + 127.0 + 296.0) / 2, 1e-9),
+          reason: 'charts-canvas-theming.target-chart#12 — centred in what is '
+              'left');
+
+      final tight = _drawTarget(
+        values: const <double>[500000.0],
+        targets: const <double>[1000000.0],
+        labels: const <String>['Today'],
+        color: green,
+        theme: theme,
+        width: 70,
+      );
+      expect(tight.texts, <String>['Today'],
+          reason: 'charts-canvas-theming.target-chart#11 — neither text is '
+              'drawn when it does not fit');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Card chrome, heights and scroll resets
+  // -------------------------------------------------------------------------
+
+  group('card chrome and hosting', () {
+    testWidgets('show-habit.card-order-and-visibility#5 and '
+        'charts-canvas-theming.chart-host-contracts#2: the Card style, and the '
+        "history card's zero bottom padding", (tester) async {
+      expect(ChartCard.cardPadding.top, 16.0,
+          reason: 'show-habit.card-order-and-visibility#5 — 16dp top padding');
+      expect(ChartCard.cardPadding.bottom, 16.0,
+          reason: 'show-habit.card-order-and-visibility#5 — and 16dp bottom');
+      expect(ChartCard.cardMargin.bottom, 1.0,
+          reason: 'show-habit.card-order-and-visibility#5 — 1dp bottom margin');
+      expect(ChartCard.elevation, 1.0,
+          reason: 'show-habit.card-order-and-visibility#5 — 1dp elevation');
+
+      await _pump(tester, BarCardView(state: barState()));
+      final material = tester.widget<Material>(
+        find
+            .ancestor(
+              of: find.byType(CoreView),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(material.color, const Color(0xFFFAFAFA),
+          reason: 'show-habit.card-order-and-visibility#5 — the cardBgColor '
+              'background');
+      expect(material.elevation, 1.0,
+          reason: 'show-habit.card-order-and-visibility#5');
+      expect(tester.getSize(find.byType(ChartCard)).width, 400.0,
+          reason: 'show-habit.card-order-and-visibility#5 — match_parent '
+              'width');
+
+      await _pump(tester, HistoryCardView(state: historyState()));
+      final historyPadding = tester
+          .widgetList<Padding>(find.byType(Padding))
+          .map((p) => p.padding)
+          .whereType<EdgeInsets>()
+          .firstWhere((p) => p.left == 16.0 && p.right == 4.0);
+      expect(historyPadding.bottom, 0.0,
+          reason: 'show-habit.card-order-and-visibility#5 — the History card '
+              'overrides paddingBottom to 0dp');
+    });
+
+    testWidgets('show-habit.card-order-and-visibility#7 and '
+        'charts-canvas-theming.chart-host-contracts#2: the fixed chart heights',
+        (tester) async {
+      expect(ScoreCardView.chartHeight, 220.0,
+          reason: 'show-habit.card-order-and-visibility#7 — Score chart 220dp');
+      expect(BarCardView.chartHeight, 220.0,
+          reason: 'show-habit.card-order-and-visibility#7 — Bar chart 220dp');
+      expect(HistoryCardView.chartHeight, 160.0,
+          reason: 'show-habit.card-order-and-visibility#7 — History chart '
+              '160dp');
+      expect(FrequencyCardView.chartHeight, 200.0,
+          reason: 'show-habit.card-order-and-visibility#7 — Frequency chart '
+              '200dp');
+
+      await _pump(tester, ScoreCardView(state: scoreState()));
+      expect(tester.getSize(find.byType(CoreView)).height, 220.0,
+          reason: 'charts-canvas-theming.chart-host-contracts#2');
+      await _pump(tester, BarCardView(state: barState()));
+      expect(tester.getSize(find.byType(CoreView)).height, 220.0,
+          reason: 'charts-canvas-theming.chart-host-contracts#2');
+      await _pump(tester, HistoryCardView(state: historyState()));
+      expect(tester.getSize(find.byType(CoreView)).height, 160.0,
+          reason: 'charts-canvas-theming.chart-host-contracts#2');
+      await _pump(tester, FrequencyCardView(state: frequencyState()));
+      expect(tester.getSize(find.byType(CoreView)).height, 200.0,
+          reason: 'charts-canvas-theming.chart-host-contracts#2');
+
+      // The streak chart is WRAP_CONTENT, sized by streaks.size * 20dp.
+      await _pump(tester, StreakCardView(state: streakState()));
+      expect(tester.getSize(find.byType(CoreView)).height, 60.0,
+          reason: 'show-habit.card-order-and-visibility#7 — the Streak chart '
+              'is wrap_content (baseSize per streak row)');
+      expect(tester.getSize(find.byType(CoreView)).height, 60.0,
+          reason: 'charts-canvas-theming.chart-host-contracts#2');
+
+      // The target chart is the one exception: show_habit_target.xml asks for
+      // 300dp, but TargetChart.onMeasure only honours a MATCH_PARENT height,
+      // so the port sizes it at labels.size * baseSize instead — the very
+      // behaviour charts-canvas-theming.target-chart#3 describes.
+      await _pump(
+        tester,
+        TargetCardView(
+          state: targetState(
+            values: const <double>[1, 2, 3],
+            targets: const <double>[10, 20, 30],
+            intervals: const <int>[30, 91, 365],
+          ),
+        ),
+      );
+      expect(tester.getSize(find.byType(CoreView)).height, 60.0,
+          reason: 'charts-canvas-theming.target-chart#3');
+    });
+
+    testWidgets('charts-canvas-theming.barchart#22 and '
+        'charts-canvas-theming.chart-host-contracts#5: how the bar card wires '
+        'the chart', (tester) async {
+      await _pump(
+        tester,
+        BarCardView(state: barState(isNumerical: true)),
+      );
+      final chart = _viewOf<BarChart>(tester);
+
+      expect(chart.series, <List<double>>[
+        <double>[5.0, 3.0]
+      ], reason: 'charts-canvas-theming.barchart#22 — series = '
+          '[entries.map { it.value / 1000.0 }]');
+      expect(chart.colors, <core.Color>[theme.color(habitColor.paletteIndex)],
+          reason: 'charts-canvas-theming.barchart#22 — colors = '
+              '[theme.color(state.color.paletteIndex)]');
+      expect(chart.axis, <core.LocalDate>[today, today.minus(7)],
+          reason: 'charts-canvas-theming.barchart#22 — axis = '
+              'entries.map { it.date }');
+      expect(chart.dataOffset, 0,
+          reason: 'charts-canvas-theming.barchart#22 — resetDataOffset() runs '
+              'on every state change');
+
+      // A new state builds a new chart, always back at the newest bucket.
+      await _pump(
+        tester,
+        BarCardView(state: barState(isNumerical: true, numericalSpinnerPosition: 2)),
+      );
+      final rebuilt = _viewOf<BarChart>(tester);
+      expect(identical(rebuilt, chart), isFalse,
+          reason: 'charts-canvas-theming.chart-host-contracts#5 — the card '
+              'hands its host a fresh chart on every state');
+      expect(rebuilt.dataOffset, 0,
+          reason: 'charts-canvas-theming.chart-host-contracts#5 — so changing '
+              'the bucket spinner always snaps back to today');
+    });
+
+    testWidgets('show-habit.chart-scrolling#4 #5 #7: which charts jump back to '
+        'today on refresh', (tester) async {
+      await _pump(tester, BarCardView(state: barState()));
+      expect(_viewOf<BarChart>(tester).dataOffset, 0,
+          reason: 'show-habit.chart-scrolling#4 — BarCardView.setState calls '
+              'resetDataOffset()');
+      await _pump(tester, BarCardView(state: barState(boolSpinnerPosition: 2)));
+      expect(_viewOf<BarChart>(tester).dataOffset, 0,
+          reason: 'show-habit.chart-scrolling#4');
+
+      await _pump(tester, ScoreCardView(state: scoreState()));
+      expect(_viewOf<ScoreChartView>(tester).dataOffset, 0,
+          reason: 'show-habit.chart-scrolling#5 — ScoreCardView.setState calls '
+              'reset()');
+      await _pump(tester, ScoreCardView(state: scoreState(spinnerPosition: 3)));
+      expect(_viewOf<ScoreChartView>(tester).dataOffset, 0,
+          reason: 'show-habit.chart-scrolling#5');
+
+      await _pump(tester, HistoryCardView(state: historyState()));
+      final first = _viewOf<HistoryChart>(tester);
+      first.dataOffset = 4;
+      await _pump(tester, HistoryCardView(state: historyState()));
+      final second = _viewOf<HistoryChart>(tester);
+      expect(identical(second, first), isFalse,
+          reason: 'show-habit.chart-scrolling#7 — HistoryCardView replaces the '
+              'whole HistoryChart object on every setState');
+      expect(second.dataOffset, 0,
+          reason: 'show-habit.chart-scrolling#7 — which resets its dataOffset '
+              'to 0');
+    });
+
+    testWidgets('show-habit.chart-scrolling#9: a tap is onClick and a long '
+        'press is onLongClick, in logical coordinates', (tester) async {
+      final listener = _RecordingDateListener();
+      await _pump(
+        tester,
+        HistoryCardView(state: historyState(), listener: listener),
+      );
+      final chart = _viewOf<HistoryChart>(tester);
+      final origin = tester.getTopLeft(find.byType(CoreView));
+
+      await tester.tapAt(origin + const Offset(10, 30));
+      await tester.pump();
+      expect(listener.shortPresses, hasLength(1),
+          reason: 'show-habit.chart-scrolling#9 — a single tap is routed to '
+              'onClick');
+      // The same offset handed straight to the chart lands on the same date,
+      // which is what "already divided by density" means here.
+      chart.onClick(10, 30);
+      expect(listener.shortPresses[1], listener.shortPresses[0],
+          reason: 'show-habit.chart-scrolling#9 — with coordinates local to '
+              'the chart, in logical units');
+
+      await tester.longPressAt(origin + const Offset(10, 50));
+      await tester.pump();
+      expect(listener.longPresses, hasLength(1),
+          reason: 'show-habit.chart-scrolling#9 — a long press is routed to '
+              'onLongClick');
+      chart.onLongClick(10, 50);
+      expect(listener.longPresses[1], listener.longPresses[0],
+          reason: 'show-habit.chart-scrolling#9');
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

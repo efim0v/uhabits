@@ -757,6 +757,34 @@ void main() {
             'onRefreshFinished() and no other listener callbacks');
   });
 
+  // The same targeted refresh, seen from the row that toggled: every other
+  // row keeps the values it already had cached.
+  test('a toggle refreshes only the habit it touched', () {
+    final h2 = habitList.getByPosition(2);
+    final others = <int, List<int>>{
+      for (var i = 0; i < 10; i++)
+        if (i != 2)
+          habitList.getByPosition(i).id!:
+              List<int>.of(cache.getCheckmarks(habitList.getByPosition(i).id!)),
+    };
+
+    commandRunner.run(
+      CreateRepetitionCommand(habitList, h2, today, Entry.no, ''),
+    );
+
+    expect(cache.getCheckmarks(h2.id!)[0], Entry.no,
+        reason: 'list-habits.toggle-from-row#3: the toggled habit is the one '
+            'that was refreshed');
+    expect(listener.calls, <String>['onItemChanged(2)', 'onRefreshFinished()'],
+        reason: 'list-habits.toggle-from-row#3: after a CreateRepetitionCommand '
+            'the cache refreshes only that one habit');
+    others.forEach((id, values) {
+      expect(cache.getCheckmarks(id), values,
+          reason: 'list-habits.toggle-from-row#3: so other rows keep their '
+              'cached values');
+    });
+  });
+
   test('testCommandListener_all', () {
     expect(cache.habitCount, 10,
         reason: 'list-habits.card-list-cache#22: cache.habitCount starts at 10');

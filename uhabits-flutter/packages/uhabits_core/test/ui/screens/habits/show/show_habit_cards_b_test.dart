@@ -17,19 +17,26 @@
 library;
 
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/commands/command.dart';
+import 'package:uhabits_core/src/commands/command_runner.dart';
+import 'package:uhabits_core/src/commands/create_repetition_command.dart';
 import 'package:uhabits_core/src/gui/theme.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/entry_list.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/models/score.dart';
 import 'package:uhabits_core/src/models/streak.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
+import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dart'
+    show CheckMarkDialogCallback, NumberPickerCallback;
 import 'package:uhabits_core/src/ui/screens/habits/show/views/bar_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/frequency_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart';
@@ -107,6 +114,117 @@ class _FakeCardScreen implements ScoreCardScreen, BarCardScreen {
     log.add('refresh');
     observed.add(readPreference());
   }
+}
+
+/// Stands in for the Android `ShowHabitActivity.Screen` as far as
+/// `HistoryCardPresenter` can see it. Every member of `HistoryCardScreen` is a
+/// dialog or a haptic buzz, so all four are recorded rather than acted on.
+class _FakeHistoryScreen implements HistoryCardScreen {
+  final List<String> log = <String>[];
+
+  OnDateClickedListener? editorListener;
+
+  final List<double> numberValues = <double>[];
+  final List<String> numberNotes = <String>[];
+  NumberPickerCallback? numberCallback;
+
+  final List<int> checkmarkValues = <int>[];
+  final List<String> checkmarkNotes = <String>[];
+  final List<PaletteColor> checkmarkColors = <PaletteColor>[];
+  CheckMarkDialogCallback? checkmarkCallback;
+
+  @override
+  void showHistoryEditorDialog(OnDateClickedListener listener) {
+    editorListener = listener;
+    log.add('showHistoryEditorDialog');
+  }
+
+  @override
+  void showFeedback() => log.add('showFeedback');
+
+  @override
+  void showNumberPopup(
+    double value,
+    String notes,
+    NumberPickerCallback callback,
+  ) {
+    numberValues.add(value);
+    numberNotes.add(notes);
+    numberCallback = callback;
+    log.add('showNumberPopup');
+  }
+
+  @override
+  void showCheckmarkPopup(
+    int selectedValue,
+    String notes,
+    PaletteColor color,
+    CheckMarkDialogCallback callback,
+  ) {
+    checkmarkValues.add(selectedValue);
+    checkmarkNotes.add(notes);
+    checkmarkColors.add(color);
+    checkmarkCallback = callback;
+    log.add('showCheckmarkPopup');
+  }
+}
+
+/// The same screen seen through the two bucket cards' eyes as well, so a single
+/// counter can answer "did this action reach `updateWidgets`?".
+class _WidgetCountingScreen extends _FakeHistoryScreen
+    implements ScoreCardScreen, BarCardScreen {
+  int updateWidgetsCount = 0;
+
+  int refreshCount = 0;
+
+  @override
+  void updateWidgets() {
+    updateWidgetsCount++;
+    log.add('updateWidgets');
+  }
+
+  @override
+  void refresh() {
+    refreshCount++;
+    log.add('refresh');
+  }
+}
+
+/// A real [CommandRunner] — the commands genuinely run — that also records what
+/// it was handed and when.
+class _RecordingRunner extends CommandRunner {
+  _RecordingRunner(super.taskRunner, this._log);
+
+  final List<String> _log;
+
+  final List<Command> commands = <Command>[];
+
+  @override
+  void run(Command command) {
+    commands.add(command);
+    _log.add('run:${command.runtimeType}');
+    super.run(command);
+  }
+}
+
+/// Counts `resort()`, which `CreateRepetitionCommand` calls last.
+class _ResortCountingHabitList extends MemoryHabitList {
+  int resortCount = 0;
+
+  @override
+  void resort() {
+    resortCount++;
+    super.resort();
+  }
+}
+
+/// Records every command the runner announces as finished — the hook the show
+/// screen refreshes from.
+class _FinishedCommandListener implements CommandRunnerListener {
+  final List<Command> finished = <Command>[];
+
+  @override
+  void onCommandFinished(Command command) => finished.add(command);
 }
 
 void main() {
@@ -334,7 +452,10 @@ void main() {
       presenter.onSpinnerPosition(3);
 
       expect(prefs.scoreCardSpinnerPosition, 3,
-          reason: 'show-habit.score-card#7');
+          reason: 'show-habit.score-card#7 and '
+              'settings.preferences.card-spinner-positions#5 — '
+              'pref_score_view_interval has no settings-screen row: the chart '
+              'spinner on the habit detail screen is what writes it');
       expect(screen.log, <String>['updateWidgets', 'refresh'],
           reason: 'show-habit.score-card#7');
       // The preference is already written when the screen is called back.
@@ -448,7 +569,10 @@ void main() {
           BarCardPresenter(preferences: prefs, screen: numericalScreen);
       numericalPresenter.onNumericalSpinnerPosition(2);
       expect(prefs.barCardNumericalSpinnerPosition, 2,
-          reason: 'show-habit.bar-card#4');
+          reason: 'show-habit.bar-card#4 and '
+              'settings.preferences.card-spinner-positions#5 — '
+              'pref_bar_card_numerical_spinner is written by the bar-card '
+              'spinner, never by a settings row');
       expect(numericalScreen.log, <String>['updateWidgets', 'refresh'],
           reason: 'show-habit.bar-card#4');
       expect(numericalScreen.observed, <int>[2, 2],
@@ -460,7 +584,9 @@ void main() {
           BarCardPresenter(preferences: prefs, screen: boolScreen);
       boolPresenter.onBoolSpinnerPosition(1);
       expect(prefs.barCardBoolSpinnerPosition, 1,
-          reason: 'show-habit.bar-card#4');
+          reason: 'show-habit.bar-card#4 and '
+              'settings.preferences.card-spinner-positions#5 — and likewise '
+              'pref_bar_card_bool_spinner');
       expect(boolScreen.log, <String>['updateWidgets', 'refresh'],
           reason: 'show-habit.bar-card#4');
       expect(boolScreen.observed, <int>[1, 1],
@@ -1054,6 +1180,317 @@ void main() {
           ).frequency,
           isEmpty,
           reason: 'show-habit.frequency-card#4');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // show-habit.history-interaction
+  //
+  // The interactive half of HistoryCard.kt: the presenter *is* the chart's
+  // OnDateClickedListener, so a press on a calendar cell arrives here and
+  // leaves again either as a dialog request on HistoryCardScreen or as a
+  // CreateRepetitionCommand.
+  // -------------------------------------------------------------------------
+  group('show-habit.history-interaction', () {
+    late _ResortCountingHabitList habitList;
+    late TaskRunner taskRunner;
+    late _WidgetCountingScreen screen;
+    late _RecordingRunner commandRunner;
+    late _FinishedCommandListener finished;
+    late Preferences preferences;
+
+    setUp(() {
+      habitList = _ResortCountingHabitList();
+      taskRunner = CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      );
+      screen = _WidgetCountingScreen();
+      commandRunner = _RecordingRunner(taskRunner, screen.log);
+      finished = _FinishedCommandListener();
+      commandRunner.addListener(finished);
+      preferences = memoryPreferences();
+    });
+
+    HistoryCardPresenter presenterFor(Habit habit) => HistoryCardPresenter(
+          commandRunner: commandRunner,
+          habit: habit,
+          habitList: habitList,
+          preferences: preferences,
+          screen: screen,
+        );
+
+    test('#3 #6 a boolean short press buzzes first, then opens the check-mark '
+        'popup', () {
+      final habit = buildHabit();
+      presenterFor(habit).onDateShortPress(today);
+
+      expect(preferences.isShortToggleEnabled, isFalse,
+          reason: 'show-habit.history-interaction#6 — short-toggle is off by '
+              'default');
+      expect(screen.log, <String>['showFeedback', 'showCheckmarkPopup'],
+          reason: 'show-habit.history-interaction#3 — the haptic buzz comes '
+              'first, before the popup');
+      expect(commandRunner.commands, isEmpty,
+          reason: 'show-habit.history-interaction#6 — a short press with '
+              'short-toggle off runs no command of its own');
+    });
+
+    test('#3 #6 a boolean long press buzzes first, then toggles directly', () {
+      final habit = buildHabit();
+      presenterFor(habit).onDateLongPress(today);
+
+      expect(screen.log,
+          <String>['showFeedback', 'run:CreateRepetitionCommand'],
+          reason: 'show-habit.history-interaction#3 — the haptic buzz comes '
+              'first, even when the press ends in a command');
+      expect(screen.checkmarkValues, isEmpty,
+          reason: 'show-habit.history-interaction#6 — a long press with '
+              'short-toggle off opens no popup');
+      expect(commandRunner.commands, hasLength(1),
+          reason: 'show-habit.history-interaction#6 — it toggles directly');
+    });
+
+    test('#5 short-toggle swaps the two boolean gestures', () {
+      preferences.isShortToggleEnabled = true;
+      final habit = buildHabit();
+      final presenter = presenterFor(habit);
+
+      presenter.onDateShortPress(today);
+      expect(screen.log,
+          <String>['showFeedback', 'run:CreateRepetitionCommand'],
+          reason: 'show-habit.history-interaction#5 — with short-toggle on, a '
+              'short press toggles the value directly');
+
+      screen.log.clear();
+      presenter.onDateLongPress(today.minus(1));
+      expect(screen.log, <String>['showFeedback', 'showCheckmarkPopup'],
+          reason: 'show-habit.history-interaction#5 — and a long press opens '
+              'the check-mark popup');
+    });
+
+    test('#4 a numerical habit opens the number popup on both press lengths',
+        () {
+      for (final shortToggle in <bool>[false, true]) {
+        screen.log.clear();
+        screen.numberValues.clear();
+        preferences.isShortToggleEnabled = shortToggle;
+        final habit = buildHabit(type: HabitType.numerical);
+        final presenter = presenterFor(habit);
+
+        presenter.onDateShortPress(today);
+        presenter.onDateLongPress(today);
+
+        expect(
+            screen.log,
+            <String>[
+              'showFeedback',
+              'showNumberPopup',
+              'showFeedback',
+              'showNumberPopup',
+            ],
+            reason: 'show-habit.history-interaction#4 — numerical habits '
+                'ignore the short-toggle preference entirely');
+      }
+    });
+
+    test('#7 the direct toggle follows Entry.nextToggleValue', () {
+      // The cycle itself, exactly as the presenter asks for it.
+      int next(int value, {bool skip = false, bool question = false}) =>
+          Entry.nextToggleValue(
+            value,
+            isSkipEnabled: skip,
+            areQuestionMarksEnabled: question,
+          );
+
+      expect(next(Entry.yesAuto), Entry.yesManual,
+          reason: 'show-habit.history-interaction#7');
+      expect(next(Entry.yesManual), Entry.no,
+          reason: 'show-habit.history-interaction#7');
+      expect(next(Entry.yesManual, skip: true), Entry.skip,
+          reason: 'show-habit.history-interaction#7');
+      expect(next(Entry.skip), Entry.no,
+          reason: 'show-habit.history-interaction#7');
+      expect(next(Entry.no), Entry.yesManual,
+          reason: 'show-habit.history-interaction#7');
+      expect(next(Entry.no, question: true), Entry.unknown,
+          reason: 'show-habit.history-interaction#7');
+      expect(next(Entry.unknown), Entry.yesManual,
+          reason: 'show-habit.history-interaction#7');
+      expect(next(7), Entry.yesManual,
+          reason: 'show-habit.history-interaction#7 — any other value toggles '
+              'to YES_MANUAL');
+
+      // And what the presenter actually dispatches, walking the cycle for
+      // real: UNKNOWN -> YES_MANUAL -> SKIP -> NO.
+      preferences.isSkipEnabled = true;
+      final habit = buildHabit();
+      final presenter = presenterFor(habit);
+      final dispatched = <int>[];
+      for (var i = 0; i < 3; i++) {
+        presenter.onDateLongPress(today);
+        dispatched.add(
+          (commandRunner.commands.last as CreateRepetitionCommand).value,
+        );
+      }
+      expect(dispatched, <int>[Entry.yesManual, Entry.skip, Entry.no],
+          reason: 'show-habit.history-interaction#7 — each toggle reads the '
+              'current value back and advances one step');
+    });
+
+    test('#8 toggling preserves the existing notes', () {
+      final habit = buildHabit(entries: <Entry>[
+        Entry(today, Entry.yesManual, notes: 'felt great'),
+      ]);
+      presenterFor(habit).onDateLongPress(today);
+
+      final command =
+          commandRunner.commands.single as CreateRepetitionCommand;
+      expect(command.habitList, same(habitList),
+          reason: 'show-habit.history-interaction#8 — '
+              'CreateRepetitionCommand(habitList, habit, date, value, notes)');
+      expect(command.habit, same(habit),
+          reason: 'show-habit.history-interaction#8');
+      expect(command.date, today,
+          reason: 'show-habit.history-interaction#8');
+      expect(command.value, Entry.no,
+          reason: 'show-habit.history-interaction#8');
+      expect(command.notes, 'felt great',
+          reason: 'show-habit.history-interaction#8 — the note survives the '
+              'toggle');
+      expect(habit.originalEntries.get(today).notes, 'felt great',
+          reason: 'show-habit.history-interaction#8');
+    });
+
+    test('#9 the number popup is seeded with value/1000 and its notes, and '
+        'stores round(value * 1000)', () {
+      final habit = buildHabit(
+        type: HabitType.numerical,
+        entries: <Entry>[Entry(today, 5000, notes: 'ran home')],
+      );
+      final presenter = presenterFor(habit);
+      presenter.onDateShortPress(today);
+
+      expect(screen.numberValues, <double>[5.0],
+          reason: 'show-habit.history-interaction#9 — seeded with '
+              'entry.value / 1000.0');
+      expect(screen.numberNotes, <String>['ran home'],
+          reason: 'show-habit.history-interaction#9 — and with entry.notes');
+
+      screen.numberCallback!.onNumberPicked(2.5, 'ran further');
+      final command =
+          commandRunner.commands.single as CreateRepetitionCommand;
+      expect(command.value, 2500,
+          reason: 'show-habit.history-interaction#9 — the stored value is '
+              '(enteredValue * 1000).roundToInt()');
+      expect(command.notes, 'ran further',
+          reason: 'show-habit.history-interaction#9 — with the new notes');
+
+      screen.numberCallback!.onNumberPicked(0.75, '');
+      expect(
+          (commandRunner.commands.last as CreateRepetitionCommand).value, 750,
+          reason: 'show-habit.history-interaction#9');
+    });
+
+    test('#10 the check-mark popup is seeded with the value, notes and habit '
+        'colour', () {
+      final habit = buildHabit(
+        color: const PaletteColor(11),
+        entries: <Entry>[Entry(today, Entry.yesManual, notes: 'done')],
+      );
+      presenterFor(habit).onDateShortPress(today);
+
+      expect(screen.checkmarkValues, <int>[Entry.yesManual],
+          reason: 'show-habit.history-interaction#10');
+      expect(screen.checkmarkNotes, <String>['done'],
+          reason: 'show-habit.history-interaction#10');
+      expect(screen.checkmarkColors, <PaletteColor>[const PaletteColor(11)],
+          reason: 'show-habit.history-interaction#10');
+
+      screen.checkmarkCallback!.onNotesSaved(Entry.skip, 'away');
+      final command =
+          commandRunner.commands.single as CreateRepetitionCommand;
+      expect(command.value, Entry.skip,
+          reason: 'show-habit.history-interaction#10 — the callback runs '
+              'CreateRepetitionCommand with the chosen value');
+      expect(command.notes, 'away',
+          reason: 'show-habit.history-interaction#10 — and notes');
+    });
+
+    test('#11 the command writes the entry, recomputes and resorts, and the '
+        'finished command reaches the listener', () {
+      final habit = buildHabit();
+      final resortsBefore = habitList.resortCount;
+      presenterFor(habit).onDateLongPress(today);
+
+      expect(habit.originalEntries.get(today).value, Entry.yesManual,
+          reason: 'show-habit.history-interaction#11 — Entry(date, value, '
+              'notes) is added to habit.originalEntries');
+      expect(habit.computedEntries.get(today).value, Entry.yesManual,
+          reason: 'show-habit.history-interaction#11 — habit.recompute() runs '
+              'after the write');
+      expect(habitList.resortCount, resortsBefore + 1,
+          reason: 'show-habit.history-interaction#11 — habitList.resort() runs '
+              'last');
+      expect(finished.finished, hasLength(1),
+          reason: 'show-habit.history-interaction#11 — the finished command '
+              'triggers a full screen refresh through the CommandRunner '
+              'listener');
+      expect(finished.finished.single, same(commandRunner.commands.single),
+          reason: 'show-habit.history-interaction#11');
+    });
+
+    test('#12 the current value comes from computedEntries, which answers '
+        'UNKNOWN for an unrecorded day', () {
+      final habit = buildHabit();
+      expect(habit.computedEntries.get(today).value, Entry.unknown,
+          reason: 'show-habit.history-interaction#12 — computedEntries.get '
+              'returns Entry(date, UNKNOWN) when nothing is recorded');
+      expect(habit.computedEntries.get(today).notes, '',
+          reason: 'show-habit.history-interaction#12');
+
+      presenterFor(habit).onDateShortPress(today);
+      expect(screen.checkmarkValues, <int>[Entry.unknown],
+          reason: 'show-habit.history-interaction#12 — so the popup is seeded '
+              'with UNKNOWN');
+
+      // A YES_AUTO day, which only computedEntries ever holds, is what the
+      // popup and the toggle both read — never the original entry.
+      final weekly = buildHabit(
+        frequency: Frequency(1, 7),
+        entries: <Entry>[Entry(today.minus(3), Entry.yesManual)],
+      );
+      expect(weekly.originalEntries.get(today).value, Entry.unknown,
+          reason: 'show-habit.history-interaction#12');
+      expect(weekly.computedEntries.get(today).value, Entry.yesAuto,
+          reason: 'show-habit.history-interaction#12');
+      screen.checkmarkValues.clear();
+      presenterFor(weekly).onDateShortPress(today);
+      expect(screen.checkmarkValues, <int>[Entry.yesAuto],
+          reason: 'show-habit.history-interaction#12 — the value is read from '
+              'habit.computedEntries.get(date)');
+    });
+
+    test('show-habit.widget-refresh#3 toggling a day never touches the widgets',
+        () {
+      final habit = buildHabit();
+      final presenter = presenterFor(habit);
+
+      presenter.onDateLongPress(today);
+      presenter.onDateShortPress(today);
+      expect(screen.updateWidgetsCount, 0,
+          reason: 'show-habit.widget-refresh#3 — toggling a day propagates '
+              'through the CommandRunner, never through updateWidgets');
+
+      // The bucket spinners are the only things that do call it.
+      ScoreCardPresenter(preferences: preferences, screen: screen)
+          .onSpinnerPosition(2);
+      expect(screen.updateWidgetsCount, 1,
+          reason: 'show-habit.widget-refresh#3');
+      BarCardPresenter(preferences: preferences, screen: screen)
+          .onBoolSpinnerPosition(1);
+      expect(screen.updateWidgetsCount, 2,
+          reason: 'show-habit.widget-refresh#3');
     });
   });
 }

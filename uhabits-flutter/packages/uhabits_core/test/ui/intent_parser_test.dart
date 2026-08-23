@@ -399,4 +399,120 @@ void main() {
           reason: 'intents.parser-validation#7');
     });
   });
+
+  // -----------------------------------------------------------------------
+  // The receiver-side rules the parser is the whole of, in the Flutter port.
+  //
+  // `WidgetReceiver` and `ReminderReceiver` are Android broadcast receivers
+  // with no counterpart here, but the parsing and validation they delegate to
+  // IntentParser is exactly this class, so the rules that describe it are
+  // asserted against it.
+  // -----------------------------------------------------------------------
+
+  group('receiver-side parsing', () {
+    test('parseCheckmarkIntent raises the two documented IllegalArgument '
+        'messages', () {
+      expect(
+        () => parser.parseCheckmarkIntent(checkmarkIntent()),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.message, 'message', 'uri is null')),
+        reason: "intents.widget-receiver-dispatch#9: parseCheckmarkIntent "
+            "throws IllegalArgumentException('uri is null') when intent.data "
+            'is null',
+      );
+      expect(
+        () => parser.parseCheckmarkIntent(checkmarkIntent(
+            data: Uri.parse('content://org.isoron.uhabits/habit/9999'))),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.message, 'message', 'habit not found')),
+        reason: "intents.widget-receiver-dispatch#9: and "
+            "IllegalArgumentException('habit not found') when the id in the "
+            'URI does not resolve',
+      );
+    });
+
+    test('the habit always comes from getById(parseContentUriId(data))', () {
+      final second = fixtures.createEmptyHabit(name: 'Run', position: 1);
+      habitList.add(second);
+      final uri = Uri.parse(second.uriString);
+
+      expect(parseContentUriId(uri), second.id,
+          reason: 'intents.reminder-receiver-dispatch#3: the habit is '
+              'resolved as habits.getById(ContentUris.parseId(intent.data))');
+      expect(habitList.getById(parseContentUriId(uri)), same(second),
+          reason: 'intents.reminder-receiver-dispatch#3: which is the same '
+              'lookup the parser performs');
+      expect(
+        parser.parseCheckmarkIntent(checkmarkIntent(data: uri)).habit,
+        same(second),
+        reason: 'intents.reminder-receiver-dispatch#3',
+      );
+      expect(
+        () => parser.parseCheckmarkIntent(checkmarkIntent()),
+        throwsA(isA<ArgumentError>()),
+        reason: 'intents.reminder-receiver-dispatch#3: when intent.data is '
+            'null there is no habit at all',
+      );
+    });
+
+    test('the date comes from the timestamp extra and is bounded by today',
+        () {
+      final uri = Uri.parse(habit.uriString);
+
+      expect(
+        parser.parseCheckmarkIntent(checkmarkIntent(data: uri)).date,
+        getToday(),
+        reason: "intents.widget-receiver-dispatch#10: the date comes from the "
+            "long extra 'timestamp', defaulting to getToday().unixTime",
+      );
+      expect(
+        parser
+            .parseCheckmarkIntent(checkmarkIntent(
+              data: uri,
+              timestamp: todayMillis - LocalDate.millisPerDay + 3600 * 1000,
+            ))
+            .date,
+        getToday().minus(1),
+        reason: 'intents.widget-receiver-dispatch#10: it is normalised '
+            'through LocalDate.fromUnixTime',
+      );
+      expect(
+        () => parser.parseCheckmarkIntent(checkmarkIntent(
+          data: uri,
+          timestamp: todayMillis + LocalDate.millisPerDay,
+        )),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.message, 'message', 'timestamp is not valid')),
+        reason: "intents.widget-receiver-dispatch#10: and rejected with "
+            "IllegalArgumentException('timestamp is not valid') if it is in "
+            'the future',
+      );
+      expect(
+        () => parser.parseCheckmarkIntent(checkmarkIntent(
+          data: uri,
+          timestamp: -LocalDate.millisPerDay,
+        )),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.message, 'message', 'timestamp is not valid')),
+        reason: 'intents.widget-receiver-dispatch#10: or negative',
+      );
+    });
+
+    test('IntentParser takes nothing but the habit list', () {
+      final otherList = MemoryHabitList();
+      final otherParser = IntentParser(otherList);
+
+      expect(otherParser.habits, same(otherList),
+          reason: 'reminders.dependency-wiring#5: IntentParser depends only '
+              'on HabitList');
+      expect(
+        () => otherParser.parseCheckmarkIntent(
+            checkmarkIntent(data: Uri.parse(habit.uriString))),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.message, 'message', 'habit not found')),
+        reason: 'reminders.dependency-wiring#5: so a parser built on another '
+            'list resolves nothing from this one',
+      );
+    });
+  });
 }

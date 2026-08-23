@@ -482,6 +482,66 @@ void main() {
     });
   });
 
+  // The label a NumberButtonView draws is `value.toShortString()` from
+  // `org.isoron.uhabits.activities.habits.list.views` — the Android duplicate,
+  // i.e. [ShortString.toShortStringAndroid]. The rest of that view (the skip
+  // and question-mark glyphs, the AT_MOST colouring, the unit trimming, the
+  // notes indicator) is not ported; only the number formatting is.
+  group('list-habits.number-button', () {
+    test('#5 the branch chosen is the first one the value clears', () {
+      // Each branch rounds inside its own unit, so the boundary values pin the
+      // order the ladder is walked: >=1e9 G, >=1e8 M with no decimal, >=1e7
+      // and >=1e6 M with one, >=1e5 k with none, >=1e4 and >=1e3 k with one,
+      // then the three DecimalFormat patterns.
+      expect(1e9.toShortStringAndroid(), '1.0G',
+          reason: 'list-habits.number-button#5');
+      expect(1e8.toShortStringAndroid(), '100M',
+          reason: 'list-habits.number-button#5');
+      expect(1e7.toShortStringAndroid(), '10.0M',
+          reason: 'list-habits.number-button#5');
+      expect(1e6.toShortStringAndroid(), '1.0M',
+          reason: 'list-habits.number-button#5');
+      expect(1e5.toShortStringAndroid(), '100k',
+          reason: 'list-habits.number-button#5');
+      expect(1e4.toShortStringAndroid(), '10.0k',
+          reason: 'list-habits.number-button#5');
+      expect(1e3.toShortStringAndroid(), '1.0k',
+          reason: 'list-habits.number-button#5');
+      // DecimalFormat("#"): no fractional digits at all above 100.
+      expect(123.99.toShortStringAndroid(), '124',
+          reason: 'list-habits.number-button#5');
+      // DecimalFormat("#.#") between 10 and 100…
+      expect(12.34.toShortStringAndroid(), '12.3',
+          reason: 'list-habits.number-button#5');
+      // …and DecimalFormat("#.##") below 10.
+      expect(1.234.toShortStringAndroid(), '1.23',
+          reason: 'list-habits.number-button#5');
+    });
+
+    test('#6 the concrete examples of NumberButtonViewTest.testFormatValue', () {
+      const expected = <(double, String)>[
+        (0.1235, '0.12'),
+        (0.1, '0.1'),
+        (5.0, '5'),
+        (5.25, '5.25'),
+        (12.3456, '12.3'),
+        (123.123, '123'),
+        (321.2, '321'),
+        (4321.2, '4.3k'),
+        (54321.2, '54.3k'),
+        (654321.2, '654k'),
+        (7654321.2, '7.7M'),
+        (87654321.2, '87.7M'),
+        (987654321.2, '988M'),
+        (1987654321.2, '2.0G'),
+      ];
+      for (final (value, text) in expected) {
+        expect(value.toShortStringAndroid(), text,
+            reason: 'list-habits.number-button#6');
+      }
+    });
+  });
+
   group('charts-canvas-theming.habit-list-header-core', () {
     // The core goldens are rendered with Locale.US and a fixed today of
     // 2015-01-25 (a Sunday), which is what [_UsDateFormatter] reproduces.

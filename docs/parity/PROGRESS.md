@@ -44,3 +44,4 @@
 | 2026-08-23 | W10 | файлы: экспорт .db и CSV, выбор файла импорта, системный шеринг, открытие ссылок | 2 фичи | ~50 | ✅ |
 | 2026-08-23 | — | `reminders.boot-reschedule`, `reminders.on-show-reminder` | — | — | BLOCKED: нужен нативный BroadcastReceiver и фоновый изолят |
 | 2026-08-23 | — | `io.auto-backup`, `io.public-backup-folder-pref` | — | — | BLOCKED: Storage Access Framework, нет кроссплатформенного аналога |
+| 2026-08-23 | зачистка | закрыты правила, ставшие проверяемыми после появления UI | 28 фич | +298 правил | ✅ |

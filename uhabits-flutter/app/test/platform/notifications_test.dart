@@ -3,6 +3,7 @@
 // ignore_for_file: implementation_imports
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:uhabits/l10n/app_localizations_en.dart';
 import 'package:uhabits/platform/flutter_alarm_scheduler.dart';
 import 'package:uhabits/platform/flutter_notification_tray.dart';
 import 'package:uhabits_core/src/commands/command_runner.dart';
@@ -265,14 +266,17 @@ void main() {
           .build(habit, 10, LocalDate.ymd(2015, 1, 26), reminderTime);
 
       expect(spec.channelId, 'REMINDERS',
-          reason: 'notifications.content#1: the channel id is the constant '
-              '"REMINDERS"');
+          reason: 'notifications.content#1 and '
+              'settings.screen.reminder-category#8: the channel id is the '
+              'constant "REMINDERS"');
       expect(spec.channelId, NotificationTray.remindersChannelId,
-          reason: 'notifications.content#1: it is '
+          reason: 'notifications.content#1 and '
+              'settings.screen.reminder-category#8: it is '
               'NotificationTray.REMINDERS_CHANNEL_ID');
       expect(spec.channelName, 'Reminder',
-          reason: 'notifications.channel#1: the user-visible channel name is '
-              'R.string.reminder');
+          reason: 'notifications.channel#1 and '
+              'settings.screen.reminder-category#8: the channel is created '
+              'with name = the localized string "Reminder"');
       expect(spec.title, 'Meditate',
           reason: 'notifications.content#3: the content title is habit.name '
               'verbatim');
@@ -307,16 +311,28 @@ void main() {
       expect(
         builder.build(habit, 10, LocalDate.ymd(2015, 1, 26), 0).ongoing,
         isFalse,
-        reason: 'notifications.sticky-and-dismiss#1: pref_sticky_notifications '
-            'defaults to false',
+        reason: 'notifications.sticky-and-dismiss#1 and '
+            'settings.preferences.sticky-notifications#4: '
+            'pref_sticky_notifications defaults to false, so nothing is '
+            'ongoing',
       );
 
       preferences.setNotificationsSticky(true);
       expect(
         builder.build(habit, 10, LocalDate.ymd(2015, 1, 26), 0).ongoing,
         isTrue,
-        reason: 'notifications.content#8: '
+        reason: 'notifications.content#8 and '
+            'settings.preferences.sticky-notifications#4: every reminder is '
+            'built with '
             'setOngoing(preferences.shouldMakeNotificationsSticky())',
+      );
+
+      preferences.setNotificationsSticky(false);
+      expect(
+        builder.build(habit, 10, LocalDate.ymd(2015, 1, 26), 0).ongoing,
+        isFalse,
+        reason: 'settings.preferences.sticky-notifications#4: the flag is '
+            'read afresh for every notification, not captured once',
       );
     });
 
@@ -873,6 +889,274 @@ void main() {
               'reminders even though they are included in the WITH_ALARM query');
     });
   });
+
+  // -----------------------------------------------------------------------
+  // The receiver rules the decoder is the whole of, in the Flutter port
+  // -----------------------------------------------------------------------
+
+  group('reminder response dispatch', () {
+    String payloadFor(Habit habit, LocalDate date, int reminderTime) =>
+        ReminderPayload(
+          habitId: habit.id ?? 0,
+          timestamp: date.unixTime,
+          reminderTime: reminderTime,
+        ).encode();
+
+    test('a payload this app did not write is dropped, not thrown on', () {
+      expect(ReminderResponse.decode(payload: null), isNull,
+          reason: 'intents.reminder-receiver-dispatch#1: onReceive returns '
+              'immediately when the intent it was handed carries nothing');
+      expect(
+        ReminderResponse.decode(
+            actionId: ReminderActions.addRepetition, payload: null),
+        isNull,
+        reason: 'intents.reminder-receiver-dispatch#1: an action without an '
+            'intent behind it is dropped too',
+      );
+
+      for (final broken in <String>[
+        '',
+        'not a uri at all ::::',
+        'content://org.isoron.uhabits/habit/abc?timestamp=0&reminderTime=0',
+        'content://org.isoron.uhabits/habit/10',
+        'content://org.isoron.uhabits/habit/10?timestamp=x&reminderTime=1',
+      ]) {
+        expect(
+          () => ReminderResponse.decode(
+              actionId: ReminderActions.snoozeReminder, payload: broken),
+          returnsNormally,
+          reason: 'intents.reminder-receiver-dispatch#10: the whole dispatch '
+              'is wrapped in try/catch(RuntimeException), so a deleted habit '
+              'or a malformed URI never crashes the app',
+        );
+        expect(
+          ReminderResponse.decode(
+              actionId: ReminderActions.snoozeReminder, payload: broken),
+          isNull,
+          reason: 'intents.reminder-receiver-dispatch#10: it is swallowed',
+        );
+      }
+    });
+
+    test('an action with no branch has no effect', () {
+      final payload = payloadFor(yesNoHabit(), LocalDate.ymd(2015, 1, 26), 500);
+
+      expect(
+        ReminderResponse.decode(
+            actionId: 'org.isoron.uhabits.ACTION_UPDATE_WIDGETS_VALUE',
+            payload: payload),
+        isNull,
+        reason: 'intents.reminder-receiver-dispatch#9: any other action falls '
+            'through the when with no effect',
+      );
+      expect(
+        ReminderResponse.decode(actionId: 'android.intent.action.BOOT_COMPLETED',
+            payload: payload),
+        isNull,
+        reason: 'intents.reminder-receiver-dispatch#9',
+      );
+    });
+
+    test('the Yes and No actions carry the checkmark day as "timestamp"', () {
+      final habit = yesNoHabit();
+      final date = LocalDate.ymd(2015, 1, 25);
+      final payload = payloadFor(habit, date, unixTime(2015, 1, 25, 8, 30));
+
+      expect(Uri.parse(payload).queryParameters['timestamp'],
+          '${date.unixTime}',
+          reason: 'intents.actions-and-extras#12: the ADD/REMOVE repetition '
+              "intents carry the long extra 'timestamp' = LocalDate.unixTime");
+      for (final action in <String>[
+        ReminderActions.addRepetition,
+        ReminderActions.removeRepetition,
+      ]) {
+        final response =
+            ReminderResponse.decode(actionId: action, payload: payload)!;
+        expect(response.date, date,
+            reason: 'intents.actions-and-extras#12: which is what the handler '
+                'writes the entry to');
+        expect(response.habitId, habit.id,
+            reason: 'intents.actions-and-extras#12: alongside the habit the '
+                'data URI names');
+      }
+    });
+
+    test('the dismiss action is what reaches ReminderController.onDismiss',
+        () async {
+      final presenter = _FakePresenter();
+      final systemTray = FlutterNotificationTray(
+        presenter: presenter,
+        builder: buildBuilder(),
+        logging: logging,
+      );
+      final taskRunner = CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      );
+      final core = NotificationTray(
+        taskRunner,
+        CommandRunner(taskRunner),
+        preferences,
+        systemTray,
+      );
+      final controller =
+          ReminderController(_NoopScheduler(), core, preferences);
+      final habit = yesNoHabit();
+      habitList.add(habit);
+
+      core.show(habit, LocalDate.ymd(2015, 1, 26), 500);
+      await systemTray.settle();
+      final posted = presenter.shown.single;
+
+      final response = ReminderResponse.decode(
+        actionId: ReminderActions.dismissReminder,
+        payload: posted.payload,
+      )!;
+      expect(response.kind, ReminderResponseKind.dismiss,
+          reason: 'notifications.sticky-and-dismiss#6: onDismiss is reached '
+              'via the notification delete intent, action '
+              'org.isoron.uhabits.ACTION_DISMISS_REMINDER');
+      expect(response.habitId, habit.id,
+          reason: 'intents.reminder-receiver-dispatch#6: the receiver resolves '
+              'the habit from the intent data before calling onDismiss');
+
+      controller.onDismiss(habitList.getById(response.habitId)!);
+      await systemTray.settle();
+
+      expect(presenter.cancelled, <int>[10],
+          reason: 'intents.reminder-receiver-dispatch#6: ACTION_DISMISS_'
+              'REMINDER calls reminderController.onDismiss(habit), which '
+              'cancels');
+
+      // The sticky branch of the same entry point.
+      preferences.setNotificationsSticky(true);
+      presenter.shown.clear();
+      presenter.cancelled.clear();
+      core.show(habit, LocalDate.ymd(2015, 1, 26), 500);
+      await systemTray.settle();
+      presenter.shown.clear();
+      controller.onDismiss(habit);
+      await systemTray.settle();
+
+      expect(presenter.cancelled, isEmpty,
+          reason: 'notifications.sticky-and-dismiss#6: with sticky on, the '
+              'same delete intent re-posts instead of cancelling');
+      expect(presenter.shown.length, 1,
+          reason: 'notifications.sticky-and-dismiss#6');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Strings and flags the builder takes straight from the ledger
+  // -----------------------------------------------------------------------
+
+  group('notification strings and flags', () {
+    test('the snooze action carries the "snooze" string, English "Later"', () {
+      final resolved = NotificationStrings.from(L10nEn());
+      expect(resolved.snooze, 'Later',
+          reason: 'reminders.snooze-android12-gate#3: the action label is the '
+              'string "snooze" whose English value is "Later"');
+
+      final builder = ReminderNotificationBuilder(
+        preferences: preferences,
+        strings: resolved,
+      );
+      final spec = builder.build(
+        yesNoHabit(),
+        10,
+        LocalDate.ymd(2015, 1, 26),
+        500,
+      );
+      expect(
+        spec.actions.last,
+        const ReminderNotificationAction(
+            'org.isoron.uhabits.ACTION_SNOOZE_REMINDER', 'Later'),
+        reason: 'reminders.snooze-android12-gate#3: and that string is what '
+            'labels the snooze action',
+      );
+    });
+
+    test('sticky notifications are built ongoing', () async {
+      final presenter = _FakePresenter();
+      final tray = FlutterNotificationTray(
+        presenter: presenter,
+        builder: buildBuilder(),
+        logging: logging,
+      );
+
+      expect(preferences.shouldMakeNotificationsSticky(), isFalse);
+      tray.showNotification(yesNoHabit(), 10, LocalDate.ymd(2015, 1, 26), 500);
+      await tray.settle();
+      expect(presenter.shown.single.ongoing, isFalse,
+          reason: 'notifications.sticky-and-dismiss#4: setOngoing follows the '
+              'preference, which defaults to false');
+
+      preferences.setNotificationsSticky(true);
+      presenter.shown.clear();
+      tray.showNotification(yesNoHabit(), 10, LocalDate.ymd(2015, 1, 26), 500);
+      await tray.settle();
+      expect(presenter.shown.single.ongoing, isTrue,
+          reason: 'notifications.sticky-and-dismiss#4: when sticky is on, the '
+              'notification is built with setOngoing(true)');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // The SystemScheduler contract itself
+  // -----------------------------------------------------------------------
+
+  group('SystemScheduler contract', () {
+    test('the Flutter scheduler is a SystemScheduler with two results', () {
+      final scheduler = FlutterAlarmScheduler(
+        plugin: _FakeAlarmPlugin(),
+        builder: buildBuilder(),
+        logging: logging,
+        nowMillis: () => 0,
+      );
+
+      expect(scheduler, isA<SystemScheduler>(),
+          reason: 'reminders.exact-alarm-scheduling#1: IntentScheduler '
+              'implements ReminderScheduler.SystemScheduler');
+      expect(SchedulerResult.values,
+          <SchedulerResult>[SchedulerResult.ignored, SchedulerResult.ok],
+          reason: 'reminders.exact-alarm-scheduling#1: SchedulerResult has '
+              'exactly two values: IGNORED and OK');
+    });
+
+    test('log(componentName, msg) writes under that component name', () {
+      final scheduler = FlutterAlarmScheduler(
+        plugin: _FakeAlarmPlugin(),
+        builder: buildBuilder(),
+        logging: logging,
+        nowMillis: () => 0,
+      );
+
+      scheduler.log('ReminderScheduler', 'Scheduling all alarms');
+
+      expect(logBuffer.toString(),
+          contains('[ReminderScheduler] Scheduling all alarms'),
+          reason: 'reminders.exact-alarm-scheduling#11: log(componentName, '
+              'msg) forwards to Log.d(componentName, msg) — the component '
+              'name is the tag, not a fixed one');
+
+      scheduler.log('IntentScheduler', 'timestamp=1 now=0');
+      expect(logBuffer.toString(),
+          contains('[IntentScheduler] timestamp=1 now=0'),
+          reason: 'reminders.exact-alarm-scheduling#11: a different component '
+              'name gives a different tag');
+    });
+  });
+}
+
+/// The one `ReminderScheduler` method `ReminderController` calls; the real one
+/// is exercised by the core's own test.
+class _NoopScheduler implements ReminderSchedulerApi {
+  int scheduleAllCount = 0;
+
+  @override
+  void scheduleAll() {
+    scheduleAllCount++;
+  }
 }
 
 // ---------------------------------------------------------------------------

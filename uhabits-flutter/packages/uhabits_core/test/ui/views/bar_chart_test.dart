@@ -885,6 +885,158 @@ void main() {
               'value 0, i.e. skipped');
     });
   });
+  // -------------------------------------------------------------------------
+  // The same chart read against the show-habit bar card's own rules.
+  // -------------------------------------------------------------------------
+  group('show-habit.bar-card', () {
+    test('#8 the y scale is max(largest value, 1.0), over 6 gridlines, and a '
+        'non-positive bar is not drawn', () {
+      final chart = fixture();
+      final c = canvas300x200();
+      chart.draw(c);
+
+      // maxValue = 500: the tallest bar fills the whole 140 of plot area.
+      expect(chart.nGridlines, 6, reason: 'show-habit.bar-card#8');
+      expect(c.gridLines, hasLength(5),
+          reason: 'show-habit.bar-card#8 — nGridlines = 6 means five drawn '
+              'lines plus the axis baseline');
+      expect(c.barHeightAt(14.0 + 26 * 4), near(140.0),
+          reason: 'show-habit.bar-card#8 — the largest series value sets the '
+              'scale');
+
+      // The fixture holds four zeros among its eleven values, and each of them
+      // draws nothing at all.
+      expect(c.barBodies, hasLength(7),
+          reason: 'show-habit.bar-card#8 — bars whose value is <= 0 are not '
+              'drawn at all');
+
+      // With every value below 1, the scale is pinned at 1.0 rather than
+      // rescaling the chart around the largest crumb.
+      final small = BarChart(LightTheme(), fmt)
+        ..axis = <LocalDate>[today, today.minus(1)]
+        ..series.add(<double>[0.5, 0.25])
+        ..colors.add(Color.RED);
+      final c2 = canvas300x200();
+      small.draw(c2);
+      expect(c2.barHeightAt(14.0 + 26 * 10), near(70.0),
+          reason: 'show-habit.bar-card#8 — 0.5 of a floor of 1.0 is half the '
+              'plot, not the whole of it');
+    });
+
+    test('#9 every drawn bar is labelled above with the core toShortString()',
+        () {
+      final chart = fixture();
+      final c = canvas300x200();
+      chart.draw(c);
+
+      // The eight non-zero values, oldest column first.
+      expect(c.valueLabels.map((op) => op.args[0] as String).toList(),
+          <String>['300', '100', '30', '500', '137', '150', '200'],
+          reason: 'show-habit.bar-card#9 — one label per drawn bar');
+
+      final fractional = BarChart(LightTheme(), fmt)
+        ..axis = <LocalDate>[today, today.minus(1), today.minus(2)]
+        ..series.add(<double>[12500.0, 12.25, 7.5])
+        ..colors.add(Color.RED);
+      final c2 = canvas300x200();
+      fractional.draw(c2);
+      expect(c2.valueLabels.map((op) => op.args[0] as String).toList(),
+          <String>['7.5', '12.3', '12.5k'],
+          reason: 'show-habit.bar-card#9 — the label is the core '
+              'toShortString() of the value');
+    });
+
+    test('#10 bar geometry: 12/3/4/20/40, group width and column count', () {
+      final chart = fixture();
+
+      expect(chart.barWidth, 12.0, reason: 'show-habit.bar-card#10');
+      expect(chart.barMargin, 3.0, reason: 'show-habit.bar-card#10');
+      expect(chart.barGroupMargin, 4.0, reason: 'show-habit.bar-card#10');
+      expect(chart.paddingTop, 20.0, reason: 'show-habit.bar-card#10');
+      expect(chart.footerHeight, 40.0, reason: 'show-habit.bar-card#10');
+
+      // barGroupWidth = 2*4 + nSeries*(12 + 2*3) = 26, so the drawn bars sit
+      // 26 apart: marginLeft 7 + barGroupMargin 4 + barMargin 3 = 14, then one
+      // group per column.
+      final c = canvas300x200();
+      chart.draw(c);
+      final bodies = c.barBodies.map((op) => op.args[0] as double).toList();
+      expect(bodies, <double>[
+        for (final column in <int>[0, 2, 3, 4, 7, 8, 10]) 14.0 + 26.0 * column,
+      ], reason: 'show-habit.bar-card#10 — one series gives 8 + 18 = 26');
+      // nColumns = floor(300 / 26) = 11; a column may carry two labels, so it
+      // is the distinct label x values that count.
+      expect(c.axisLabelXs.toSet(), hasLength(11),
+          reason: 'show-habit.bar-card#10 — the column count is '
+              'floor(availableWidth / groupWidth)');
+
+      chart.series.add(series1);
+      chart.colors.add(Color.RED);
+      final c2 = canvas300x200();
+      chart.draw(c2);
+      // Two series: 8 + 2*18 = 44, so floor(300 / 44) = 6 columns.
+      expect(c2.axisLabelXs.toSet(), hasLength(6),
+          reason: 'show-habit.bar-card#10 — a second series widens the group '
+              'and drops the column count');
+    });
+
+    test('#11 axis labelling: month on change, else day, year on a second line',
+        () {
+      final chart = fixture();
+      final c = canvas300x200();
+      chart.draw(c);
+
+      // The axis is newest-first, so axis[0].daysUntil(axis[1]) is -1: the
+      // large-interval branch is not taken even though the dates span months.
+      expect(chart.axis[0].daysUntil(chart.axis[1]), -1,
+          reason: 'show-habit.bar-card#11 — the difference is negative for a '
+              'newest-first axis, so it never exceeds 300');
+      expect(c.axisLabels.map((op) => op.args[0] as String).toList(),
+          <String>[
+            'Jan', '2015', '16', '17', '18', '19', //
+            '20', '21', '22', '23', '24', '25',
+          ],
+          reason: 'show-habit.bar-card#11 — the short month name when the '
+              'month differs from the previous column, else the day number, '
+              'plus the year on a second line when the year changes');
+      final crossing = fixture(origin: LocalDate.ymd(2015, 1, 5));
+      final c3 = canvas300x200();
+      crossing.draw(c3);
+      expect(c3.axisLabels.map((op) => op.args[0] as String).toList(),
+          <String>[
+            'Dec', '2014', '27', '28', '29', '30', '31', //
+            'Jan', '2015', '2', '3', '4', '5',
+          ],
+          reason: 'show-habit.bar-card#11 — a month boundary prints the month '
+              'name again, and a year boundary the year');
+
+      // An axis with fewer than two points is the only case that reaches the
+      // year-only branch in practice.
+      final single = BarChart(LightTheme(), fmt)
+        ..axis = <LocalDate>[today]
+        ..series.add(<double>[1.0])
+        ..colors.add(Color.RED);
+      final c2 = canvas300x200();
+      single.draw(c2);
+      expect(c2.axisLabels.map((op) => op.args[0] as String).toList(),
+          <String>['2015'],
+          reason: 'show-habit.bar-card#11 — an axis with fewer than 2 points '
+              'prints only the year');
+    });
+
+    test('show-habit.chart-scrolling#8: dataColumnWidth is barWidth + '
+        '2*barMargin', () {
+      final chart = fixture();
+      expect(chart.dataColumnWidth, 18.0,
+          reason: 'show-habit.chart-scrolling#8 — 12 + 6 = 18 for the Bar '
+              'chart');
+      chart.barWidth = 20.0;
+      chart.barMargin = 1.0;
+      expect(chart.dataColumnWidth, 22.0,
+          reason: 'show-habit.chart-scrolling#8 — it tracks the two style '
+              'fields, never a cached number');
+    });
+  });
 }
 
 Matcher near(double value) => closeTo(value, 1e-9);

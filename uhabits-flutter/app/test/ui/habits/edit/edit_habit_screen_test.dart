@@ -20,6 +20,7 @@ import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/edit_habit_model.dart';
+import 'package:uhabits/ui/common/dialogs/weekday_picker_dialog.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
@@ -1321,6 +1322,367 @@ void main() {
       );
       expect(modelOf(tester).nameController.text, 'Meditate',
           reason: 'edit-habit.entry-points#4');
+    });
+  });
+  // =======================================================================
+  // reminders.edit-ui — the same screen, seen from the reminders domain
+  // =======================================================================
+
+  group('reminders.edit-ui', () {
+    test('#1 #2 the three fields and where they are seeded from', () {
+      final scope = openScope();
+
+      final blank = createModel(scope);
+      expect(blank.reminderHour, -1,
+          reason: "reminders.edit-ui#1: reminderHour, -1 meaning 'no "
+              "reminder'");
+      expect(blank.reminderMin, -1, reason: 'reminders.edit-ui#1');
+      expect(blank.reminderDays, WeekdayList.everyDay,
+          reason: 'reminders.edit-ui#1: reminderDays defaults to '
+              'WeekdayList.EVERY_DAY');
+
+      final withReminder = addHabit(
+        scope,
+        'Meditate',
+        reminder: Reminder(7, 30, WeekdayList(3)),
+      );
+      final seeded = createModel(scope, habitId: withReminder.id);
+      expect(seeded.reminderHour, 7,
+          reason: 'reminders.edit-ui#2: seeded from habit.reminder when it is '
+              'non-null');
+      expect(seeded.reminderMin, 30, reason: 'reminders.edit-ui#2');
+      expect(seeded.reminderDays, WeekdayList(3), reason: 'reminders.edit-ui#2');
+
+      final without = addHabit(scope, 'Run');
+      final unseeded = createModel(scope, habitId: without.id);
+      expect(unseeded.reminderHour, -1,
+          reason: 'reminders.edit-ui#2: otherwise they stay at -1/-1/'
+              'EVERY_DAY');
+      expect(unseeded.reminderMin, -1, reason: 'reminders.edit-ui#2');
+      expect(unseeded.reminderDays, WeekdayList.everyDay,
+          reason: 'reminders.edit-ui#2');
+    });
+
+    test('#3 the picker opens on the current time, or 08:00', () {
+      expect(EditHabitScreen.initialReminderTime(-1, -1),
+          const TimeOfDay(hour: 8, minute: 0),
+          reason: 'reminders.edit-ui#3: pre-set to reminderHour if >= 0 else '
+              '8, and reminderMin if >= 0 else 0 — the default suggested '
+              'reminder time is 08:00');
+      expect(EditHabitScreen.initialReminderTime(21, 45),
+          const TimeOfDay(hour: 21, minute: 45),
+          reason: 'reminders.edit-ui#3: an existing reminder seeds the picker');
+      expect(EditHabitScreen.initialReminderTime(0, 0),
+          const TimeOfDay(hour: 0, minute: 0),
+          reason: 'reminders.edit-ui#3: hour 0 is >= 0, so midnight is kept');
+    });
+
+    test('#5 onTimeSet stores, onTimeCleared resets all three', () {
+      final model = createModel(openScope())
+        ..setReminderTime(21, 45);
+      expect(model.reminderHour, 21,
+          reason: 'reminders.edit-ui#5: onTimeSet stores the picked hour');
+      expect(model.reminderMin, 45,
+          reason: 'reminders.edit-ui#5: and the picked minute');
+
+      model.setReminderDays(WeekdayList(3));
+      model.clearReminder();
+      expect(model.reminderHour, -1,
+          reason: 'reminders.edit-ui#5: onTimeCleared resets reminderHour = -1');
+      expect(model.reminderMin, -1,
+          reason: 'reminders.edit-ui#5: reminderMin = -1');
+      expect(model.reminderDays, WeekdayList.everyDay,
+          reason: 'reminders.edit-ui#5: AND reminderDays = '
+              'WeekdayList.EVERY_DAY');
+    });
+
+    test('#8 an empty weekday selection is silently replaced by every day',
+        () {
+      final model = createModel(openScope())
+        ..setReminderDays(WeekdayList(0));
+      expect(model.reminderDays, WeekdayList.everyDay,
+          reason: 'reminders.edit-ui#8: if the resulting list isEmpty it is '
+              'silently replaced by WeekdayList.EVERY_DAY');
+
+      model.setReminderDays(WeekdayList(3));
+      expect(model.reminderDays, WeekdayList(3),
+          reason: 'reminders.edit-ui#8: a non-empty selection is kept as it '
+              'is');
+    });
+
+    testWidgets('#8 the weekday row opens a "Select days" multi-choice list, '
+        'pre-checked and starting at Saturday', (tester) async {
+      await pumpEditor(tester, openScope(dispatcher: const AsyncDispatcher()));
+      modelOf(tester)
+        ..setReminderTime(8, 0)
+        ..setReminderDays(WeekdayList(3));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(EditHabitScreen.reminderDaysPickerKey));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Select days'), findsOneWidget,
+          reason: 'reminders.edit-ui#8: tapping the weekday row opens '
+              'WeekdayPickerDialog, titled "Select days"');
+      final tiles = tester
+          .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+          .toList();
+      expect(tiles.length, 7, reason: 'reminders.edit-ui#8');
+      expect(
+        tiles.map((t) => (t.title! as Text).data).toList(),
+        <String>[
+          'Saturday',
+          'Sunday',
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+        ],
+        reason: 'reminders.edit-ui#8: multi-choice items = long weekday names '
+            'starting at Saturday',
+      );
+      expect(
+        tiles.map((t) => t.value).toList(),
+        <bool>[true, true, false, false, false, false, false],
+        reason: 'reminders.edit-ui#8: pre-checked from the current '
+            'WeekdayList — WeekdayList(3) is Saturday and Sunday',
+      );
+
+      // Untick everything and confirm: the empty result is replaced.
+      for (var index = 0; index < 7; index++) {
+        if (tiles[index].value!) {
+          await tester.tap(find.byKey(ValueKey<String>('weekday_$index')));
+          await tester.pump();
+        }
+      }
+      await tester.tap(find.byKey(const ValueKey<String>('weekday_ok')));
+      await tester.pumpAndSettle();
+
+      expect(modelOf(tester).reminderDays, WeekdayList.everyDay,
+          reason: 'reminders.edit-ui#8: confirming builds '
+              'WeekdayList(selectedDays); if the resulting list isEmpty it is '
+              'silently replaced by WeekdayList.EVERY_DAY');
+    });
+
+    test('#9 the reminder is written whole, or set to null', () {
+      final scope = openScope();
+      final model = createModel(scope)
+        ..nameController.text = 'Meditate'
+        ..setReminderTime(8, 30)
+        ..setReminderDays(WeekdayList(3));
+      model.save();
+      final saved = scope.habitList.getByPosition(0);
+      expect(saved.reminder, isNotNull,
+          reason: 'reminders.edit-ui#9: if reminderHour >= 0 then '
+              'habit.reminder = Reminder(reminderHour, reminderMin, '
+              'reminderDays)');
+      expect(saved.reminder!.hour, 8, reason: 'reminders.edit-ui#9');
+      expect(saved.reminder!.minute, 30, reason: 'reminders.edit-ui#9');
+      expect(saved.reminder!.days, WeekdayList(3),
+          reason: 'reminders.edit-ui#9');
+
+      final second = createModel(scope)..nameController.text = 'Run';
+      second.save();
+      expect(scope.habitList.getByPosition(1).reminder, isNull,
+          reason: 'reminders.edit-ui#9: else habit.reminder = null');
+    });
+
+    testWidgets('#6 #7 Off hides the weekday row and its divider; a time '
+        'shows both', (tester) async {
+      await pumpEditor(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('Off'),
+        ),
+        findsOneWidget,
+        reason: 'reminders.edit-ui#6: when reminderHour < 0 the time row shows '
+            'the string reminder_off',
+      );
+      expect(find.byKey(EditHabitScreen.reminderDaysPickerKey), findsNothing,
+          reason: 'reminders.edit-ui#6: and the weekday row is GONE');
+      expect(find.byKey(EditHabitScreen.reminderDividerKey), findsNothing,
+          reason: 'reminders.edit-ui#6: together with its divider');
+
+      modelOf(tester)
+        ..setReminderTime(8, 30)
+        ..setReminderDays(WeekdayList(3));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('8:30 AM'),
+        ),
+        findsOneWidget,
+        reason: 'reminders.edit-ui#7: when reminderHour >= 0 the time row '
+            'shows formatTime(context, hour, minute)',
+      );
+      expect(find.byKey(EditHabitScreen.reminderDividerKey), findsOneWidget,
+          reason: 'reminders.edit-ui#7');
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderDaysPickerKey),
+          matching: find.text('Weekends'),
+        ),
+        findsOneWidget,
+        reason: 'reminders.edit-ui#7: and the weekday row is visible showing '
+            'reminderDays.toFormattedString(context)',
+      );
+    });
+
+    testWidgets('#11 the time row renders the wall-clock hour and minute',
+        (tester) async {
+      await pumpEditor(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      modelOf(tester).setReminderTime(0, 5);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('12:05 AM'),
+        ),
+        findsOneWidget,
+        reason: 'reminders.edit-ui#11: formatTime formats (hours * 60 + '
+            'minutes) * 60000 ms in UTC, so the rendered time is exactly the '
+            "wall-clock hour:minute in the user's 12/24-hour preference",
+      );
+
+      modelOf(tester).setReminderTime(23, 59);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('11:59 PM'),
+        ),
+        findsOneWidget,
+        reason: 'reminders.edit-ui#11: no time zone is ever applied to it',
+      );
+    });
+  });
+
+  // =======================================================================
+  // reminders.weekday-label
+  // =======================================================================
+
+  group('reminders.weekday-label', () {
+    const shortNames = <String>[
+      'Sat',
+      'Sun',
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+    ];
+    const longNames = <String>[
+      'Saturday',
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+    ];
+
+    String format(WeekdayList days) => formatWeekdayList(
+          days,
+          l10n,
+          shortNames: shortNames,
+          longNames: longNames,
+        );
+
+    WeekdayList listOf(List<int> indexes) => WeekdayList.fromArray(
+          List<bool>.generate(7, indexes.contains),
+        );
+
+    test('#7 #8 the seven names are taken in Saturday-first order', () {
+      expect(
+        getWeekdaySequence(DayOfWeek.saturday),
+        <DayOfWeek>[
+          DayOfWeek.saturday,
+          DayOfWeek.sunday,
+          DayOfWeek.monday,
+          DayOfWeek.tuesday,
+          DayOfWeek.wednesday,
+          DayOfWeek.thursday,
+          DayOfWeek.friday,
+        ],
+        reason: 'reminders.weekday-label#7: getWeekdaySequence(SATURDAY) '
+            'yields [SATURDAY, SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, '
+            'FRIDAY] via allDays[(firstWeekday.daysSinceSunday + offset) % 7]',
+      );
+      expect(WeekdayPickerDialog.weekdays.first, DayOfWeek.saturday,
+          reason: 'reminders.weekday-label#8: the short and long weekday names '
+              'are built anchored at DayOfWeek.SATURDAY, so array index 0 '
+              'corresponds to Saturday');
+      expect(WeekdayPickerDialog.weekdays.last, DayOfWeek.friday,
+          reason: 'reminders.weekday-label#8: and index 6 to Friday');
+      expect(format(listOf(<int>[0])), 'Saturday',
+          reason: 'reminders.weekday-label#1: index 0 is Saturday');
+      expect(format(listOf(<int>[6])), 'Friday',
+          reason: 'reminders.weekday-label#1: through index 6 Friday');
+    });
+
+    test('#2 to #6 the five ordered branches', () {
+      expect(format(listOf(<int>[4])), 'Wednesday',
+          reason: 'reminders.weekday-label#2: exactly one day selected gives '
+              'the LONG name of that day');
+      expect(format(listOf(<int>[0, 1])), 'Weekends',
+          reason: 'reminders.weekday-label#3: exactly two days at indices 0 '
+              'and 1 (Saturday and Sunday) give the string weekends');
+      expect(format(listOf(<int>[2, 3, 4, 5, 6])), 'Monday to Friday',
+          reason: 'reminders.weekday-label#4: exactly five days with indices 0 '
+              'and 1 both false give any_weekday');
+      expect(format(WeekdayList(127)), 'Any day of the week',
+          reason: 'reminders.weekday-label#5: all seven days give any_day');
+      expect(format(listOf(<int>[0, 2])), 'Sat, Mon',
+          reason: 'reminders.weekday-label#6: otherwise the SHORT names of the '
+              'selected days are joined with ", " in index order starting at '
+              'Saturday');
+      expect(format(listOf(<int>[1, 2])), 'Sun, Mon',
+          reason: 'reminders.weekday-label#3: two days that are NOT the '
+              'weekend fall through to the short-name join');
+      expect(format(listOf(<int>[0, 2, 3, 4, 5])), 'Sat, Mon, Tue, Wed, Thu',
+          reason: 'reminders.weekday-label#4: five days that include Saturday '
+              'fall through as well');
+    });
+
+    test('#9 the join is comma + space, the first without a separator', () {
+      expect(format(listOf(<int>[0, 1, 2])), 'Sat, Sun, Mon',
+          reason: 'reminders.weekday-label#9: selected days are appended as '
+              'short names joined by ", ", the first without a separator');
+      expect(format(listOf(<int>[6, 0])).startsWith('Sat'), isTrue,
+          reason: 'reminders.weekday-label#9: it iterates i in 0..6, so the '
+              'order is the array order and not the selection order');
+    });
+  });
+
+  // =======================================================================
+  // intents.actions-and-extras#14 — what the edit entry point carries
+  // =======================================================================
+
+  group('intents.actions-and-extras', () {
+    testWidgets('#14 the editor route carries habitId and habitType',
+        (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      final habit = addHabit(scope, 'Meditate');
+
+      await pumpEditor(tester, scope, habitId: habit.id);
+      expect(modelOf(tester).habitId, habit.id,
+          reason: 'intents.actions-and-extras#14: startEditActivity(context, '
+              "habit) puts the extras 'habitId' (Long) and 'habitType' (Int)");
+      expect(modelOf(tester).habitType, HabitType.yesNo,
+          reason: 'intents.actions-and-extras#14');
+
+      await pumpEditor(tester, scope, habitType: HabitType.numerical);
+      expect(modelOf(tester).habitId, -1,
+          reason: 'intents.actions-and-extras#14: startEditActivity(context, '
+              "habitType) puts only 'habitType'");
+      expect(modelOf(tester).habitType, HabitType.numerical,
+          reason: 'intents.actions-and-extras#14');
     });
   });
 }

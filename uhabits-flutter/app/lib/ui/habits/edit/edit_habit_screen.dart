@@ -273,9 +273,18 @@ class EditHabitScreen extends StatelessWidget {
   }
 
   /// `IntentFactory.startEditActivity(context, habit)` — EDIT mode.
+  ///
+  /// Kotlin puts *both* extras on the intent — `habitId` and `habitType`
+  /// (`show-habit.edit-action#2`) — even though EDIT mode reads the type back
+  /// off the habit it loaded and never looks at the extra. Both are passed
+  /// here for the same reason: so the route carries what the intent carried.
   static Future<void> open(BuildContext context, core.Habit habit) {
     return Navigator.of(context).push(
-      route(scope: context.read<AppScope>(), habitId: habit.id),
+      route(
+        scope: context.read<AppScope>(),
+        habitId: habit.id,
+        habitType: habit.type,
+      ),
     );
   }
 

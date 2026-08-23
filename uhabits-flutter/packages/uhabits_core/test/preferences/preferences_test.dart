@@ -902,6 +902,135 @@ void main() {
           LocalDate.ymd(2015, 1, 24),
           reason: 'settings.preferences.first-weekday#14');
     });
+
+    test('#15 only week bucketing moves; scores, streaks and intervals never '
+        'see the first weekday', () {
+      setToday(LocalDate.ymd(2015, 1, 25));
+      addTearDown(resetToday);
+
+      // 2015-01-24 is a Saturday and 2015-01-25 the Sunday after it, so the
+      // two days fall in one bucket with firstWeekday=7 and in two with
+      // firstWeekday=1.
+      final entries = <Entry>[
+        Entry(LocalDate.ymd(2015, 1, 25), Entry.yesManual),
+        Entry(LocalDate.ymd(2015, 1, 24), Entry.yesManual),
+      ];
+      expect(
+          entries
+              .groupedSum(
+                truncateField: TruncateField.weekNumber,
+                firstWeekday: 7,
+                isNumerical: false,
+              )
+              .length,
+          1,
+          reason: 'settings.preferences.first-weekday#15');
+      expect(
+          entries
+              .groupedSum(
+                truncateField: TruncateField.weekNumber,
+                firstWeekday: 1,
+                isNumerical: false,
+              )
+              .length,
+          2,
+          reason: 'settings.preferences.first-weekday#15');
+
+      // Every other truncation ignores it entirely.
+      for (final field in <TruncateField>[
+        TruncateField.day,
+        TruncateField.month,
+        TruncateField.quarter,
+        TruncateField.year,
+      ]) {
+        expect(
+            entries.groupedSum(
+              truncateField: field,
+              firstWeekday: 1,
+              isNumerical: false,
+            ),
+            entries.groupedSum(
+              truncateField: field,
+              firstWeekday: 7,
+              isNumerical: false,
+            ),
+            reason: 'settings.preferences.first-weekday#15');
+      }
+
+      // Score, streak and interval computation take no firstWeekday argument
+      // at all, so flipping the preference cannot move them. A 3/7 habit is
+      // the interesting case: its interval logic is week-shaped but is driven
+      // by the frequency denominator, not by the calendar week.
+      final factory = MemoryModelFactory();
+      final habitList = factory.buildHabitList();
+      final habit = factory.buildHabit()
+        ..name = 'Meditate'
+        ..frequency = Frequency.threeTimesPerWeek;
+      habitList.add(habit);
+      for (final entry in entries) {
+        habit.originalEntries.add(entry);
+      }
+
+      List<double> scoresOf() => <double>[
+            for (var i = 0; i < 10; i++) habit.scores[getToday().minus(i)].value
+          ];
+      List<String> streaksOf() => habit.streaks
+          .getBest(10)
+          .map((streak) => '${streak.start}..${streak.end}')
+          .toList();
+      List<int> computedOf() => <int>[
+            for (var i = 0; i < 10; i++)
+              habit.computedEntries.get(getToday().minus(i)).value
+          ];
+
+      storage.putString('pref_first_weekday', '7');
+      expect(prefs.firstWeekday, DayOfWeek.saturday,
+          reason: 'settings.preferences.first-weekday#15');
+      habit.recompute();
+      final saturdayScores = scoresOf();
+      final saturdayStreaks = streaksOf();
+      final saturdayComputed = computedOf();
+
+      storage.putString('pref_first_weekday', '2');
+      expect(prefs.firstWeekday, DayOfWeek.monday,
+          reason: 'settings.preferences.first-weekday#15');
+      habit.recompute();
+
+      expect(scoresOf(), saturdayScores,
+          reason: 'settings.preferences.first-weekday#15');
+      expect(streaksOf(), saturdayStreaks,
+          reason: 'settings.preferences.first-weekday#15');
+      expect(computedOf(), saturdayComputed,
+          reason: 'settings.preferences.first-weekday#15');
+    });
+  });
+
+  group('settings.preferences.sticky-notifications', () {
+    test('#2 the listener fires on every write, even a redundant one', () {
+      expect(prefs.shouldMakeNotificationsSticky(), isFalse,
+          reason: 'settings.preferences.sticky-notifications#2');
+
+      prefs.setNotificationsSticky(true);
+      expect(listener.notificationsChanged, 1,
+          reason: 'settings.preferences.sticky-notifications#2');
+
+      // Same value again: nothing changed, and the listener is notified all
+      // the same.
+      prefs.setNotificationsSticky(true);
+      expect(prefs.shouldMakeNotificationsSticky(), isTrue,
+          reason: 'settings.preferences.sticky-notifications#2');
+      expect(listener.notificationsChanged, 2,
+          reason: 'settings.preferences.sticky-notifications#2');
+
+      prefs.setNotificationsSticky(false);
+      prefs.setNotificationsSticky(false);
+      expect(listener.notificationsChanged, 4,
+          reason: 'settings.preferences.sticky-notifications#2');
+      expect(listener.checkmarkSequenceChanged, 0,
+          reason: 'settings.preferences.sticky-notifications#2');
+      expect(listener.questionMarksChanged, 0,
+          reason: 'settings.preferences.sticky-notifications#2');
+    });
   });
 
   group('settings.preferences.midnight-delay', () {

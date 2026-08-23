@@ -387,10 +387,137 @@ void main() {
       );
 
       await _dragBy(tester, -60);
-      expect(reported, isEmpty, reason: 'list-habits.header-scrolling#4');
+      expect(reported, isEmpty,
+          reason: 'list-habits.header-scrolling#4 and '
+              'settings.preferences.checkmark-reverse-order#6 — '
+              'HeaderView.updateScrollDirection starts at -1 and multiplies '
+              'by -1 when isCheckmarkSequenceReversed, so a reversed strip '
+              'scrolls the other way. (The further RTL flip is not ported: '
+              'the core view always lays its columns out left to right — see '
+              'platform-glue.rtl-layout.)');
 
       await _dragBy(tester, 60);
-      expect(reported, [1], reason: 'list-habits.header-scrolling#4');
+      expect(reported, [1],
+          reason: 'list-habits.header-scrolling#4 and '
+              'settings.preferences.checkmark-reverse-order#6 — direction +1');
+    });
+
+    testWidgets(
+        'settings.preferences.checkmark-reverse-order#6 — the natural order '
+        'scrolls in the opposite direction', (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(tester, buttonCount: 5, reported: reported);
+
+      await _dragBy(tester, 60);
+      expect(reported, isEmpty,
+          reason: 'settings.preferences.checkmark-reverse-order#6 — with the '
+              'flag false the direction is the bare -1');
+
+      await _dragBy(tester, -60);
+      expect(reported, [1],
+          reason: 'settings.preferences.checkmark-reverse-order#6 — so the '
+              'same gesture that scrolled a reversed strip does nothing here, '
+              'and its opposite scrolls');
+    });
+
+    testWidgets('dates#9 the bucket is one 48dp column over the header colour',
+        (tester) async {
+      // `ScrollableChart.setScrollerBucketSize(checkmarkWidth)` plus
+      // `setBackgroundColor(headerBackgroundColor)`. The third clause of the
+      // rule — `elevation = dp(2f)` — is an Android shadow the Flutter strip
+      // does not draw; it has no Material wrapper at all.
+      await _pumpHeader(tester, buttonCount: 5);
+
+      expect(ListHeader.columnWidth, LightTheme().checkmarkButtonSize,
+          reason: 'list-habits.header-dates#9');
+      expect(ListHeader.columnWidth, 48.0,
+          reason: 'list-habits.header-dates#9');
+      expect(_draw(tester).ops.first.color, LightTheme().headerBackgroundColor,
+          reason: 'list-habits.header-dates#9');
+
+      final reported = <int>[];
+      await _pumpHeader(tester, buttonCount: 5, reported: reported);
+      await _dragBy(tester, -47);
+      expect(reported, isEmpty, reason: 'list-habits.header-dates#9');
+      await _dragBy(tester, -1);
+      expect(reported, [1], reason: 'list-habits.header-dates#9');
+    });
+
+    testWidgets('dates#11 the direction starts at -1 and the reversed '
+        'sequence flips it', (tester) async {
+      // `updateScrollDirection()`: `var direction = -1; if (reversed)
+      // direction *= -1; if (isRTL) direction *= -1`. The RTL factor is not
+      // ported — the core strip always lays its columns out left to right.
+      final forward = <int>[];
+      await _pumpHeader(tester, buttonCount: 5, reported: forward);
+      // Dragging left (negative dx) walks into the past when direction is -1.
+      await _dragBy(tester, -60);
+      expect(forward, [1], reason: 'list-habits.header-dates#11');
+      await _dragBy(tester, 60);
+      expect(forward, [1, 0], reason: 'list-habits.header-dates#11');
+
+      final reversed = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        reversed: true,
+        reported: reversed,
+      );
+      await _dragBy(tester, -60);
+      expect(reversed, isEmpty, reason: 'list-habits.header-dates#11');
+      await _dragBy(tester, 60);
+      expect(reversed, [1], reason: 'list-habits.header-dates#11');
+    });
+
+    testWidgets('#5 a drag is clamped to maxX and does not scroll the list '
+        'behind it', (tester) async {
+      final reported = <int>[];
+      final controller = ScrollController();
+      addTearDown(controller.dispose);
+      var offset = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: StatefulBuilder(
+            builder: (context, setState) => Column(
+              children: <Widget>[
+                ListHeader(
+                  buttonCount: 5,
+                  dataOffset: offset,
+                  maxDataOffset: 3,
+                  onDataOffsetChanged: (value) {
+                    reported.add(value);
+                    setState(() => offset = value);
+                  },
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: controller,
+                    itemCount: 60,
+                    itemBuilder: (context, index) =>
+                        SizedBox(height: 50, child: Text('row $index')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Far past the end of the scrollable range: the offset stops at
+      // maxDataOffset and no debt accumulates behind it.
+      await _dragBy(tester, -960);
+      expect(reported, [3], reason: 'list-habits.header-scrolling#5');
+      await _dragBy(tester, 48);
+      expect(reported, [3, 2], reason: 'list-habits.header-scrolling#5');
+
+      // The horizontal recogniser owns the gesture, so the vertical list
+      // behind the strip never moved (requestDisallowInterceptTouchEvent).
+      expect(controller.offset, 0.0,
+          reason: 'list-habits.header-scrolling#5');
     });
   });
 

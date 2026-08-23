@@ -16,6 +16,7 @@ import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/models/reminder.dart';
 import 'package:uhabits_core/src/models/weekday_list.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
+import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/src/preferences/widget_preferences.dart';
 import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
@@ -637,9 +638,29 @@ void main() {
       // delay, yet the reminder still belongs to Jan 30.
       reminderScheduler.scheduleAtTime(habit, unixTime(2015, 1, 30, 7, 0));
       expect(sys.scheduled.single.timestamp, unixTime(2015, 1, 30, 0, 0),
-          reason: 'reminders.schedule-at-time#3: the hour/minute offsets are '
-              'hard-coded 0, so the midnight-delay preference is deliberately '
-              'not applied');
+          reason: 'reminders.schedule-at-time#3 and '
+              'settings.preferences.midnight-delay#12: the hour/minute offsets '
+              'are hard-coded 0, so the midnight-delay preference is '
+              'deliberately not applied by scheduleAtTime');
+      // 2015-01-30 06:00 UTC is 02:00 local: strictly inside the 3-hour
+      // window, so the two offsets disagree about which day it is.
+      sys.clear();
+      final insideTheDelay = unixTime(2015, 1, 30, 6, 0);
+      reminderScheduler.scheduleAtTime(habit, insideTheDelay);
+      expect(sys.scheduled.single.timestamp, unixTime(2015, 1, 30, 0, 0),
+          reason: 'settings.preferences.midnight-delay#12: scheduleAtTime '
+              'still says Jan 30');
+      expect(
+        DateUtils.getStartOfDayWithOffset(
+          DateUtils.removeTimezone(insideTheDelay),
+          Preferences.midnightDelayHoursWhenEnabled,
+          0,
+        ),
+        unixTime(2015, 1, 29, 0, 0),
+        reason: 'settings.preferences.midnight-delay#12: had the 3-hour '
+            'offset been passed through, the checkmark day would have been '
+            'Jan 29 instead',
+      );
     });
 
     test('tomorrow when the reminder time has passed', () {
@@ -1055,6 +1076,70 @@ void main() {
           reason: 'reminders.snooze-custom-time#2: therefore a later '
               'scheduleAll() overwrites the one-off alarm with the habit\'s '
               'regular reminder time');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // reminders.dependency-wiring / reminders.app-start-and-permission
+  // -----------------------------------------------------------------------
+
+  group('object graph', () {
+    test('ReminderScheduler is built from commandRunner, habitList, the '
+        'system scheduler and the widget preferences', () {
+      final scheduler = ReminderScheduler(
+        commandRunner,
+        habitList,
+        sys,
+        widgetPreferences,
+      );
+
+      expect(scheduler, isA<CommandRunnerListener>(),
+          reason: 'reminders.dependency-wiring#1: ReminderScheduler is '
+              'constructed as ReminderScheduler(commandRunner, habitList, '
+              'sys = IntentScheduler, widgetPreferences), and the command '
+              'runner argument is there because it registers itself as a '
+              'listener');
+
+      // Each of the four arguments is actually used, which is the only way to
+      // tell them apart from the outside.
+      DateUtils.setFixedLocalTime(
+          DateUtils.removeTimezone(unixTime(2015, 1, 26, 13, 0)));
+      habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habitList.add(habit);
+      widgetPreferences.setSnoozeTime(habitId, unixTime(2015, 1, 26, 15, 0));
+      sys.clear();
+
+      scheduler.startListening();
+      commandRunner.run(EditHabitCommand(habitList, habitId, habit));
+
+      expect(sys.scheduled.single.habit, same(habit),
+          reason: 'reminders.dependency-wiring#1: the habitList argument is '
+              'what scheduleAll() iterates and the sys argument is what '
+              'receives the alarm');
+      expect(sys.scheduled.single.reminderTime, unixTime(2015, 1, 26, 15, 0),
+          reason: 'reminders.dependency-wiring#1: the widgetPreferences '
+              'argument is where the snooze time comes from');
+      scheduler.stopListening();
+    });
+
+    test('no habit with a reminder means nothing to ask permission for', () {
+      expect(reminderScheduler.hasHabitsWithReminders(), isFalse,
+          reason: 'reminders.app-start-and-permission#6: if the user has zero '
+              'habits with reminders, no permission is ever requested');
+
+      final withoutReminder = fixtures.createEmptyHabit(name: 'no reminder');
+      habitList.add(withoutReminder);
+      expect(reminderScheduler.hasHabitsWithReminders(), isFalse,
+          reason: 'reminders.app-start-and-permission#6: a habit without a '
+              'reminder does not open the permission gate either');
+
+      final archived = fixtures.createEmptyHabit(name: 'archived');
+      archived.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      archived.isArchived = true;
+      habitList.add(archived);
+      expect(reminderScheduler.hasHabitsWithReminders(), isTrue,
+          reason: 'reminders.app-start-and-permission#6: the gate is '
+              'getFiltered(WITH_ALARM), which does include archived habits');
     });
   });
 }

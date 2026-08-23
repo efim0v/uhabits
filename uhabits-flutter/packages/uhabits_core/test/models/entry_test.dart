@@ -150,10 +150,14 @@ void main() {
       // Short toggle off (the default): a press opens the dialog instead of
       // cycling, pre-filled with the current value.
       expect(prefs.isShortToggleEnabled, isFalse,
-          reason: 'models.entry-values#10');
+          reason: 'models.entry-values#10 and '
+              'settings.preferences.short-toggle#4 — HistoryCard branches on '
+              'preferences.isShortToggleEnabled exactly as the list buttons '
+              'do: with it off a short press opens the editor');
       presenter.onDateShortPress(today);
       expect(screen.log, ['feedback', 'checkmark'],
-          reason: 'models.entry-values#10');
+          reason: 'models.entry-values#10 and '
+              'settings.preferences.short-toggle#4');
       expect(screen.checkmarkValue, Entry.unknown,
           reason: 'models.entry-values#10');
 
@@ -180,7 +184,10 @@ void main() {
       screen.log.clear();
 
       presenter.onDateShortPress(today);
-      expect(screen.log, ['feedback'], reason: 'models.entry-values#10');
+      expect(screen.log, ['feedback'],
+          reason: 'models.entry-values#10 and '
+              'settings.preferences.short-toggle#4 — with the preference on '
+              'the short press toggles instead of opening the dialog');
       expect(
         habit.originalEntries.get(today).value,
         Entry.nextToggleValue(
@@ -197,9 +204,12 @@ void main() {
       screen.log.clear();
       presenter.onDateLongPress(today);
       expect(screen.log, ['feedback', 'checkmark'],
-          reason: 'models.entry-values#10');
+          reason: 'models.entry-values#10 and '
+              'settings.preferences.short-toggle#4 — and the long press is '
+              'the one that now opens the history editor');
       expect(screen.checkmarkValue, Entry.skip,
-          reason: 'models.entry-values#10');
+          reason: 'models.entry-values#10 and '
+              'settings.preferences.short-toggle#4');
     });
   });
 

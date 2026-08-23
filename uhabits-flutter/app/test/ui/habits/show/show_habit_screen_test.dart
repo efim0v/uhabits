@@ -18,12 +18,15 @@ import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/show_habit_model.dart';
+import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/show/cards/notes_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/overview_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/subtitle_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
+import 'package:uhabits/ui/theme/app_theme.dart' show appThemeData;
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
+import 'package:uhabits_core/src/ui/intent_parser.dart' show parseContentUriId;
 // `Color` and `Theme` collide with the Material ones, so they come in under a
 // prefix and everything else stays bare.
 import 'package:uhabits_core/uhabits_core.dart' hide Color, Theme;
@@ -789,6 +792,498 @@ void main() {
 
       expect(find.byType(ShowHabitScreen), findsNothing);
       expect(find.byType(HabitListScreen), findsOneWidget);
+    });
+  });
+
+  // =======================================================================
+  // reminders.show-habit-subtitle — the same row, seen from the reminders
+  // domain of the ledger
+  // =======================================================================
+
+  group('reminders.show-habit-subtitle', () {
+    testWidgets('#1 the reminder row is the formatted time, or "Off"',
+        (tester) async {
+      final scope = openScope();
+      final withReminder = addHabit(
+        scope,
+        'Meditate',
+        reminder: Reminder(21, 5, WeekdayList.everyDay),
+      );
+      final without = addHabit(scope, 'Run');
+
+      await tester.pumpWidget(
+        wrapCard(SubtitleCardView(state: stateOf(scope, withReminder).subtitle)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        '9:05 PM',
+        reason: 'reminders.show-habit-subtitle#1: when state.reminder is '
+            'non-null the label is formatTime(context, reminder.hour, '
+            'reminder.minute)',
+      );
+
+      await tester.pumpWidget(
+        wrapCard(
+          SubtitleCardView(
+            state: stateOf(scope, withReminder).subtitle,
+            use24HourFormat: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        '21:05',
+        reason: 'reminders.show-habit-subtitle#1: through the same 12/24-hour '
+            'system preference the rest of the app uses',
+      );
+
+      await tester.pumpWidget(
+        wrapCard(SubtitleCardView(state: stateOf(scope, without).subtitle)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        'Off',
+        reason: 'reminders.show-habit-subtitle#1: when it is null the label is '
+            'the string reminder_off',
+      );
+    });
+
+    testWidgets('#2 the reminder icon uses the FontAwesome typeface',
+        (tester) async {
+      final scope = openScope();
+      final habit = addHabit(
+        scope,
+        'Meditate',
+        reminder: Reminder(8, 30, WeekdayList.everyDay),
+      );
+
+      await tester.pumpWidget(
+        wrapCard(SubtitleCardView(state: stateOf(scope, habit).subtitle)),
+      );
+      await tester.pumpAndSettle();
+
+      final icon = textOf(tester, SubtitleCardView.reminderIconKey);
+      expect(icon.style!.fontFamily, FontAssets.fontAwesomeFamily,
+          reason: 'reminders.show-habit-subtitle#2: the reminder icon uses the '
+              'FontAwesome typeface');
+      expect(icon.data, FontAwesome.bellO,
+          reason: 'reminders.show-habit-subtitle#2: and its glyph is the bell');
+    });
+  });
+  // -----------------------------------------------------------------------
+  // Scaffold: how the screen is reached, refreshed and themed
+  // -----------------------------------------------------------------------
+
+  group('scaffold, revisited', () {
+    test('show-habit.screen-scaffold#1: the route is the habit URI, and '
+        'the id in it resolves through habitList.getById', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      final route = ShowHabitScreen.route(scope: scope, habit: habit);
+      expect(route.settings.name, 'content://org.isoron.uhabits/habit/${habit.id}',
+          reason: 'show-habit.screen-scaffold#1 — the screen is identified by '
+              'Habit.uriString');
+      expect(route.settings.name, habit.uriString,
+          reason: 'show-habit.screen-scaffold#1');
+
+      // Parsing the trailing id back out and asking the habit list for it
+      // returns the very same habit, which is the whole of the Android
+      // resolution step.
+      final id = parseContentUriId(Uri.parse(route.settings.name!));
+      expect(id, habit.id,
+          reason: 'show-habit.screen-scaffold#1 — the id is the trailing path '
+              'segment');
+      expect(scope.habitList.getById(id), same(habit),
+          reason: 'show-habit.screen-scaffold#1 — habitList.getById(id) is the '
+              'habit the screen shows');
+    });
+
+    test('show-habit.screen-scaffold#5: refresh() completes before it '
+        'returns, on the one UI isolate', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      final model =
+          ShowHabitModel(scope: scope, habit: habit, theme: LightTheme());
+      addTearDown(model.dispose);
+
+      var notifications = 0;
+      model.addListener(() => notifications++);
+      habit.name = 'Meditate twice';
+
+      model.refresh();
+      // No await, no pump: Kotlin launches refresh on Dispatchers.Main and
+      // Dart's UI isolate *is* that thread, so the new state and the
+      // notification are both already there.
+      expect(model.state.title, 'Meditate twice',
+          reason: 'show-habit.screen-scaffold#5 — refresh runs on the main '
+              'dispatcher');
+      expect(notifications, 1,
+          reason: 'show-habit.screen-scaffold#5 — and its listeners with it');
+    });
+
+    test('show-habit.screen-scaffold#6: onResume registers the command '
+        'listener and onPause unregisters it', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      final model =
+          ShowHabitModel(scope: scope, habit: habit, theme: LightTheme());
+      addTearDown(model.dispose);
+      var notifications = 0;
+      model.addListener(() => notifications++);
+
+      final command = CreateRepetitionCommand(
+        scope.habitList,
+        habit,
+        getToday(),
+        Entry.yesManual,
+        '',
+      );
+
+      scope.commandRunner.notifyListeners(command);
+      expect(notifications, 0,
+          reason: 'show-habit.screen-scaffold#6 — nothing is registered before '
+              'onResume');
+
+      model.attach();
+      expect(notifications, 1,
+          reason: 'show-habit.screen-scaffold#6 — onResume registers and '
+              'refreshes');
+      scope.commandRunner.notifyListeners(command);
+      expect(notifications, 2,
+          reason: 'show-habit.screen-scaffold#6 — and the screen is now a '
+              'CommandRunner.Listener');
+
+      model.detach();
+      scope.commandRunner.notifyListeners(command);
+      expect(notifications, 2,
+          reason: 'show-habit.screen-scaffold#6 — onPause unregisters the '
+              'listener');
+
+      // Re-attaching is idempotent: a second onResume does not double-register.
+      model.attach();
+      final before = notifications;
+      scope.commandRunner.notifyListeners(command);
+      expect(notifications, before + 1,
+          reason: 'show-habit.screen-scaffold#6');
+    });
+
+    testWidgets('show-habit.screen-scaffold#11: every card state carries the '
+        'theme variant the app was built from', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      Future<core.Theme> themeUnder(core.Theme appTheme) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: appThemeData(appTheme),
+            localizationsDelegates: L10n.localizationsDelegates,
+            supportedLocales: L10n.supportedLocales,
+            home: Provider<AppScope>.value(
+              value: scope,
+              // One key for all three: the screen stays mounted and the
+              // theme really is switched under it, as a night-mode toggle
+              // would.
+              child: ShowHabitScreen(
+                key: const ValueKey<String>('themeProbe'),
+                habit: habit,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        return modelOf(tester).state.theme;
+      }
+
+      expect(await themeUnder(LightTheme()), isA<LightTheme>(),
+          reason: 'show-habit.screen-scaffold#11');
+      final dark = await themeUnder(DarkTheme());
+      expect(dark, isA<DarkTheme>(), reason: 'show-habit.screen-scaffold#11');
+      expect(dark, isNot(isA<PureBlackTheme>()),
+          reason: 'show-habit.screen-scaffold#11');
+      expect(await themeUnder(PureBlackTheme()), isA<PureBlackTheme>(),
+          reason: 'show-habit.screen-scaffold#11 — pure black is its own '
+              'variant, not just a dark one');
+
+      // And the theme really is the one every card state is built with.
+      final state = modelOf(tester).state;
+      expect(state.subtitle.theme, same(state.theme),
+          reason: 'show-habit.screen-scaffold#11');
+      expect(state.overview.theme, same(state.theme),
+          reason: 'show-habit.screen-scaffold#11');
+      expect(state.target.theme, same(state.theme),
+          reason: 'show-habit.screen-scaffold#11');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Card chrome
+  // -----------------------------------------------------------------------
+
+  group('card chrome', () {
+    testWidgets('show-habit.card-order-and-visibility#6: the subtitle card is '
+        'the one card that is not a @style/Card', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate', description: 'notes');
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+
+      final subtitle = find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.subtitle));
+      final material = tester.widget<Material>(
+        find.descendant(of: subtitle, matching: find.byType(Material)).first,
+      );
+      expect(material.color,
+          _toFlutterColor(LightTheme().headerBackgroundColor),
+          reason: 'show-habit.card-order-and-visibility#6 — '
+              'headerBackgroundColor, not cardBgColor');
+      expect(material.elevation, 2.0,
+          reason: 'show-habit.card-order-and-visibility#6 — 2dp of elevation');
+
+      final padding = tester
+          .widgetList<Padding>(
+            find.descendant(of: subtitle, matching: find.byType(Padding)),
+          )
+          .map((p) => p.padding)
+          .whereType<EdgeInsetsDirectional>()
+          .single;
+      expect(padding.start, 60.0,
+          reason: 'show-habit.card-order-and-visibility#6 — 60dp of side '
+              'padding');
+      expect(padding.top, 15.0,
+          reason: 'show-habit.card-order-and-visibility#6 — 15dp top padding');
+      expect(padding.bottom, 10.0,
+          reason: 'show-habit.card-order-and-visibility#6 — 10dp bottom '
+              'padding');
+
+      // The notes card next to it is a plain @style/Card instead.
+      final notes = find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.notes));
+      final notesMaterial = tester.widget<Material>(
+        find.descendant(of: notes, matching: find.byType(Material)).first,
+      );
+      expect(notesMaterial.color,
+          _toFlutterColor(LightTheme().cardBackgroundColor),
+          reason: 'show-habit.card-order-and-visibility#6 — every other card '
+              'takes cardBgColor and 1dp');
+      expect(notesMaterial.elevation, 1.0,
+          reason: 'show-habit.card-order-and-visibility#6');
+    });
+
+    testWidgets('show-habit.notes-card#3 #4: the description is plain text, '
+        'and a new state always redraws it', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(
+        scope,
+        'Meditate',
+        description: '**not bold** https://example.com',
+      );
+
+      await tester.pumpWidget(
+        wrapCard(
+          NotesCardView(
+            state: stateOf(scope, habit).notes,
+            theme: LightTheme(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final text = tester.widget<Text>(find.byType(Text));
+      expect(text.data, '**not bold** https://example.com',
+          reason: 'show-habit.notes-card#3 — rendered verbatim: no markdown, '
+              'no links, no formatting');
+      expect(text.textSpan, isNull,
+          reason: 'show-habit.notes-card#3 — a single plain string, not a rich '
+              'span tree');
+      expect(text.style!.color,
+          _toFlutterColor(LightTheme().highContrastTextColor),
+          reason: 'show-habit.notes-card#3 — in contrast100');
+
+      // setState always invalidates: pushing a new state repaints, with
+      // nothing memoised from the previous one.
+      habit.description = 'edited';
+      await tester.pumpWidget(
+        wrapCard(
+          NotesCardView(
+            state: stateOf(scope, habit).notes,
+            theme: LightTheme(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byType(Text)).data, 'edited',
+          reason: 'show-habit.notes-card#4 — setState always calls '
+              'invalidate() after updating');
+    });
+
+    testWidgets('show-habit.overview-card#11: the row is weighted 5, 4, 4, 4, '
+        '4', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(
+        wrapCard(OverviewCardView(state: stateOf(scope, habit).overview)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(OverviewCardView.ringWeight, 5,
+          reason: 'show-habit.overview-card#11 — the ring column has weight 5');
+      expect(OverviewCardView.columnWeight, 4,
+          reason: 'show-habit.overview-card#11 — the four value columns have '
+              'weight 4');
+
+      final flexes = tester
+          .widgetList<Expanded>(
+            find.descendant(of: find.byType(Row), matching: find.byType(Expanded)),
+          )
+          .map((e) => e.flex)
+          .toList();
+      expect(flexes, <int>[5, 4, 4, 4, 4],
+          reason: 'show-habit.overview-card#11 — in that order: ring, Score, '
+              'Month, Year, Total');
+    });
+
+    test('charts-canvas-theming.ring-view-android#3 #4 #10: the ring the '
+        'overview card draws', () {
+      final theme = LightTheme();
+      final ring = RingPainter(
+        color: _toFlutterColor(theme.colorOf(const PaletteColor(7))),
+        inactiveColor: _toFlutterColor(theme.highContrastTextColor)
+            .withValues(alpha: RingPainter.inactiveAlpha),
+        backgroundColor: _toFlutterColor(theme.cardBackgroundColor),
+        percentage: 0.6,
+        thickness: OverviewCardView.ringThickness,
+      );
+
+      expect(RingPainter.inactiveAlpha, 0.15,
+          reason: 'charts-canvas-theming.ring-view-android#3 — inactiveColor '
+              'is forced to 15% alpha at construction');
+      expect(ring.inactiveColor.a, closeTo(0.15, 1e-6),
+          reason: 'charts-canvas-theming.ring-view-android#3');
+
+      expect(RingPainter.defaultPrecision, 0.01,
+          reason: 'charts-canvas-theming.ring-view-android#4 — the default '
+              'precision is 0.01');
+      expect(ring.precision, 0.01,
+          reason: 'charts-canvas-theming.ring-view-android#4 — which the '
+              'overview layout does not override');
+      expect(ring.sweepDegrees, closeTo(216.0, 1e-6),
+          reason: 'charts-canvas-theming.ring-view-android#4 — angle = 360 * '
+              'round(percentage / precision) * precision');
+      // 1% steps: 3.6 degrees apart, with everything between snapping.
+      expect(
+        RingPainter(
+          color: ring.color,
+          inactiveColor: ring.inactiveColor,
+          backgroundColor: ring.backgroundColor,
+          percentage: 0.6049,
+          thickness: 5,
+        ).sweepDegrees,
+        closeTo(216.0, 1e-6),
+        reason: 'charts-canvas-theming.ring-view-android#4',
+      );
+      expect(
+        RingPainter(
+          color: ring.color,
+          inactiveColor: ring.inactiveColor,
+          backgroundColor: ring.backgroundColor,
+          percentage: 0.606,
+          thickness: 5,
+        ).sweepDegrees,
+        closeTo(219.6, 1e-6),
+        reason: 'charts-canvas-theming.ring-view-android#4',
+      );
+
+      expect(OverviewCardView.ringSize, 30.0,
+          reason: 'charts-canvas-theming.ring-view-android#10 — the show-habit '
+              'overview ring is 30dp');
+      expect(OverviewCardView.ringThickness, 5.0,
+          reason: 'charts-canvas-theming.ring-view-android#10 — with thickness '
+              '5dp');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Menu actions the screen exposes, and the strings they use
+  // -----------------------------------------------------------------------
+
+  group('menu actions', () {
+    testWidgets('show-habit.edit-action#2: the editor is opened with the habit '
+        'id and the habit type', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Run', type: HabitType.numerical);
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(ShowHabitScreen.editActionKey));
+      await tester.pumpAndSettle();
+
+      final editor =
+          tester.widget<EditHabitScreen>(find.byType(EditHabitScreen));
+      expect(editor.habitId, habit.id,
+          reason: 'show-habit.edit-action#2 — the long extra "habitId" is '
+              'habit.id');
+      expect(editor.habitType, HabitType.numerical,
+          reason: 'show-habit.edit-action#2 — and the extra "habitType" is '
+              'habit.type');
+
+      // Back to the detail screen: the show screen is not finished by Edit
+      // (show-habit.edit-action#3), so the editor sits on top of it.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      final boolean = addHabit(scope, 'Meditate');
+      await tester.pumpWidget(wrap(scope, boolean));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ShowHabitScreen.editActionKey));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<EditHabitScreen>(find.byType(EditHabitScreen)).habitType,
+        HabitType.yesNo,
+        reason: 'show-habit.edit-action#2',
+      );
+    });
+
+    testWidgets('show-habit.menu#6 and show-habit.archive-unarchive#3: the '
+        'menu titles and the two confirmation messages', (tester) async {
+      late L10n l10n;
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Builder(builder: (context) {
+            l10n = L10n.of(context);
+            return const SizedBox.shrink();
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        <String>[
+          l10n.export,
+          l10n.archive,
+          l10n.unarchive,
+          l10n.delete,
+          l10n.edit,
+        ],
+        <String>['Export', 'Archive', 'Unarchive', 'Delete', 'Edit'],
+        reason: 'show-habit.menu#6 — the five translated menu titles',
+      );
+
+      // ShowHabitMenuPresenter.Message.HABIT_ARCHIVED / HABIT_UNARCHIVED, at
+      // the quantity the show screen always uses.
+      expect(l10n.toastHabitsArchived(1), 'Habit archived',
+          reason: 'show-habit.archive-unarchive#3 — HABIT_ARCHIVED renders the '
+              'quantity-1 string "Habit archived"');
+      expect(l10n.toastHabitsUnarchived(1), 'Habit unarchived',
+          reason: 'show-habit.archive-unarchive#3 — and HABIT_UNARCHIVED '
+              '"Habit unarchived"');
     });
   });
 }

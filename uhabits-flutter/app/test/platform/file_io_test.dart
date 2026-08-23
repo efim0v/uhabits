@@ -37,6 +37,8 @@ import 'package:uhabits/ui/settings/settings_screen.dart';
 import 'package:uhabits_core/src/io/abstract_importer.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/show_habit_menu_presenter.dart'
+    show ShowHabitMenuPresenterSystem;
 import 'package:uhabits_core/uhabits_core.dart';
 
 // ---------------------------------------------------------------------------
@@ -188,6 +190,31 @@ void main() {
           reason: 'io.export-csv-entry-points#5');
       expect(() => finder.getCSVOutputDir(), throwsA(isA<TypeError>()),
           reason: 'io.export-csv-entry-points#5 the `!!` in HabitsDirFinder');
+    });
+
+    test('show-habit.export-csv#2 the single-habit export writes into the same '
+        'app-private "CSV" subdirectory', () {
+      final parent = makeDir('external-show-habit');
+      final finder = HabitsDirFinder(<String>[parent]);
+
+      expect(HabitsDirFinder.csvDirName, 'CSV',
+          reason: 'show-habit.export-csv#2 — the subdirectory is named "CSV"');
+      final dir = finder.getCSVOutputDir();
+      expect(dir.pathString, '$parent/CSV',
+          reason: 'show-habit.export-csv#2 — under the app-private files '
+              'directory');
+      expect(Directory(dir.pathString).existsSync(), isTrue,
+          reason: 'show-habit.export-csv#2 — created if it is not there yet');
+
+      // The show screen's `ShowHabitMenuPresenter.System` and the list
+      // screen's `ListHabitsBehavior.DirFinder` are the same object, so both
+      // exports land in the same place.
+      expect(finder, isA<ShowHabitMenuPresenterSystem>(),
+          reason: 'show-habit.export-csv#2 — HabitsDirFinder is what the show '
+              'screen asks for its output directory');
+      expect((finder as ShowHabitMenuPresenterSystem).getCSVOutputDir().pathString,
+          '$parent/CSV',
+          reason: 'show-habit.export-csv#2');
     });
 
     test('#6 settings result 102 exports the list into the CSV dir', () async {
@@ -409,6 +436,20 @@ void main() {
       expect(backupFileName(DateTime.fromMillisecondsSinceEpoch(40 * 86400000)),
           'Loop Habits Backup 1970-02-10 000000.db',
           reason: 'io.export-db-backup#13 the same format as AutoBackup');
+      // The automatic daily backup itself is not ported — the Storage Access
+      // Framework it needs has no cross-platform equivalent — but the name it
+      // would write is produced by this one helper, shared with the manual
+      // export, and AutoBackupTest asserts exactly the string above.
+      expect(backupFileName(instant).startsWith('Loop Habits Backup '), isTrue,
+          reason: 'io.auto-backup#10: the name is "Loop Habits Backup " + the '
+              'formatted date + ".db"');
+      expect(backupFileName(instant).endsWith('.db'), isTrue,
+          reason: 'io.auto-backup#10');
+      expect(backupDateString(DateTime.utc(2025, 8, 22, 14, 30, 12)),
+          '2025-08-22 143012',
+          reason: 'io.auto-backup#10: SimpleDateFormat("yyyy-MM-dd HHmmss", '
+              'Locale.US) formatted in the UTC time zone, never the device '
+              'one');
     });
 
     test('#1 #3 #7 #9 #14 #16 settings result 103 copies the live database',
@@ -449,6 +490,10 @@ void main() {
       expect(File(expected).readAsBytesSync(),
           File(scope.databasePath!).readAsBytesSync(),
           reason: 'io.export-db-backup#7 a byte-for-byte copy of the live db');
+      expect(File(expected).lengthSync(), File(scope.databasePath!).lengthSync(),
+          reason: 'io.auto-backup#11: the backup is a raw byte-for-byte copy '
+              'of the SQLite file — no VACUUM, no checkpoint, no transaction '
+              'wrapper, so the copy is the same length as the original');
       expect(sharer.paths, <String>[expected],
           reason: 'io.export-db-backup#9 io.export-db-backup#14 '
               'the absolute path reaches the share sheet');
@@ -782,6 +827,22 @@ void main() {
 
       expect(opener.openResourceFile('migrations/99.sql').lines(),
           throwsA(isA<FileSystemException>()));
+    });
+
+    test('io.resourcefile-api#3 exists() answers, it does not throw', () async {
+      final opener = FlutterFileOpener(userDataDir: tempDir.path);
+
+      expect(await opener.openResourceFile('migrations/09.sql').exists(), isTrue,
+          reason: 'io.resourcefile-api#3: resource paths are asset paths — the '
+              "importer asks for 'migrations/NN.sql' and nothing else");
+      expect(await opener.openResourceFile('migrations/99.sql').exists(),
+          isFalse,
+          reason: 'io.resourcefile-api#3: exists() is implemented by '
+              'attempting to open the asset and catching the failure, so a '
+              'missing resource answers false instead of throwing');
+      expect(await opener.openResourceFile('not/an/asset').exists(), isFalse,
+          reason: 'io.resourcefile-api#3: including a path that is not an '
+              'asset path at all');
     });
 
     test('copyTo writes the script where the caller asked', () async {

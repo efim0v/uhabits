@@ -663,4 +663,61 @@ void main() {
       }
     });
   });
+
+  // -------------------------------------------------------------------------
+  // The same themes read against the show-habit screen's own colour rules.
+  // -------------------------------------------------------------------------
+  group('show-habit.theme-colors', () {
+    test('#2 the light palette indices 0..19, and black for anything else', () {
+      const rule = 'show-habit.theme-colors#2';
+      final theme = LightTheme();
+      for (var i = 0; i < 20; i++) {
+        expectOpaque(theme.color(i), lightPalette[i], '$rule (index $i)');
+      }
+      expectOpaque(theme.color(-1), 0x000000, rule);
+      expectOpaque(theme.color(20), 0x000000, rule);
+      expectOpaque(theme.color(999), 0x000000, rule);
+    });
+
+    test('#3 the dark palette indices 0..19, and white for anything else', () {
+      const rule = 'show-habit.theme-colors#3';
+      final theme = DarkTheme();
+      for (var i = 0; i < 20; i++) {
+        expectOpaque(theme.color(i), darkPalette[i], '$rule (index $i)');
+      }
+      expectOpaque(theme.color(-1), 0xFFFFFF, rule);
+      expectOpaque(theme.color(20), 0xFFFFFF, rule);
+    });
+
+    test('#5 the dark neutrals, and what PureBlackTheme does to them', () {
+      const rule = 'show-habit.theme-colors#5';
+      final dark = DarkTheme();
+      expectOpaque(dark.cardBackgroundColor, 0x303030, rule);
+      expectOpaque(dark.lowContrastTextColor, 0x424242, rule);
+      expectOpaque(dark.mediumContrastTextColor, 0x9E9E9E, rule);
+      expectOpaque(dark.highContrastTextColor, 0xF5F5F5, rule);
+      expectOpaque(dark.appBackgroundColor, 0x212121, rule);
+
+      final pure = PureBlackTheme();
+      expectOpaque(pure.appBackgroundColor, 0x000000, rule);
+      expectOpaque(pure.cardBackgroundColor, 0x000000, rule);
+      expectOpaque(pure.lowContrastTextColor, 0x212121, rule);
+      // The other three neutrals are inherited from DarkTheme untouched.
+      expectOpaque(pure.mediumContrastTextColor, 0x9E9E9E, rule);
+      expectOpaque(pure.highContrastTextColor, 0xF5F5F5, rule);
+    });
+
+    test('#6 the two text sizes the charts read are 10.0 and 17.0', () {
+      const rule = 'show-habit.theme-colors#6';
+      for (final theme in <Theme>[
+        LightTheme(),
+        DarkTheme(),
+        PureBlackTheme(),
+        WidgetTheme(),
+      ]) {
+        expect(theme.smallTextSize, 10.0, reason: rule);
+        expect(theme.regularTextSize, 17.0, reason: rule);
+      }
+    });
+  });
 }

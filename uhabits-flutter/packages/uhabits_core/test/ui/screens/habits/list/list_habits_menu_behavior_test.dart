@@ -373,12 +373,17 @@ void main() {
           isArchivedAllowed: true,
           isCompletedAllowed: false,
         ),
-        reason: 'list-habits.filters#4',
+        reason: 'list-habits.filters#4 and '
+            'settings.preferences.question-marks#5 — with question marks off '
+            'updateAdapterFilter() builds '
+            'HabitMatcher(isCompletedAllowed = showCompleted)',
       );
       expect(
         withoutQuestionMarks.adapter.lastFilter.isEnteredAllowed,
         isTrue,
-        reason: 'list-habits.filters#4',
+        reason: 'list-habits.filters#4 and '
+            'settings.preferences.question-marks#5 — the other field keeps its '
+            'default',
       );
 
       final withQuestionMarks = Fixture(
@@ -392,12 +397,15 @@ void main() {
           isArchivedAllowed: true,
           isEnteredAllowed: false,
         ),
-        reason: 'list-habits.filters#4',
+        reason: 'list-habits.filters#4 and '
+            'settings.preferences.question-marks#5 — with question marks on '
+            'the flag is routed to isEnteredAllowed instead',
       );
       expect(
         withQuestionMarks.adapter.lastFilter.isCompletedAllowed,
         isTrue,
-        reason: 'list-habits.filters#4',
+        reason: 'list-habits.filters#4 and '
+            'settings.preferences.question-marks#5',
       );
 
       // The search query rides along on both branches.
@@ -1410,13 +1418,29 @@ void main() {
       expect(
         f.adapter.lastFilter.isArchivedAllowed,
         isTrue,
-        reason: 'list-habits.menu.overflow-items#8',
+        reason: 'list-habits.menu.overflow-items#8 and '
+            'settings.preferences.show-archived-completed#3 — pref_show_archived '
+            'has no settings-screen row; the main-screen "Hide archived" item '
+            'is what toggles it',
+      );
+      expect(
+        f.preferences.showArchived,
+        isTrue,
+        reason: 'settings.preferences.show-archived-completed#3 — the filter '
+            'menu item is the only writer of pref_show_archived',
       );
       f.behavior.onToggleShowCompleted();
       expect(
         f.adapter.lastFilter.isCompletedAllowed,
         isFalse,
-        reason: 'list-habits.menu.overflow-items#8',
+        reason: 'list-habits.menu.overflow-items#8 and '
+            'settings.preferences.show-archived-completed#3 — likewise '
+            'pref_show_completed and "Hide completed"',
+      );
+      expect(
+        f.preferences.showCompleted,
+        isFalse,
+        reason: 'settings.preferences.show-archived-completed#3',
       );
       expect(
         f.adapter.refreshCount,
@@ -1439,12 +1463,17 @@ void main() {
       expect(
         f.adapter.lastFilter,
         const HabitMatcher(isEnteredAllowed: false),
-        reason: 'list-habits.menu.overflow-items#10',
+        reason: 'list-habits.menu.overflow-items#10 and '
+            'settings.preferences.question-marks#7 — flipping the switch in '
+            'settings reaches onPreferencesChanged(), which re-applies the '
+            'adapter filter immediately (invalidateOptionsMenu() is the '
+            'Android half and has no Flutter analogue)',
       );
       expect(
         f.adapter.log,
         <String>['setFilter', 'refresh'],
-        reason: 'list-habits.menu.overflow-items#10',
+        reason: 'list-habits.menu.overflow-items#10 and '
+            'settings.preferences.question-marks#7',
       );
     });
 

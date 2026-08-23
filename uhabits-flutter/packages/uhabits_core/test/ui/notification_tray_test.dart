@@ -13,17 +13,29 @@
 /// Every `expect` carries the parity-ledger rule id it exercises.
 library;
 
+import 'dart:async';
+
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/commands/archive_habits_command.dart';
+import 'package:uhabits_core/src/commands/change_habit_color_command.dart';
 import 'package:uhabits_core/src/commands/command_runner.dart';
+import 'package:uhabits_core/src/commands/create_repetition_command.dart';
+import 'package:uhabits_core/src/commands/delete_habits_command.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
+import 'package:uhabits_core/src/models/habit_list.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
+import 'package:uhabits_core/src/models/palette_color.dart';
 import 'package:uhabits_core/src/models/reminder.dart';
 import 'package:uhabits_core/src/models/weekday_list.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
+import 'package:uhabits_core/src/preferences/widget_preferences.dart';
+import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
 import 'package:uhabits_core/src/ui/notification_tray.dart';
 
@@ -232,6 +244,16 @@ void _enterToday(Habit habit, int value) {
 
 /// The default notification date used across the tests: 2015-01-25, a Sunday.
 final LocalDate _sunday = LocalDate.ymd(2015, 1, 25);
+
+/// The size of `NotificationTray`'s private `active` map, read the only way the
+/// core exposes it: `reshowAll()` re-runs the task for exactly one entry each.
+int _activeCount(_Fixture f) {
+  f.systemTray.shown.clear();
+  f.tray.reshowAll();
+  final count = f.systemTray.shown.length;
+  f.systemTray.shown.clear();
+  return count;
+}
 
 void main() {
   setUp(() {
@@ -1075,7 +1097,8 @@ void main() {
       expect(
         tray.cancelCalls,
         <Habit>[habit],
-        reason: 'notifications.sticky-and-dismiss#5 — with sticky off, '
+        reason: 'notifications.sticky-and-dismiss#5 and '
+            'settings.preferences.sticky-notifications#5 — with sticky off, '
             'onDismiss calls notificationTray.cancel(habit)',
       );
       expect(
@@ -1091,15 +1114,17 @@ void main() {
       expect(
         tray.reshowCalls,
         <Habit>[habit],
-        reason: 'notifications.sticky-and-dismiss#5 — with sticky on, '
-            'onDismiss calls notificationTray.reshow(habit), the Android 14+ '
-            'workaround',
+        reason: 'notifications.sticky-and-dismiss#5 and '
+            'settings.preferences.sticky-notifications#5 — with sticky on, '
+            'onDismiss calls notificationTray.reshow(habit) instead of '
+            'cancelling, the Android 14+ workaround',
       );
       expect(
         tray.cancelCalls.length,
         1,
-        reason: 'notifications.sticky-and-dismiss#5 — the sticky branch does '
-            'not also cancel',
+        reason: 'notifications.sticky-and-dismiss#5 and '
+            'settings.preferences.sticky-notifications#5 — the sticky branch '
+            'does not also cancel',
       );
     });
   });
@@ -1210,4 +1235,548 @@ void main() {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  // notifications.auto-cancel — NotificationTray as a CommandRunner.Listener
+  // -------------------------------------------------------------------------
+
+  group('notifications.auto-cancel', () {
+    test('onCommandFinished cancels for CreateRepetitionCommand', () {
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final habit = f.habit();
+      habitList.add(habit);
+      f.tray.show(habit, _sunday, 456);
+      f.systemTray.shown.clear();
+      f.order.clear();
+
+      f.tray.onCommandFinished(
+        CreateRepetitionCommand(habitList, habit, getToday(), Entry.yesManual, ''),
+      );
+
+      expect(
+        f.systemTray.removed,
+        <int>[5],
+        reason: 'notifications.auto-cancel#1 — if command is '
+            'CreateRepetitionCommand it cancels the notification for '
+            'command.habit',
+      );
+      expect(
+        _activeCount(f),
+        0,
+        reason: 'notifications.auto-cancel#10 — recording an entry dismisses '
+            "that habit's reminder notification",
+      );
+    });
+
+    test('onCommandFinished cancels every habit of a DeleteHabitsCommand', () {
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final first = f.habit(id: 5, name: 'Meditate');
+      final second = f.habit(id: 7, name: 'Run');
+      final untouched = f.habit(id: 9, name: 'Wake up early');
+      for (final h in <Habit>[first, second, untouched]) {
+        habitList.add(h);
+        f.tray.show(h, _sunday, 456);
+      }
+      f.systemTray.removed.clear();
+
+      f.tray.onCommandFinished(
+        DeleteHabitsCommand(habitList, <Habit>[first, second]),
+      );
+
+      expect(
+        f.systemTray.removed,
+        <int>[5, 7],
+        reason: 'notifications.auto-cancel#1 — if command is '
+            'DeleteHabitsCommand it cancels the notification for every habit '
+            "in the command's deleted list",
+      );
+      expect(
+        _activeCount(f),
+        1,
+        reason: 'notifications.auto-cancel#10 — deleting a habit dismisses '
+            'its notification, and only its own',
+      );
+    });
+
+    test('the two checks are independent ifs, not an else-if chain', () {
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final habit = f.habit();
+      habitList.add(habit);
+      f.tray.show(habit, _sunday, 456);
+      f.systemTray.removed.clear();
+
+      f.tray.onCommandFinished(_BothCommand(habitList, habit));
+
+      expect(
+        f.systemTray.removed,
+        <int>[5, 5],
+        reason: 'notifications.auto-cancel#6 — onCommandFinished contains two '
+            'independent if checks (not else-if), so a command that is both '
+            'runs both branches',
+      );
+    });
+
+    test('every other command type is ignored', () {
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final habit = f.habit();
+      habitList.add(habit);
+      f.tray.show(habit, _sunday, 456);
+      f.systemTray.removed.clear();
+
+      f.tray.onCommandFinished(
+        ArchiveHabitsCommand(habitList, <Habit>[habit]),
+      );
+      f.tray.onCommandFinished(
+        ChangeHabitColorCommand(habitList, <Habit>[habit], const PaletteColor(3)),
+      );
+
+      expect(
+        f.systemTray.removed,
+        isEmpty,
+        reason: 'notifications.auto-cancel#7 — all other command types are '
+            "ignored: an archived habit's already-showing notification is NOT "
+            'dismissed by archiving it',
+      );
+      expect(_activeCount(f), 1,
+          reason: 'notifications.auto-cancel#7 — the registry keeps the entry');
+    });
+
+    test('cancel removes the notification and the registry entry', () {
+      final f = _Fixture();
+      final habit = f.habit();
+      f.tray.show(habit, _sunday, 456);
+
+      f.tray.cancel(habit);
+
+      expect(
+        f.systemTray.removed,
+        <int>[5],
+        reason: 'notifications.auto-cancel#8 — cancel(habit) calls '
+            'systemTray.removeNotification(notificationId)',
+      );
+      expect(
+        _activeCount(f),
+        0,
+        reason: 'notifications.auto-cancel#8 — and removes the habit from the '
+            'internal active map',
+      );
+
+      final nullId = f.habit(id: null);
+      f.tray.cancel(nullId);
+      expect(
+        f.systemTray.removed.last,
+        0,
+        reason: 'notifications.auto-cancel#9 — the notification id is '
+            '(habit.id % Int.MAX_VALUE) and 0 when habit.id is null',
+      );
+
+      final big = f.habit(id: 2147483647 + 5);
+      f.tray.cancel(big);
+      expect(
+        f.systemTray.removed.last,
+        5,
+        reason: 'notifications.auto-cancel#9 — the notification id is '
+            'habit.id % Int.MAX_VALUE',
+      );
+    });
+
+    test('the command runner is what dismisses the notification, exactly once',
+        () {
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final habit = f.habit();
+      habitList.add(habit);
+      f.tray.startListening();
+      f.tray.show(habit, _sunday, 456);
+      f.systemTray.removed.clear();
+
+      f.commandRunner.run(
+        CreateRepetitionCommand(habitList, habit, getToday(), Entry.yesManual, ''),
+      );
+
+      expect(
+        f.systemTray.removed,
+        <int>[5],
+        reason: 'notifications.auto-cancel#5 — answering a reminder from the '
+            'app removes the notification exactly once',
+      );
+
+      // Idempotence: the same command a second time cancels again without
+      // failing, which is what lets WidgetBehavior cancel around the write.
+      f.commandRunner.run(
+        CreateRepetitionCommand(habitList, habit, getToday(), Entry.no, ''),
+      );
+      expect(
+        f.systemTray.removed,
+        <int>[5, 5],
+        reason: 'notifications.auto-cancel#5 — cancelling an already cancelled '
+            'notification is a no-op on the registry',
+      );
+    });
+
+    test('startListening/stopListening register with both collaborators', () {
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final habit = f.habit();
+      habitList.add(habit);
+
+      // Before startListening the tray hears nothing at all.
+      f.tray.show(habit, _sunday, 456);
+      f.systemTray.removed.clear();
+      f.commandRunner.run(
+        CreateRepetitionCommand(habitList, habit, getToday(), Entry.no, ''),
+      );
+      expect(
+        f.systemTray.removed,
+        isEmpty,
+        reason: 'notifications.auto-cancel#2 — the tray only hears commands '
+            'once startListening() has registered it with the CommandRunner',
+      );
+
+      f.tray.startListening();
+      f.tray.show(habit, _sunday, 456);
+      f.systemTray.shown.clear();
+      f.commandRunner.run(
+        CreateRepetitionCommand(habitList, habit, getToday(), Entry.no, ''),
+      );
+      expect(
+        f.systemTray.removed,
+        <int>[5],
+        reason: 'notifications.auto-cancel#2 — startListening() registers with '
+            'the CommandRunner',
+      );
+
+      // The Preferences half of the same registration.
+      f.tray.show(habit, _sunday, 456);
+      f.systemTray.shown.clear();
+      f.preferences.setNotificationsSticky(true);
+      expect(
+        f.systemTray.shown.length,
+        1,
+        reason: 'notifications.auto-cancel#2 — startListening() also registers '
+            'with Preferences, so onNotificationsChanged reshows',
+      );
+
+      f.tray.stopListening();
+      f.systemTray.shown.clear();
+      f.systemTray.removed.clear();
+      f.preferences.setNotificationsSticky(false);
+      f.commandRunner.run(
+        CreateRepetitionCommand(habitList, habit, getToday(), Entry.no, ''),
+      );
+      expect(
+        f.systemTray.shown,
+        isEmpty,
+        reason: 'notifications.auto-cancel#2 — stopListening() unregisters '
+            'from Preferences',
+      );
+      expect(
+        f.systemTray.removed,
+        isEmpty,
+        reason: 'notifications.auto-cancel#2 — and from the CommandRunner',
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // reminders.dependency-wiring — the object graph the app builds
+  // -------------------------------------------------------------------------
+
+  group('reminders.dependency-wiring', () {
+    test('NotificationTray takes taskRunner, commandRunner, preferences and '
+        'systemTray, in that order', () {
+      final order = <String>[];
+      final systemTray = _FakeSystemTray(order);
+      final taskRunner = CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      );
+      final commandRunner = CommandRunner(taskRunner);
+      final preferences = Preferences(MemoryStorage());
+      final tray = NotificationTray(
+        taskRunner,
+        commandRunner,
+        preferences,
+        systemTray,
+      );
+
+      expect(
+        tray,
+        isA<NotificationTray>(),
+        reason: 'reminders.dependency-wiring#2 — NotificationTray is '
+            'constructed as NotificationTray(taskRunner, commandRunner, '
+            'preferences, systemTray = AndroidNotificationTray)',
+      );
+      expect(
+        tray,
+        isA<CommandRunnerListener>(),
+        reason: 'reminders.dependency-wiring#2 — and is the CommandRunner '
+            'listener the app registers',
+      );
+      expect(
+        tray,
+        isA<PreferencesListener>(),
+        reason: 'reminders.dependency-wiring#2 — and the Preferences listener',
+      );
+    });
+
+    test('ReminderController takes reminderScheduler, notificationTray and '
+        'preferences', () {
+      final f = _Fixture();
+      final scheduler = _FakeScheduler(f.order);
+      final tray = _RecordingTray(
+        f.taskRunner,
+        f.commandRunner,
+        f.preferences,
+        f.systemTray,
+        f.order,
+      );
+      final controller = ReminderController(scheduler, tray, f.preferences);
+      final habit = f.habit();
+
+      controller.onShowReminder(habit, _sunday, 456);
+      controller.onDismiss(habit);
+
+      expect(
+        f.order,
+        <String>['show', 'scheduleAll', 'cancel'],
+        reason: 'reminders.dependency-wiring#3 — ReminderController is '
+            'constructed as ReminderController(reminderScheduler, '
+            'notificationTray, preferences) and is the only entry point the '
+            'receivers use',
+      );
+    });
+
+    test('the ShowNotificationTask splits across the two dispatchers', () async {
+      final mainDispatcher = _RecordingDispatcher('main');
+      final ioDispatcher = _RecordingDispatcher('io');
+      final f = _Fixture(
+        runner: CoroutineTaskRunner(
+          mainDispatcher: mainDispatcher,
+          ioDispatcher: ioDispatcher,
+        ),
+      );
+      final habit = f.habit();
+
+      f.tray.show(habit, _sunday, 456);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        mainDispatcher.dispatched,
+        1,
+        reason: 'reminders.dependency-wiring#7 — the ShowNotificationTask runs '
+            'onPostExecute on the main dispatcher via CoroutineTaskRunner',
+      );
+      expect(
+        ioDispatcher.dispatched,
+        1,
+        reason: 'reminders.dependency-wiring#7 — and doInBackground on the IO '
+            'dispatcher',
+      );
+      expect(
+        f.systemTray.shown.length,
+        1,
+        reason: 'reminders.dependency-wiring#7 — the notification is posted '
+            'from the main half',
+      );
+    });
+
+    test('onPreExecute and onProgressUpdate are unused for notifications', () {
+      final f = _Fixture();
+      final habit = f.habit();
+      final task = _CountingTask();
+
+      f.taskRunner.execute(task);
+      f.taskRunner.publishProgress(task, 3);
+
+      expect(
+        task.preExecuted,
+        1,
+        reason: 'reminders.dependency-wiring#7 — the runner still calls '
+            'onPreExecute, which ShowNotificationTask does not override',
+      );
+      expect(
+        task.progressUpdates,
+        <int>[3],
+        reason: 'reminders.dependency-wiring#7 — onProgressUpdate is reachable '
+            'but unused for notifications',
+      );
+      f.tray.show(habit, _sunday, 456);
+      expect(
+        f.systemTray.shown.length,
+        1,
+        reason: 'reminders.dependency-wiring#7 — the notification pipeline '
+            'needs neither of them',
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // reminders.on-show-reminder#3 — the expired snooze is cleaned up here
+  // -------------------------------------------------------------------------
+
+  group('reminders.on-show-reminder over the real scheduler', () {
+    test('an expired snooze is discarded when the reminder fires', () {
+      DateUtils.setFixedTimeZone(const FixedTimeZone(0));
+      addTearDown(() {
+        DateUtils.setFixedTimeZone(null);
+        DateUtils.setFixedLocalTime(null);
+      });
+
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final habit = f.habit();
+      habitList.add(habit);
+      final storage = MemoryStorage();
+      final widgetPreferences = WidgetPreferences(storage);
+      final scheduler = ReminderScheduler(
+        f.commandRunner,
+        habitList,
+        _NullSystemScheduler(),
+        widgetPreferences,
+      );
+      final controller = ReminderController(
+        _SchedulerAdapter(scheduler),
+        f.tray,
+        f.preferences,
+      );
+
+      // The user snoozed until 09:00; it is now 10:00.
+      final nine = DateTime.utc(2015, 1, 25, 9).millisecondsSinceEpoch;
+      DateUtils.setFixedLocalTime(DateTime.utc(2015, 1, 25, 10).millisecondsSinceEpoch);
+      widgetPreferences.setSnoozeTime(5, nine);
+      expect(widgetPreferences.getSnoozeTime(5), nine);
+
+      controller.onShowReminder(habit, _sunday, 456);
+
+      expect(
+        widgetPreferences.getSnoozeTime(5),
+        0,
+        reason: 'reminders.on-show-reminder#3 — scheduleAll() re-reads the '
+            'snooze preference, so a snooze that has just expired is cleaned '
+            'up at this point',
+      );
+    });
+
+    test('a live snooze survives the firing', () {
+      DateUtils.setFixedTimeZone(const FixedTimeZone(0));
+      addTearDown(() {
+        DateUtils.setFixedTimeZone(null);
+        DateUtils.setFixedLocalTime(null);
+      });
+
+      final f = _Fixture();
+      final habitList = MemoryHabitList();
+      final habit = f.habit();
+      habitList.add(habit);
+      final widgetPreferences = WidgetPreferences(MemoryStorage());
+      final scheduler = ReminderScheduler(
+        f.commandRunner,
+        habitList,
+        _NullSystemScheduler(),
+        widgetPreferences,
+      );
+      final controller = ReminderController(
+        _SchedulerAdapter(scheduler),
+        f.tray,
+        f.preferences,
+      );
+
+      final eleven = DateTime.utc(2015, 1, 25, 11).millisecondsSinceEpoch;
+      DateUtils.setFixedLocalTime(DateTime.utc(2015, 1, 25, 10).millisecondsSinceEpoch);
+      widgetPreferences.setSnoozeTime(5, eleven);
+
+      controller.onShowReminder(habit, _sunday, 456);
+
+      expect(
+        widgetPreferences.getSnoozeTime(5),
+        eleven,
+        reason: 'reminders.on-show-reminder#3 — only an expired snooze is '
+            'discarded; one still in the future is kept',
+      );
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Test doubles used only by the groups above
+// ---------------------------------------------------------------------------
+
+/// A command that is both a CreateRepetitionCommand and a DeleteHabitsCommand,
+/// which is what `notifications.auto-cancel#6` allows for.
+class _BothCommand extends CreateRepetitionCommand
+    implements DeleteHabitsCommand {
+  _BothCommand(HabitList habitList, Habit habit)
+      : selected = <Habit>[habit],
+        super(habitList, habit, getToday(), Entry.yesManual, '');
+
+  @override
+  final List<Habit> selected;
+}
+
+/// Counts how many blocks each dispatcher role received.
+class _RecordingDispatcher implements Dispatcher {
+  _RecordingDispatcher(this.name);
+
+  final String name;
+  int dispatched = 0;
+
+  @override
+  Future<void> dispatch(FutureOr<void> Function() block) {
+    dispatched++;
+    return Future<void>(() => block());
+  }
+}
+
+/// Records the two `Task` callbacks the notification pipeline never uses.
+class _CountingTask extends Task {
+  int preExecuted = 0;
+  final List<int> progressUpdates = <int>[];
+
+  @override
+  void doInBackground() {}
+
+  @override
+  void onPreExecute() {
+    preExecuted++;
+  }
+
+  @override
+  void onProgressUpdate(int currentPosition) {
+    progressUpdates.add(currentPosition);
+  }
+}
+
+/// Lets the real [ReminderScheduler] stand behind the narrow interface
+/// [ReminderController] declares.
+class _SchedulerAdapter implements ReminderSchedulerApi {
+  _SchedulerAdapter(this._scheduler);
+
+  final ReminderScheduler _scheduler;
+
+  @override
+  void scheduleAll() => _scheduler.scheduleAll();
+}
+
+/// A `SystemScheduler` that sets no alarms: the snooze bookkeeping under test
+/// happens before the platform is reached.
+class _NullSystemScheduler implements SystemScheduler {
+  @override
+  void log(String componentName, String msg) {}
+
+  @override
+  SchedulerResult scheduleShowReminder(
+    int reminderTime,
+    Habit habit,
+    int timestamp,
+  ) =>
+      SchedulerResult.ok;
+
+  @override
+  SchedulerResult? scheduleWidgetUpdate(int updateTime) => null;
 }

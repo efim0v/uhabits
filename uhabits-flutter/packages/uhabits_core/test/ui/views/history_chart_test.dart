@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:uhabits_core/src/ui/views/history_chart.dart';
+import 'package:uhabits_core/src/ui/views/ring.dart' show notesIndicatorRadius;
 import 'package:uhabits_core/uhabits_core.dart';
 
 /// Ported from
@@ -1255,6 +1256,246 @@ void main() {
         LocalDate.ymd(2014, 12, 10),
         LocalDate.ymd(2015, 1, 25),
       ], reason: 'charts-canvas-theming.historychart-hittest#8');
+    });
+  });
+  // -------------------------------------------------------------------------
+  // The same chart read against the show-habit history card's own rules.
+  // -------------------------------------------------------------------------
+  group('show-habit.history-card', () {
+    test('#7 a HATCHED square gets five pairs of diagonal card-coloured '
+        'strokes at width 0.75', () {
+      final theme = LightTheme();
+      final canvas = RecordingCanvas();
+      baseChart(
+        theme: theme,
+        series: <Square>[Square.hatched],
+        defaultSquare: Square.off,
+        notesIndicators: <bool>[],
+      ).draw(canvas);
+
+      // Offset 0 is the last column's only square: x = 325, y = 25, w = 24.
+      final lines =
+          blockAt(canvas, 325.0, 25.0).where((o) => o.name == 'drawLine');
+      expect(lines, hasLength(10),
+          reason: 'show-habit.history-card#7 — five hatch steps, each drawing '
+              'the line and its mirror');
+      for (final line in lines) {
+        expect(line.color, theme.cardBackgroundColor,
+            reason: 'show-habit.history-card#7 — in the card background '
+                'colour');
+        expect(line.strokeWidth, 0.75,
+            reason: 'show-habit.history-card#7 — stroke width 0.75');
+      }
+      // The step is width/5, so the five k values are 2.4, 7.2, 12.0, 16.8,
+      // 21.6 measured from the square's top-left corner.
+      expect(
+          lines.map((o) => o.d(0) - 325.0).toList(),
+          <double>[2.4, 21.6, 7.2, 16.8, 12.0, 12.0, 16.8, 7.2, 21.6, 2.4]
+              .map((v) => closeTo(v, 1e-9))
+              .toList(),
+          reason: 'show-habit.history-card#7');
+
+      // No other square state is hatched.
+      final plain = RecordingCanvas();
+      baseChart(
+        series: <Square>[Square.on],
+        defaultSquare: Square.off,
+        notesIndicators: <bool>[],
+      ).draw(plain);
+      expect(plain.opsNamed('drawLine'), isEmpty,
+          reason: 'show-habit.history-card#7');
+    });
+
+    test('#8 rounded corners at 0.15 of the width, 1.0 of spacing, and a '
+        'centred day number in the more contrasting token', () {
+      final theme = LightTheme();
+      final chart = baseChart(theme: theme);
+      final canvas = RecordingCanvas();
+      chart.draw(canvas);
+
+      expect(chart.squareSpacing, 1.0,
+          reason: 'show-habit.history-card#8 — 1.0 spacing between squares');
+      final square = squareAt(canvas, 0.0, 25.0);
+      // squareSize is 25, so the drawn square is 24 wide with a 3.6 radius.
+      expect(square.d(2), closeTo(24.0, 1e-9),
+          reason: 'show-habit.history-card#8');
+      expect(square.d(3), closeTo(24.0, 1e-9),
+          reason: 'show-habit.history-card#8');
+      expect(square.d(4), closeTo(24.0 * 0.15, 1e-9),
+          reason: 'show-habit.history-card#8 — corner radius = width * 0.15');
+
+      final day = dayNumberOf(canvas, 0.0, 25.0);
+      expect(day.textAlign, TextAlign.center,
+          reason: 'show-habit.history-card#8 — the day number is centred');
+      expect(day.d(1), closeTo(0.0 + 12.0, 1e-9),
+          reason: 'show-habit.history-card#8 — at x + width / 2');
+      expect(day.d(2), closeTo(25.0 + 12.0, 1e-9),
+          reason: 'show-habit.history-card#8 — and y + width / 2');
+
+      // An OFF square is the low-contrast token, against which the medium
+      // one contrasts more than the card background does.
+      final off = RecordingCanvas();
+      baseChart(
+        theme: theme,
+        series: <Square>[Square.off],
+        defaultSquare: Square.off,
+        notesIndicators: <bool>[],
+      ).draw(off);
+      final offSquare = theme.lowContrastTextColor;
+      final expected = offSquare.contrast(theme.cardBackgroundColor) >
+              offSquare.contrast(theme.mediumContrastTextColor)
+          ? theme.cardBackgroundColor
+          : theme.mediumContrastTextColor;
+      expect(dayNumberOf(off, 325.0, 25.0).color, expected,
+          reason: 'show-habit.history-card#8 — whichever of '
+              'cardBackgroundColor / mediumContrastTextColor has the higher '
+              'contrast against the square colour');
+    });
+
+    test('#9 the notes dot is width/12 across, in the square top-right corner',
+        () {
+      final theme = LightTheme();
+      final canvas = RecordingCanvas();
+      baseChart(
+        theme: theme,
+        series: <Square>[
+          Square.on,
+          Square.grey,
+          Square.off,
+          Square.dimmed,
+          Square.hatched,
+        ],
+        defaultSquare: Square.off,
+        notesIndicators: <bool>[true, true, true, true, true],
+      ).draw(canvas);
+
+      final dot = blockAt(canvas, 325.0, 25.0)
+          .firstWhere((o) => o.name == 'fillCircle');
+      expect(dot.d(0), closeTo(325.0 + 24.0 - 24.0 / 5, 1e-9),
+          reason: 'show-habit.history-card#9 — x + width - width/5');
+      expect(dot.d(1), closeTo(25.0 + 24.0 / 5, 1e-9),
+          reason: 'show-habit.history-card#9 — y + width/5');
+      expect(dot.d(2), closeTo(24.0 / 12, 1e-9),
+          reason: 'show-habit.history-card#9 — radius width/12');
+
+      // Offsets 1..4 are the last-but-one column's bottom four rows.
+      expect(dot.color, theme.lowContrastTextColor,
+          reason: 'show-habit.history-card#9 — lowContrastTextColor for ON');
+      expect(circleColorAt(canvas, 300.0, 175.0), theme.lowContrastTextColor,
+          reason: 'show-habit.history-card#9 — and for GREY');
+      expect(circleColorAt(canvas, 300.0, 150.0), theme.color(7),
+          reason: 'show-habit.history-card#9 — the habit colour otherwise');
+      expect(circleColorAt(canvas, 300.0, 125.0), theme.color(7),
+          reason: 'show-habit.history-card#9');
+      expect(circleColorAt(canvas, 300.0, 100.0), theme.color(7),
+          reason: 'show-habit.history-card#9');
+
+      expect(
+          blockAt(canvas, 300.0, 75.0).where((o) => o.name == 'fillCircle'),
+          isEmpty,
+          reason: 'show-habit.history-card#9 — an entry with no notes gets no '
+              'dot');
+    });
+
+    test('charts-canvas-theming.notes-indicator#4: the calendar dot is the '
+        "chart's own, not the 8px button one", () {
+      final canvas = RecordingCanvas();
+      baseChart(
+        series: <Square>[Square.on],
+        defaultSquare: Square.off,
+        notesIndicators: <bool>[true],
+      ).draw(canvas);
+
+      final dot = canvas.opsNamed('fillCircle').single;
+      expect(dot.d(2), closeTo(24.0 / 12, 1e-9),
+          reason: 'charts-canvas-theming.notes-indicator#4 — the radius scales '
+              'with the square, unlike the flat 8 device pixels of '
+              'drawNotesIndicator');
+      expect(dot.d(2), isNot(closeTo(notesIndicatorRadius, 1e-9)),
+          reason: 'charts-canvas-theming.notes-indicator#4 — the two '
+              'indicators are unrelated');
+      expect(dot.d(0), closeTo(325.0 + 24.0 - 24.0 / 5, 1e-9),
+          reason: 'charts-canvas-theming.notes-indicator#4 — at '
+              '(x + width - width/5, y + width/5) of the calendar square');
+      expect(dot.d(1), closeTo(25.0 + 24.0 / 5, 1e-9),
+          reason: 'charts-canvas-theming.notes-indicator#4');
+    });
+
+    test('#11 a column header is the month on change, else the year on '
+        'change, else nothing', () {
+      final canvas = RecordingCanvas();
+      baseChart().draw(canvas);
+
+      expect(headers(canvas).map((o) => o.text).toList(), <String>[
+        'Oct', 'Nov', '2014', '', '', '', 'Dec', //
+        '', '', '', 'Jan', '2015', '', '',
+      ], reason: 'show-habit.history-card#11 — the short month name when it '
+          'differs from the previously printed month, else the year when the '
+          'year differs, else nothing');
+    });
+
+    test('#12 the top-left date is today minus (nColumns-1+dataOffset)*7 plus '
+        'the first-weekday offset', () {
+      final listener = RecordingListener();
+      final chart = baseChart(listener: listener);
+      final canvas = RecordingCanvas();
+      chart.draw(canvas);
+
+      // today is a Sunday and the week starts on Sunday, so the weekday term
+      // is (0 - 0 + 7) % 7 = 0 and topLeftDate = today - 13*7.
+      chart.onClick(2.0, 30.0);
+      expect(listener.shortPresses.single,
+          LocalDate.ymd(2015, 1, 25).minus(13 * 7),
+          reason: 'show-habit.history-card#12');
+
+      // A Monday-first week pushes the top-left cell one more day back:
+      // (0 - 1 + 7) % 7 = 6.
+      listener.reset();
+      final monday = baseChart(
+        firstWeekday: DayOfWeek.monday,
+        listener: listener,
+      );
+      monday.draw(RecordingCanvas());
+      monday.onClick(2.0, 30.0);
+      expect(listener.shortPresses.single,
+          LocalDate.ymd(2015, 1, 25).minus(13 * 7 + 6),
+          reason: 'show-habit.history-card#12');
+
+      // And each dataOffset step is another whole week.
+      listener.reset();
+      chart.dataOffset = 2;
+      chart.draw(RecordingCanvas());
+      chart.onClick(2.0, 30.0);
+      expect(listener.shortPresses.single,
+          LocalDate.ymd(2015, 1, 25).minus(15 * 7),
+          reason: 'show-habit.history-card#12');
+    });
+
+    test('show-habit.number-formatting#8: the square label is the plain '
+        'day-of-month integer', () {
+      final canvas = RecordingCanvas();
+      baseChart().draw(canvas);
+
+      expect(columnDayNumbers(canvas, 0),
+          <String>['26', '27', '28', '29', '30', '31', '1'],
+          reason: 'show-habit.number-formatting#8 — no padding, no ordinal '
+              'suffix, no month');
+      expect(columnDayNumbers(canvas, 13), <String>['25'],
+          reason: 'show-habit.number-formatting#8');
+    });
+
+    test('show-habit.chart-scrolling#8: dataColumnWidth is squareSpacing + '
+        'squareSize', () {
+      final chart = baseChart();
+      chart.draw(RecordingCanvas());
+      expect(chart.dataColumnWidth, closeTo(1.0 + 25.0, 1e-9),
+          reason: 'show-habit.chart-scrolling#8 — the History chart scrolls by '
+              'squareSpacing + squareSize');
+
+      chart.squareSpacing = 4.0;
+      chart.draw(RecordingCanvas());
+      expect(chart.dataColumnWidth, closeTo(4.0 + 25.0, 1e-9),
+          reason: 'show-habit.chart-scrolling#8');
     });
   });
 }

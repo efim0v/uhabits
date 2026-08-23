@@ -220,7 +220,13 @@ class HabitCard extends StatelessWidget {
       isNumerical: habit.isNumerical,
       unit: habit.unit,
       targetType: habit.targetType,
-      targetValue: habit.targetValue,
+      // `HabitCardView.copyAttributesFrom` sets `threshold = h.targetValue`,
+      // and then `HabitCardListView.bindCardView` overwrites it with
+      // `habit.targetValue / habit.frequency.denominator` — the second write
+      // is the one that survives (`list-habits.habit-card#7`). A daily habit
+      // divides by 1 and is unaffected; a "300 pages per week" habit colours
+      // a day once it reaches 300/7, not 300.
+      targetValue: habit.targetValue / habit.frequency.denominator,
       buttonCount: buttonCount,
       dataOffset: dataOffset,
       onToggle: onToggle,

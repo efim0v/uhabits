@@ -273,6 +273,7 @@ void main() {
   late HabitFixtures fixtures;
   late TaskRunner taskRunner;
   late _SpyCommandRunner commandRunner;
+  late MemoryStorage prefsStorage;
   late Preferences prefs;
   late _NullLogging logging;
   late _SpyCache cache;
@@ -308,7 +309,8 @@ void main() {
       habit.recompute();
       habitList.add(habit);
     }
-    prefs = Preferences(MemoryStorage());
+    prefsStorage = MemoryStorage();
+    prefs = Preferences(prefsStorage);
     logging = _NullLogging();
     cache = _SpyCache(habitList, commandRunner, taskRunner, logging);
     midnightTimer = _SpyMidnightTimer(logging, prefs);
@@ -683,6 +685,59 @@ void main() {
       expect(adapter.hasNoHabit(), isTrue,
           reason: 'list-habits.adapter#11: hasNoHabit() delegates to the '
               'cache');
+    });
+  });
+
+  // =========================================================================
+  // list-habits.sort-modes — the half of the feature that lives on this side
+  // of the menu presenter. The arrow icons of rule #11 belong to the Android
+  // Sort submenu, which the Flutter screen does not have.
+  // =========================================================================
+
+  group('list-habits.sort-modes', () {
+    List<String> rowNames() => <String>[
+          for (var i = 0; i < adapter.itemCount; i++) adapter.getItem(i)!.name,
+        ];
+
+    test('#12 a new order re-sorts the rows at once and survives a restart',
+        () {
+      expect(rowNames(),
+          <String>['Habit 0', 'Habit 1', 'Habit 2', 'Habit 3', 'Habit 4'],
+          reason: 'list-habits.sort-modes#12: BY_POSITION is the starting '
+              'order');
+
+      cache.reset();
+      adapter.primaryOrder = HabitListOrder.byNameDesc;
+
+      expect(cache.calls, contains('refreshAllHabits'),
+          reason: 'list-habits.sort-modes#12: changing the sort order triggers '
+              'a full cache refresh');
+      expect(rowNames(),
+          <String>['Habit 4', 'Habit 3', 'Habit 2', 'Habit 1', 'Habit 0'],
+          reason: 'list-habits.sort-modes#12: so the rows are re-ordered '
+              'immediately');
+
+      // "Persists across app restarts": the order went into the preference
+      // store, and a freshly built adapter seeds the cache from it again.
+      expect(prefsStorage.getString('pref_default_order', ''), 'BY_NAME_DESC',
+          reason: 'list-habits.sort-modes#12: the change is persisted');
+
+      final restarted = HabitCardListAdapter(
+        _SpyCache(habitList, commandRunner, taskRunner, logging),
+        Preferences(prefsStorage),
+        midnightTimer,
+      );
+      expect(restarted.primaryOrder, HabitListOrder.byNameDesc,
+          reason: 'list-habits.sort-modes#12: a restart reads the same order '
+              'back');
+      expect(
+        <String>[
+          for (var i = 0; i < restarted.itemCount; i++)
+            restarted.getItem(i)!.name,
+        ],
+        <String>['Habit 4', 'Habit 3', 'Habit 2', 'Habit 1', 'Habit 0'],
+        reason: 'list-habits.sort-modes#12: and the rows come back sorted',
+      );
     });
   });
 

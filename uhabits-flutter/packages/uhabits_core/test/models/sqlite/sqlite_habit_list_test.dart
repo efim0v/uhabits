@@ -1431,6 +1431,61 @@ void main() {
           reason: 'models.habit-list-reorder#9');
     });
 
+    // The persistence half of the drag-and-drop gesture on the list screen:
+    // `ListHabitsBehavior.onReorderHabit` calls straight into this method.
+    test('drag-reorder#7 the bulk shift bounds, in both directions', () {
+      seedTenHabits();
+
+      // Up: `position + 1 where position >= toPos and position < fromPos`.
+      db.clearLog();
+      final movedUp = habitList.getById(8)!; // position 7
+      final targetUp = habitList.getById(4)!; // position 3
+      final fromUp = movedUp.position;
+      final toUp = targetUp.position;
+      habitList.reorder(movedUp, targetUp);
+
+      expect(
+        db.preparedMatching('update habits set position'),
+        <String>[
+          'update habits set position = position + 1 '
+              'where position >= $toUp and position < $fromUp'
+        ],
+        reason: 'list-habits.drag-reorder#7: a move to a smaller position '
+            'increments position by 1 for all habits with position >= toPos '
+            'and < fromPos',
+      );
+      expect(rowsById()[8]!.position, toUp,
+          reason: "list-habits.drag-reorder#7: then the moved habit's position "
+              'is written as toPos');
+
+      // Down: `position - 1 where position > fromPos and position <= toPos`.
+      db.clearLog();
+      final movedDown = habitList.getById(2)!;
+      final targetDown = habitList.getById(7)!;
+      final fromDown = movedDown.position;
+      final toDown = targetDown.position;
+      expect(toDown, greaterThan(fromDown),
+          reason: 'list-habits.drag-reorder#7');
+      habitList.reorder(movedDown, targetDown);
+
+      expect(
+        db.preparedMatching('update habits set position'),
+        <String>[
+          'update habits set position = position - 1 '
+              'where position > $fromDown and position <= $toDown'
+        ],
+        reason: 'list-habits.drag-reorder#7: a move to a larger position '
+            'decrements position by 1 for all habits with position > fromPos '
+            'and <= toPos',
+      );
+      expect(rowsById()[2]!.position, toDown,
+          reason: "list-habits.drag-reorder#7: then the moved habit's position "
+              'is written as toPos');
+      expect(storedPositions(), <int>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+          reason: 'list-habits.drag-reorder#7: the shift leaves a contiguous '
+              'run of positions behind');
+    });
+
     test('#10 repair and the load path renumber stored positions to 0..n-1, '
         'writing only the rows that do not already match', () {
       seedTenHabits();

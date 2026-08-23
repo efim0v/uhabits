@@ -9,6 +9,7 @@ import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/commands/delete_habits_command.dart';
 import 'package:uhabits_core/src/commands/unarchive_habits_command.dart';
 import 'package:uhabits_core/src/io/files.dart';
+import 'package:uhabits_core/src/io/habits_csv_exporter.dart';
 import 'package:uhabits_core/src/io/zip.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
@@ -205,6 +206,18 @@ class _UnwritableUserFile implements UserFile {
 
   @override
   Future<void> writeString(String content) => throw UnimplementedError();
+}
+
+/// Records every task the runner starts, so "runs on the app's TaskRunner" is
+/// an observation rather than an inference.
+class _RecordingTaskListener implements TaskRunnerListener {
+  final List<Task> started = <Task>[];
+
+  @override
+  void onTaskStarted(Task task) => started.add(task);
+
+  @override
+  void onTaskFinished(Task task) {}
 }
 
 /// Records every command the runner announces as finished.
@@ -720,5 +733,107 @@ void main() {
     expect(log, <String>['refresh'],
         reason: 'show-habit.randomize#8 — refresh is the only call the '
             'presenter makes; nothing else is notified');
+  });
+
+  // -------------------------------------------------------------------------
+  // show-habit.export-csv — the same entry point read against its own rules
+  // -------------------------------------------------------------------------
+
+  test('show-habit.export-csv#1 #3 #7: one ExportCSVTask on the task runner, '
+      'one dated archive, this habit only', () async {
+    final tempDir = Directory.systemTemp.createTempSync('uhabits-show-export1-');
+    addTearDown(() {
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    });
+    final other = fixtures.createEmptyHabit(name: 'Other habit');
+    habitList.add(other);
+    system.dir = LocalUserFile(tempDir.path);
+    final tasks = _RecordingTaskListener();
+    taskRunner.addListener(tasks);
+
+    menu.onExportCSV();
+    await taskRunner.awaitAll();
+
+    expect(tasks.started, hasLength(1),
+        reason: 'show-habit.export-csv#1 — selecting Export runs exactly one '
+            "task on the app's TaskRunner");
+    expect(tasks.started.single, isA<ExportCSVTask>(),
+        reason: 'show-habit.export-csv#1 — and that task is ExportCSVTask');
+    expect(commandRunner.commands, isEmpty,
+        reason: 'show-habit.export-csv#1 — the export dispatches no command');
+
+    final produced = tempDir
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last)
+        .toList();
+    expect(produced, hasLength(1),
+        reason: 'show-habit.export-csv#7 — exactly one file is produced in the '
+            'output directory per export');
+    expect(produced.single, 'Loop Habits CSV 2015-01-25.zip',
+        reason: 'show-habit.export-csv#3 — the archive is named "Loop Habits '
+            'CSV <today>.zip" with a zero-padded YYYY-MM-DD date');
+    expect(getToday().toCSVString(), '2015-01-25',
+        reason: 'show-habit.export-csv#3 — <today> is '
+            'getToday().toCSVString()');
+
+    final names = (await ZipReader(
+                Uint8List.fromList(File('${tempDir.path}/${produced.single}')
+                    .readAsBytesSync()))
+            .entries())
+        .map((e) => e.name)
+        .toList();
+    expect(names.where((n) => n.endsWith('Checkmarks.csv') && n.contains('/')),
+        hasLength(1),
+        reason: 'show-habit.export-csv#1 — ExportCSVTask is given '
+            'listOf(habit), so only the habit currently shown is exported');
+    expect(names.where((n) => n.contains('Other habit')), isEmpty,
+        reason: 'show-habit.export-csv#1 — the other habits get no folder');
+  });
+
+  test('show-habit.export-csv#6: a failing export is swallowed and reported as '
+      'COULD_NOT_EXPORT', () async {
+    system.dir = _UnwritableUserFile();
+
+    menu.onExportCSV();
+    await taskRunner.awaitAll();
+
+    expect(screen.sendFileCalls, isEmpty,
+        reason: 'show-habit.export-csv#6 — the exception is swallowed and the '
+            'callback receives null, so no share screen opens');
+    expect(screen.messages,
+        <ShowHabitMenuPresenterMessage>[
+          ShowHabitMenuPresenterMessage.couldNotExport,
+        ],
+        reason: 'show-habit.export-csv#6 — in which case COULD_NOT_EXPORT is '
+            'shown');
+    expect(ShowHabitMenuPresenterMessage.couldNotExport.index, 0,
+        reason: 'show-habit.export-csv#6 — COULD_NOT_EXPORT is the first of '
+            'the three menu messages');
+  });
+
+  // -------------------------------------------------------------------------
+  // show-habit.widget-refresh — the menu half
+  // -------------------------------------------------------------------------
+
+  test('show-habit.widget-refresh#3: no menu action touches the widgets', () {
+    screen.confirmDelete = true;
+
+    menu.onEditHabit();
+    menu.onArchiveHabits();
+    menu.onUnarchiveHabits();
+    menu.onDeleteHabit();
+
+    expect(log.where((entry) => entry.contains('updateWidgets')), isEmpty,
+        reason: 'show-habit.widget-refresh#3 — edit, archive, unarchive and '
+            'delete propagate through the CommandRunner, never through '
+            'updateWidgets');
+    expect(log.where((entry) => entry.startsWith('run:')).toList(), <String>[
+      'run:ArchiveHabitsCommand',
+      'run:UnarchiveHabitsCommand',
+      'run:DeleteHabitsCommand',
+    ],
+        reason: 'show-habit.widget-refresh#3 — the CommandRunner is the only '
+            'thing these actions notify');
   });
 }

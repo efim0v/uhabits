@@ -408,16 +408,28 @@ void main() {
         expect(
           h.screen.confetti,
           isEmpty,
-          reason: 'list-habits.toggle-from-row#1 — no confetti for value '
-              '$value, only for YES_MANUAL(2)',
+          reason: 'list-habits.toggle-from-row#1 and '
+              'settings.preferences.disable-animations#5 — no confetti for '
+              'value $value, only for YES_MANUAL(2)',
         );
       }
       h.behavior.onToggle(habit1, today, Entry.yesAuto, '', 1.0, 2.0);
       expect(
         h.screen.confetti,
         isEmpty,
-        reason: 'list-habits.toggle-from-row#5 — YES_AUTO(1) is not '
+        reason: 'list-habits.toggle-from-row#5 and '
+            'settings.preferences.disable-animations#5 — YES_AUTO(1) is not '
             'YES_MANUAL(2), so no confetti',
+      );
+      h.screen.confetti.clear();
+      h.behavior.onToggle(habit1, today, Entry.yesManual, '', 1.0, 2.0);
+      expect(
+        h.screen.confetti.length,
+        1,
+        reason: 'settings.preferences.disable-animations#5 — onToggle asks '
+            'for the confetti only when the new value is YES_MANUAL. Whether '
+            'the burst is then drawn is the screen\'s decision, not the '
+            "presenter's",
       );
     });
 
@@ -1102,7 +1114,8 @@ void main() {
       expect(
         h.log,
         <String>['repair', 'message:databaseRepaired'],
-        reason: 'persistence.repair-db-action#1 — repair() runs on a '
+        reason: 'persistence.repair-db-action#1 and '
+            'settings.screen.database-category#16 — repair() runs on a '
             'background task and DATABASE_REPAIRED is shown afterwards',
       );
       expect(
@@ -1184,16 +1197,180 @@ void main() {
           ListHabitsBehaviorMessage.couldNotGenerateBugReport,
           ListHabitsBehaviorMessage.fileNotRecognized,
         ],
-        reason: 'list-habits.data-io-actions#7 — COULD_NOT_EXPORT, '
+        reason: 'list-habits.data-io-actions#7 and '
+            'settings.screen.database-category#14 — COULD_NOT_EXPORT, '
             'IMPORT_SUCCESSFUL, IMPORT_FAILED, DATABASE_REPAIRED, '
             'COULD_NOT_GENERATE_BUG_REPORT, FILE_NOT_RECOGNIZED',
       );
+      expect(
+        ListHabitsBehaviorMessage.values.length,
+        6,
+        reason: 'settings.screen.database-category#14 — exactly six values',
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // settings.intro.first-run-trigger, and the two preferences it moves:
+  // settings.preferences.first-run-and-launch-count and
+  // settings.preferences.hints
+  // -------------------------------------------------------------------------
+  group('settings.intro.first-run-trigger', () {
+    test('#1 #2 onStartup increments the launch count before it looks at '
+        'isFirstRun', () {
+      expect(h.prefs.launchCount, 0,
+          reason: 'settings.preferences.first-run-and-launch-count#5');
+      expect(h.prefs.isFirstRun, isTrue,
+          reason: 'settings.intro.first-run-trigger#2');
+
+      h.behavior.onStartup();
+
+      expect(h.prefs.launchCount, 1,
+          reason: 'settings.preferences.first-run-and-launch-count#5 — '
+              'incrementLaunchCount() runs FIRST, so launch_count is already '
+              '1 during the first-run branch');
+      expect(h.screen.introCount, 1,
+          reason: 'settings.intro.first-run-trigger#1 — the intro is launched '
+              'from onStartup(), and from nowhere else');
+    });
+
+    test('#3 #5 onFirstRun clears isFirstRun and seeds the hint before the '
+        'intro is shown', () {
+      h.behavior.onStartup();
+
+      expect(
+        h.log,
+        <String>['showIntroScreen'],
+        reason: 'settings.intro.first-run-trigger#3 — the order is '
+            'isFirstRun = false, updateLastHint(-1, today), '
+            'screen.showIntroScreen()',
+      );
+      expect(h.prefs.isFirstRun, isFalse,
+          reason: 'settings.intro.first-run-trigger#5 — isFirstRun is cleared '
+              'BEFORE the intro is shown, so killing the app during the intro '
+              'means it is never shown again');
+      expect(h.prefs.lastHintNumber, -1,
+          reason: 'settings.preferences.hints#5 — onFirstRun() calls '
+              'updateLastHint(-1, getToday())');
+      expect(h.prefs.lastHintDate, today,
+          reason: 'settings.preferences.hints#5 — the hint timestamp is '
+              "today's");
+      expect(h.prefs.launchCount, 1,
+          reason: 'settings.preferences.first-run-and-launch-count#6');
+    });
+
+    test('#4 the presenter asks the screen for the intro, with no arguments',
+        () {
+      h.behavior.onFirstRun();
+
+      expect(h.screen.introCount, 1,
+          reason: 'settings.intro.first-run-trigger#4 — showIntroScreen() '
+              'takes no parameters, matching IntentFactory.startIntroActivity('
+              'context) starting IntroActivity with no extras');
+    });
+
+    test('#5 #6 a second startup shows nothing, and so does a startup with '
+        'isFirstRun already false', () {
+      h.behavior.onStartup();
+      h.behavior.onStartup();
+
+      expect(h.screen.introCount, 1,
+          reason: 'settings.intro.first-run-trigger#5 — once isFirstRun is '
+              'cleared the intro never comes back');
+      expect(h.prefs.launchCount, 2,
+          reason: 'settings.preferences.first-run-and-launch-count#5 — the '
+              'launch count is still incremented unconditionally');
+
+      final fresh = _Harness();
+      // BaseUserInterfaceTest.setUp bypasses the intro exactly this way.
+      fresh.prefs.isFirstRun = false;
+      fresh.behavior.onStartup();
+
+      expect(fresh.screen.introCount, 0,
+          reason: 'settings.intro.first-run-trigger#6 — setting '
+              'prefs.isFirstRun = false in setup is what makes the '
+              'instrumentation tests skip the intro');
+      expect(fresh.prefs.launchCount, 1,
+          reason: 'settings.intro.first-run-trigger#2 — the launch count is '
+              'incremented before isFirstRun is even read');
+      expect(fresh.prefs.lastHintNumber, -1,
+          reason: 'settings.preferences.hints#5 — no first run, so nothing '
+              'seeded the hint: last_hint_number keeps its -1 default');
+      expect(fresh.prefs.lastHintDate, isNull,
+          reason: 'settings.preferences.hints#5 — and no hint timestamp was '
+              'written');
     });
   });
 
   // -------------------------------------------------------------------------
   // list-habits.hints
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // list-habits.startup-lifecycle — the part of ListHabitsActivity that lives
+  // in the presenter. The Android lifecycle itself (onResume/onPause, the
+  // POST_NOTIFICATIONS flow, the ACTION_EDIT intent, the auto-backup and the
+  // widget refresh) is not this class's, and is not ported here.
+  // -------------------------------------------------------------------------
+  group('list-habits.startup-lifecycle', () {
+    test('#1 onStartup always increments the launch count, then branches on '
+        'isFirstRun', () {
+      expect(h.prefs.launchCount, 0,
+          reason: 'list-habits.startup-lifecycle#1');
+
+      h.behavior.onStartup();
+      expect(h.prefs.launchCount, 1,
+          reason: 'list-habits.startup-lifecycle#1');
+      expect(h.screen.introCount, 1,
+          reason: 'list-habits.startup-lifecycle#1 — isFirstRun defaults to '
+              'true, so the first-run flow ran');
+
+      // A second startup still counts, and no longer branches.
+      h.behavior.onStartup();
+      expect(h.prefs.launchCount, 2,
+          reason: 'list-habits.startup-lifecycle#1');
+      expect(h.screen.introCount, 1,
+          reason: 'list-habits.startup-lifecycle#1');
+
+      // …and a launch that was never a first run counts all the same.
+      final fresh = _Harness();
+      fresh.prefs.isFirstRun = false;
+      fresh.behavior.onStartup();
+      expect(fresh.prefs.launchCount, 1,
+          reason: 'list-habits.startup-lifecycle#1');
+      expect(fresh.screen.introCount, 0,
+          reason: 'list-habits.startup-lifecycle#1');
+    });
+
+    test('#2 the first-run flow clears the flag, seeds the hint and shows the '
+        'intro', () {
+      h.behavior.onFirstRun();
+
+      expect(h.prefs.isFirstRun, isFalse,
+          reason: 'list-habits.startup-lifecycle#2');
+      expect(h.prefs.lastHintNumber, -1,
+          reason: 'list-habits.startup-lifecycle#2 — updateLastHint(-1, today)');
+      expect(h.prefs.lastHintDate, today,
+          reason: 'list-habits.startup-lifecycle#2');
+      expect(h.log, <String>['showIntroScreen'],
+          reason: 'list-habits.startup-lifecycle#2 — the intro is the last of '
+              'the three steps');
+
+      // hints#9: seeding the timestamp with today is exactly what keeps
+      // shouldShow() false for the rest of the first day.
+      final hints = HintList(h.prefs, listHabitsHints);
+      expect(hints.shouldShow(), isFalse,
+          reason: 'list-habits.hints#9 — lastHintDate == today');
+
+      setToday(today.plus(1));
+      expect(hints.shouldShow(), isTrue,
+          reason: 'list-habits.hints#9 — and lets the first hint appear the '
+              'next day');
+      expect(hints.pop(), listHabitsHints[0],
+          reason: 'list-habits.hints#9 — starting from hints[0], because the '
+              'seeded number was -1');
+    });
+  });
+
   group('list-habits.hints', () {
     late Preferences prefs;
     late _RecordingStorage storage;

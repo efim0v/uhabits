@@ -1,9 +1,13 @@
 import 'dart:math';
 
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/gui/canvas.dart';
 import 'package:uhabits_core/src/gui/color.dart';
 import 'package:uhabits_core/src/gui/font_awesome.dart';
 import 'package:uhabits_core/src/gui/image.dart';
+import 'package:uhabits_core/src/gui/theme.dart';
+import 'package:uhabits_core/src/gui/view.dart';
+import 'package:uhabits_core/src/ui/views/checkmark_button.dart';
 
 /// Ported from
 /// uhabits-core/src/commonMain/kotlin/org/isoron/platform/gui/FontAwesome.kt,
@@ -370,6 +374,241 @@ void main() {
           reason: 'charts-canvas-theming.image-and-golden-diff#8');
     });
   });
+  // -------------------------------------------------------------------------
+  // The view-shaped overload of the golden helper, and the glyph path itself.
+  // -------------------------------------------------------------------------
+  group('assertRenders(width, height, path, view)', () {
+    test('#7 builds a canvas of the given logical size, draws the view once, '
+        'then delegates', () async {
+      final view = _CountingView();
+      final recorder = _ExportRecorder();
+      _SizedTestCanvas? built;
+
+      Future<void> assertRendersView(
+        double width,
+        double height,
+        String path,
+        View view, {
+        required GoldenImageLoader loadResourceImage,
+      }) async {
+        final canvas = _SizedTestCanvas(width, height, exporter: recorder.call);
+        built = canvas;
+        view.draw(canvas);
+        await assertRenders(path, canvas.toImage(),
+            loadResourceImage: loadResourceImage);
+      }
+
+      await assertRendersView(
+        300.0,
+        200.0,
+        'views/BarChart/base.png',
+        view,
+        loadResourceImage: (_) =>
+            _solid(600, 400, _black, exporter: recorder.call),
+      );
+
+      expect(built!.width, 300.0,
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — the canvas '
+              'is created at the logical width the caller asked for');
+      expect(built!.height, 200.0,
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — and at its '
+              'logical height');
+      expect(built!.getWidth(), 300.0,
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — which is '
+              'what the view reads back');
+      expect(built!.getHeight(), 200.0,
+          reason: 'charts-canvas-theming.image-and-golden-diff#7');
+      expect(view.drawCount, 1,
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — view.draw '
+              'is called exactly once');
+      expect(recorder.paths, isEmpty,
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — a matching '
+              'golden exports nothing');
+
+      // The delegation is real: a mismatched golden fails with the message
+      // assertRenders(path, canvas) produces, against the path it was given.
+      Object? thrown;
+      try {
+        await assertRendersView(
+          300.0,
+          200.0,
+          'views/BarChart/offset.png',
+          view,
+          loadResourceImage: (_) =>
+              _solid(600, 400, _white, exporter: recorder.call),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown.toString(), contains('Images differ (distance='),
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — it delegates '
+              'to assertRenders(expectedPath, canvas)');
+      expect(recorder.paths, contains('/tmp/failed/views/BarChart/offset.png'),
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — including '
+              'its /tmp/failed dumps, under the path that was passed in');
+      expect(view.drawCount, 2,
+          reason: 'charts-canvas-theming.image-and-golden-diff#7 — one draw per '
+              'call, never a cached image');
+    });
+  });
+
+  group('FontAwesome glyph drawing', () {
+    test('#6 a glyph goes through drawText, so it obeys the sticky text align '
+        'and is centred on y like any other text', () {
+      final theme = LightTheme();
+      final canvas = _SizedTestCanvas(48.0, 48.0);
+      // A sticky alignment set before the view runs: the view never touches it.
+      canvas.setTextAlign(TextAlign.right);
+
+      CheckmarkButton(2, theme.color(7), theme).draw(canvas);
+
+      final ops = canvas.ops.where((op) => op.name == 'drawText').toList();
+      expect(ops, hasLength(1),
+          reason: 'charts-canvas-theming.fontawesome-glyphs#6 — the glyph is '
+              'drawn by the normal drawText path, not by a glyph-specific '
+              'call');
+      expect(ops.single.text, FontAwesome.check,
+          reason: 'charts-canvas-theming.fontawesome-glyphs#6');
+      expect(ops.single.font, Font.fontAwesome,
+          reason: 'charts-canvas-theming.fontawesome-glyphs#6 — only the font '
+              'changes');
+      expect(ops.single.textAlign, TextAlign.right,
+          reason: 'charts-canvas-theming.fontawesome-glyphs#6 — the alignment '
+              'in force when the glyph is drawn is the one the caller set');
+      // drawText anchors on the visual centre, and the button asks for the
+      // canvas centre, so the glyph is centred on that y.
+      expect(ops.single.args, <double>[24.0, 24.0],
+          reason: 'charts-canvas-theming.fontawesome-glyphs#6 — vertically '
+              'centred on the given y like any other text');
+
+      // A different alignment survives just as well, and a plain-text view
+      // drawn on the same canvas is indistinguishable in its op shape.
+      final centred = _SizedTestCanvas(48.0, 48.0)
+        ..setTextAlign(TextAlign.center);
+      CheckmarkButton(0, theme.color(7), theme).draw(centred);
+      expect(
+          centred.ops.where((op) => op.name == 'drawText').single.textAlign,
+          TextAlign.center,
+          reason: 'charts-canvas-theming.fontawesome-glyphs#6');
+      expect(centred.ops.where((op) => op.name == 'drawText').single.text,
+          FontAwesome.times,
+          reason: 'charts-canvas-theming.fontawesome-glyphs#6');
+    });
+  });
 }
 
 const Color _transparent = Color(0.0, 0.0, 0.0, 0.0);
+
+
+/// A [View] that only counts how many times it was drawn.
+class _CountingView extends View {
+  int drawCount = 0;
+
+  @override
+  void draw(Canvas canvas) {
+    drawCount++;
+    canvas.setColor(_black);
+    canvas.fill();
+  }
+}
+
+/// One recorded [Canvas] call, together with the sticky paint state in force.
+class _CanvasOp {
+  _CanvasOp(this.name, this.args,
+      {this.text, required this.font, required this.textAlign});
+
+  final String name;
+  final List<double> args;
+  final String? text;
+  final Font font;
+  final TextAlign textAlign;
+}
+
+/// The "test canvas of the given logical width/height" the view-shaped
+/// `assertRenders` overload builds: it reports the size it was constructed
+/// with and rasterises to a [pixelScale]-times image, exactly as the core
+/// golden baselines are captured.
+class _SizedTestCanvas extends Canvas {
+  _SizedTestCanvas(this.width, this.height, {this.exporter});
+
+  /// `ViewTestHelper.pixelScale`.
+  static const double pixelScale = 2.0;
+
+  final double width;
+  final double height;
+  final ImageExporter? exporter;
+
+  final List<_CanvasOp> ops = <_CanvasOp>[];
+
+  Color _color = Color.BLACK;
+  Font _font = Font.regular;
+  double _fontSize = 12.0;
+  TextAlign _textAlign = TextAlign.left;
+
+  void _record(String name, List<double> args, {String? text}) {
+    ops.add(_CanvasOp(name, args,
+        text: text, font: _font, textAlign: _textAlign));
+  }
+
+  @override
+  double getWidth() => width;
+
+  @override
+  double getHeight() => height;
+
+  @override
+  void setColor(Color color) => _color = color;
+
+  @override
+  void setFont(Font font) => _font = font;
+
+  @override
+  void setFontSize(double size) => _fontSize = size;
+
+  @override
+  void setStrokeWidth(double size) {
+    // Sticky on a real Canvas, but nothing here reads it back.
+  }
+
+  @override
+  void setTextAlign(TextAlign align) => _textAlign = align;
+
+  @override
+  void drawLine(double x1, double y1, double x2, double y2) =>
+      _record('drawLine', <double>[x1, y1, x2, y2]);
+
+  @override
+  void drawText(String text, double x, double y) =>
+      _record('drawText', <double>[x, y], text: text);
+
+  @override
+  void fillRect(double x, double y, double w, double h) =>
+      _record('fillRect', <double>[x, y, w, h]);
+
+  @override
+  void drawRect(double x, double y, double w, double h) =>
+      _record('drawRect', <double>[x, y, w, h]);
+
+  @override
+  void fillRoundRect(double x, double y, double w, double h, double radius) =>
+      _record('fillRoundRect', <double>[x, y, w, h, radius]);
+
+  @override
+  void fillCircle(double cx, double cy, double radius) =>
+      _record('fillCircle', <double>[cx, cy, radius]);
+
+  @override
+  void fillArc(double cx, double cy, double radius, double start, double swipe) =>
+      _record('fillArc', <double>[cx, cy, radius, start, swipe]);
+
+  @override
+  double measureText(String text) => text.length * _fontSize * 0.6;
+
+  @override
+  Image toImage() => _solid(
+        (width * pixelScale).round(),
+        (height * pixelScale).round(),
+        _color,
+        exporter: exporter,
+      );
+}

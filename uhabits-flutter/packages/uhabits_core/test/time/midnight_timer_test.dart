@@ -230,10 +230,24 @@ void main() {
 
       timer.addListener(_CountingListener());
       timer.onResume(DateUtils.secondLength, executor);
+
+      // onResume's initial delay carries the same preference-derived offset.
+      expect(
+        executor.initialDelayMillis,
+        DateUtils.millisecondsUntilTomorrowWithOffset(3, 0) +
+            DateUtils.secondLength,
+        reason: 'time.midnight-timer#4 and '
+            'settings.preferences.midnight-delay#7 — the next tick is at '
+            'millisecondsUntilTomorrowWithOffset(midnightDelayHours, 0)',
+      );
+
       executor.tick();
 
       expect(getToday(), LocalDate.ymd(2017, 1, 1),
-          reason: 'time.midnight-timer#4');
+          reason: 'time.midnight-timer#4 and '
+              'settings.preferences.midnight-delay#7 — firing calls '
+              'setToday(computeToday(midnightDelayHours, 0)), so with the 3h '
+              'delay 01:00 on Jan 2 is still Jan 1');
     });
 
     test('#5 the notify loop is one critical section', () async {
@@ -316,6 +330,45 @@ void main() {
           reason: 'time.midnight-timer#7');
       timer.onPause();
     });
+
+    // The same timer, seen from the habit list screen: `ListHabitsActivity`
+    // resumes it in onResume and the adapter is one of its listeners.
+    test('list-habits#6 the schedule the list screen resumes', () {
+      DateUtils.setFixedLocalTime(unixTime(2017, 1, 1, 20, 0));
+
+      // Without the preference the boundary is plain midnight…
+      expect(prefs.midnightDelayHours, 0,
+          reason: 'list-habits.startup-lifecycle#6');
+      timer.onResume(DateUtils.secondLength, executor);
+      expect(executor.initialDelayMillis, 4 * _hour + DateUtils.secondLength,
+          reason: 'list-habits.startup-lifecycle#6');
+      expect(executor.periodMillis, DateUtils.dayLength,
+          reason: 'list-habits.startup-lifecycle#6');
+      expect(DateUtils.dayLength, 24 * _hour,
+          reason: 'list-habits.startup-lifecycle#6');
+
+      // …and with it, three hours later, still plus the one-second safety
+      // offset.
+      final delayed = _RecordingExecutor();
+      prefs.isMidnightDelayEnabled = true;
+      expect(prefs.midnightDelayHours, 3,
+          reason: 'list-habits.startup-lifecycle#6');
+      timer.onResume(DateUtils.secondLength, delayed);
+      expect(delayed.initialDelayMillis, 7 * _hour + DateUtils.secondLength,
+          reason: 'list-habits.startup-lifecycle#6');
+
+      // Each fire re-dates the world and then notifies. 04:00 on Jan 3 is
+      // still Jan 2 under the three-hour delay.
+      final listener = _CountingListener();
+      timer.addListener(listener);
+      pinClock(unixTime(2017, 1, 3, 4, 0));
+      setToday(LocalDate.ymd(2017, 1, 1));
+      delayed.commands.single();
+
+      expect(getToday(), LocalDate.ymd(2017, 1, 3),
+          reason: 'list-habits.startup-lifecycle#6');
+      expect(listener.count, 1, reason: 'list-habits.startup-lifecycle#6');
+    });
   });
 
   group('time.today-and-day-boundary', () {
@@ -393,9 +446,13 @@ void main() {
     test('#3 #8 the offset is subtracted and the division floors', () {
       pinClock(unixTime(2017, 1, 2, 2, 59, 59999));
       expect(computeToday(3, 0), LocalDate.ymd(2017, 1, 1),
-          reason: 'time.today-and-day-boundary#3');
+          reason: 'time.today-and-day-boundary#3 and '
+              'settings.preferences.midnight-delay#6 — computeToday subtracts '
+              'hourOffset*3_600_000 + minuteOffset*60_000 from the local '
+              'millis and then floor-divides by 86_400_000');
       expect(computeToday(3, 30), LocalDate.ymd(2017, 1, 1),
-          reason: 'time.today-and-day-boundary#3');
+          reason: 'time.today-and-day-boundary#3 and '
+              'settings.preferences.midnight-delay#6');
 
       pinClock(unixTime(2017, 1, 2, 3, 0));
       expect(computeToday(3, 0), LocalDate.ymd(2017, 1, 2),
@@ -418,10 +475,13 @@ void main() {
           reason: 'time.today-and-day-boundary#9');
       pinClock(0);
       expect(computeToday(0, 0).daysSince2000, -10957,
-          reason: 'time.today-and-day-boundary#9');
+          reason: 'time.today-and-day-boundary#9 and '
+              'settings.preferences.midnight-delay#6 — the returned date is '
+              'LocalDate(daysSinceEpoch - 10957)');
       pinClock(LocalDate.ymd(2000, 1, 1).unixTime);
       expect(computeToday(0, 0).daysSince2000, 0,
-          reason: 'time.today-and-day-boundary#9');
+          reason: 'time.today-and-day-boundary#9 and '
+              'settings.preferences.midnight-delay#6');
     });
 
     test('#4 the midnight delay preference shifts the day boundary', () {
@@ -477,14 +537,19 @@ void main() {
               0,
             ) +
             1000,
-        reason: 'time.today-and-day-boundary#5',
+        reason: 'time.today-and-day-boundary#5 and '
+            'settings.preferences.midnight-delay#7 — MidnightTimer.onResume '
+            'schedules its next tick at millisecondsUntilTomorrowWithOffset('
+            'preferences.midnightDelayHours, 0)',
       );
       expect(executor.periodMillis, 86400000,
           reason: 'time.today-and-day-boundary#5');
 
       executor.tick();
       expect(getToday(), LocalDate.ymd(2017, 1, 2),
-          reason: 'time.today-and-day-boundary#5');
+          reason: 'time.today-and-day-boundary#5 and '
+              'settings.preferences.midnight-delay#7 — on firing it calls '
+              'setToday(computeToday(preferences.midnightDelayHours, 0))');
       expect(listener.count, 1, reason: 'time.today-and-day-boundary#5');
 
       // Only the MidnightTimer.notifyListeners call site is reachable from the
@@ -542,6 +607,30 @@ void main() {
         LocalDate.ymd(2020, 9, 2),
         reason: 'time.today-and-day-boundary#7',
       );
+    });
+  });
+
+  group('reminders.dependency-wiring', () {
+    test('#4 MidnightTimer is built from the logger and the preferences', () {
+      final buffer = StringBuffer();
+      final preferences = Preferences(MemoryStorage());
+      final built = MidnightTimer(
+        StandardLogging(out: buffer, err: buffer),
+        preferences,
+      );
+
+      DateUtils.setFixedLocalTime(unixTime(2017, 1, 1, 20, 0));
+      final recorder = _RecordingExecutor();
+      built.onResume(DateUtils.secondLength, recorder);
+
+      expect(buffer.toString(), contains('[MidnightTimer]'),
+          reason: 'reminders.dependency-wiring#4: MidnightTimer is '
+              'constructed as MidnightTimer(logging, preferences) — the first '
+              'argument is the logger it writes through');
+      expect(recorder.commands, isNotEmpty,
+          reason: 'reminders.dependency-wiring#4: and the second is the '
+              'preferences it reads the midnight delay from');
+      built.onPause();
     });
   });
 }

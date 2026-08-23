@@ -213,6 +213,11 @@ void main() {
       final h = buildHabit();
       expect(h.color, const PaletteColor(8),
           reason: 'models.habit-fields-defaults#1');
+      expect(h.color, const PaletteColor(8),
+          reason: 'show-habit.theme-colors#7 — Habit.color defaults to '
+              'PaletteColor(8) (teal) for a new habit, which is the colour '
+              'every card of the detail screen is tinted with until the user '
+              'picks another');
       expect(h.description, '', reason: 'models.habit-fields-defaults#1');
       expect(h.frequency, Frequency.daily,
           reason: 'models.habit-fields-defaults#1');

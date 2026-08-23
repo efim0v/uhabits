@@ -15,6 +15,11 @@
 ///  * show_habit.xml is the column itself: a fixed toolbar over a scrolling
 ///    list of nine cards (`show-habit.screen-scaffold#12`).
 ///
+/// `AndroidThemeSwitcher.currentTheme` is the shared `coreThemeOf` of
+/// ui/theme/app_theme.dart, so the cards see whichever of LightTheme,
+/// DarkTheme and PureBlackTheme the app was built from
+/// (`show-habit.screen-scaffold#11`).
+///
 /// Five of the nine cards — score, bar, history, streak and frequency — have
 /// no state object in `uhabits_core` yet. They keep their place in
 /// [ShowHabitCard] and are simply skipped here until their slices land, so
@@ -32,6 +37,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/show_habit_model.dart';
+import '../../theme/app_theme.dart' show coreThemeOf;
 import '../edit/edit_habit_screen.dart';
 import 'cards/notes_card_view.dart';
 import 'cards/overview_card_view.dart';
@@ -93,15 +99,6 @@ class ShowHabitScreen extends StatelessWidget {
   }
 }
 
-/// `AndroidThemeSwitcher.currentTheme`, as far as this port goes: the Flutter
-/// brightness stands in for `pref_theme` plus the system dark mode, and
-/// `PureBlackTheme` waits for the preferences slice
-/// (`show-habit.screen-scaffold#11`).
-core.Theme coreThemeOf(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-        ? core.DarkTheme()
-        : core.LightTheme();
-
 class _ShowHabitView extends StatefulWidget {
   const _ShowHabitView();
 
@@ -122,8 +119,19 @@ class _ShowHabitViewState extends State<_ShowHabitView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // `AndroidThemeSwitcher.apply()` restarts the activity when the theme
-    // changes; here the model rebuilds its state instead.
-    _model.theme = coreThemeOf(context);
+    // changes; here the model rebuilds its state instead
+    // (`show-habit.screen-scaffold#11`).
+    //
+    // didChangeDependencies runs inside the build phase, and the model's
+    // setter refreshes and notifies — which would mark this element's
+    // provider dirty mid-build and throw. The first build never gets here
+    // (the model was created with this very theme), so the deferral only
+    // costs a frame on an actual theme switch.
+    final theme = coreThemeOf(context);
+    if (theme.runtimeType == _model.theme.runtimeType) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _model.theme = theme;
+    });
   }
 
   @override
