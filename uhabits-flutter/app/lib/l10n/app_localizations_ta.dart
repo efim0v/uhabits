@@ -9,6 +9,9 @@ class L10nTa extends L10n {
   L10nTa([String locale = 'ta']) : super(locale);
 
   @override
+  String get overview => 'மேற்பார்வை';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nTa extends L10n {
 
   @override
   String get toastHabitCreated => 'பழக்கம் உருவாக்கப்பட்டது';
-
-  @override
-  String get overview => 'மேற்பார்வை';
 
   @override
   String get habitStrength => 'பழக்கத்தின் வலிமை';

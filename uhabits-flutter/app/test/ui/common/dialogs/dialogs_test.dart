@@ -2284,12 +2284,19 @@ void main() {
     testWidgets('unparseable input leaves the value unchanged', (tester) async {
       final result = await _openNumber(tester, value: 7.0);
 
-      // The keypad filter lets a second separator through, and
-      // NumberFormat.parse then throws — `save()` swallows it and keeps the
+      // The keypad filter lets the separator through with no digit anywhere,
+      // and NumberFormat.parse then throws — `save()` swallows it and keeps the
       // value the popup opened on.
+      //
+      // This used to type "1.2.3", which is not unparseable at all:
+      // `java.text.NumberFormat.parse` reads the prefix "1.2" and stops, so the
+      // assertion pinned the port's discard rather than the rule
+      // (`audit7.numeric-entry-popup-throws-away-a#1`). Corrected, not
+      // loosened — the rule still says exactly what it said, and the input now
+      // really is one Java refuses.
       await tester.enterText(
         find.byKey(const ValueKey<String>('number_value')),
-        '1.2.3',
+        '..',
       );
       await tester.tap(
         find.byKey(const ValueKey<String>('number_save_button')),
@@ -2301,6 +2308,27 @@ void main() {
         const NumberDialogResult(7.0, ''),
         reason: 'list-habits.entry-edit-popup-numeric#5 — unparseable input '
             'leaves the value unchanged',
+      );
+    });
+
+    testWidgets('a parsable prefix is what gets saved', (tester) async {
+      final result = await _openNumber(tester, value: 7.0);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('number_value')),
+        '1.2.3',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('number_save_button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        result.value,
+        const NumberDialogResult(1.2, ''),
+        reason: 'audit7.numeric-entry-popup-throws-away-a#1 and '
+            'list-habits.entry-edit-popup-numeric#5 — a stray second separator '
+            'ends the parse; it does not cancel it',
       );
     });
 

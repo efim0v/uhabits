@@ -9,6 +9,9 @@ class L10nKo extends L10n {
   L10nKo([String locale = 'ko']) : super(locale);
 
   @override
+  String get overview => '한눈에 보기';
+
+  @override
   String get appName => 'Loop 습관제조기';
 
   @override
@@ -37,9 +40,6 @@ class L10nKo extends L10n {
 
   @override
   String get toastHabitCreated => '습관이 생성되었습니다.';
-
-  @override
-  String get overview => '한눈에 보기';
 
   @override
   String get habitStrength => '습관 강도';
@@ -461,7 +461,7 @@ class L10nKo extends L10n {
   String get prefViewPrivacy => '개인 정보 취급 방침 보기';
 
   @override
-  String get viewAllContributors => '모든 기여자보기&#8230;';
+  String get viewAllContributors => '모든 기여자보기…';
 
   @override
   String get database => '데이터베이스';

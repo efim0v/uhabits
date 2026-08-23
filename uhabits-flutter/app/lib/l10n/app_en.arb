@@ -1,5 +1,6 @@
 {
   "@@locale": "en",
+  "overview": "Overview",
   "appName": "Loop Habit Tracker",
   "mainActivityTitle": "Habits",
   "actionSettings": "Settings",
@@ -10,7 +11,6 @@
   "addHabit": "Add habit",
   "colorPickerDefaultTitle": "Change color",
   "toastHabitCreated": "Habit created",
-  "overview": "Overview",
   "habitStrength": "Habit strength",
   "history": "History",
   "clear": "Clear",

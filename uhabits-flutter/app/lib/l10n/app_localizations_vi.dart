@@ -9,6 +9,9 @@ class L10nVi extends L10n {
   L10nVi([String locale = 'vi']) : super(locale);
 
   @override
+  String get overview => 'Tổng quan';
+
+  @override
   String get appName => 'Trình theo dõi thói quen Loop';
 
   @override
@@ -37,9 +40,6 @@ class L10nVi extends L10n {
 
   @override
   String get toastHabitCreated => 'Thói quen đã được tạo';
-
-  @override
-  String get overview => 'Tổng quan';
 
   @override
   String get habitStrength => 'Độ mạnh của thói quen';
@@ -470,7 +470,7 @@ class L10nVi extends L10n {
   String get prefViewPrivacy => 'Xem chính sách bảo mật';
 
   @override
-  String get viewAllContributors => 'Xem tất cả những người đóng góp&#8230;';
+  String get viewAllContributors => 'Xem tất cả những người đóng góp…';
 
   @override
   String get database => 'Cơ sở dữ liệu';

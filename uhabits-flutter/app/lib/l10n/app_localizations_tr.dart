@@ -9,6 +9,9 @@ class L10nTr extends L10n {
   L10nTr([String locale = 'tr']) : super(locale);
 
   @override
+  String get overview => 'Genel Bakış';
+
+  @override
   String get appName => 'Loop - Alışkanlık Takip Uygulaması';
 
   @override
@@ -37,9 +40,6 @@ class L10nTr extends L10n {
 
   @override
   String get toastHabitCreated => 'Alışkanlık oluşturuldu.';
-
-  @override
-  String get overview => 'Genel Bakış';
 
   @override
   String get habitStrength => 'Alışkanlık gücü';
@@ -470,7 +470,7 @@ class L10nTr extends L10n {
   String get prefViewPrivacy => 'Gizlilik politikasını görüntüle';
 
   @override
-  String get viewAllContributors => 'Katkıda bulunanları görüntüle&#8230;';
+  String get viewAllContributors => 'Katkıda bulunanları görüntüle…';
 
   @override
   String get database => 'Veritabanı';

@@ -9,6 +9,9 @@ class L10nNo extends L10n {
   L10nNo([String locale = 'no']) : super(locale);
 
   @override
+  String get overview => 'Oversikt';
+
+  @override
   String get appName => 'Loop Vaneoversikt';
 
   @override
@@ -37,9 +40,6 @@ class L10nNo extends L10n {
 
   @override
   String get toastHabitCreated => 'Vane laget';
-
-  @override
-  String get overview => 'Oversikt';
 
   @override
   String get habitStrength => 'Vanestyrke';

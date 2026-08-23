@@ -95,6 +95,10 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
   late final TextEditingController _searchController =
       TextEditingController(text: widget.model.menu.searchQuery);
 
+  /// `mSearchSrcTextView`'s focus, which [onCloseClicked] re-requests after it
+  /// empties the field (`audit7.the-search-bar-s-x-button#1`).
+  final FocusNode _searchFocusNode = FocusNode();
+
   /// `activity.invalidateOptionsMenu()`.
   void invalidateOptionsMenu() {
     if (mounted) setState(() {});
@@ -107,6 +111,7 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -183,10 +188,61 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
   ///
   /// It puts the action items back and invalidates the menu, but never touches
   /// `behavior.searchQuery` (`list-habits.search#12`).
+  ///
+  /// This is the *listener*, not the X button's handler: it is reached only
+  /// through [onCloseClicked], and only once the field is already empty.
   bool onSearchClosed() {
     isSearchActive = false;
     invalidateOptionsMenu();
     return true;
+  }
+
+  /// `androidx.appcompat.widget.SearchView.onCloseClicked()`, which is what the
+  /// X button actually runs.
+  ///
+  /// ```java
+  /// void onCloseClicked() {
+  ///     CharSequence text = mSearchSrcTextView.getText();
+  ///     if (TextUtils.isEmpty(text)) {
+  ///         if (mIconifiedByDefault) {
+  ///             if (mOnCloseListener == null || !mOnCloseListener.onClose()) {
+  ///                 clearFocus();
+  ///                 updateViewsVisibility(true);
+  ///             }
+  ///         }
+  ///     } else {
+  ///         mSearchSrcTextView.setText("");
+  ///         mSearchSrcTextView.requestFocus();
+  ///         setImeVisibility(true);
+  ///     }
+  /// }
+  /// ```
+  ///
+  /// It is a two-stage control, not a close button
+  /// (`audit7.the-search-bar-s-x-button#1`). While the query is non-empty the
+  /// close listener is NOT called: the field is emptied, re-focused and left
+  /// open, and emptying it fires the TextWatcher, so `onQueryTextChange("")`
+  /// rebuilds the matcher with an empty query and the full list comes back.
+  /// Only a second tap, on an already-empty field, reaches [onSearchClosed].
+  /// The search bar can therefore never be closed while a query is still in
+  /// force, which is the property that keeps the list from being left silently
+  /// filtered.
+  ///
+  /// The listener's `true` is what suppresses the `clearFocus()` /
+  /// `updateViewsVisibility(true)` fallback, so there is nothing after it.
+  void onCloseClicked() {
+    if (_searchController.text.isNotEmpty) {
+      // `mSearchSrcTextView.setText("")`. Assigning to a Dart controller does
+      // not fire `TextField.onChanged` the way Android's TextWatcher fires, so
+      // the query change is carried to the presenter explicitly.
+      _searchController.clear();
+      onQueryTextChange('');
+      // `requestFocus()` + `setImeVisibility(true)`: the field stays open with
+      // the keyboard up.
+      _searchFocusNode.requestFocus();
+      return;
+    }
+    onSearchClosed();
   }
 
   /// `createMenuItems`: the hide-completed item is relabelled once either of
@@ -301,6 +357,7 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
           child: TextField(
             key: ListHabitsMenuItems.keyOf(ListHabitsMenuItems.searchContainer),
             controller: _searchController,
+            focusNode: _searchFocusNode,
             // `isIconified = false`: the field is open and focused already.
             autofocus: true,
             style: const TextStyle(color: Colors.white),
@@ -317,7 +374,9 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
           key: const ValueKey<String>('listHabitsMenu.searchClose'),
           icon: const Icon(Icons.close),
           tooltip: l10n.search,
-          onPressed: onSearchClosed,
+          // `SearchView`'s X runs onCloseClicked(), which only *sometimes*
+          // reaches the close listener (`audit7.the-search-bar-s-x-button#1`).
+          onPressed: onCloseClicked,
         ),
       ],
     );

@@ -9,6 +9,9 @@ class L10nSv extends L10n {
   L10nSv([String locale = 'sv']) : super(locale);
 
   @override
+  String get overview => 'Översikt';
+
+  @override
   String get appName => 'Loop Vanedagbok';
 
   @override
@@ -37,9 +40,6 @@ class L10nSv extends L10n {
 
   @override
   String get toastHabitCreated => 'Vana skapad';
-
-  @override
-  String get overview => 'Översikt';
 
   @override
   String get habitStrength => 'Vanestyrka';
@@ -471,7 +471,7 @@ class L10nSv extends L10n {
   String get prefViewPrivacy => 'Visa integritetspolicy';
 
   @override
-  String get viewAllContributors => 'Visa alla medverkande&#8230;';
+  String get viewAllContributors => 'Visa alla medverkande…';
 
   @override
   String get database => 'Databas';

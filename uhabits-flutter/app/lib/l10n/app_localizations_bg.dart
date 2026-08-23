@@ -9,6 +9,9 @@ class L10nBg extends L10n {
   L10nBg([String locale = 'bg']) : super(locale);
 
   @override
+  String get overview => 'Обобщение';
+
+  @override
   String get appName => 'Loop Следене на навици';
 
   @override
@@ -37,9 +40,6 @@ class L10nBg extends L10n {
 
   @override
   String get toastHabitCreated => 'Навикът е създаден';
-
-  @override
-  String get overview => 'Обобщение';
 
   @override
   String get habitStrength => 'Сила на навика';

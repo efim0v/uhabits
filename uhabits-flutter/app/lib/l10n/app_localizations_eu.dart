@@ -9,6 +9,9 @@ class L10nEu extends L10n {
   L10nEu([String locale = 'eu']) : super(locale);
 
   @override
+  String get overview => 'Ikuspegi orokorra';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nEu extends L10n {
 
   @override
   String get toastHabitCreated => 'Ohitura sortu da';
-
-  @override
-  String get overview => 'Ikuspegi orokorra';
 
   @override
   String get habitStrength => 'Ohituraren indarra';
@@ -472,7 +472,7 @@ class L10nEu extends L10n {
   String get prefViewPrivacy => 'Ikusi pribatutasun politika';
 
   @override
-  String get viewAllContributors => 'Ikusi laguntzaile guztiak&#8230;';
+  String get viewAllContributors => 'Ikusi laguntzaile guztiak…';
 
   @override
   String get database => 'Datu-basea';

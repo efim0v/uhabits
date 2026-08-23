@@ -7159,3 +7159,94 @@ clause away in a comment while asserting only the cache half.
 - **Severity:** minor
 
 1. `audit6.an-open-entry-popup-or-colour#1` — In the Kotlin app: Kotlin app: with a check-mark or number popup open on the main habit list (or the colour picker / delete confirmation from the selection menu), pressing Home, opening recents, or taking a call runs `ListHabitsActivity.onPause`, which calls `dismissCurrentDialog()`. The popup is torn down there and then — which also runs `CheckmarkDialog.onDismiss` / `NumberDialog.onDismiss`, so notes typed but not saved are committed at that moment via `onToggle(originalValue, currentNotes)`. Returning to the app shows a plain habit list.
+
+## Domain: Seventh audit pass (2026-08-24)
+
+Eight findings, none above minor. Two of them were introduced by the sixth pass's own fixes:
+dismissing the current dialog on pause now over-fires and kills the pickers on the editor
+screen, and the toast listener re-attaches on resume without checking whether the list is still
+the top route.
+
+That is worth naming rather than quietly repairing. Six passes in, the repairs at the margin
+are creating roughly as much as they remove, which is what approaching the asymptote looks
+like. The remaining findings are all of this kind: correct in the large, wrong at one edge.
+
+#### audit7.a-failed-import-shows-no-error
+
+- [x] `audit7.a-failed-import-shows-no-error` — A failed import shows no error and can leave the database inside an open transaction
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/tasks/ImportDataTask.kt — ImportDataTask.doInBackground(), `catch (e: Exception)`; trigger in uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/HabitBullCSVImporter.kt — parseDate()`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/io/generic_importer.dart:122-140 (ImportDataTask.doInBackground); trigger in uhabits-flutter/packages/uhabits_core/lib/src/io/habit_bull_csv_importer.dart (_parseDate)`
+- **Severity:** major
+
+1. `audit7.a-failed-import-shows-no-error#1` — In the Kotlin app: Kotlin's ImportDataTask opens a transaction with database.begin(), then wraps the whole import in `catch (e: Exception)`. Exception is the supertype of RuntimeException, so every parse accident inside an importer is caught: HabitBullCSVImporter.parseDate doing parts[2].toInt() on a date such as "2015-01" throws IndexOutOfBoundsException, the catch sets result = FAILED, commits anyway to close the transaction, and onPostExecute fires onImportDataFinished(FAILED). The user sees "Failed to import data.", the temp file is deleted, the database is left committed and clean, and a second attempt with a good file works.
+
+#### audit7.the-exported-broadcast-api-other-apps
+
+- [x] `audit7.the-exported-broadcast-api-other-apps` — The exported broadcast API other apps use to check habits off is gone, and the loss is not recorded
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/AndroidManifest.xml — `<receiver android:name=".receivers.WidgetReceiver" android:exported="true" android:permission="false">` with four intent-filters (ACTION_SET_NUMERICAL_VALUE, ACTION_TOGGLE_REPETITION, ACTION_ADD_REPETITION, ACTION_REMOVE_REPETITION;`
+- **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (no component declares any `org.isoron.uhabits.ACTION_*` filter); the action strings survive only as the never-consumed constant list `WidgetActions.exported` in uhabits-flutter/app/lib/state/intent_router.dart`
+- **Severity:** minor
+
+1. `audit7.the-exported-broadcast-api-other-apps#1` — In the Kotlin app: WidgetReceiver is exported with android:permission="false", i.e. deliberately reachable by any other app. Tasker, MacroDroid, `adb shell am broadcast`, or a third-party launcher shortcut can send org.isoron.uhabits.ACTION_ADD_REPETITION / ACTION_REMOVE_REPETITION / ACTION_TOGGLE_REPETITION with data = content://org.isoron.uhabits/habit/<id> and an optional `timestamp` extra; WidgetBehavior writes the entry through CreateRepetitionCommand with no UI shown, whether or not the app is running. The ledger states this as intents.widget-receiver-dispatch#12.
+
+#### audit7.the-search-bar-s-x-button
+
+- [x] `audit7.the-search-bar-s-x-button` — The search bar's X button closes the bar on the first tap instead of first clearing the query, so the habit list silently stays filtered
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt — createSearchBar(), the `actionSearchContainer` SearchView and its setOnCloseListener (with androidx.appcompat.widget.SearchView.onCloseClicked, which the listener hangs off)`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/list_habits_menu.dart — `_buildSearchView` (the IconButton keyed `listHabitsMenu.searchClose`, line ~316) and `onSearchClosed()` (line ~185)`
+- **Severity:** major
+
+1. `audit7.the-search-bar-s-x-button#1` — In the Kotlin app: The action view is an `androidx.appcompat.widget.SearchView`. Its close (X) button runs `onCloseClicked()`, which is a two-stage control: while the query text is non-empty it does `mSearchSrcTextView.setText("")`, re-requests focus and keeps the keyboard up — the close listener is NOT called. Clearing the text fires the TextWatcher, so `onQueryTextChange("")` -> `behavior.onSearchQueryChanged("")` -> the matcher is rebuilt with an empty query and the full list comes back, with the search field still open. Only a second X tap, on an already-empty field, reaches `setOnCloseListener`, which sets `isSearchActive = false`, restores the `actionItems` group and invalidates the menu. In practice the search bar can therefore never be closed while a query is still in force.
+
+#### audit7.the-show-habit-overflow-menu-re
+
+- [x] `audit7.the-show-habit-overflow-menu-re` — The show-habit overflow menu re-derives Archive/Unarchive visibility on every rebuild, so it never shows the stale item the Android menu keeps
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitMenu.kt — onCreateOptionsMenu() (ShowHabitActivity overrides onCreateOptionsMenu but not onPrepareOptionsMenu, and never calls invalidateOptionsMenu)`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart line 571 (`final items = model.menu.onCreateOptionsMenu();` inside `build`), backed by app/lib/ui/habits/show/show_habit_menu.dart `onCreateOptionsMenu`/`_isVisible``
+- **Severity:** cosmetic
+
+1. `audit7.the-show-habit-overflow-menu-re#1` — In the Kotlin app: `ShowHabitMenu.onCreateOptionsMenu` asks `presenter.canArchive()` / `canUnarchive()` exactly once, when the options menu is inflated. `onArchiveHabits()` runs the command and shows the "Habit archived" snackbar but nothing rebuilds the menu, so the overflow keeps offering "Archive" (and still hides "Unarchive") for the rest of the visit to the screen. FEATURES.md states this as `show-habit.archive-unarchive#4`: "the menu keeps the stale Archive/Unarchive visibility until the options menu is rebuilt".
+
+#### audit7.xml-numeric-character-references-survive-into
+
+- [x] `audit7.xml-numeric-character-references-survive-into` — XML numeric character references survive into the ARB files: the About screen's "View all contributors…" row renders a literal "&#8230;" in 34 languages
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/values-*/strings.xml, string `view_all_contributors` (e.g. values-de-rDE/strings.xml:184 `<string name="view_all_contributors">Alle Mitwirkende anzeigen&#8230;</string>`), rendered by uhabits-android/src/main/res/layout/about.xml `@+id/tvContributors``
+- **Where the port should do it:** `uhabits-flutter/app/lib/l10n/app_de.arb (and 34 more) → generated uhabits-flutter/app/lib/l10n/app_localizations_de.dart:473 `String get viewAllContributors => 'Alle Mitwirkende anzeigen&#8230;';`, rendered by uhabits-flutter/app/lib/ui/about/about_screen.dart:556. Root cause: `_`
+- **Severity:** minor
+
+1. `audit7.xml-numeric-character-references-survive-into#1` — In the Kotlin app: AAPT decodes the XML numeric character reference `&#8230;` when it compiles the resource table, so the Links/Developers card's last row reads "Alle Mitwirkende anzeigen…" (German), "Посмотреть всех участников…" (Russian), etc. — a proper horizontal-ellipsis character, in every one of the 34 localized `values-*` folders that use the reference.
+
+#### audit7.numeric-entry-popup-throws-away-a
+
+- [x] `audit7.numeric-entry-popup-throws-away-a` — Numeric entry popup throws away a typed amount containing a stray second decimal separator instead of saving its parsable prefix
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/NumberDialog.kt — NumberDialog.save()`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/common/dialogs/number_dialog.dart — _NumberDialogState._save() (line ~250: `value = _parser.parse(text).toDouble()` inside `on FormatException { }`)`
+- **Severity:** minor
+
+1. `audit7.numeric-entry-popup-throws-away-a#1` — In the Kotlin app: Flutter port: `_parser` is `intl.NumberFormat.decimalPattern(locale)`, whose `parse` is strict — I ran it and it throws `FormatException: Invalid double` on "1.2.3" (and on "1,2,3" in a comma-decimal locale). The `on FormatException` branch then leaves `value = widget.value`, so tapping SAVE writes the day's PREVIOUS amount back through CreateRepetitionCommand. The typed number is silently discarded and the popup closes as if it had been accepted. The file's own header comment justifies the narrowing with "the field only ever accepts digits and the locale decimal separator … so the two agree on everything the keypad can produce", but the field's `FilteringTextInputFormatter.allow(RegExp('[0-9<sep>]'))` places no limit on how many separators are typed, exactly as Android's `DigitsKeyListener.getInstance("0123456789" + separator)` does not.
+
+#### audit7.backgrounding-the-app-or-just-pulling
+
+- [x] `audit7.backgrounding-the-app-or-just-pulling` — Backgrounding the app — or just pulling down the notification shade — closes the picker the user has open on the Edit-habit screen
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt (`onPause`, last statement `dismissCurrentDialog()`) together with uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt (no `onPause` override at `
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart, `_HabitListViewState.didChangeAppLifecycleState` (line 311), the `dismissCurrentDialog()` at line 330`
+- **Severity:** minor
+
+1. `audit7.backgrounding-the-app-or-just-pulling#1` — In the Kotlin app: `dismissCurrentDialog()` is reached only from `ListHabitsActivity.onPause`, i.e. only when the habit list itself leaves the foreground. Once `EditHabitActivity` is on top, `ListHabitsActivity` is already stopped and its `onPause` cannot run again, and `EditHabitActivity` never dismisses anything (its only teardown of dialogs is the `for (fragment in supportFragmentManager.fragments) dismiss()` loop in `onCreate`, which runs on activity re-creation, not on a pause). So the colour picker, the boolean frequency picker, the target-type list, the radial time picker and the weekday picker all stay on screen across a Home press, an incoming call or a notification-shade pull-down.
+
+#### audit7.after-a-background-round-trip-the
+
+- [x] `audit7.after-a-background-round-trip-the` — After a background round trip, the habit-list command toast reappears over whichever screen is actually on top
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt (`onResume` -> `screen.onAttached()`, `onPause` -> `screen.onDetached()`) and .../list/ListHabitsScreen.kt (`onAttached`/`onDetached`/`onCommandFinished`)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart, `_HabitListViewState.didChangeAppLifecycleState` (line 311), the `_toasts.onAttached()` at line 347, paired against `didPushNext`/`didPopNext` at lines 364/370`
+- **Severity:** minor
+
+1. `audit7.after-a-background-round-trip-the#1` — In the Kotlin app: `ListHabitsScreen` is registered on the CommandRunner only while the list activity is resumed. Starting `EditHabitActivity` or `ShowHabitActivity` pauses the list and unregisters it, and nothing re-registers it until the list activity itself resumes — a background/foreground round trip performed while the editor or the detail screen is in front runs that activity's `onResume`, never the list's. So a command finished from the screen on top produces only that screen's own message, never the list's toast; that is what `commands.listener-list-habits-toasts#1` and `#6` pin.

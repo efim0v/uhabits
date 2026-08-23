@@ -9,6 +9,9 @@ class L10nCs extends L10n {
   L10nCs([String locale = 'cs']) : super(locale);
 
   @override
+  String get overview => 'Přehled';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nCs extends L10n {
 
   @override
   String get toastHabitCreated => 'Zvyk vytvořen.';
-
-  @override
-  String get overview => 'Přehled';
 
   @override
   String get habitStrength => 'Síla zvyku';
@@ -470,7 +470,7 @@ class L10nCs extends L10n {
   String get prefViewPrivacy => 'Zobrazit zásady ochrany osobních údajů';
 
   @override
-  String get viewAllContributors => 'Zobrazit všechny přispěvatele&#8230;';
+  String get viewAllContributors => 'Zobrazit všechny přispěvatele…';
 
   @override
   String get database => 'Databáze';

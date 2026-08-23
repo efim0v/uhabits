@@ -9,6 +9,9 @@ class L10nIs extends L10n {
   L10nIs([String locale = 'is']) : super(locale);
 
   @override
+  String get overview => 'Yfirlit';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nIs extends L10n {
 
   @override
   String get toastHabitCreated => 'Venja sköpuð';
-
-  @override
-  String get overview => 'Yfirlit';
 
   @override
   String get habitStrength => 'Habit strength';
@@ -470,7 +470,7 @@ class L10nIs extends L10n {
   String get prefViewPrivacy => 'Skoða persónuverndarstefnu';
 
   @override
-  String get viewAllContributors => 'Skoða alla þátttakendur&#8230;';
+  String get viewAllContributors => 'Skoða alla þátttakendur…';
 
   @override
   String get database => 'Gagnagrunnur';

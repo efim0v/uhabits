@@ -9,6 +9,9 @@ class L10nMl extends L10n {
   L10nMl([String locale = 'ml']) : super(locale);
 
   @override
+  String get overview => 'അവലോകനം';
+
+  @override
   String get appName => 'ലൂപ്പ് ഹാബിറ്റ് ട്രാക്കർ';
 
   @override
@@ -37,9 +40,6 @@ class L10nMl extends L10n {
 
   @override
   String get toastHabitCreated => 'ശീലം സൃഷ്ടിച്ചു';
-
-  @override
-  String get overview => 'അവലോകനം';
 
   @override
   String get habitStrength => 'ശീലത്തിന്റെ ശക്തി';

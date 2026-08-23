@@ -9,6 +9,9 @@ class L10nDa extends L10n {
   L10nDa([String locale = 'da']) : super(locale);
 
   @override
+  String get overview => 'Overblik';
+
+  @override
   String get appName => 'Loop Vane Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nDa extends L10n {
 
   @override
   String get toastHabitCreated => 'Vanen er skabt.';
-
-  @override
-  String get overview => 'Overblik';
 
   @override
   String get habitStrength => 'Vanestyrke';
@@ -470,7 +470,7 @@ class L10nDa extends L10n {
   String get prefViewPrivacy => 'Se privatlivspolitik';
 
   @override
-  String get viewAllContributors => 'Se alle bidragsydere&#8230;';
+  String get viewAllContributors => 'Se alle bidragsydere…';
 
   @override
   String get database => 'Database';

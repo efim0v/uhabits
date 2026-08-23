@@ -9,6 +9,9 @@ class L10nHu extends L10n {
   L10nHu([String locale = 'hu']) : super(locale);
 
   @override
+  String get overview => 'Áttekintés';
+
+  @override
   String get appName => 'Loop Szokásrögzítő';
 
   @override
@@ -37,9 +40,6 @@ class L10nHu extends L10n {
 
   @override
   String get toastHabitCreated => 'Szokás létrehozva';
-
-  @override
-  String get overview => 'Áttekintés';
 
   @override
   String get habitStrength => 'Szokás erőssége';
@@ -473,7 +473,7 @@ class L10nHu extends L10n {
   String get prefViewPrivacy => 'Adatvédelmi nyilatkozat';
 
   @override
-  String get viewAllContributors => 'Az összes közreműködő megtekintése&#8230;';
+  String get viewAllContributors => 'Az összes közreműködő megtekintése…';
 
   @override
   String get database => 'Adatbázis';

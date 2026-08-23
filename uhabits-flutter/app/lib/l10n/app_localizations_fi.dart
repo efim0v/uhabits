@@ -9,6 +9,9 @@ class L10nFi extends L10n {
   L10nFi([String locale = 'fi']) : super(locale);
 
   @override
+  String get overview => 'Yleiskatsaus';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nFi extends L10n {
 
   @override
   String get toastHabitCreated => 'Rutiini luotu';
-
-  @override
-  String get overview => 'Yleiskatsaus';
 
   @override
   String get habitStrength => 'Rutiinin vahvuus';
@@ -471,7 +471,7 @@ class L10nFi extends L10n {
   String get prefViewPrivacy => 'Katso tietosuojakäytäntö';
 
   @override
-  String get viewAllContributors => 'Näytä kaikki osallistujat&#8230;';
+  String get viewAllContributors => 'Näytä kaikki osallistujat…';
 
   @override
   String get database => 'Tietokanta';

@@ -9,6 +9,9 @@ class L10nAr extends L10n {
   L10nAr([String locale = 'ar']) : super(locale);
 
   @override
+  String get overview => 'نظرة عامة';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nAr extends L10n {
 
   @override
   String get toastHabitCreated => 'تم إنشاء عادة';
-
-  @override
-  String get overview => 'نظرة عامة';
 
   @override
   String get habitStrength => 'قوة العادة';
@@ -470,7 +470,7 @@ class L10nAr extends L10n {
   String get prefViewPrivacy => 'عرض نهج الخصوصية';
 
   @override
-  String get viewAllContributors => 'عرض جميع المساهمين&#8230;';
+  String get viewAllContributors => 'عرض جميع المساهمين…';
 
   @override
   String get database => 'قاعدة البيانات';

@@ -9,6 +9,9 @@ class L10nHr extends L10n {
   L10nHr([String locale = 'hr']) : super(locale);
 
   @override
+  String get overview => 'Pregled';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nHr extends L10n {
 
   @override
   String get toastHabitCreated => 'Navika je stvorena';
-
-  @override
-  String get overview => 'Pregled';
 
   @override
   String get habitStrength => 'Snaga navike';
@@ -472,7 +472,7 @@ class L10nHr extends L10n {
   String get prefViewPrivacy => 'Prikaži pravila o privatnosti';
 
   @override
-  String get viewAllContributors => 'Pregledaj sve suradnike&#8230;';
+  String get viewAllContributors => 'Pregledaj sve suradnike…';
 
   @override
   String get database => 'Baza podataka';

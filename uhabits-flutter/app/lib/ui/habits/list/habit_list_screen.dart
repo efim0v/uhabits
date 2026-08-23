@@ -164,6 +164,26 @@ class _HabitListViewState extends State<_HabitListView>
   /// (`commands.listener-list-habits-toasts#1`).
   late final ListHabitsCommandToasts _toasts;
 
+  /// Whether another *screen* is on top of this one — the port's stand-in for
+  /// "this activity has already been paused and stopped".
+  ///
+  /// Upstream the activity lifecycle carries this by construction: once
+  /// `EditHabitActivity` or `ShowHabitActivity` is started, the list activity
+  /// is stopped, and neither its `onPause` nor its `onResume` can run again
+  /// until the screen on top is finished — a Home press from up there runs
+  /// *that* activity's callbacks and none of the list's. A Flutter app has one
+  /// activity for the whole process, so this widget stays mounted under the
+  /// pushed route and the engine keeps sending it every lifecycle change; this
+  /// flag is what stops it acting on them
+  /// (`audit7.backgrounding-the-app-or-just-pulling#1`,
+  /// `audit7.after-a-background-round-trip-the#1`).
+  ///
+  /// It is maintained by [didPushNext] / [didPopNext], which the observer only
+  /// reports for `PageRoute`s: a dialog is a window over a *running* activity
+  /// and pauses nothing, so an entry popup or a colour picker opened from the
+  /// list leaves this false and its `onPause` still tears them down.
+  bool _isCovered = false;
+
   /// `ListHabitsRootView.konfettiView`.
   final GlobalKey<ConfettiOverlayState> _confettiKey =
       GlobalKey<ConfettiOverlayState>();
@@ -327,7 +347,16 @@ class _HabitListViewState extends State<_HabitListView>
       // commits notes typed but never saved
       // (`audit6.an-open-entry-popup-or-colour#1`,
       // `list-habits.startup-lifecycle#4`).
-      dismissCurrentDialog();
+      //
+      // Only when this screen is the one being paused, though. The statement
+      // belongs to `ListHabitsActivity.onPause`, which cannot run while
+      // `EditHabitActivity` is on top — that activity is already stopped — and
+      // the editor dismisses nothing of its own, so its colour picker,
+      // frequency picker, target-type list, radial time picker and weekday
+      // picker all survive a Home press, an incoming call or a
+      // notification-shade pull-down
+      // (`audit7.backgrounding-the-app-or-just-pulling#1`).
+      if (!_isCovered) dismissCurrentDialog();
       _toasts.onDetached();
       _model.detach();
       return;
@@ -343,8 +372,15 @@ class _HabitListViewState extends State<_HabitListView>
       core.computeToday(_model.scope.preferences.midnightDelayHours, 0),
     );
     _model.attach();
-    // `screen.onAttached()`, the other half of the pair above.
-    _toasts.onAttached();
+    // `screen.onAttached()`, the other half of the pair above — and, like the
+    // dismissal, only when this screen is the one resuming. A background round
+    // trip taken from the editor or the detail screen runs *that* activity's
+    // `onResume`; nothing re-registers the list until the list activity itself
+    // comes back, which is [didPopNext] here. Re-registering from under the
+    // pushed route would put the list's toast over the screen the user is
+    // actually looking at (`audit7.after-a-background-round-trip-the#1`,
+    // `commands.listener-list-habits-toasts#1`, `#6`).
+    if (!_isCovered) _toasts.onAttached();
   }
 
   // -----------------------------------------------------------------------
@@ -360,14 +396,29 @@ class _HabitListViewState extends State<_HabitListView>
   /// The adapter is deliberately left attached: the cache under it belongs to
   /// the application, not to this screen, and the widgets, the notification
   /// tray and the screen on top all read it while this one is covered.
+  ///
+  /// It is also the moment the list stops hearing its own lifecycle: from here
+  /// until [didPopNext] this widget stands in for a *stopped* activity, whose
+  /// `onPause` and `onResume` the system no longer calls
+  /// (`audit7.backgrounding-the-app-or-just-pulling#1`).
   @override
-  void didPushNext() => _toasts.onDetached();
+  void didPushNext() {
+    _isCovered = true;
+    _toasts.onDetached();
+  }
 
   /// `ListHabitsActivity.onResume` when that screen is finished: the toast
   /// listener is registered again, so the first command run back on the list
   /// shows its snackbar.
+  ///
+  /// This is the *only* thing that re-registers it after a screen was pushed
+  /// over the list, background round trip or no background round trip
+  /// (`audit7.after-a-background-round-trip-the#1`).
   @override
-  void didPopNext() => _toasts.onAttached();
+  void didPopNext() {
+    _isCovered = false;
+    _toasts.onAttached();
+  }
 
   /// The route this screen sits on was itself pushed or popped; the mount and
   /// the unmount already cover both, exactly as `onCreate` / `onDestroy` do.

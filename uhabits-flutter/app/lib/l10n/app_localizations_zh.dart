@@ -9,6 +9,9 @@ class L10nZh extends L10n {
   L10nZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get overview => '总览';
+
+  @override
   String get appName => 'Loop 习惯记录';
 
   @override
@@ -37,9 +40,6 @@ class L10nZh extends L10n {
 
   @override
   String get toastHabitCreated => '习惯已创建';
-
-  @override
-  String get overview => '总览';
 
   @override
   String get habitStrength => '习惯强度';
@@ -652,6 +652,9 @@ class L10nZhCn extends L10nZh {
   L10nZhCn() : super('zh_CN');
 
   @override
+  String get overview => '总览';
+
+  @override
   String get appName => 'Loop 习惯记录';
 
   @override
@@ -680,9 +683,6 @@ class L10nZhCn extends L10nZh {
 
   @override
   String get toastHabitCreated => '习惯已创建';
-
-  @override
-  String get overview => '总览';
 
   @override
   String get habitStrength => '习惯强度';
@@ -1267,6 +1267,9 @@ class L10nZhTw extends L10nZh {
   L10nZhTw() : super('zh_TW');
 
   @override
+  String get overview => '總覽';
+
+  @override
   String get appName => 'Loop 習以為常';
 
   @override
@@ -1295,9 +1298,6 @@ class L10nZhTw extends L10nZh {
 
   @override
   String get toastHabitCreated => '習慣已增加';
-
-  @override
-  String get overview => '總覽';
 
   @override
   String get habitStrength => '習慣強度';

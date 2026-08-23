@@ -9,6 +9,9 @@ class L10nCa extends L10n {
   L10nCa([String locale = 'ca']) : super(locale);
 
   @override
+  String get overview => 'Visió general';
+
+  @override
   String get appName => 'Loop - Hàbit Rastrejador';
 
   @override
@@ -37,9 +40,6 @@ class L10nCa extends L10n {
 
   @override
   String get toastHabitCreated => 'Hàbit creat.';
-
-  @override
-  String get overview => 'Visió general';
 
   @override
   String get habitStrength => 'Fortalesa de l\'hàbit';
@@ -472,7 +472,7 @@ class L10nCa extends L10n {
   String get prefViewPrivacy => 'Veure la política de privadesa';
 
   @override
-  String get viewAllContributors => 'Veure tots els col·laboradors&#8230;';
+  String get viewAllContributors => 'Veure tots els col·laboradors…';
 
   @override
   String get database => 'Base de dades';

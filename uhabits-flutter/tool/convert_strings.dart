@@ -28,6 +28,18 @@ final _plainArg = RegExp(r'%([sd])');
 /// Android quantity keywords that ICU also understands.
 const _icuPluralKeywords = {'zero', 'one', 'two', 'few', 'many', 'other'};
 
+/// Messages the English template must declare even though `values/strings.xml`
+/// no longer does.
+///
+/// `overview` is still translated in 46 `values-*` folders — it is the title of
+/// the show screen's first card — but the default file dropped it, so a
+/// straight conversion produces a template without it and gen-l10n emits no
+/// `L10n.overview` at all. The English text below is the one the string had
+/// before it was lost (`platform-glue.localization-inventory#2`); a real
+/// translation always wins, because the loop below writes over anything set
+/// here.
+const _templateAdditions = <String, String>{'overview': 'Overview'};
+
 void main(List<String> args) {
   final repoRoot = Directory.current.parent.path;
   final resDir = Directory('$repoRoot/uhabits-android/src/main/res');
@@ -79,6 +91,15 @@ void main(List<String> args) {
     totalMessages += messages.length;
 
     final arb = <String, Object?>{'@@locale': suffix};
+    if (isTemplate) {
+      // Keys 46 translations define and the English `values/strings.xml` has
+      // lost. gen-l10n generates a getter only for what the template declares,
+      // so without these the translations are orphaned and every locale falls
+      // back to a wrong string — which is exactly what happened to the show
+      // screen's Overview card before the template was repaired by hand. The
+      // repair lives here now, so that regenerating does not undo it.
+      arb.addAll(_templateAdditions);
+    }
     for (final message in messages) {
       arb[message.key] = message.value;
       if (isTemplate && message.placeholders.isNotEmpty) {
@@ -263,14 +284,44 @@ String _dartKey(String androidName) {
           .join();
 }
 
-String _unescape(String raw) => raw
-    .trim()
-    .replaceAll(r"\'", "'")
-    .replaceAll(r'\"', '"')
-    .replaceAll(r'\n', '\n')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&#39;', "'")
+String _unescape(String raw) => _decodeCharRefs(raw
+        .trim()
+        .replaceAll(r"\'", "'")
+        .replaceAll(r'\"', '"')
+        .replaceAll(r'\n', '\n')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'"))
+    // Last, so that `&amp;#8230;` — an escaped ampersand followed by text —
+    // stays the literal "&#8230;" the translator wrote instead of becoming an
+    // ellipsis. The numeric pass above cannot see through "&amp;" either,
+    // because that string contains no "&#" sequence.
     .replaceAll('&amp;', '&');
+
+/// An XML numeric character reference: `&#8230;` or `&#x2026;`.
+///
+/// AAPT decodes these while it compiles the resource table, so what the Android
+/// app renders is the character, never the escape. 34 of the translated
+/// `values-*/strings.xml` files spell the ellipsis of `view_all_contributors`
+/// this way (`audit7.xml-numeric-character-references-survive-into#1`), and the
+/// named-entity list above cannot reach them: `&#8230;` is not `&hellip;`.
+final _charRef = RegExp(r'&#(?:[xX]([0-9a-fA-F]+)|([0-9]+));');
+
+/// The `&#NNNN;` half of what AAPT does to a string resource.
+///
+/// This subsumes `&#39;`, which the named list used to carry as a special case.
+/// A reference that is not a valid Unicode scalar value is left alone rather
+/// than throwing: AAPT would not have accepted it either, so the literal text
+/// is the honest thing to carry across.
+String _decodeCharRefs(String raw) =>
+    raw.replaceAllMapped(_charRef, (match) {
+      final hex = match.group(1);
+      final int code = hex != null
+          ? int.parse(hex, radix: 16)
+          : int.parse(match.group(2)!);
+      if (code <= 0 || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) {
+        return match.group(0)!;
+      }
+      return String.fromCharCode(code);
+    });

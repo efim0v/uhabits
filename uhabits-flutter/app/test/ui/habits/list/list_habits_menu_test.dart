@@ -579,6 +579,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // The close LISTENER, invoked directly. Reaching it from the X button
+      // takes a second tap on an already-empty field
+      // (`audit7.the-search-bar-s-x-button`); what #12 pins is that the
+      // listener itself never touches behavior.searchQuery.
       expect(menuOf(tester).onSearchClosed(), isTrue,
           reason: 'list-habits.search#12 — the close listener returns true');
       await tester.pumpAndSettle();
@@ -751,6 +755,189 @@ void main() {
       expect(itemFinder(ListHabitsMenuItems.settings), findsOneWidget,
           reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — the '
               'four showAsAction="never" items are unaffected');
+    });
+  });
+
+  // =======================================================================
+  // audit7.the-search-bar-s-x-button
+  //
+  // The action view is an `androidx.appcompat.widget.SearchView`, and its X
+  // button runs `onCloseClicked()`, which is a two-stage control:
+  //
+  //     void onCloseClicked() {
+  //         CharSequence text = mSearchSrcTextView.getText();
+  //         if (TextUtils.isEmpty(text)) {
+  //             if (mIconifiedByDefault) {
+  //                 if (mOnCloseListener == null || !mOnCloseListener.onClose()) {
+  //                     clearFocus();
+  //                     updateViewsVisibility(true);
+  //                 }
+  //             }
+  //         } else {
+  //             mSearchSrcTextView.setText("");
+  //             mSearchSrcTextView.requestFocus();
+  //             setImeVisibility(true);
+  //         }
+  //     }
+  //
+  // While the query is non-empty the close LISTENER is never reached: the
+  // field is emptied, refocused and left open, and the TextWatcher carries
+  // `onQueryTextChange("")` to the presenter so the full list comes back.
+  // Only a second tap, on an already-empty field, reaches
+  // `setOnCloseListener` and closes the bar. The search bar therefore can
+  // never be closed while a query is still in force.
+  // =======================================================================
+
+  group('audit7.the-search-bar-s-x-button', () {
+    Finder searchCloseFinder() =>
+        find.byKey(const ValueKey<String>('listHabitsMenu.searchClose'));
+
+    Future<AppScope> openSearchWithQuery(WidgetTester tester) async {
+      final scope = openScope();
+      for (final name in <String>['Yoga practice', 'Read']) {
+        final habit = scope.modelFactory.buildHabit()..name = name;
+        scope.habitList.add(habit);
+        habit.recompute();
+      }
+      await pumpScreen(tester, scope);
+      await openFilterMenu(tester);
+      await tester.tap(itemFinder(ListHabitsMenuItems.search));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        itemFinder(ListHabitsMenuItems.searchContainer),
+        'yoga',
+      );
+      await tester.pumpAndSettle();
+      return scope;
+    }
+
+    testWidgets('#1 the first tap clears the query and keeps the bar open',
+        (tester) async {
+      await openSearchWithQuery(tester);
+      expect(find.text('Read'), findsNothing,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the list starts out '
+              'filtered');
+
+      await tester.tap(searchCloseFinder());
+      await tester.pumpAndSettle();
+
+      // `mSearchSrcTextView.setText("")` plus the TextWatcher it fires.
+      expect(modelOf(tester).menu.searchQuery, '',
+          reason: 'audit7.the-search-bar-s-x-button#1 — clearing the text '
+              'fires onQueryTextChange("") -> '
+              'behavior.onSearchQueryChanged("")');
+      expect(
+        tester
+            .widget<TextField>(itemFinder(ListHabitsMenuItems.searchContainer))
+            .controller
+            ?.text,
+        '',
+        reason: 'audit7.the-search-bar-s-x-button#1 — the field itself is '
+            'emptied',
+      );
+      // …and the matcher was rebuilt with an empty query, so the full list is
+      // back. This is the whole point: the list must never be left silently
+      // filtered.
+      expect(find.text('Yoga practice'), findsOneWidget,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the full list comes '
+              'back');
+      expect(find.text('Read'), findsOneWidget,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the full list comes '
+              'back');
+
+      // The close listener was NOT called: the bar is still open.
+      expect(menuOf(tester).isSearchActive, isTrue,
+          reason: 'audit7.the-search-bar-s-x-button#1 — while the query is '
+              'non-empty the close listener is not reached, so isSearchActive '
+              'stays true');
+      expect(itemFinder(ListHabitsMenuItems.searchContainer), findsOneWidget,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the search field is '
+              'still on the toolbar');
+      expect(itemFinder(ListHabitsMenuItems.createHabit), findsNothing,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the actionItems group '
+              'is still hidden');
+      // `requestFocus()` + `setImeVisibility(true)`: the keyboard stays up.
+      expect(
+        tester
+            .widget<TextField>(itemFinder(ListHabitsMenuItems.searchContainer))
+            .focusNode
+            ?.hasFocus,
+        isTrue,
+        reason: 'audit7.the-search-bar-s-x-button#1 — the field re-requests '
+            'focus and the keyboard is kept up',
+      );
+    });
+
+    testWidgets('#1 the second tap, on an empty field, closes the bar',
+        (tester) async {
+      await openSearchWithQuery(tester);
+
+      await tester.tap(searchCloseFinder());
+      await tester.pumpAndSettle();
+      await tester.tap(searchCloseFinder());
+      await tester.pumpAndSettle();
+
+      expect(menuOf(tester).isSearchActive, isFalse,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the second tap, on an '
+              'already-empty field, reaches setOnCloseListener');
+      expect(itemFinder(ListHabitsMenuItems.searchContainer), findsNothing,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the search container '
+              'is hidden again');
+      expect(itemFinder(ListHabitsMenuItems.createHabit), findsOneWidget,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the actionItems group '
+              'is restored');
+      expect(modelOf(tester).menu.searchQuery, '',
+          reason: 'audit7.the-search-bar-s-x-button#1 — the bar closes with no '
+              'query left in force');
+      expect(find.text('Yoga practice'), findsOneWidget,
+          reason: 'audit7.the-search-bar-s-x-button#1');
+      expect(find.text('Read'), findsOneWidget,
+          reason: 'audit7.the-search-bar-s-x-button#1 — the list is not left '
+              'silently filtered');
+    });
+
+    testWidgets('#1 one tap closes a bar that was never typed into',
+        (tester) async {
+      final scope = openScope();
+      final habit = scope.modelFactory.buildHabit()..name = 'Yoga practice';
+      scope.habitList.add(habit);
+      habit.recompute();
+      await pumpScreen(tester, scope);
+      await openFilterMenu(tester);
+      await tester.tap(itemFinder(ListHabitsMenuItems.search));
+      await tester.pumpAndSettle();
+
+      await tester.tap(searchCloseFinder());
+      await tester.pumpAndSettle();
+
+      expect(menuOf(tester).isSearchActive, isFalse,
+          reason: 'audit7.the-search-bar-s-x-button#1 — an empty field takes '
+              'the `TextUtils.isEmpty(text)` branch on the very first tap');
+      expect(itemFinder(ListHabitsMenuItems.createHabit), findsOneWidget,
+          reason: 'audit7.the-search-bar-s-x-button#1');
+    });
+
+    testWidgets('#1 onCloseClicked is the two-stage control, onSearchClosed '
+        'stays the close listener', (tester) async {
+      await openSearchWithQuery(tester);
+      final menu = menuOf(tester);
+
+      // Stage one: a non-empty field. The listener is not run.
+      menu.onCloseClicked();
+      await tester.pumpAndSettle();
+      expect(menu.isSearchActive, isTrue,
+          reason: 'audit7.the-search-bar-s-x-button#1 — onCloseClicked on a '
+              'non-empty field does not call the close listener');
+      expect(modelOf(tester).menu.searchQuery, '',
+          reason: 'audit7.the-search-bar-s-x-button#1');
+
+      // Stage two: an empty field. Now the listener runs, and it still
+      // returns true (`list-habits.search#12`).
+      menu.onCloseClicked();
+      await tester.pumpAndSettle();
+      expect(menu.isSearchActive, isFalse,
+          reason: 'audit7.the-search-bar-s-x-button#1 — onCloseClicked on an '
+              'empty field delegates to the close listener');
     });
   });
 }

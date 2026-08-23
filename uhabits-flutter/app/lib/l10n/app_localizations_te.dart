@@ -9,6 +9,9 @@ class L10nTe extends L10n {
   L10nTe([String locale = 'te']) : super(locale);
 
   @override
+  String get overview => 'అవలోకనం';
+
+  @override
   String get appName => 'Datasheet';
 
   @override
@@ -37,9 +40,6 @@ class L10nTe extends L10n {
 
   @override
   String get toastHabitCreated => 'అలవాటు సృష్టించబడింది';
-
-  @override
-  String get overview => 'అవలోకనం';
 
   @override
   String get habitStrength => 'Habit strength';

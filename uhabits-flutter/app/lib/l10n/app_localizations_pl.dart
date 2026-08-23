@@ -9,6 +9,9 @@ class L10nPl extends L10n {
   L10nPl([String locale = 'pl']) : super(locale);
 
   @override
+  String get overview => 'Przegląd';
+
+  @override
   String get appName => 'Śledzenie Nawyków Loop';
 
   @override
@@ -37,9 +40,6 @@ class L10nPl extends L10n {
 
   @override
   String get toastHabitCreated => 'Utworzono nawyk';
-
-  @override
-  String get overview => 'Przegląd';
 
   @override
   String get habitStrength => 'Siła nawyku';

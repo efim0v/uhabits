@@ -417,11 +417,18 @@ void main() {
       );
     });
 
-    testWidgets('#11 a second separator leaves the value unchanged', (
+    testWidgets('#11 a second separator saves the parsable prefix', (
       tester,
     ) async {
-      // The key listener does not count separators, so "1.2.3" is reachable;
-      // it is also unparseable, and save() swallows the failure.
+      // The key listener does not count separators, so "1.2.3" is reachable.
+      // It is NOT unparseable: `NumberFormat.parse(String)` reads from the
+      // start and stops at the first character it cannot use, so Java returns
+      // 1.2 and throws only when it could read nothing at all.
+      //
+      // This assertion used to demand 7.0 — the day's previous amount — and so
+      // pinned the port's own defect rather than Kotlin's behaviour. It is
+      // corrected here, not loosened: the expected value is what Java's parser
+      // returns for this exact string.
       final result = await _openNumber(tester, value: 7.0);
 
       await _type(tester, '1.2.3');
@@ -429,18 +436,71 @@ void main() {
 
       expect(
         result.value!.value,
-        7.0,
+        closeTo(1.2, 1e-9),
         reason:
-            'number-dialog.popup#11 and '
-            'list-habits.entry-edit-popup-numeric#5 — a ParseException leaves '
-            'the original value unchanged',
+            'audit7.numeric-entry-popup-throws-away-a#1 and '
+            'number-dialog.popup#11 — java.text.NumberFormat.parse is lenient '
+            'and stops at the stray second separator, so the amount saved is '
+            'the prefix "1.2", not the previous value',
       );
       expect(
         _stored(result.value!.value),
-        7000,
+        1200,
         reason:
-            'number-dialog.popup#13 and number-dialog.popup#17 — so the '
-            'entry is rewritten with the amount it already had',
+            'audit7.numeric-entry-popup-throws-away-a#1, '
+            'number-dialog.popup#13 and number-dialog.popup#17 — so the entry '
+            'is rewritten with what the user actually typed',
+      );
+    });
+
+    testWidgets('#11 the same leniency in a comma-decimal locale', (
+      tester,
+    ) async {
+      // The filter accepts the comma and rejects the period under `de`, so
+      // "1,2,3" is the German spelling of the same accident.
+      final result = await _openNumber(
+        tester,
+        value: 7.0,
+        locale: const Locale('de'),
+      );
+
+      await _type(tester, '1,2,3');
+      expect(
+        _fieldText(tester),
+        '1,2,3',
+        reason:
+            'number-dialog.popup#5 — DigitsKeyListener("0123456789,") lets '
+            'every one of these through',
+      );
+
+      await _tapSave(tester);
+      expect(
+        result.value!.value,
+        closeTo(1.2, 1e-9),
+        reason:
+            'audit7.numeric-entry-popup-throws-away-a#1 — the second decimal '
+            'separator ends the parse in German exactly as it does in English',
+      );
+    });
+
+    testWidgets('#11 trailing junk after a whole number is dropped, not the '
+        'number', (tester) async {
+      final result = await _openNumber(tester, value: 7.0);
+
+      await _type(tester, '12.');
+      await _tapSave(tester);
+      expect(result.value!.value, closeTo(12.0, 1e-9),
+          reason: 'audit7.numeric-entry-popup-throws-away-a#1');
+
+      final second = await _openNumber(tester, value: 7.0);
+      await _type(tester, '12..5');
+      await _tapSave(tester);
+      expect(
+        second.value!.value,
+        closeTo(12.0, 1e-9),
+        reason:
+            'audit7.numeric-entry-popup-throws-away-a#1 — Java reads "12.", '
+            'stops at the second separator and never sees the 5',
       );
     });
 
@@ -490,10 +550,13 @@ void main() {
       tester,
     ) async {
       // The worst case for the storage convention: a value that survives the
-      // parse failure must still scale back to the integer it came from.
+      // parse failure must still scale back to the integer it came from. The
+      // string has to be one Java really refuses — no digit before the stop —
+      // because "9.." is not one of those: it yields 9. (This test used to use
+      // "9..", and so asserted the very discard the audit found.)
       final result = await _openNumber(tester, value: 12345 / 1000.0);
 
-      await _type(tester, '9..');
+      await _type(tester, '..');
       await _tapSave(tester);
 
       expect(
@@ -503,6 +566,83 @@ void main() {
             'number-dialog.popup#11, number-dialog.popup#13 and '
             'number-dialog.popup#17',
       );
+
+      final second = await _openNumber(tester, value: 12345 / 1000.0);
+      await _type(tester, '9..');
+      await _tapSave(tester);
+      expect(
+        _stored(second.value!.value),
+        9000,
+        reason:
+            'audit7.numeric-entry-popup-throws-away-a#1 — "9.." has a '
+            'parsable prefix, so Java saves 9 and the old 12.345 is gone',
+      );
+    });
+
+    test('#11 the parser is Java-lenient, prefix by prefix', () {
+      // The unit-level statement of the same rule: what
+      // `NumberFormat.getInstance().parse(String)` returns for every string
+      // the field can hold, including the ones `intl` refuses outright.
+      for (final entry in <(String, String, double?)>[
+        // (locale, typed text, what java.text.NumberFormat.parse returns)
+        ('en', '12', 12.0),
+        ('en', '1.2', 1.2),
+        ('en', '1.2.3', 1.2),
+        ('en', '12..5', 12.0),
+        ('en', '9..', 9.0),
+        ('en', '5.', 5.0),
+        ('en', '.5', 0.5),
+        ('en', '007', 7.0),
+        // Nothing readable at index 0 — the one case Java throws on, and the
+        // only one that keeps the day's previous amount.
+        ('en', '.', null),
+        ('en', '..', null),
+        ('de', '1,2,3', 1.2),
+        ('de', '1,2', 1.2),
+        ('de', '1,2,', 1.2),
+        ('de', ',', null),
+        // Persian digits: the same walk, over a non-ASCII numbering system.
+        ('fa', '۱٫۲٫۳', 1.2),
+        ('fa', '٫', null),
+      ]) {
+        expect(
+          NumberDialog.parseAmount(entry.$2, entry.$1),
+          entry.$3 == null ? isNull : closeTo(entry.$3!, 1e-9),
+          reason:
+              'audit7.numeric-entry-popup-throws-away-a#1 — '
+              '"${entry.$2}" in ${entry.$1}',
+        );
+      }
+    });
+
+    test('#11 the leniency holds in every locale the app ships', () {
+      // The stray separator is reachable in all 48 of them, because every one
+      // of them has its own accepted separator key and none of them counts
+      // how many are typed. This also pins that the shortening walk never
+      // escapes as something other than a FormatException.
+      for (final locale in L10n.supportedLocales) {
+        final name = NumberDialog.resolveLocale(locale.toString());
+        final format = intl.NumberFormat.decimalPattern(name);
+        final sep = format.symbols.DECIMAL_SEP;
+        final typed =
+            '${NumberDialog.formatValue(1.2, name)}$sep${format.format(3)}';
+
+        expect(
+          NumberDialog.parseAmount(typed, name),
+          closeTo(1.2, 1e-9),
+          reason:
+              'audit7.numeric-entry-popup-throws-away-a#1 — "$typed" for '
+              '$locale keeps its parsable prefix',
+        );
+        expect(
+          NumberDialog.parseAmount(sep, name),
+          isNull,
+          reason:
+              'audit7.numeric-entry-popup-throws-away-a#1 and '
+              'number-dialog.popup#11 — a separator on its own is the '
+              'ParseException case, in $locale as anywhere else',
+        );
+      }
     });
   });
 }

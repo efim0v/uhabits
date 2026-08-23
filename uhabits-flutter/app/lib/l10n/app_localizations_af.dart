@@ -9,6 +9,9 @@ class L10nAf extends L10n {
   L10nAf([String locale = 'af']) : super(locale);
 
   @override
+  String get overview => 'Oorsig';
+
+  @override
   String get appName => 'Loop - Gewoonte Boekhouer';
 
   @override
@@ -37,9 +40,6 @@ class L10nAf extends L10n {
 
   @override
   String get toastHabitCreated => 'Gewoonte geskep';
-
-  @override
-  String get overview => 'Oorsig';
 
   @override
   String get habitStrength => 'Habit strength';

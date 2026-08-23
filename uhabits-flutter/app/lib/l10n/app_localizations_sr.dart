@@ -9,6 +9,9 @@ class L10nSr extends L10n {
   L10nSr([String locale = 'sr']) : super(locale);
 
   @override
+  String get overview => 'Преглед';
+
+  @override
   String get appName => '„Loop“ — праћење навика';
 
   @override
@@ -37,9 +40,6 @@ class L10nSr extends L10n {
 
   @override
   String get toastHabitCreated => 'Навика направљена';
-
-  @override
-  String get overview => 'Преглед';
 
   @override
   String get habitStrength => 'Моћ навике';
@@ -469,7 +469,7 @@ class L10nSr extends L10n {
   String get prefViewPrivacy => 'Приказ политике приватности';
 
   @override
-  String get viewAllContributors => 'прикажи све сараднике&#8230;';
+  String get viewAllContributors => 'прикажи све сараднике…';
 
   @override
   String get database => 'База података';
@@ -679,6 +679,9 @@ class L10nSrLatn extends L10nSr {
   L10nSrLatn() : super('sr_Latn');
 
   @override
+  String get overview => 'Pregled';
+
+  @override
   String get appName => '„Loop“ — praćenje navika';
 
   @override
@@ -707,9 +710,6 @@ class L10nSrLatn extends L10nSr {
 
   @override
   String get toastHabitCreated => 'Navika napravljena';
-
-  @override
-  String get overview => 'Pregled';
 
   @override
   String get habitStrength => 'Moć navike';
@@ -1103,7 +1103,7 @@ class L10nSrLatn extends L10nSr {
   String get prefViewPrivacy => 'Prikaz politike privatnosti';
 
   @override
-  String get viewAllContributors => 'prikaži sve saradnike&#8230;';
+  String get viewAllContributors => 'prikaži sve saradnike…';
 
   @override
   String get database => 'Baza podataka';

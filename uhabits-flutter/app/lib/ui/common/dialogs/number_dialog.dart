@@ -25,12 +25,18 @@
 ///    `dialogs.single-current-dialog`; the tag it is shown under survives as
 ///    the route name, the way `HistoryEditorDialog` keeps its own.
 ///
-/// One deliberate narrowing: Java's `NumberFormat.parse` is lenient and stops
-/// at the first character it cannot read, while `intl`'s throws. Since the
-/// field only ever accepts digits and the locale decimal separator
-/// (`number-dialog.popup#5`, `#16`), the two agree on everything the keypad can
-/// produce, and a throw lands in the same branch as a Java `ParseException`:
-/// the original value is kept (`number-dialog.popup#11`).
+/// Java's `NumberFormat.parse` is lenient and stops at the first character it
+/// cannot read, while `intl`'s insists on consuming the whole string and throws
+/// otherwise. That difference is *not* invisible here, as this comment used to
+/// claim: the field's `FilteringTextInputFormatter.allow(RegExp('[0-9<sep>]'))`
+/// places no limit on how many separators are typed, exactly as Android's
+/// `DigitsKeyListener.getInstance("0123456789" + separator)` does not, so
+/// "1.2.3" is reachable on both sides — and where Java saves 1.2, `intl` threw
+/// and the popup wrote the day's PREVIOUS amount back
+/// (`audit7.numeric-entry-popup-throws-away-a#1`). The leniency is reproduced
+/// deliberately in [NumberDialog.parseAmount]; only the case Java itself throws
+/// on — nothing readable at all — still keeps the original value
+/// (`number-dialog.popup#11`).
 ///
 /// The other `intl`-versus-Java gap is locale coverage, and it is not a
 /// narrowing but a crash: see [NumberDialog.resolveLocale].
@@ -187,6 +193,39 @@ class NumberDialog extends StatefulWidget {
         resolveLocale(localeName),
       ).format(entryValue / 1000.0);
 
+  /// `NumberFormat.getInstance().parse(text)`, leniency included
+  /// (`number-dialog.popup#11`,
+  /// `audit7.numeric-entry-popup-throws-away-a#1`).
+  ///
+  /// Java parses from index 0 and stops at the first character it cannot use,
+  /// returning whatever it read up to there; it raises `ParseException` only
+  /// when it could read nothing at all. Returns null in exactly that case, so
+  /// the caller keeps the value it started with.
+  static double? parseAmount(String text, [String? localeName]) =>
+      parseAmountWith(
+        intl.NumberFormat.decimalPattern(resolveLocale(localeName)),
+        text,
+      );
+
+  /// [parseAmount] against a format that is already built.
+  ///
+  /// The leniency is reproduced as "the longest prefix this format accepts",
+  /// which is the same answer Java's character walk gives over the alphabet the
+  /// field can hold — digits and the locale decimal separator, and nothing else
+  /// (`number-dialog.popup#5`, `#16`). Java stops at the second separator; so
+  /// does this, because every prefix that still contains it is refused.
+  static double? parseAmountWith(intl.NumberFormat format, String text) {
+    for (int end = text.length; end > 0; end--) {
+      try {
+        return format.parse(text.substring(0, end)).toDouble();
+      } on FormatException {
+        // This is the character Java would have stopped at. Try the prefix
+        // that ends before it.
+      }
+    }
+    return null;
+  }
+
   @override
   State<NumberDialog> createState() => _NumberDialogState();
 }
@@ -256,11 +295,13 @@ class _NumberDialogState extends State<NumberDialog> {
     if (text.isEmpty) {
       value = core.Entry.unknown / 1000.0;
     } else {
-      try {
-        value = _parser.parse(text).toDouble();
-      } on FormatException {
-        // NOP — the original value survives, as it does past a ParseException.
-      }
+      // `numberFormat.parse(valueStr)!!.toDouble()`, which reads as far as it
+      // can and throws only when that is nowhere
+      // (`audit7.numeric-entry-popup-throws-away-a#1`).
+      final parsed = NumberDialog.parseAmountWith(_parser, text);
+      // NOP on null — the original value survives, as it does past a
+      // ParseException.
+      if (parsed != null) value = parsed;
     }
     Navigator.of(context).pop(NumberDialogResult(value, _notes.text.trim()));
   }

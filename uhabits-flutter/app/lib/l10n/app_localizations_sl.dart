@@ -9,6 +9,9 @@ class L10nSl extends L10n {
   L10nSl([String locale = 'sl']) : super(locale);
 
   @override
+  String get overview => 'Pregled';
+
+  @override
   String get appName => 'Loop Sledilnik Navad';
 
   @override
@@ -37,9 +40,6 @@ class L10nSl extends L10n {
 
   @override
   String get toastHabitCreated => 'Navada ustvarjena';
-
-  @override
-  String get overview => 'Pregled';
 
   @override
   String get habitStrength => 'Moč navade';
@@ -472,7 +472,7 @@ class L10nSl extends L10n {
   String get prefViewPrivacy => 'Oglejte si pravilnik o zasebnosti';
 
   @override
-  String get viewAllContributors => 'Poglej vse sodelavce&#8230;';
+  String get viewAllContributors => 'Poglej vse sodelavce…';
 
   @override
   String get database => 'Baza podatkov';

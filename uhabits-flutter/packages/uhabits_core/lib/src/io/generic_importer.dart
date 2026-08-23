@@ -129,14 +129,32 @@ class ImportDataTask extends Task {
         _result = notRecognized;
         modelFactory.database.commit();
       }
-    } on Exception catch (e, stackTrace) {
+      // `catch (e: Exception)`, and note that it is NOT `on Exception catch`.
+      // Java's `Exception` sits above `RuntimeException`, so Kotlin's clause
+      // takes every parse accident an importer can commit —
+      // `HabitBullCSVImporter.parseDate` doing `parts[2].toInt()` on a date
+      // such as "2015-01" throws IndexOutOfBoundsException, and the catch
+      // still sets FAILED and commits. Dart splits that hierarchy the other
+      // way: the same accidents are `Error`s (RangeError, StateError,
+      // TypeError, ArgumentError), not `Exception`s, so `on Exception` would
+      // let them escape — past `onPostExecute`, so the user is told nothing,
+      // and past the commit, so the database is left inside the open
+      // transaction and the next write behaves unpredictably
+      // (`audit7.a-failed-import-shows-no-error#1`). A bare `catch` is the
+      // clause that covers what Kotlin's covers; the same choice was already
+      // made for `catch (e: Exception)` in `HabitBullCSVImporter.canHandle`.
+      // It also sweeps up Dart's `OutOfMemoryError`/`StackOverflowError`,
+      // which map onto java.lang.Error and which Kotlin would rethrow —
+      // neither is recoverable, and rethrowing them here would reinstate
+      // exactly the open transaction this rule is about.
+    } catch (e, stackTrace) {
       _result = failed;
       _logger.error(importFailedMessage);
       _logger.error(e, stackTrace);
       // On failure, commit anyway to close the transaction
       try {
         modelFactory.database.commit();
-      } on Exception catch (_) {}
+      } catch (_) {}
     }
   }
 

@@ -9,6 +9,9 @@ class L10nHi extends L10n {
   L10nHi([String locale = 'hi']) : super(locale);
 
   @override
+  String get overview => 'अवलोकन';
+
+  @override
   String get appName => 'Loop - आदत पर नजर';
 
   @override
@@ -37,9 +40,6 @@ class L10nHi extends L10n {
 
   @override
   String get toastHabitCreated => 'आदत बनायी गई';
-
-  @override
-  String get overview => 'अवलोकन';
 
   @override
   String get habitStrength => 'आदत की मजबूती';
@@ -471,7 +471,7 @@ class L10nHi extends L10n {
   String get prefViewPrivacy => 'गोपनीयता नीति देखें';
 
   @override
-  String get viewAllContributors => 'सभी योगदानकर्ता देखें&#8230;';
+  String get viewAllContributors => 'सभी योगदानकर्ता देखें…';
 
   @override
   String get database => 'डेटाबेस';

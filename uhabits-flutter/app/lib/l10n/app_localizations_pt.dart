@@ -9,6 +9,9 @@ class L10nPt extends L10n {
   L10nPt([String locale = 'pt']) : super(locale);
 
   @override
+  String get overview => 'Visão geral';
+
+  @override
   String get appName => 'Loop - Acompanhador de Hábitos';
 
   @override
@@ -37,9 +40,6 @@ class L10nPt extends L10n {
 
   @override
   String get toastHabitCreated => 'Hábito criado.';
-
-  @override
-  String get overview => 'Visão geral';
 
   @override
   String get habitStrength => 'Estabilidade';
@@ -471,7 +471,7 @@ class L10nPt extends L10n {
   String get prefViewPrivacy => 'Ver política de privacidade';
 
   @override
-  String get viewAllContributors => 'Exibir todos os colaboradores&#8230;';
+  String get viewAllContributors => 'Exibir todos os colaboradores…';
 
   @override
   String get database => 'Banco de dados';
@@ -679,6 +679,9 @@ class L10nPtBr extends L10nPt {
   L10nPtBr() : super('pt_BR');
 
   @override
+  String get overview => 'Visão geral';
+
+  @override
   String get appName => 'Loop - Acompanhador de Hábitos';
 
   @override
@@ -707,9 +710,6 @@ class L10nPtBr extends L10nPt {
 
   @override
   String get toastHabitCreated => 'Hábito criado.';
-
-  @override
-  String get overview => 'Visão geral';
 
   @override
   String get habitStrength => 'Estabilidade';
@@ -1123,7 +1123,7 @@ class L10nPtBr extends L10nPt {
   String get prefViewPrivacy => 'Ver política de privacidade';
 
   @override
-  String get viewAllContributors => 'Exibir todos os colaboradores&#8230;';
+  String get viewAllContributors => 'Exibir todos os colaboradores…';
 
   @override
   String get database => 'Banco de dados';
@@ -1321,6 +1321,9 @@ class L10nPtPt extends L10nPt {
   L10nPtPt() : super('pt_PT');
 
   @override
+  String get overview => 'Visão geral';
+
+  @override
   String get appName => 'Loop - Acompanhador de Hábitos';
 
   @override
@@ -1349,9 +1352,6 @@ class L10nPtPt extends L10nPt {
 
   @override
   String get toastHabitCreated => 'Hábito criado';
-
-  @override
-  String get overview => 'Visão geral';
 
   @override
   String get habitStrength => 'Pontuação';
@@ -1747,7 +1747,7 @@ class L10nPtPt extends L10nPt {
   String get prefViewPrivacy => 'Ver política de privacidade';
 
   @override
-  String get viewAllContributors => 'Ver todos os colaboradores&#8230;';
+  String get viewAllContributors => 'Ver todos os colaboradores…';
 
   @override
   String get database => 'Banco de dados';

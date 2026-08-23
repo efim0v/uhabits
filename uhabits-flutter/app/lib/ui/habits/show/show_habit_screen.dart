@@ -253,6 +253,23 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   /// popup, the number popup and the delete confirmation.
   VoidCallback? _currentDialog;
 
+  /// The inflated options menu (`show-habit.menu#1`).
+  ///
+  /// `ShowHabitActivity.onCreateOptionsMenu` runs once, when the action bar
+  /// asks for its menu, and the activity overrides neither
+  /// `onPrepareOptionsMenu` nor ever calls `invalidateOptionsMenu` — so the
+  /// answers `presenter.canArchive()` / `canUnarchive()` gave at inflation
+  /// stick for the rest of the visit. Recomputing them in `build` instead made
+  /// the item flip as soon as the archive command finished, which is a
+  /// different screen from the one upstream shows
+  /// (`show-habit.archive-unarchive#4`,
+  /// `audit7.the-show-habit-overflow-menu-re#1`).
+  ///
+  /// `late final` is the inflation: the initializer runs on the first build,
+  /// once, and never again for the life of this state.
+  late final List<ShowHabitMenuItem> _menuItems =
+      _model.menu.onCreateOptionsMenu();
+
   @override
   void initState() {
     super.initState();
@@ -566,9 +583,9 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     final theme = state.theme;
     final l10n = L10n.of(context);
 
-    // `onCreateOptionsMenu` is called once per menu build, exactly as Android
-    // rebuilds the options menu.
-    final items = model.menu.onCreateOptionsMenu();
+    // `onCreateOptionsMenu` is called once per menu build — and the options
+    // menu of this activity is built exactly once. See [_menuItems].
+    final items = _menuItems;
 
     return Scaffold(
       // `@style/CardList` and the ScrollView both take ?windowBackgroundColor.

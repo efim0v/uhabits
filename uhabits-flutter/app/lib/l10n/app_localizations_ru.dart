@@ -9,6 +9,9 @@ class L10nRu extends L10n {
   L10nRu([String locale = 'ru']) : super(locale);
 
   @override
+  String get overview => 'Обзор';
+
+  @override
   String get appName => 'Трекер привычек Loop';
 
   @override
@@ -37,9 +40,6 @@ class L10nRu extends L10n {
 
   @override
   String get toastHabitCreated => 'Привычка создана';
-
-  @override
-  String get overview => 'Обзор';
 
   @override
   String get habitStrength => 'Сила привычки';
@@ -473,7 +473,7 @@ class L10nRu extends L10n {
   String get prefViewPrivacy => 'Посмотреть политику конфиденциальности';
 
   @override
-  String get viewAllContributors => 'Посмотреть всех участников&#8230;';
+  String get viewAllContributors => 'Посмотреть всех участников…';
 
   @override
   String get database => 'База данных';

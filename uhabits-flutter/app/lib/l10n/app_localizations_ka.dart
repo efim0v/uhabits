@@ -9,6 +9,9 @@ class L10nKa extends L10n {
   L10nKa([String locale = 'ka']) : super(locale);
 
   @override
+  String get overview => 'მიმოხილვა';
+
+  @override
   String get appName => 'Loop — ჩვევების ტრეკერი';
 
   @override
@@ -37,9 +40,6 @@ class L10nKa extends L10n {
 
   @override
   String get toastHabitCreated => 'ჩვევა შეიქმნა';
-
-  @override
-  String get overview => 'მიმოხილვა';
 
   @override
   String get habitStrength => 'ჩვევის გაჯდომის დონე';
@@ -471,7 +471,7 @@ class L10nKa extends L10n {
   String get prefViewPrivacy => 'კონფიდენციალურობის პოლიტიკა';
 
   @override
-  String get viewAllContributors => 'ყველა წვლილის შემტანის ნახვა&#8230;';
+  String get viewAllContributors => 'ყველა წვლილის შემტანის ნახვა…';
 
   @override
   String get database => 'მონაცემთა ბაზა';

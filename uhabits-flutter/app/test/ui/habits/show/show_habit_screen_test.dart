@@ -1512,8 +1512,15 @@ void main() {
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
 
+      // The options menu is inflated once per visit and never invalidated
+      // (`audit7.the-show-habit-overflow-menu-re#1`), so a flag flipped while
+      // the screen is up is read by the *next* visit, not by a refresh of this
+      // one. This used to call `modelOf(tester).refresh()` and expect the item
+      // to appear, which asserted a menu rebuild Android does not perform.
       scope.preferences.isDeveloper = true;
-      modelOf(tester).refresh();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(wrap(scope, habit));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(ShowHabitScreen.overflowMenuKey));
       await tester.pumpAndSettle();
@@ -1524,6 +1531,96 @@ void main() {
       );
       expect(find.text(ShowHabitMenuItem.randomizeTitle), findsOneWidget,
           reason: 'show-habit.menu#5 — titled with the literal "Randomize"');
+    });
+
+    testWidgets('audit7.the-show-habit-overflow-menu-re#1 and '
+        'show-habit.archive-unarchive#4: archiving leaves the stale Archive '
+        'item in the overflow', (tester) async {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+
+      final Finder archive =
+          find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.archive));
+      final Finder unarchive =
+          find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.unarchive));
+
+      await tester.tap(find.byKey(ShowHabitScreen.overflowMenuKey));
+      await tester.pumpAndSettle();
+      expect(archive, findsOneWidget,
+          reason: 'show-habit.menu#3 — canArchive() is true for a habit that '
+              'is not archived');
+      expect(unarchive, findsNothing, reason: 'show-habit.menu#4');
+
+      await tester.tap(archive);
+      await tester.pumpAndSettle();
+      expect(habit.isArchived, isTrue,
+          reason: 'show-habit.archive-unarchive#1 — ArchiveHabitsCommand ran');
+
+      // The presenter now answers the other way round…
+      expect(
+        modelOf(tester).menu.onCreateOptionsMenu(),
+        containsAll(<ShowHabitMenuItem>[ShowHabitMenuItem.unarchive]),
+        reason: 'audit7.the-show-habit-overflow-menu-re#1 — canUnarchive() is '
+            'true the moment the command finishes; the staleness is in the '
+            'menu, not in the presenter',
+      );
+
+      // …but the menu was inflated once, in onCreateOptionsMenu, and
+      // ShowHabitActivity overrides neither onPrepareOptionsMenu nor calls
+      // invalidateOptionsMenu, so nothing rebuilds it for the rest of the
+      // visit.
+      await tester.tap(find.byKey(ShowHabitScreen.overflowMenuKey));
+      await tester.pumpAndSettle();
+      expect(
+        archive,
+        findsOneWidget,
+        reason: 'audit7.the-show-habit-overflow-menu-re#1 and '
+            'show-habit.archive-unarchive#4 — the overflow keeps offering '
+            '"Archive" after the habit has been archived',
+      );
+      expect(
+        unarchive,
+        findsNothing,
+        reason: 'audit7.the-show-habit-overflow-menu-re#1 and '
+            'show-habit.archive-unarchive#4 — and still hides "Unarchive"',
+      );
+
+      // Close the menu and let the snackbar time out, so neither outlives the
+      // test.
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+    });
+
+    testWidgets('audit7.the-show-habit-overflow-menu-re#1: a fresh visit '
+        'inflates the menu again', (tester) async {
+      // The staleness lasts exactly as long as the inflated menu does: the
+      // next activity — here, the next ShowHabitScreen — asks the presenter
+      // again, and gets Unarchive.
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      habit.isArchived = true;
+      scope.habitList.update(<Habit>[habit]);
+
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ShowHabitScreen.overflowMenuKey));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.unarchive)),
+        findsOneWidget,
+        reason: 'show-habit.menu#4 and '
+            'audit7.the-show-habit-overflow-menu-re#1 — onCreateOptionsMenu is '
+            'asked once per menu build, and this is a new one',
+      );
+      expect(
+        find.byKey(ShowHabitScreen.menuItemKey(ShowHabitMenuItem.archive)),
+        findsNothing,
+        reason: 'show-habit.menu#3',
+      );
     });
 
     test('show-habit.menu#5: the Randomize title is never translated', () {

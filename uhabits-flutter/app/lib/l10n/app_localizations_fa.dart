@@ -9,6 +9,9 @@ class L10nFa extends L10n {
   L10nFa([String locale = 'fa']) : super(locale);
 
   @override
+  String get overview => 'مرور';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nFa extends L10n {
 
   @override
   String get toastHabitCreated => 'عادت ایجاد شد';
-
-  @override
-  String get overview => 'مرور';
 
   @override
   String get habitStrength => 'قدرت عادت';
@@ -472,7 +472,7 @@ class L10nFa extends L10n {
   String get prefViewPrivacy => 'مشاهده سیاست حفظ حریم خصوصی';
 
   @override
-  String get viewAllContributors => 'مشاهده همه همکاران&#8230;';
+  String get viewAllContributors => 'مشاهده همه همکاران…';
 
   @override
   String get database => 'دیتابیس';

@@ -9,6 +9,9 @@ class L10nRo extends L10n {
   L10nRo([String locale = 'ro']) : super(locale);
 
   @override
+  String get overview => 'Prezentare generală';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nRo extends L10n {
 
   @override
   String get toastHabitCreated => 'Obicei creat.';
-
-  @override
-  String get overview => 'Prezentare generală';
 
   @override
   String get habitStrength => 'Graficul obiceiurilor';
@@ -471,7 +471,7 @@ class L10nRo extends L10n {
   String get prefViewPrivacy => 'Consultați politica de confidențialitate';
 
   @override
-  String get viewAllContributors => 'Vizualizați toți colaboratorii&#8230;';
+  String get viewAllContributors => 'Vizualizați toți colaboratorii…';
 
   @override
   String get database => 'Bază de date';

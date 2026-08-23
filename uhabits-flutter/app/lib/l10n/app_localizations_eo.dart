@@ -9,6 +9,9 @@ class L10nEo extends L10n {
   L10nEo([String locale = 'eo']) : super(locale);
 
   @override
+  String get overview => 'Generala vidado';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nEo extends L10n {
 
   @override
   String get toastHabitCreated => 'Kutimo kreita';
-
-  @override
-  String get overview => 'Generala vidado';
 
   @override
   String get habitStrength => 'Kutimo forteco';
@@ -470,7 +470,7 @@ class L10nEo extends L10n {
   String get prefViewPrivacy => 'Vidu privatecan politikon';
 
   @override
-  String get viewAllContributors => 'Rigardi ĉiujn kontribuantojn&#8230;';
+  String get viewAllContributors => 'Rigardi ĉiujn kontribuantojn…';
 
   @override
   String get database => 'Datumbazo';

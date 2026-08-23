@@ -9,6 +9,9 @@ class L10nEl extends L10n {
   L10nEl([String locale = 'el']) : super(locale);
 
   @override
+  String get overview => 'Επισκόπηση';
+
+  @override
   String get appName => 'Loop - Καταγραφή Συνηθειών';
 
   @override
@@ -37,9 +40,6 @@ class L10nEl extends L10n {
 
   @override
   String get toastHabitCreated => 'Η συνήθεια δημιουργήθηκε';
-
-  @override
-  String get overview => 'Επισκόπηση';
 
   @override
   String get habitStrength => 'Δύναμη συνήθειας';
@@ -475,7 +475,7 @@ class L10nEl extends L10n {
   String get prefViewPrivacy => 'Προβολή πολιτικής απορρήτου';
 
   @override
-  String get viewAllContributors => 'Προβολή όλων των συντελεστών&#8230;';
+  String get viewAllContributors => 'Προβολή όλων των συντελεστών…';
 
   @override
   String get database => 'Βάση δεδομένων';

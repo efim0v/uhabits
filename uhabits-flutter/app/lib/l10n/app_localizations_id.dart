@@ -9,6 +9,9 @@ class L10nId extends L10n {
   L10nId([String locale = 'id']) : super(locale);
 
   @override
+  String get overview => 'Ikhtisar';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nId extends L10n {
 
   @override
   String get toastHabitCreated => 'Kebiasaan ditambahkan';
-
-  @override
-  String get overview => 'Ikhtisar';
 
   @override
   String get habitStrength => 'Kekuatan Kebiasaan';

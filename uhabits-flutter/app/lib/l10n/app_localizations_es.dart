@@ -9,6 +9,9 @@ class L10nEs extends L10n {
   L10nEs([String locale = 'es']) : super(locale);
 
   @override
+  String get overview => 'Resumen';
+
+  @override
   String get appName => 'Loop Analizador de Hábitos';
 
   @override
@@ -37,9 +40,6 @@ class L10nEs extends L10n {
 
   @override
   String get toastHabitCreated => 'Hábito creado';
-
-  @override
-  String get overview => 'Resumen';
 
   @override
   String get habitStrength => 'Fuerza del hábito';
@@ -472,7 +472,7 @@ class L10nEs extends L10n {
   String get prefViewPrivacy => 'Ver política de privacidad';
 
   @override
-  String get viewAllContributors => 'Ver todos los colaboradores&#8230;';
+  String get viewAllContributors => 'Ver todos los colaboradores…';
 
   @override
   String get database => 'Base de datos';

@@ -9,6 +9,9 @@ class L10nIt extends L10n {
   L10nIt([String locale = 'it']) : super(locale);
 
   @override
+  String get overview => 'Panoramica';
+
+  @override
   String get appName => 'Loop - Tracciatore di Abitudine';
 
   @override
@@ -37,9 +40,6 @@ class L10nIt extends L10n {
 
   @override
   String get toastHabitCreated => 'Abitudine creata';
-
-  @override
-  String get overview => 'Panoramica';
 
   @override
   String get habitStrength => 'Forza dell\'abitudine';
@@ -471,7 +471,7 @@ class L10nIt extends L10n {
   String get prefViewPrivacy => 'Visualizza informativa sulla privacy';
 
   @override
-  String get viewAllContributors => 'Visualizza tutti i collaboratori&#8230;';
+  String get viewAllContributors => 'Visualizza tutti i collaboratori…';
 
   @override
   String get database => 'Banca dati';

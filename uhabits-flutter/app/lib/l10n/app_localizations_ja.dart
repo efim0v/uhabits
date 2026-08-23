@@ -9,6 +9,9 @@ class L10nJa extends L10n {
   L10nJa([String locale = 'ja']) : super(locale);
 
   @override
+  String get overview => '概要';
+
+  @override
   String get appName => 'ループ習慣トラッカー';
 
   @override
@@ -37,9 +40,6 @@ class L10nJa extends L10n {
 
   @override
   String get toastHabitCreated => '習慣を作成しました';
-
-  @override
-  String get overview => '概要';
 
   @override
   String get habitStrength => '習慣の強さ';
@@ -461,7 +461,7 @@ class L10nJa extends L10n {
   String get prefViewPrivacy => 'プライバシーポリシーを見る';
 
   @override
-  String get viewAllContributors => 'すべての貢献者を表示&#8230;';
+  String get viewAllContributors => 'すべての貢献者を表示…';
 
   @override
   String get database => 'データベース';

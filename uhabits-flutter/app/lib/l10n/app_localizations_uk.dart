@@ -9,6 +9,9 @@ class L10nUk extends L10n {
   L10nUk([String locale = 'uk']) : super(locale);
 
   @override
+  String get overview => 'Огляд';
+
+  @override
   String get appName => 'Трекер звичок Loop';
 
   @override
@@ -37,9 +40,6 @@ class L10nUk extends L10n {
 
   @override
   String get toastHabitCreated => 'Звичку створено';
-
-  @override
-  String get overview => 'Огляд';
 
   @override
   String get habitStrength => 'Сила звички';
@@ -472,7 +472,7 @@ class L10nUk extends L10n {
   String get prefViewPrivacy => 'Переглянути політику конфіденційності';
 
   @override
-  String get viewAllContributors => 'Переглянути всіх учасників&#8230;';
+  String get viewAllContributors => 'Переглянути всіх учасників…';
 
   @override
   String get database => 'База даних';

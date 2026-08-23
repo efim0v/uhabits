@@ -26,6 +26,9 @@ import 'package:uhabits_core/src/database/sqlite3_database.dart';
 import 'package:uhabits_core/src/io/abstract_importer.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
+// Aliased: this file declares a SECOND `AbstractImporter`, which would
+// otherwise collide with the dispatcher's.
+import 'package:uhabits_core/src/io/habit_bull_csv_importer.dart' as hb;
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
@@ -220,6 +223,28 @@ class RecordingListener implements ImportDataTaskListener {
 
   @override
   void onImportDataFinished(int result) => results.add(result);
+}
+
+/// Bridges the REAL `HabitBullCSVImporter` onto the dispatcher's
+/// [AbstractImporter].
+///
+/// The core declares `AbstractImporter` twice — once in
+/// `src/io/abstract_importer.dart`, which is what `GenericImporter` accepts,
+/// and once in `src/io/habit_bull_csv_importer.dart`, which is what the
+/// HabitBull importer extends — so the two cannot be assembled directly. This
+/// forwards both members and adds nothing, which is what lets the real
+/// `parseDate` run inside a real `ImportDataTask`.
+class HabitBullBridge extends AbstractImporter {
+  HabitBullBridge(this.delegate);
+
+  final hb.HabitBullCSVImporter delegate;
+
+  @override
+  Future<bool> canHandle(UserFile file) => delegate.canHandle(file);
+
+  @override
+  Future<void> importHabitsFromFile(UserFile file) =>
+      delegate.importHabitsFromFile(file);
 }
 
 // ---------------------------------------------------------------------------
@@ -958,6 +983,158 @@ void main() {
       expect(buildTask(), isA<ImportDataTask>(),
           reason: 'io.import-task#7 an SQLModelFactory is accepted and its '
               'database is the one the transaction runs on');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // audit7.a-failed-import-shows-no-error
+  //
+  // Kotlin's `catch (e: Exception)` sits above `RuntimeException`, so an
+  // IndexOutOfBoundsException raised inside an importer — `parts[2].toInt()`
+  // on a date such as "2015-01" — is caught like any other failure: result
+  // becomes FAILED, the transaction is committed anyway, and onPostExecute
+  // reports it. Dart splits the hierarchy the other way: `RangeError`,
+  // `StateError`, `TypeError` and friends are `Error`s, NOT `Exception`s, so
+  // `on Exception catch` lets exactly the accidents Kotlin catches escape —
+  // past onPostExecute (so the user is told nothing) and past the commit (so
+  // the database is left inside an open transaction).
+  // -------------------------------------------------------------------------
+
+  group('audit7.a-failed-import-shows-no-error', () {
+    late List<String> sql;
+    late RecordingDatabase database;
+    late SQLModelFactory modelFactory;
+    late List<String> log;
+    late RecordingImporter loop;
+    late RecordingLogging logging;
+    late RecordingListener listener;
+
+    setUp(() {
+      sql = <String>[];
+      log = <String>[];
+      database = RecordingDatabase(openMigratedDatabase(), sql);
+      modelFactory = SQLModelFactory(database);
+      loop = RecordingImporter('loop', claims: false, log: log);
+      logging = RecordingLogging();
+      listener = RecordingListener();
+      sql.clear();
+    });
+
+    tearDown(() {
+      database.close();
+    });
+
+    GenericImporter dispatcherWith(AbstractImporter habitBull) =>
+        GenericImporter(
+          loop,
+          RecordingImporter('rewire', claims: false, log: log),
+          RecordingImporter('tickmate', claims: false, log: log),
+          habitBull,
+        );
+
+    ImportDataTask taskFor(GenericImporter importer, UserFile file) =>
+        ImportDataTask(importer, modelFactory, file, listener,
+            logging: logging);
+
+    /// True when the database is still inside the transaction the task opened:
+    /// sqlite refuses a nested BEGIN.
+    bool stillInTransaction() {
+      try {
+        database.begin();
+        // It started, so the task's transaction had been closed. Undo ours.
+        database.commit();
+        return false;
+      } catch (_) {
+        return true;
+      }
+    }
+
+    test('#1 a parse accident inside an importer is FAILED, not an escape',
+        () async {
+      loop.claims = true;
+      // What `parts[2]` on a two-part date actually throws in Dart. Kotlin's
+      // IndexOutOfBoundsException is a RuntimeException, so `catch (e:
+      // Exception)` takes it.
+      final error = RangeError.index(2, <String>['2015', '01'], 'index');
+      loop.throwOnImport = error;
+      final task = taskFor(dispatcherWith(HabitBullGateImporter()),
+          writeText('backup.db', 'whatever'));
+
+      await task.doInBackground();
+      task.onPostExecute();
+
+      expect(listener.results, <int>[ImportDataTask.failed],
+          reason: 'audit7.a-failed-import-shows-no-error#1 — the catch sets '
+              'result = FAILED and onPostExecute fires '
+              'onImportDataFinished(FAILED), so the user sees "Failed to '
+              'import data."');
+      expect(sql, contains('COMMIT'),
+          reason: 'audit7.a-failed-import-shows-no-error#1 — the catch '
+              'commits anyway to close the transaction');
+      expect(sql, isNot(contains('ROLLBACK')),
+          reason: 'audit7.a-failed-import-shows-no-error#1 — Kotlin commits, '
+              'it does not roll back');
+      expect(stillInTransaction(), isFalse,
+          reason: 'audit7.a-failed-import-shows-no-error#1 — the database is '
+              'left committed and clean, so a second attempt with a good file '
+              'works');
+      expect(logging.errorsOf(importDataTaskLoggerName),
+          contains(importFailedMessage),
+          reason: 'audit7.a-failed-import-shows-no-error#1 — Log.e('
+              '"ImportDataTask", "Import failed", e)');
+      expect(logging.errorsOf(importDataTaskLoggerName), contains(error),
+          reason: 'audit7.a-failed-import-shows-no-error#1 — the thrown '
+              'object is logged too');
+    });
+
+    test('#1 the real HabitBull importer on a two-part date reports FAILED',
+        () async {
+      // The exact trigger the finding names: HabitBullCSVImporter.parseDate
+      // doing parts[2].toInt() on "2015-01".
+      final habitList = MemoryModelFactory().buildHabitList();
+      final habitBull = HabitBullBridge(hb.HabitBullCSVImporter(
+        habitList,
+        MemoryModelFactory(),
+        logging,
+      ));
+      final file = writeText(
+        'habitbull.csv',
+        'HabitName,HabitDescription,HabitCategory,CalendarDate,Value,'
+            'CommentText\n'
+            'Wake up early,,,2015-01,1,\n',
+      );
+      final task = taskFor(dispatcherWith(habitBull), file);
+
+      await task.doInBackground();
+      task.onPostExecute();
+
+      expect(listener.results, <int>[ImportDataTask.failed],
+          reason: 'audit7.a-failed-import-shows-no-error#1 — a broken date in '
+              'a HabitBull CSV is a FAILED import, not an unhandled crash');
+      expect(stillInTransaction(), isFalse,
+          reason: 'audit7.a-failed-import-shows-no-error#1 — the transaction '
+              'is closed even when the importer dies mid-file');
+      expect(logging.errorsOf(importDataTaskLoggerName),
+          contains(importFailedMessage),
+          reason: 'audit7.a-failed-import-shows-no-error#1 — the failure is '
+              'logged under the ImportDataTask tag');
+    });
+
+    test('#1 a commit that itself fails still cannot escape', () async {
+      loop.claims = true;
+      loop.throwOnImport = StateError('importer bug');
+      database.failOnCommit = true;
+      final task = taskFor(dispatcherWith(HabitBullGateImporter()),
+          writeText('backup.db', 'whatever'));
+
+      await task.doInBackground();
+      task.onPostExecute();
+
+      expect(listener.results, <int>[ImportDataTask.failed],
+          reason: 'audit7.a-failed-import-shows-no-error#1 — the nested '
+              '`try { commit() } catch (_) {}` swallows whatever the retry '
+              'throws, exactly as Kotlin does');
+      database.failOnCommit = false;
     });
   });
 }

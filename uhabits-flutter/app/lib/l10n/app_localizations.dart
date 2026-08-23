@@ -188,6 +188,12 @@ abstract class L10n {
     Locale('zh', 'TW'),
   ];
 
+  /// No description provided for @overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get overview;
+
   /// No description provided for @appName.
   ///
   /// In en, this message translates to:
@@ -247,12 +253,6 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Habit created'**
   String get toastHabitCreated;
-
-  /// No description provided for @overview.
-  ///
-  /// In en, this message translates to:
-  /// **'Overview'**
-  String get overview;
 
   /// No description provided for @habitStrength.
   ///

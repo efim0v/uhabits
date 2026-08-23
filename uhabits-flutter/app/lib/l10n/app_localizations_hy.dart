@@ -9,6 +9,9 @@ class L10nHy extends L10n {
   L10nHy([String locale = 'hy']) : super(locale);
 
   @override
+  String get overview => 'Overview';
+
+  @override
   String get appName => 'Loop Habit Tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nHy extends L10n {
 
   @override
   String get toastHabitCreated => 'Սովորությունը ստեղծեց';
-
-  @override
-  String get overview => 'Overview';
 
   @override
   String get habitStrength => 'Habit strength';

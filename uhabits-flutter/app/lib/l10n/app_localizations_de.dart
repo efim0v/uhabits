@@ -9,6 +9,9 @@ class L10nDe extends L10n {
   L10nDe([String locale = 'de']) : super(locale);
 
   @override
+  String get overview => 'Übersicht';
+
+  @override
   String get appName => 'Loop - Gewohnheiten Tracking';
 
   @override
@@ -37,9 +40,6 @@ class L10nDe extends L10n {
 
   @override
   String get toastHabitCreated => 'Gewohnheit erstellt';
-
-  @override
-  String get overview => 'Übersicht';
 
   @override
   String get habitStrength => 'Wertung';
@@ -470,7 +470,7 @@ class L10nDe extends L10n {
   String get prefViewPrivacy => 'Datenschutzrichtlinie anzeigen';
 
   @override
-  String get viewAllContributors => 'Alle Mitwirkende anzeigen&#8230;';
+  String get viewAllContributors => 'Alle Mitwirkende anzeigen…';
 
   @override
   String get database => 'Datenbank';

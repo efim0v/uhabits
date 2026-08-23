@@ -9,6 +9,9 @@ class L10nNl extends L10n {
   L10nNl([String locale = 'nl']) : super(locale);
 
   @override
+  String get overview => 'Overzicht';
+
+  @override
   String get appName => 'Loop Gewoonte tracker';
 
   @override
@@ -37,9 +40,6 @@ class L10nNl extends L10n {
 
   @override
   String get toastHabitCreated => 'Gewoonte aangemaakt.';
-
-  @override
-  String get overview => 'Overzicht';
 
   @override
   String get habitStrength => 'Gewoonte-sterkte';
@@ -472,7 +472,7 @@ class L10nNl extends L10n {
   String get prefViewPrivacy => 'Privacybeleid bekijken';
 
   @override
-  String get viewAllContributors => 'Bekijk alle bijdragers&#8230;';
+  String get viewAllContributors => 'Bekijk alle bijdragers…';
 
   @override
   String get database => 'Database';
