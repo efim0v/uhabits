@@ -1737,7 +1737,8 @@ written from the rules below.
 
 #### io.printf-format
 
-- [ ] `io.printf-format` — printf-style format helper
+- [~] `io.printf-format` — printf-style format helper
+- **Disposition:** superseded — Dart has no printf, so the port ships its own formatter in packages/uhabits_core/lib/src/io/printf.dart instead of delegating to java.lang.String.format or the npm sprintf-js package that the one remaining rule (#4) describes; there is no Kotlin/JS target to port.
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/io/Strings.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/io/JavaStrings.kt`, `uhabits-core/src/jsMain/kotlin/org/isoron/platform/io/JsStrings.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/io/StringsTest.kt`
@@ -2087,7 +2088,8 @@ written from the rules below.
 
 #### io.logging
 
-- [ ] `io.logging` — Logging abstraction (importers and platform adapter)
+- [~] `io.logging` — Logging abstraction (importers and platform adapter)
+- **Disposition:** superseded — AppScope wires StandardLogging over Dart stdout/stderr (app/lib/state/app_scope.dart); Dart output already reaches logcat on Android and os_log on iOS, so the android.util.Log adapter (#3, #6, #7) and its Dagger @AppScope binding (#8) have nothing to map onto.
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/io/Logging.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/io/AndroidLogging.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/inject/HabitsApplicationComponent.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3184,7 +3186,8 @@ written from the rules below.
 
 #### edit-habit.instance-state
 
-- [ ] `edit-habit.instance-state` — Rotation / process-death state restoration
+- [~] `edit-habit.instance-state` — Rotation / process-death state restoration
+- **Disposition:** superseded — The editor's form lives in ordinary Flutter State (EditHabitModel + TextEditingControllers), which survives rotation without an onSaveInstanceState Bundle; there is no Bundle round trip to port, and the ledger's own Notes direct exactly this.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/regression/SavedStateTest.kt`
@@ -3212,7 +3215,8 @@ written from the rules below.
 
 #### dialogs.single-current-dialog
 
-- [ ] `dialogs.single-current-dialog` — Global 'only one dialog at a time' mechanism
+- [~] `dialogs.single-current-dialog` — Global 'only one dialog at a time' mechanism
+- **Disposition:** superseded — Every picker in the port is an awaited modal route on the Navigator (showColorPickerDialog, showFrequencyPickerDialog, showWeekdayPickerDialog, showTimePicker, showConfirmDeleteDialog, showCheckmarkDialog, showNumberDialog), so 'one at a time', 'the history editor stays under the entry popups' (#5) and 'leaving the screen closes the popup' (#6) fall out of route stacking; there is no process-wide WeakReference registry to reproduce.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/DialogUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`, `.../activities/habits/show/ShowHabitActivity.kt`, `.../activities/habits/list/ListHabitsScreen.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -3438,7 +3442,8 @@ written from the rules below.
 
 #### time-picker.radial-dialog
 
-- [ ] `time-picker.radial-dialog` — Vendored radial TimePickerDialog
+- [~] `time-picker.radial-dialog` — Vendored radial TimePickerDialog
+- **Disposition:** superseded — app/lib/ui/habits/edit/edit_habit_screen.dart already calls Flutter's Material showTimePicker for the reminder, and the vendored dialog's Clear button is reproduced as the separate editHabit.reminderClear control on the reminder row; the AOSP fork is not shipped.
 - **Platform:** needs-native-per-platform · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/com/android/datetimepicker/time/TimePickerDialog.java`, `.../time/RadialPickerLayout.java`, `uhabits-android/src/main/res/layout/time_picker_dialog.xml`, `uhabits-android/src/main/res/values/strings.xml`, `.../values/pickers.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/EditHabitSteps.kt`
@@ -3778,7 +3783,8 @@ written from the rules below.
 
 #### settings.theme.theme-modes
 
-- [ ] `settings.theme.theme-modes` — Theme modes: automatic / light / dark, and the theme switcher
+- [~] `settings.theme.theme-modes` — Theme modes: automatic / light / dark, and the theme switcher
+- **Disposition:** superseded — app/lib/state/theme_model.dart reads MediaQuery.platformBrightness and the theme is a value in the widget tree, so the @ActivityScope switcher (#11), applyDialog styles (#10), the Activity cast (#12), the per-call View.currentTheme() helper (#13) and the SDK<29 branch (#5) have no counterpart; the eight behavioural rules are ported and cited.
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/ThemeSwitcher.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/AndroidThemeSwitcher.kt`, `uhabits-android/src/main/res/values/styles.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/preferences/PreferencesTest.kt`
@@ -3800,7 +3806,8 @@ written from the rules below.
 
 #### settings.theme.toggle-night-mode
 
-- [ ] `settings.theme.toggle-night-mode` — Dark theme toggle in the overflow menu
+- [~] `settings.theme.toggle-night-mode` — Dark theme toggle in the overflow menu
+- **Disposition:** superseded — DEVIATIONS.md records that a theme change rebuilds the widget tree in place instead of recreating the activity; #7 (finish + fade + 500 ms postDelayed) and #9 (restart on resume when pure black changed) describe exactly that restart mechanism.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/ThemeSwitcher.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehavior.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt`, `.../ListHabitsScreen.kt`, `.../ListHabitsActivity.kt`, `uhabits-android/src/main/res/menu/list_habits.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsMenuBehaviorTest.kt`
@@ -3833,7 +3840,8 @@ written from the rules below.
 
 #### settings.screen.structure
 
-- [ ] `settings.screen.structure` — Settings screen structure and hosting
+- [~] `settings.screen.structure` — Settings screen structure and hosting
+- **Disposition:** superseded — The only uncited rule (#8) is Android BackupManager.dataChanged — whose backup agent is already dispositioned superseded as persistence.android-backup-agent — plus the PreferenceFragment idiom of re-running updateWeekdayPreference on every change, which the Flutter settings screen gets by rebuilding. Rules #1-#7 are ported and cited.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsActivity.kt`, `.../settings/SettingsFragment.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/res/layout/settings_activity.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/AboutTest.kt`, `.../acceptance/LinksTest.kt`
@@ -3954,7 +3962,8 @@ written from the rules below.
 
 #### settings.intro.slides
 
-- [ ] `settings.intro.slides` — First-run intro slides
+- [~] `settings.intro.slides` — First-run intro slides
+- **Disposition:** superseded — The intro is a Flutter route (app/lib/ui/intro/intro_screen.dart), not an Activity, so #7's manifest declaration (empty label, Theme.AppCompat.Light.NoActionBar) has no counterpart; the three slides, their copy, images and background colours are ported and cited.
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/intro/IntroActivity.kt`, `uhabits-android/src/main/res/values/strings.xml`, `uhabits-android/src/main/AndroidManifest.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4510,7 +4519,8 @@ written from the rules below.
 
 #### reminders.snooze-android12-gate
 
-- [ ] `reminders.snooze-android12-gate` — Snooze action hidden on Android 12+
+- [~] `reminders.snooze-android12-gate` — Snooze action hidden on Android 12+
+- **Disposition:** superseded — DEVIATIONS.md records dropping the gate: the 'Later' action is offered on every platform and version because the notification-trampoline restriction that hid it does not apply when the response is handled in Dart, and the old behaviour is restorable with snoozeActionEnabled: false (both branches tested). #2 is the receiver-side half of the same gate.
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderReceiver.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4575,7 +4585,8 @@ written from the rules below.
 
 #### notifications.actions
 
-- [ ] `notifications.actions` — Reminder notification action buttons
+- [~] `notifications.actions` — Reminder notification action buttons
+- **Disposition:** superseded — The action buttons are built through flutter_local_notifications' own action API (app/lib/platform/flutter_notification_tray.dart), which exposes no NotificationCompat.WearableExtender; #4's duplicated extender action list and its stripe bitmap have no equivalent, and modern Wear OS bridges the phone's actions itself.
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/receivers/WidgetReceiver.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/widgets/WidgetBehavior.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/widgets/WidgetBehaviorTest.kt`
@@ -4603,7 +4614,8 @@ written from the rules below.
 
 #### notifications.sound
 
-- [ ] `notifications.sound` — Reminder sound / ringtone selection
+- [~] `notifications.sound` — Reminder sound / ringtone selection
+- **Disposition:** superseded — The ledger's own gap-found entry settings.reminder-sound-row-hidden records that the picker row is force-hidden upstream and says a Flutter port should ship no sound-picker row and use the platform default; #1-#6 are the RingtoneManager plumbing behind that dead row, while #7 and #8 (including the retry-without-sound path for Xiaomi) are ported and cited.
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/notifications/RingtoneManager.kt`, `.../AndroidNotificationTray.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4712,7 +4724,8 @@ written from the rules below.
 
 #### intents.pending-intent-request-codes
 
-- [ ] `intents.pending-intent-request-codes` — PendingIntent construction (request codes, flags, templates)
+- [~] `intents.pending-intent-request-codes` — PendingIntent construction (request codes, flags, templates)
+- **Disposition:** superseded — The port authors no PendingIntents in app code: widget taps are URI-keyed launch intents built by app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/WidgetIntents.kt via HomeWidgetLaunchIntent.getActivity, and notification-button intents are owned by flutter_local_notifications, so request codes and FLAG_MUTABLE templates have nothing left to key.
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentFactory.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4913,7 +4926,8 @@ written from the rules below.
 
 #### reminders.dependency-wiring
 
-- [ ] `reminders.dependency-wiring` — Object graph and lifecycle of the reminder subsystem
+- [~] `reminders.dependency-wiring` — Object graph and lifecycle of the reminder subsystem
+- **Disposition:** superseded — Dagger is replaced by AppScope's plain constructor wiring, and the Android widget bridge is file-based (home_widget) rather than a per-receiver DI component, so #6's @ReceiverScope annotation and the per-onReceive WidgetComponent have no counterpart; #1-#5 and #7 are ported and cited.
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/inject/HabitsApplicationComponent.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReceiverScope.kt`, `.../receivers/WidgetReceiver.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/tasks/CoroutineTaskRunner.kt`, `.../tasks/Task.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -4998,7 +5012,8 @@ written from the rules below.
 
 #### charts-canvas-theming.fontawesome-glyphs
 
-- [ ] `charts-canvas-theming.fontawesome-glyphs` — FontAwesome glyph set and font loading
+- [~] `charts-canvas-theming.fontawesome-glyphs` — FontAwesome glyph set and font loading
+- **Disposition:** superseded — The port bundles assets/fonts/FontAwesome.ttf and NotoSans Regular/Bold once as Flutter font assets declared in app/pubspec.yaml, so #5's separate copy of the icon font inside the Android instrumentation-test APK has no counterpart; #1-#4 and #6 are ported and cited.
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/gui/FontAwesome.kt`, `uhabits-android/src/main/res/values/fontawesome.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/InterfaceUtils.kt`, `uhabits-core/src/jvmMain/java/org/isoron/platform/gui/JavaCanvas.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/platform/gui/CanvasTest.kt`
@@ -5088,7 +5103,8 @@ written from the rules below.
 
 #### charts-canvas-theming.dataview-scrolling
 
-- [ ] `charts-canvas-theming.dataview-scrolling` — AndroidDataView horizontal scrolling and paging
+- [~] `charts-canvas-theming.dataview-scrolling` — AndroidDataView horizontal scrolling and paging
+- **Disposition:** superseded — AndroidDataView is replaced by app/lib/ui/common/scrollable_chart.dart, a single widget covering both Android scrollers; the rules describe android.widget.Scroller, GestureDetector and ValueAnimator internals, and the file documents each substitution.
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/platform/gui/AndroidDataView.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5414,7 +5430,8 @@ written from the rules below.
 
 #### charts-canvas-theming.target-chart
 
-- [ ] `charts-canvas-theming.target-chart` — TargetChart (target progress bars)
+- [~] `charts-canvas-theming.target-chart` — TargetChart (target progress bars)
+- **Disposition:** superseded — TargetChart is ported as a Flutter widget (app/lib/ui/habits/show/cards/target_card_view.dart) that rebuilds declaratively; the single uncited rule #14 (setValues/setLabels/setTargets each calling requestLayout()) is an Android View measure-invalidation idiom with no Flutter counterpart, and the other thirteen rules are ported and cited.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/TargetChart.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/views/TargetCard.kt`, `uhabits-android/src/main/res/layout/show_habit_target.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/widgets/TargetWidgetTest.kt`
@@ -5588,7 +5605,8 @@ written from the rules below.
 
 #### platform-glue.di-app-component
 
-- [ ] `platform-glue.di-app-component` — Application-scope dependency graph (HabitsApplicationComponent)
+- [~] `platform-glue.di-app-component` — Application-scope dependency graph (HabitsApplicationComponent)
+- **Disposition:** superseded — The kotlin-inject @Component/@AppScope graph is replaced by the hand-wired container in app/lib/state/app_scope.dart plus package:provider; AppScope.open takes the Database, PreferencesStorage and both dispatchers as arguments, which is what rule #9's `open @Provides` override hook existed for.
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/inject/HabitsApplicationComponent.kt`, `.../inject/AppContext.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/preferences/SharedPreferencesStorage.kt`, `.../io/AndroidLogging.kt`, `.../database/AndroidDatabaseOpener.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/HabitsApplicationTestComponent.kt`, `.../BaseAndroidTest.kt`
@@ -5606,7 +5624,8 @@ written from the rules below.
 
 #### platform-glue.di-activity-component
 
-- [ ] `platform-glue.di-activity-component` — Activity-scope dependency graph (HabitsActivityComponent)
+- [~] `platform-glue.di-activity-component` — Activity-scope dependency graph (HabitsActivityComponent)
+- **Disposition:** superseded — The @ActivityScope graph is replaced by per-route state objects and providers; the port has one activity, and its screens (habit_list_screen, show_habit_screen, edit_habit_screen) build their own models rather than resolving an activity-scoped component.
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/inject/HabitsActivityComponent.kt`, `.../inject/ActivityScope.kt`, `.../inject/ActivityContext.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`, `.../activities/HabitsDirFinder.kt`, `.../activities/habits/list/ListHabitsModule.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/HabitsActivityTestComponent.kt`
@@ -5622,7 +5641,8 @@ written from the rules below.
 
 #### platform-glue.di-receiver-components
 
-- [ ] `platform-glue.di-receiver-components` — Receiver-scope subcomponents
+- [~] `platform-glue.di-receiver-components` — Receiver-scope subcomponents
+- **Disposition:** superseded — There are no BroadcastReceivers in the port that resolve a DI graph: WidgetBehavior is a plain Dart class constructed in app/lib/state/widget_sync.dart, and FireSettingReceiver belongs to the Tasker integration the project already dropped (see the four platform-glue.tasker-* dispositions).
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReceiverScope.kt`, `.../receivers/WidgetReceiver.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/automation/FireSettingReceiver.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5651,7 +5671,8 @@ written from the rules below.
 
 #### platform-glue.tasker-parse-intent
 
-- [ ] `platform-glue.tasker-parse-intent` — Tasker setting intent parsing (SettingUtils.parseIntent)
+- [~] `platform-glue.tasker-parse-intent` — Tasker setting intent parsing (SettingUtils.parseIntent)
+- **Disposition:** superseded — This is the parsing half of the Tasker/Locale plugin, whose four sibling features (tasker-action-constants, tasker-edit-setting-screen, tasker-edit-setting-result, tasker-fire-setting) are already dispositioned as dropped by owner decision; with the edit screen and the fire receiver gone, nothing produces a setting bundle for SettingUtils.parseIntent to read.
 - **Platform:** core · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/automation/SettingUtils.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5842,7 +5863,8 @@ written from the rules below.
 
 #### platform-glue.translators-credits-generation
 
-- [ ] `platform-glue.translators-credits-generation` — Auto-generated translator credits
+- [~] `platform-glue.translators-credits-generation` — Auto-generated translator credits
+- **Disposition:** superseded — The Gradle updateTranslators task regenerated about_translators.xml from two CSVs at build time; the port carries the generated result as data instead — AboutScreen.translators in app/lib/ui/about/about_screen.dart is the same grouped list, and the card a user sees is already covered by the checked settings.about.screen#8.
 - **Platform:** android-only · **Port risk:** medium
 - **Source:** `gradle/translators.gradle.kts`, `build.gradle.kts`, `uhabits-android/build.gradle.kts`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5871,7 +5893,8 @@ written from the rules below.
 
 #### platform-glue.dimension-utils
 
-- [ ] `platform-glue.dimension-utils` — Density conversion and resource dimension helpers (InterfaceUtils)
+- [~] `platform-glue.dimension-utils` — Density conversion and resource dimension helpers (InterfaceUtils)
+- **Disposition:** superseded — dp-to-pixel conversion is replaced by Flutter logical pixels (a logical pixel is Android's dp); the FontAwesome typeface of rule #4 is declared in app/pubspec.yaml instead of being lazily built from an asset; rule #5's depth-first view-tree walk and rule #6's ViewCompat layout-direction probe have no widget-tree analogue.
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/InterfaceUtils.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/BaseAndroidTest.kt`, `.../BaseViewTest.kt`
@@ -5887,7 +5910,8 @@ written from the rules below.
 
 #### platform-glue.styled-resources
 
-- [ ] `platform-glue.styled-resources` — Theme attribute resolution (StyledResources)
+- [~] `platform-glue.styled-resources` — Theme attribute resolution (StyledResources)
+- **Disposition:** superseded — Android theme-attribute resolution (obtainStyledAttributes / R.attr) is replaced by the ported Theme value object in packages/uhabits_core/lib/src/gui/theme.dart and app/lib/ui/theme/app_theme.dart; the palette rule #3 fetches from R.attr.palette is a plain list already pinned by the checked charts-canvas-theming.* features.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/StyledResources.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/BaseAndroidTest.kt`
@@ -5901,7 +5925,8 @@ written from the rules below.
 
 #### platform-glue.attribute-set-utils
 
-- [ ] `platform-glue.attribute-set-utils` — Custom XML attribute parsing (AttributeSetUtils)
+- [~] `platform-glue.attribute-set-utils` — Custom XML attribute parsing (AttributeSetUtils)
+- **Disposition:** superseded — These rules parse custom XML attributes off an AttributeSet during Android view inflation; the port has no XML layouts and no inflated custom views — Flutter widgets take constructor arguments — so ISORON_NAMESPACE has nothing to read. The ledger's own Notes say a pure Flutter port drops this entirely.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/AttributeSetUtils.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5930,7 +5955,8 @@ written from the rules below.
 
 #### platform-glue.transient-ui-helpers
 
-- [ ] `platform-glue.transient-ui-helpers` — Snackbars, single-dialog tracking, and activity restart
+- [~] `platform-glue.transient-ui-helpers` — Snackbars, single-dialog tracking, and activity restart
+- **Disposition:** superseded — Snackbars go through ScaffoldMessenger (app/lib/ui/settings/data_actions.dart, about_screen.dart); the WeakReference dialog bookkeeping of rules #3-#5 is replaced by showDialog + Navigator, which already shows one route at a time and disposes it on pop; and rules #6-#7's restartWithFade is replaced by the in-place theme rebuild recorded in DEVIATIONS.md for settings.theme.toggle-night-mode#5.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt`, `.../utils/DialogUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5948,7 +5974,8 @@ written from the rules below.
 
 #### platform-glue.test-mode-and-fixtures
 
-- [ ] `platform-glue.test-mode-and-fixtures` — Test-mode detection and instrumentation harness contracts
+- [~] `platform-glue.test-mode-and-fixtures` — Test-mode detection and instrumentation harness contracts
+- **Disposition:** superseded — This is the Kotlin instrumentation harness contract — the Class.forName probe, test.db, HabitsApplicationTestComponent, UiDevice clock shell commands and the lastReceivedIntent statics. The port's tests inject a Database, a PreferencesStorage and both dispatchers straight into AppScope.open (app/lib/state/app_scope.dart) and drive time with setToday, so there is no test-mode branch in production code to detect.
 - **Platform:** android-only · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsApplication.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/DatabaseUtils.kt`, `.../receivers/ReminderReceiver.kt`, `.../receivers/WidgetReceiver.kt`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/BaseAndroidTest.kt`, `.../HabitsApplicationTestComponent.kt`, `.../HabitsActivityTestComponent.kt`, `.../intents/IntentSchedulerTest.kt`, `uhabits-android/src/test/java/org/isoron/uhabits/BaseAndroidJVMTest.kt`
@@ -5966,7 +5993,8 @@ written from the rules below.
 
 #### time-picker.haptic-feedback
 
-- [ ] `time-picker.haptic-feedback` — Radial time picker haptic feedback (vibration ticks)
+- [~] `time-picker.haptic-feedback` — Radial time picker haptic feedback (vibration ticks)
+- **Disposition:** superseded — Flutter's showTimePicker carries its own _vibrate() (HapticFeedback.vibrate, throttled by _kVibrateCommitDelay) fired on hour, minute and mode changes, so the vendored HapticFeedbackController and its Settings.System ContentObserver have nothing to port.
 - **Platform:** needs-native-per-platform · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/com/android/datetimepicker/HapticFeedbackController.java`, `uhabits-android/src/main/java/com/android/datetimepicker/time/RadialPickerLayout.java`, `.../time/TimePickerDialog.java`, `uhabits-android/src/main/res/layout/time_picker_dialog.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -5984,7 +6012,8 @@ written from the rules below.
 
 #### time-picker.clock-face-rendering
 
-- [ ] `time-picker.clock-face-rendering` — Radial clock-face rendering and dial hit geometry (CircleView, AmPmCirclesView, RadialTextsView, RadialSelectorView)
+- [~] `time-picker.clock-face-rendering` — Radial clock-face rendering and dial hit geometry (CircleView, AmPmCirclesView, RadialTextsView, RadialSelectorView)
+- **Disposition:** superseded — The dial is drawn by Flutter's showTimePicker, so CircleView / AmPmCirclesView / RadialTextsView / RadialSelectorView and the pickers.xml multipliers have nothing to port — these rules are the AOSP fork's pixel geometry, not behaviour the port chooses.
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-android/src/main/java/com/android/datetimepicker/time/CircleView.java`, `.../time/AmPmCirclesView.java`, `.../time/RadialTextsView.java`, `.../time/RadialSelectorView.java`, `uhabits-android/src/main/java/com/android/datetimepicker/Utils.java`, `uhabits-android/src/main/res/values/pickers.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6010,7 +6039,8 @@ written from the rules below.
 
 #### time-picker.accessibility-announcements
 
-- [ ] `time-picker.accessibility-announcements` — Time picker accessibility roles and spoken announcements
+- [~] `time-picker.accessibility-announcements` — Time picker accessibility roles and spoken announcements
+- **Disposition:** superseded — Flutter's showTimePicker ships its own semantics: the header is labelled with the formatted time, the hour and minute selectors expose Semantics(value: '<mode announcement> <value>') with increase/decrease actions, and the AM/PM control is button: true — so the two vendored Accessible* View subclasses and Utils.tryAccessibilityAnnounce have nothing to port.
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/com/android/datetimepicker/AccessibleTextView.java`, `.../AccessibleLinearLayout.java`, `.../Utils.java`, `.../time/TimePickerDialog.java`, `uhabits-android/src/main/res/layout/time_header_label.xml`
 - **Kotlin tests:** none — write Dart test from rules
@@ -6038,7 +6068,8 @@ written from the rules below.
 
 #### settings.reminder-sound-row-hidden
 
-- [ ] `settings.reminder-sound-row-hidden` — Reminder sound row is force-hidden (ringtone picker unreachable)
+- [~] `settings.reminder-sound-row-hidden` — Reminder sound row is force-hidden (ringtone picker unreachable)
+- **Disposition:** superseded — The port ships no ringtone picker and uses the platform default notification sound, which is what this feature's own note says a port should do; DEVIATIONS.md records rendering the 'Reminder sound' row disabled with an explanation instead of hiding it, which is why #4's exactly-two-rows count no longer holds.
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/res/xml/preferences.xml`, `uhabits-android/src/main/java/org/isoron/uhabits/notifications/RingtoneManager.kt`
 - **Kotlin tests:** none — write Dart test from rules

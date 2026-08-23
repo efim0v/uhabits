@@ -176,3 +176,183 @@ broadcast-receiver больше не может запустить активи�
 как намеренное поведение. Исправление — это отдельное продуктовое решение, а не деталь порта.
 
 **Дата:** 2026-08-23
+
+## Что теряет пользователь на фичах со статусом superseded
+
+Статус `- [~]` означает «порт делает это иначе». Иначе — не всегда бесследно.Ниже перечислено всё, что при этом реально меняется для пользователя; фичи, где потерьнет, в список не попали.
+
+### `charts-canvas-theming.dataview-scrolling`
+
+**Чем заменено:** AndroidDataView is replaced by app/lib/ui/common/scrollable_chart.dart, a single widget covering both Android scrollers; the rules describe android.widget.Scroller, GestureDetector and ValueAnimator internals, and the file documents each substitution.
+
+**Что меняется для пользователя:** the fling coasts on Flutter's FrictionSimulation rather than Scroller's curve, so a fling travels a slightly different distance (velocity halving, direction, whole-column snapping and the no-scrolling-into-the-future clamp are all kept); and the offset is capped at the legacy ScrollableChart default of 12*200 columns instead of #9's unbounded scroll into empty history.
+
+### `dialogs.single-current-dialog`
+
+**Чем заменено:** Every picker in the port is an awaited modal route on the Navigator (showColorPickerDialog, showFrequencyPickerDialog, showWeekdayPickerDialog, showTimePicker, showConfirmDeleteDialog, showCheckmarkDialog, showNumberDialog), so 'one at a time', 'the history editor stays under the entry popups' (#5) and 'leaving the screen closes the popup' (#6) fall out of route stacking; there is no process-wide WeakReference registry to reproduce.
+
+**Что меняется для пользователя:** None in any flow the app has today, because each call site awaits its dialog. Nothing enforces the rule globally: if two dialogs were ever requested concurrently they would stack rather than the first being dismissed, whereas Android would have closed the first.
+
+### `edit-habit.instance-state`
+
+**Чем заменено:** The editor's form lives in ordinary Flutter State (EditHabitModel + TextEditingControllers), which survives rotation without an onSaveInstanceState Bundle; there is no Bundle round trip to port, and the ledger's own Notes direct exactly this.
+
+**Что меняется для пользователя:** Form values are lost if Android kills the process while the editor is open — the Android Bundle restored habitId/type/colour/frequency/reminder, and no RestorationMixin or restorationScopeId is wired in the port. Rotation itself loses nothing, and the #3 bug (Target Type silently resetting to At least on rotation) is not reproduced, so Target Type now survives.
+
+### `intents.pending-intent-request-codes`
+
+**Чем заменено:** The port authors no PendingIntents in app code: widget taps are URI-keyed launch intents built by app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/WidgetIntents.kt via HomeWidgetLaunchIntent.getActivity, and notification-button intents are owned by flutter_local_notifications, so request codes and FLAG_MUTABLE templates have nothing left to key.
+
+**Что меняется для пользователя:** Two real ones. (a) Upstream showHabit used TaskStackBuilder, so Back from a widget-opened detail screen landed on the habit list; the port relies on pushing the detail route onto the app's own stack, which only behaves the same once that routing exists. (b) Rules #10/#16/#17 (RemoteViews template + fill-in intents) have no target at all because stack widgets were already removed upstream — noted in the port's AndroidManifest.xml. Otherwise no loss: every destination stays distinct because each uhabits://widget/... URI is distinct per habit, widget and action, which is what request codes bought. Note the Dart consumer of those URIs is still missing — that gap is real work, tracked under intents.widget-receiver-dispatch and platform-glue.deep-link-edit-entry, not here.
+
+### `io.logging`
+
+**Чем заменено:** AppScope wires StandardLogging over Dart stdout/stderr (app/lib/state/app_scope.dart); Dart output already reaches logcat on Android and os_log on iOS, so the android.util.Log adapter (#3, #6, #7) and its Dagger @AppScope binding (#8) have nothing to map onto.
+
+**Что меняется для пользователя:** none for a user; log lines lose the per-logger logcat tag, so a developer filtering logcat by tag must filter by message text instead.
+
+### `io.printf-format`
+
+**Чем заменено:** Dart has no printf, so the port ships its own formatter in packages/uhabits_core/lib/src/io/printf.dart instead of delegating to java.lang.String.format or the npm sprintf-js package that the one remaining rule (#4) describes; there is no Kotlin/JS target to port.
+
+**Что меняется для пользователя:** none — the pattern behaviours (#1, #2, #5) are ported and cited, and the port is deliberately locale-independent where the JVM actual was not.
+
+### `notifications.actions`
+
+**Чем заменено:** The action buttons are built through flutter_local_notifications' own action API (app/lib/platform/flutter_notification_tray.dart), which exposes no NotificationCompat.WearableExtender; #4's duplicated extender action list and its stripe bitmap have no equivalent, and modern Wear OS bridges the phone's actions itself.
+
+**Что меняется для пользователя:** a paired Pebble — the device the upstream code comment names as the reason for the extender — no longer shows the Yes/No/Enter/Later buttons on the watch.
+
+### `notifications.sound`
+
+**Чем заменено:** The ledger's own gap-found entry settings.reminder-sound-row-hidden records that the picker row is force-hidden upstream and says a Flutter port should ship no sound-picker row and use the platform default; #1-#6 are the RingtoneManager plumbing behind that dead row, while #7 and #8 (including the retry-without-sound path for Xiaomi) are ported and cited.
+
+**Что меняется для пользователя:** none — the picker is unreachable in the Kotlin build too, so reminders play the system default notification sound in both builds.
+
+### `platform-glue.attribute-set-utils`
+
+**Чем заменено:** These rules parse custom XML attributes off an AttributeSet during Android view inflation; the port has no XML layouts and no inflated custom views — Flutter widgets take constructor arguments — so ISORON_NAMESPACE has nothing to read. The ledger's own Notes say a pure Flutter port drops this entirely.
+
+**Что меняется для пользователя:** None. The quirks these rules pin (Boolean.parseBoolean leniency, getFloatAttribute swallowing NumberFormatException while getIntAttribute throws) are artefacts of parsing strings out of XML; a Dart constructor argument is already typed.
+
+### `platform-glue.di-activity-component`
+
+**Чем заменено:** The @ActivityScope graph is replaced by per-route state objects and providers; the port has one activity, and its screens (habit_list_screen, show_habit_screen, edit_habit_screen) build their own models rather than resolving an activity-scoped component.
+
+**Что меняется для пользователя:** None. Rule #5's ordering constraint (themeSwitcher.apply() before reading views) is moot because the theme is a value in the widget tree — recorded in DEVIATIONS.md for settings.theme.toggle-night-mode#5. Rule #6 (nothing survives a configuration change) is if anything reversed: Flutter state survives rotation, which a user experiences as the list not resetting.
+
+### `platform-glue.di-app-component`
+
+**Чем заменено:** The kotlin-inject @Component/@AppScope graph is replaced by the hand-wired container in app/lib/state/app_scope.dart plus package:provider; AppScope.open takes the Database, PreferencesStorage and both dispatchers as arguments, which is what rule #9's `open @Provides` override hook existed for.
+
+**Что меняется для пользователя:** None from the DI substitution itself — wiring is not observable. But be clear about what this label does NOT cover: several singletons rule #2 enumerates (notificationTray, reminderScheduler, widgetUpdater, pendingIntentFactory, genericImporter) exist in the port yet are never constructed at startup, so at runtime the app schedules no reminders and publishes no widget data. That is real work and is tracked under platform-glue.app-startup-order.
+
+### `platform-glue.di-receiver-components`
+
+**Чем заменено:** There are no BroadcastReceivers in the port that resolve a DI graph: WidgetBehavior is a plain Dart class constructed in app/lib/state/widget_sync.dart, and FireSettingReceiver belongs to the Tasker integration the project already dropped (see the four platform-glue.tasker-* dispositions).
+
+**Что меняется для пользователя:** None. Rules #1-#3 describe per-broadcast component creation, #4 describes a crash when the static component is uninitialised, and #5 observes WidgetBehavior is stateless — none is reachable by a user.
+
+### `platform-glue.dimension-utils`
+
+**Чем заменено:** dp-to-pixel conversion is replaced by Flutter logical pixels (a logical pixel is Android's dp); the FontAwesome typeface of rule #4 is declared in app/pubspec.yaml instead of being lazily built from an asset; rule #5's depth-first view-tree walk and rule #6's ViewCompat layout-direction probe have no widget-tree analogue.
+
+**Что меняется для пользователя:** One real one, small and specific: rule #2's sp-vs-dp distinction. Upstream's only spToPixels call is RingView's percentage text (uhabits-android/.../common/views/RingView.kt:87), which grew with the OS font-scale setting; the port paints that text on a canvas at a fixed logical size and `textScaler` appears nowhere in app/lib or packages/uhabits_core/lib, so it no longer scales. Every other upstream measurement was dp, which Flutter reproduces exactly.
+
+### `platform-glue.styled-resources`
+
+**Чем заменено:** Android theme-attribute resolution (obtainStyledAttributes / R.attr) is replaced by the ported Theme value object in packages/uhabits_core/lib/src/gui/theme.dart and app/lib/ui/theme/app_theme.dart; the palette rule #3 fetches from R.attr.palette is a plain list already pinned by the checked charts-canvas-theming.* features.
+
+**Что меняется для пользователя:** None — every colour, dimension, boolean and float these five rules fetch is fetched from the Theme object instead, and the values themselves are asserted by the theming features. Rule #4's fixedTheme test hook is unnecessary because a Dart test passes a Theme directly.
+
+### `platform-glue.tasker-parse-intent`
+
+**Чем заменено:** This is the parsing half of the Tasker/Locale plugin, whose four sibling features (tasker-action-constants, tasker-edit-setting-screen, tasker-edit-setting-result, tasker-fire-setting) are already dispositioned as dropped by owner decision; with the edit screen and the fire receiver gone, nothing produces a setting bundle for SettingUtils.parseIntent to read.
+
+**Что меняется для пользователя:** Nothing beyond the already-accepted loss of the Tasker plugin itself. Keeping this one rule set outstanding would imply a parser could be shipped on its own, which it cannot — it has no caller.
+
+### `platform-glue.test-mode-and-fixtures`
+
+**Чем заменено:** This is the Kotlin instrumentation harness contract — the Class.forName probe, test.db, HabitsApplicationTestComponent, UiDevice clock shell commands and the lastReceivedIntent statics. The port's tests inject a Database, a PreferencesStorage and both dispatchers straight into AppScope.open (app/lib/state/app_scope.dart) and drive time with setToday, so there is no test-mode branch in production code to detect.
+
+**Что меняется для пользователя:** None — no rule here is reachable by a user. Rule #2's test.db filename and the startup delete exist only to serve the Class.forName probe, and rule #7's static lastReceivedIntent fields exist only so instrumentation can assert an alarm fired.
+
+### `platform-glue.transient-ui-helpers`
+
+**Чем заменено:** Snackbars go through ScaffoldMessenger (app/lib/ui/settings/data_actions.dart, about_screen.dart); the WeakReference dialog bookkeeping of rules #3-#5 is replaced by showDialog + Navigator, which already shows one route at a time and disposes it on pop; and rules #6-#7's restartWithFade is replaced by the in-place theme rebuild recorded in DEVIATIONS.md for settings.theme.toggle-night-mode#5.
+
+**Что меняется для пользователя:** Two cosmetic ones. (a) Toggling pure-black dark mode no longer fades out and back over 500 ms — the tree repaints instantly; same end state, recorded deviation. (b) Rule #1 force-sets snackbar text to white regardless of theme; the port lets it follow the Material theme, so the colour can differ from upstream in a dark theme. Rule #9's 250 ms synthetic-MotionEvent keyboard hack is replaced by autofocus, which the ledger's Notes explicitly ask for.
+
+### `platform-glue.translators-credits-generation`
+
+**Чем заменено:** The Gradle updateTranslators task regenerated about_translators.xml from two CSVs at build time; the port carries the generated result as data instead — AboutScreen.translators in app/lib/ui/about/about_screen.dart is the same grouped list, and the card a user sees is already covered by the checked settings.about.screen#8.
+
+**Что меняется для пользователя:** None today: the same names appear under the same language headings. The cost is a maintenance regression, not a user-facing one — the list no longer regenerates from translators-classic.csv / translators-crowdin.csv, so the endonym table, the Winning>=10 / Translated>=100 / Approved>0 threshold and the REMOVED-name filter are frozen into the data, and a new translator's name has to be added by hand or the credits go stale.
+
+### `reminders.dependency-wiring`
+
+**Чем заменено:** Dagger is replaced by AppScope's plain constructor wiring, and the Android widget bridge is file-based (home_widget) rather than a per-receiver DI component, so #6's @ReceiverScope annotation and the per-onReceive WidgetComponent have no counterpart; #1-#5 and #7 are ported and cited.
+
+**Что меняется для пользователя:** none from this feature — but note the reminder subsystem is still never instantiated at app startup; that gap is tracked as real work under reminders.reschedule-on-command and reminders.app-start-and-permission, not hidden here.
+
+### `reminders.snooze-android12-gate`
+
+**Чем заменено:** DEVIATIONS.md records dropping the gate: the 'Later' action is offered on every platform and version because the notification-trampoline restriction that hid it does not apply when the response is handled in Dart, and the old behaviour is restorable with snoozeActionEnabled: false (both branches tested). #2 is the receiver-side half of the same gate.
+
+**Что меняется для пользователя:** none — the port offers a snooze action where upstream hides it on Android 12+; nothing is taken away.
+
+### `settings.intro.slides`
+
+**Чем заменено:** The intro is a Flutter route (app/lib/ui/intro/intro_screen.dart), not an Activity, so #7's manifest declaration (empty label, Theme.AppCompat.Light.NoActionBar) has no counterpart; the three slides, their copy, images and background colours are ported and cited.
+
+**Что меняется для пользователя:** none — the intro is still full-screen with no title bar.
+
+### `settings.reminder-sound-row-hidden`
+
+**Чем заменено:** The port ships no ringtone picker and uses the platform default notification sound, which is what this feature's own note says a port should do; DEVIATIONS.md records rendering the 'Reminder sound' row disabled with an explanation instead of hiding it, which is why #4's exactly-two-rows count no longer holds.
+
+**Что меняется для пользователя:** none behaviourally — the port shows a greyed-out 'Reminder sound' row where upstream hides it; the sound is the system default in both.
+
+### `settings.screen.structure`
+
+**Чем заменено:** The only uncited rule (#8) is Android BackupManager.dataChanged — whose backup agent is already dispositioned superseded as persistence.android-backup-agent — plus the PreferenceFragment idiom of re-running updateWeekdayPreference on every change, which the Flutter settings screen gets by rebuilding. Rules #1-#7 are ported and cited.
+
+**Что меняется для пользователя:** none beyond the already-recorded loss of Android cloud backup of preferences and the database.
+
+### `settings.theme.theme-modes`
+
+**Чем заменено:** app/lib/state/theme_model.dart reads MediaQuery.platformBrightness and the theme is a value in the widget tree, so the @ActivityScope switcher (#11), applyDialog styles (#10), the Activity cast (#12), the per-call View.currentTheme() helper (#13) and the SDK<29 branch (#5) have no counterpart; the eight behavioural rules are ported and cited.
+
+**Что меняется для пользователя:** on Android 9 and older upstream forces the light theme even when the user picked 'automatic', while the port follows the system setting there — a behaviour difference in the user's favour, nothing removed.
+
+### `settings.theme.toggle-night-mode`
+
+**Чем заменено:** DEVIATIONS.md records that a theme change rebuilds the widget tree in place instead of recreating the activity; #7 (finish + fade + 500 ms postDelayed) and #9 (restart on resume when pure black changed) describe exactly that restart mechanism.
+
+**Что меняется для пользователя:** the cross-fade and the half-second delay when switching themes; the app recolours instantly instead.
+
+### `time-picker.accessibility-announcements`
+
+**Чем заменено:** Flutter's showTimePicker ships its own semantics: the header is labelled with the formatted time, the hour and minute selectors expose Semantics(value: '<mode announcement> <value>') with increase/decrease actions, and the AM/PM control is button: true — so the two vendored Accessible* View subclasses and Utils.tryAccessibilityAnnounce have nothing to port.
+
+**Что меняется для пользователя:** Screen-reader wording is Material's, not the AOSP strings, and there is no explicit spoken announcement for each digit typed in keyboard-entry mode (Flutter conveys it through changed semantics values instead). Roles and the selected hour/minute are still announced.
+
+### `time-picker.clock-face-rendering`
+
+**Чем заменено:** The dial is drawn by Flutter's showTimePicker, so CircleView / AmPmCirclesView / RadialTextsView / RadialSelectorView and the pickers.xml multipliers have nothing to port — these rules are the AOSP fork's pixel geometry, not behaviour the port chooses.
+
+**Что меняется для пользователя:** The clock face looks like Material's, not the fork's: AM/PM is a segmented two-button toggle instead of two circles on the dial, 24-hour mode uses Material's ring layout rather than the fork's outer/inner rings, and the disappear/reappear and label-pulse animations differ. Function is unchanged — every hour and every minute is still selectable by tap or drag.
+
+### `time-picker.haptic-feedback`
+
+**Чем заменено:** Flutter's showTimePicker carries its own _vibrate() (HapticFeedback.vibrate, throttled by _kVibrateCommitDelay) fired on hour, minute and mode changes, so the vendored HapticFeedbackController and its Settings.System ContentObserver have nothing to port.
+
+**Что меняется для пользователя:** No haptic ticks at all on iOS — Flutter's picker skips vibration on iOS/macOS by design. On Android the tick fires on committed value changes rather than on every 125 ms of dial movement, and the system-haptics gate is applied by the platform channel instead of being re-read through a ContentObserver, so toggling the system setting mid-dialog is not observed.
+
+### `time-picker.radial-dialog`
+
+**Чем заменено:** app/lib/ui/habits/edit/edit_habit_screen.dart already calls Flutter's Material showTimePicker for the reminder, and the vendored dialog's Clear button is reproduced as the separate editHabit.reminderClear control on the reminder row; the AOSP fork is not shipped.
+
+**Что меняется для пользователя:** Clear is a button on the reminder row instead of a button inside the dialog. The dialog is Material's — Cancel/OK plus a keyboard-entry toggle rather than the fork's Clear/Done — and it is not tinted with the habit colour, so the accent that edit-habit.color-control#5 describes is gone (that rule stays outstanding under color-control). A radial hour/minute dial, 12/24-hour mode, per-minute granularity and keyboard entry are all still there.
+
+**Дата:** 2026-08-23
