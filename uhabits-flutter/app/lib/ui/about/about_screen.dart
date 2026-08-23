@@ -35,6 +35,7 @@ import '../../state/app_scope.dart';
 import '../common/window_insets.dart';
 import '../intro/intro_screen.dart';
 import '../theme/app_theme.dart' show coreThemeOf;
+import '../common/store_listing.dart';
 
 /// `Context.startActivitySafely(intent)`: true when something handled the
 /// intent, false when nothing did.
@@ -54,8 +55,9 @@ class TranslatorGroup {
 class AboutLinks {
   AboutLinks._();
 
-  /// `rateApp` — ACTION_VIEW market://details?id=org.isoron.uhabits
-  static final Uri rateApp = Uri.parse('market://details?id=org.isoron.uhabits');
+  /// `rateApp` — ACTION_VIEW market://details?id=org.isoron.uhabits, resolved
+  /// for the platform by [storeListingUrl].
+  static Uri get rateApp => Uri.parse(storeListingUrl);
 
   /// `sendFeedback` — ACTION_SENDTO mailto:dev@loophabits.org?subject=...
   static final Uri sendFeedback = Uri.parse(

@@ -38,6 +38,7 @@ import 'package:uhabits_core/src/io/generic_importer.dart';
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/time/date_utils.dart';
+import 'package:flutter/widgets.dart' show Rect;
 
 void main() {
   late Directory tempDir;
@@ -551,7 +552,7 @@ class _RecordingSharer implements FileSharer {
   final List<String> paths = <String>[];
 
   @override
-  Future<void> shareFile(String path, {required String mimeType}) async =>
+  Future<void> shareFile(String path, {required String mimeType, Rect? origin}) async =>
       paths.add(path);
 }
 

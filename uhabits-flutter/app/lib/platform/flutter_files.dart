@@ -33,6 +33,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/widgets.dart' show Offset, Rect, WidgetsBinding;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uhabits_core/src/io/files.dart';
@@ -399,7 +400,10 @@ class PlatformFileChooser implements FileChooser {
 /// Throws when nothing can handle the request, which is the
 /// `ActivityNotFoundException` `startActivitySafely` catches.
 abstract interface class FileSharer {
-  Future<void> shareFile(String path, {required String mimeType});
+  /// [origin] is the rectangle the share sheet is anchored to. Android ignores
+  /// it; iOS needs it wherever the sheet is a popover — see
+  /// [PlatformFileSharer.shareFile].
+  Future<void> shareFile(String path, {required String mimeType, Rect? origin});
 }
 
 /// [FileSharer] over share_plus.
@@ -410,7 +414,40 @@ class PlatformFileSharer implements FileSharer {
   const PlatformFileSharer();
 
   @override
-  Future<void> shareFile(String path, {required String mimeType}) async {
-    await Share.shareXFiles(<XFile>[XFile(path, mimeType: mimeType)]);
+  Future<void> shareFile(
+    String path, {
+    required String mimeType,
+    Rect? origin,
+  }) async {
+    await Share.shareXFiles(
+      <XFile>[XFile(path, mimeType: mimeType)],
+      sharePositionOrigin: origin ?? _viewCentre(),
+    );
+  }
+
+  /// A one-point rectangle in the middle of the window.
+  ///
+  /// The Android chooser needs no anchor, and neither does the iPhone sheet.
+  /// Any device that presents it as a popover does — iPad and Mac Catalyst —
+  /// and share_plus refuses rather than guessing: an origin that is empty, or
+  /// outside the root view, comes back as a `FlutterError` (FPPSharePlusPlugin.m
+  /// :378-394), which both callers report as "No app was found to support this
+  /// action". That is every export path on an iPad
+  /// (`feedback.share-sheet-has-no-anchor-on-ipad#1`).
+  ///
+  /// The centre of the window is the honest default: the sheet is opened from a
+  /// menu item that has already closed by the time the export finishes, so
+  /// there is no live widget left to point at.
+  static Rect? _viewCentre() {
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    if (views.isEmpty) return null;
+    final view = views.first;
+    final size = view.physicalSize / view.devicePixelRatio;
+    if (size.isEmpty) return null;
+    return Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: 1,
+      height: 1,
+    );
   }
 }

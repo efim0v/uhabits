@@ -28,6 +28,7 @@ import 'package:uhabits/state/settings_model.dart' show SettingsResult;
 import 'package:uhabits/ui/settings/data_actions.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
+import 'package:flutter/widgets.dart' show Rect;
 
 /// `FileChooser` over a canned answer — the `ACTION_OPEN_DOCUMENT` result.
 class _FakeChooser implements FileChooser {
@@ -45,7 +46,7 @@ class _FakeChooser implements FileChooser {
 
 class _FakeSharer implements FileSharer {
   @override
-  Future<void> shareFile(String path, {required String mimeType}) async {}
+  Future<void> shareFile(String path, {required String mimeType, Rect? origin}) async {}
 }
 
 /// Records what the share sheet was asked for, or refuses outright — the two
@@ -58,7 +59,7 @@ class _RecordingSharer implements FileSharer {
       <({String path, String mimeType})>[];
 
   @override
-  Future<void> shareFile(String path, {required String mimeType}) async {
+  Future<void> shareFile(String path, {required String mimeType, Rect? origin}) async {
     shared.add((path: path, mimeType: mimeType));
     if (throws) throw StateError('no activity found');
   }

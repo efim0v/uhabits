@@ -19,6 +19,7 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,6 +36,11 @@ const String rule = 'audit3.toggling-a-check-mark-on-the#1 — In the Kotlin '
     'app: Every completed toggle of a boolean check-mark buzzes with the '
     'LONG_PRESS haptic constant, which is the app\'s confirmation that a press '
     'landed on the right cell.';
+
+const String iosRule =
+    'feedback.checkmark-haptics-are-the-ios-alert-buzz#1 — the toggle is the '
+    'most frequent interaction in the app, so its confirmation has to be a '
+    'tap on every platform, not a third of a second of alert vibration.';
 
 void main() {
   late Directory tempDir;
@@ -133,6 +139,33 @@ void main() {
               'with HapticFeedbackConstants.LONG_PRESS; lightImpact, '
               'mediumImpact, heavyImpact and selectionClick all name '
               'themselves in the arguments and are other constants.');
+    });
+
+    testWidgets('on iOS the toggle taps rather than firing the alert buzz',
+        (tester) async {
+      // `HapticFeedback.vibrate()` is LONG_PRESS on Android and the right call
+      // there, but the same message carries no feedback type, and iOS answers a
+      // typeless one with AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+      // — the alert buzz that shakes the whole device, once per toggle. The
+      // SDK says so itself: "On iOS devices that support haptic feedback, this
+      // uses the default system vibration value (kSystemSoundID_Vibrate)".
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await pumpList(tester, scope);
+      final today = getToday();
+
+      platformCalls.clear();
+      await tester.longPress(cellOf('Meditate', today));
+      await tester.pumpAndSettle();
+      debugDefaultTargetPlatformOverride = null;
+
+      expect(vibrations(), hasLength(1), reason: iosRule);
+      expect(vibrations().single.arguments, 'HapticFeedbackType.mediumImpact',
+          reason: '$iosRule KEYBOARD_TAP on Android and '
+              'UIImpactFeedbackStyleMedium on iOS: a tap, and still firmer '
+              'than the lightImpact the port uses for VIRTUAL_KEY, so the two '
+              'stay in the order Android puts them in.');
     });
 
     testWidgets('#1 the buzz follows the toggle, not the gesture',

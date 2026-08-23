@@ -872,6 +872,39 @@ void main() {
           reason: 'models.habit-list-csv#5');
     });
 
+    test('Target Value rounds the way String.format does', () {
+      // `format("%.1f", habit.targetValue)` on the JVM goes through
+      // java.util.Formatter, which rounds the *shortest decimal that
+      // round-trips the double* — what Double.toString prints — HALF_UP.
+      // `toStringAsFixed` rounds the exact binary value instead, and 0.15 is
+      // stored as 0.1499999999999999944…, so the two disagree on roughly half
+      // of all x.x5 targets. The port has its own Java-compatible `format()`
+      // for exactly this reason; this column is the one place that skipped it
+      // (`feedback.csv-target-value-rounds-unlike-java#1`).
+      const cases = <(double, String)>[
+        (0.15, '0.2'),
+        (0.35, '0.4'),
+        (0.85, '0.9'),
+        (0.95, '1.0'),
+        (1.15, '1.2'),
+        (4.35, '4.4'),
+        (8.35, '8.4'),
+        // Exactly representable, so both rounders already agreed here — which
+        // is why the existing coverage never caught the difference.
+        (12.75, '12.8'),
+        (2.0, '2.0'),
+      ];
+      for (final (value, expected) in cases) {
+        final list = MemoryHabitList();
+        list.add(fixtures.createNumericalHabit()..targetValue = value);
+        final row = list.writeCSV().split('\n')[1].split(',');
+        expect(row[10], expected,
+            reason: 'feedback.csv-target-value-rounds-unlike-java#1 — '
+                'String.format("%.1f", $value) is "$expected" on the JVM; '
+                'users diff these files against spreadsheets.');
+      }
+    });
+
     test('Archived? renders the boolean', () {
       final list = MemoryHabitList();
       final a = fixtures.createEmptyHabit(name: 'A');

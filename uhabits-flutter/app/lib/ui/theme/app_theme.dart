@@ -254,6 +254,14 @@ ThemeData appThemeData(core.Theme theme) {
       // `toolbar.elevation = dp(2f)` in ViewExtensions.setupToolbar.
       elevation: 2,
       scrolledUnderElevation: 2,
+      // Every screen upstream is res/layout/toolbar.xml, a plain AppCompat
+      // Toolbar, whose title always sits at the start next to the up arrow.
+      // Left unset, `AppBar._getEffectiveCenterTitle` falls through to the
+      // platform default — `actions == null || actions.length < 2` on iOS and
+      // macOS — which would centre Settings, About and the habit editor there
+      // while leaving the list and the habit detail on the left
+      // (`feedback.toolbar-titles-centre-themselves-on-ios#1`).
+      centerTitle: false,
     ),
     cardTheme: CardThemeData(color: card),
     // The three compound controls `colorAccent` tints when activated: the seven

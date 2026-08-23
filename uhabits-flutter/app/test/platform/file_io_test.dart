@@ -42,6 +42,7 @@ import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dar
 import 'package:uhabits_core/src/ui/screens/habits/show/show_habit_menu_presenter.dart'
     show ShowHabitMenuPresenterSystem;
 import 'package:uhabits_core/uhabits_core.dart';
+import 'package:flutter/widgets.dart' show Rect;
 
 // ---------------------------------------------------------------------------
 // Fakes for the three plugin seams
@@ -71,7 +72,11 @@ class FakeFileSharer implements FileSharer {
   Object? error;
 
   @override
-  Future<void> shareFile(String path, {required String mimeType}) async {
+  Future<void> shareFile(
+    String path, {
+    required String mimeType,
+    Rect? origin,
+  }) async {
     paths.add(path);
     mimeTypes.add(mimeType);
     final error = this.error;

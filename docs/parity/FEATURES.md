@@ -1077,7 +1077,7 @@ written from the rules below.
 2. `persistence.migration-runner#2` — Database.getVersion() executes `PRAGMA user_version` and reads column 0 as an Int. Database.setVersion(v) executes the literal string `PRAGMA user_version = $v` (value interpolated into the SQL, not bound).
 3. `persistence.migration-runner#3` — Database.migrateTo(targetVersion, loadMigrationSQL): if getVersion() >= targetVersion it returns immediately without executing anything (idempotent).
 4. `persistence.migration-runner#4` — Otherwise, for v from currentVersion + 1 up to and including targetVersion, in ascending order: load the SQL text for v, split it with SQLParser.parse, execute each resulting statement in order with Database.run, then call setVersion(v).
-5. `persistence.migration-runner#5` — Because user_version is written after each individual migration completes, an interrupted upgrade resumes at the first unapplied version on the next attempt.
+5. `persistence.migration-runner#5` — Because user_version is written after each individual migration completes, an interrupted upgrade resumes at the first unapplied version on the next attempt. — **не применимо к порту:** правило описывает `Database.migrateTo` в отрыве от того, кто его вызывает. В Android-приложении вызов идёт из `HabitsDatabaseOpener.onUpgrade`, а `SQLiteOpenHelper.getDatabaseLocked` оборачивает весь апгрейд в одну транзакцию (`beginTransaction` → `onUpgrade` → `setVersion` → `setTransactionSuccessful` → `endTransaction`). `PRAGMA user_version` транзакционен, поэтому прерванный апгрейд откатывается целиком: и схема, и версия возвращаются к исходным, и следующий запуск повторяет миграции с начала диапазона, а не с первой непримененной. Наблюдаемое поведение задаёт правило `feedback.migrations-are-not-atomic#1`; механизм самого `migrateTo` (штамп версии после каждой миграции) порт сохраняет — он просто не наблюдаем снаружи транзакции.
 6. `persistence.migration-runner#6` — Migration resources are named with a zero-padded two-digit version: `%02d.sql`, loaded from the path `migrations/NN.sql` (e.g. migrations/09.sql, migrations/25.sql).
 7. `persistence.migration-runner#7` — Migration files exist only for versions 09 through 25 inclusive; there is no file for versions 0–8. A brand-new database is created by stamping user_version = 8 and then migrating to 25, so migration 09 is the effective CREATE TABLE script.
 8. `persistence.migration-runner#8` — Calling migrateTo(v) where v equals the current version leaves user_version unchanged and executes no SQL.
@@ -7364,3 +7364,73 @@ report came from.
 - **Severity:** major
 
 1. `feedback.chart-scrolling-is-only-proven-on-android#1` — In the Kotlin app: the habit screen's charts scroll horizontally while the page itself scrolls vertically, on every device the app runs on. The port's journey pins the horizontal drags on a 1000x4000 screen, where the page has no scroll range at all, and `flutter test` reports `TargetPlatform.android`, so `MaterialPageRoute` builds a Zoom transition with no back gesture. Two things therefore go untested: that a vertical drag *starting on a chart* scrolls the page rather than being swallowed by the chart's horizontal recogniser, and that on iOS — where the route is a Cupertino transition with an interactive back gesture — a horizontal drag on a chart scrolls the chart instead of popping the screen.
+
+#### feedback.migrations-are-not-atomic
+
+- [x] `feedback.migrations-are-not-atomic` — Database migrations run outside a transaction, so a failure part-way through poisons the file permanently; Android rolls the whole upgrade back
+- **Platform:** core · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/HabitsDatabaseOpener.kt:35 (`: SQLiteOpenHelper(...)`), reached via uhabits-android/src/main/java/org/isoron/uhabits/utils/DatabaseUtils.kt:90-92 (`opener!!.writableDatabase`)`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/database/database.dart — DatabaseExtensions.migrateTo`
+- **Severity:** critical
+
+1. `feedback.migrations-are-not-atomic#1` — In the Kotlin app: the app reaches the database only through `SQLiteOpenHelper.getDatabaseLocked`, which wraps the entire upgrade in one transaction — `beginTransaction()`, then `onUpgrade(db, old, new)` (which is `Database.migrateTo`'s loop), then `setVersion(mNewVersion)`, `setTransactionSuccessful()` and `endTransaction()` in a `finally`. If any statement of any migration throws, `setTransactionSuccessful()` is never reached and the transaction rolls back: schema and `user_version` are byte-for-byte what they were, the app crashes once, and the next launch retries the upgrade against a clean file. The port has no such framework class, so `migrateTo` must supply the transaction itself. Two consequences follow. Migration 22 carries its own `begin transaction` / `commit` markers, and sqlite refuses a nested `BEGIN` outright, so those markers must be translated into a savepoint — which is exactly what Android's `SQLiteSession.executeSpecial` does with a raw `begin`/`commit` statement. And a `pragma` is a no-op while a transaction is open, so the connection settings a script asks for — migration 22's `pragma foreign_keys=ON` (`persistence.migration-v22#6`) — have to be replayed once the upgrade has committed.
+
+#### feedback.checkmark-haptics-are-the-ios-alert-buzz
+
+- [x] `feedback.checkmark-haptics-are-the-ios-alert-buzz` — Toggling a check-mark fires iOS's full-length alert vibration instead of a tap, once per toggle
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/views/CheckmarkButtonView.kt:98 — performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/entry_panel.dart — performToggleFeedback`
+- **Severity:** major
+
+1. `feedback.checkmark-haptics-are-the-ios-alert-buzz#1` — In the Kotlin app: every completed toggle ends with a short `LONG_PRESS` tick confirming the press landed on the right cell — the most frequent interaction in the app. Flutter's argument-less `HapticFeedback.vibrate()` is that exact constant on Android, because the embedder answers a typeless `HapticFeedback.vibrate` message with `HapticFeedbackConstants.LONG_PRESS`. iOS answers the same typeless message with `AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)` — the alert buzz that shakes the whole device — as Flutter's own API doc states: "On iOS devices that support haptic feedback, this uses the default system vibration value (kSystemSoundID_Vibrate)". The port must therefore pick the tap-sized constant per platform: `mediumImpact` is `KEYBOARD_TAP` on Android and `UIImpactFeedbackStyleMedium` on iOS, and stays firmer than the `lightImpact` used for `VIRTUAL_KEY`, keeping the two in the order Android puts them in.
+
+#### feedback.rate-app-row-is-dead-outside-android
+
+- [x] `feedback.rate-app-row-is-dead-outside-android` — The "Rate this app" rows point at the market: scheme on every platform, so outside Android they can only ever fail
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/values/constants.xml:22 — <string name="playStoreURL">market://details?id=org.isoron.uhabits</string>, opened with startActivitySafely(Intent(ACTION_VIEW, ...)) from SettingsFragment and AboutView`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/common/store_listing.dart — storeListingUrl, used by SettingsScreen.rateAppUrl and AboutLinks.rateApp`
+- **Severity:** major
+
+1. `feedback.rate-app-row-is-dead-outside-android#1` — In the Kotlin app: the row opens the app's store listing; the "No app was found to support this action" message is the failure branch, reached only when nothing on the device can take the intent. No iOS or macOS app claims the `market:` scheme, so there that branch is the *only* branch: `launchUrl` fails, `openExternalUri` returns false, and both callers show the error toast. The port must resolve the destination per platform — the `market:` deep link where it works, and the same listing over https where it does not, since a browser is always present.
+
+#### feedback.share-sheet-has-no-anchor-on-ipad
+
+- [x] `feedback.share-sheet-has-no-anchor-on-ipad` — Sharing an export passes no origin rect, so every export path fails on iPad with "No app was found to support this action"
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt:121-137 — showSendFileScreen builds Intent(ACTION_SEND) and hands it to startActivitySafely, which opens the system chooser; no anchor is involved on any Android form factor`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_files.dart — FileSharer.shareFile / PlatformFileSharer`
+- **Severity:** major
+
+1. `feedback.share-sheet-has-no-anchor-on-ipad#1` — In the Kotlin app: Settings → Export CSV, Settings → Export full backup and a habit's Export CSV all open the chooser and hand over the file, on phone and tablet alike. iOS presents the same sheet as a popover on any device that has a `popoverPresentationController` — iPad, and Mac Catalyst — and share_plus refuses rather than guessing where to anchor it: `if (hasPopoverPresentationController && (!isCoordinateSpaceOfSourceView || CGRectIsEmpty(origin)))` returns a `FlutterError` (FPPSharePlusPlugin.m:378-394). Both callers turn any failure into `activityNotFound`, so with no origin every export path on an iPad ends in "No app was found to support this action" and the exported file is unreachable. The port targets iPad (`TARGETED_DEVICE_FAMILY = "1,2"`), so the sharing seam must carry a non-empty origin rect inside the root view.
+
+#### feedback.csv-target-value-rounds-unlike-java
+
+- [x] `feedback.csv-target-value-rounds-unlike-java` — The CSV export's Target Value column rounds the binary double instead of the shortest decimal, so about half of all x.x5 targets export one step low
+- **Platform:** core · **Port risk:** low
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt:197 — format("%.1f", habit.targetValue)`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/models/habit_list.dart — writeCSV, the Target Value column`
+- **Severity:** cosmetic
+
+1. `feedback.csv-target-value-rounds-unlike-java#1` — In the Kotlin app: the column is `format("%.1f", targetValue)`, whose JVM actual is `java.util.Formatter`. It rounds the shortest decimal that round-trips the double — what `Double.toString` prints — HALF_UP, so 0.15 exports as 0.2, 0.35 as 0.4, 0.85 as 0.9, 0.95 as 1.0 and 8.35 as 8.4. Dart's `toStringAsFixed` rounds the exact binary value instead, and 0.15 is stored as 0.1499999999999999944…, so it yields 0.1. The port already carries a Java-compatible `format()` for exactly this reason and must use it here; a target is entered by hand with no digit limit, so x.x5 values are ordinary.
+
+#### feedback.zip-entries-have-no-timestamp
+
+- [x] `feedback.zip-entries-have-no-timestamp` — Exported ZIP entries carry a zeroed MS-DOS timestamp, so extracted files are dated 1979/1980 instead of the export time
+- **Platform:** core · **Port risk:** low
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/io/Zip.kt:49 — zos.putNextEntry(java.util.zip.ZipEntry(name))`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/io/zip.dart — ZipWriter._writeLocalHeader and ._writeCentralHeader`
+- **Severity:** cosmetic
+
+1. `feedback.zip-entries-have-no-timestamp#1` — In the Kotlin app: `ZipEntry(name)` sets no time, so `ZipOutputStream.putNextEntry` stamps it — `if (e.xdostime == -1) e.setTime(System.currentTimeMillis())` — and every CSV inside "Loop Habits CSV <date>.zip" carries the moment of export. The port wrote literal zeros into the last-mod time and date of both the local and the central header, and a zero MS-DOS date encodes month 0 / day 0, which extractors render as 1979-11-30 or 1980-01-01: the files sort to the bottom of a by-date listing and cannot be told apart from an older export. Both copies of the field must agree, and a date outside 1980..2107 has to clamp rather than wrap, as `javaToDosTime` does.
+
+#### feedback.toolbar-titles-centre-themselves-on-ios
+
+- [x] `feedback.toolbar-titles-centre-themselves-on-ios` — Toolbar titles centre themselves on iOS and macOS for Settings, About and the habit editor, because nothing pins the alignment
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt:185 (`toolbar.title = title`) over uhabits-android/src/main/res/layout/toolbar.xml, a plain androidx.appcompat.widget.Toolbar`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/theme/app_theme.dart — appThemeData's AppBarThemeData`
+- **Severity:** cosmetic
+
+1. `feedback.toolbar-titles-centre-themselves-on-ios#1` — In the Kotlin app: every screen shares one toolbar layout, and an AppCompat toolbar title is start-aligned on all of them, next to the up arrow. Flutter decides per screen instead: with no `centerTitle`, `AppBar._getEffectiveCenterTitle` falls through to the platform default, which on iOS and macOS is `actions == null || actions.length < 2`. Settings and About pass no actions and the habit editor passes exactly one, so those three titles centre themselves there, while the habit list and the habit detail — two or more actions — stay on the left. The theme must pin the alignment so the answer cannot depend on the platform or on how many actions a bar happens to carry.

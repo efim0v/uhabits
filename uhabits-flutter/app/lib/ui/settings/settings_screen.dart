@@ -41,6 +41,7 @@ import '../../platform/flutter_notification_tray.dart'
 import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
 import '../theme/app_theme.dart' show coreThemeOf;
+import '../common/store_listing.dart';
 
 /// The settings screen.
 ///
@@ -77,8 +78,15 @@ class SettingsScreen extends StatelessWidget {
   /// `@string/helpURL`.
   static const String helpUrl = 'http://loophabits.org/faq.html';
 
-  /// `@string/playStoreURL`.
-  static const String rateAppUrl = 'market://details?id=org.isoron.uhabits';
+  /// `@string/playStoreURL` — but only where the `market:` scheme resolves.
+  ///
+  /// Android's Play Store app claims `market:`, and `startActivitySafely` opens
+  /// the listing with it. Nothing on iOS or macOS claims it, so `launchUrl`
+  /// fails there and the row reports "No app was found to support this action"
+  /// every time. The same listing over https is a page any browser opens, which
+  /// is the closest thing those platforms have to the intent
+  /// (`feedback.rate-app-row-is-dead-outside-android#1`).
+  static String get rateAppUrl => storeListingUrl;
 
   /// `@string/bugReportTo` — the single address every bug report goes to.
   static const String bugReportTo = 'dev@loophabits.org';

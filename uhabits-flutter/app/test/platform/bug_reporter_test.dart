@@ -17,6 +17,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Rect;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations_en.dart';
 import 'package:uhabits/platform/app_database.dart';
@@ -53,7 +54,7 @@ class _NoFileChooser implements FileChooser {
 
 class _NoFileSharer implements FileSharer {
   @override
-  Future<void> shareFile(String path, {required String mimeType}) async {}
+  Future<void> shareFile(String path, {required String mimeType, Rect? origin}) async {}
 }
 
 void main() {

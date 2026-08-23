@@ -121,6 +121,18 @@ class ZipReader {
 /// Writes a ZIP archive in memory. Created empty; every [addEntry] appends one
 /// deflated entry; [toBytes] closes the archive and returns its bytes.
 class ZipWriter {
+  /// [modifiedAt] is the time every entry is stamped with, defaulting to now.
+  ///
+  /// `ZipOutputStream.putNextEntry` stamps an entry whose time was never set —
+  /// which is every entry `ZipWriter.addEntry` creates upstream — with
+  /// `System.currentTimeMillis()`, so the files inside an export carry the
+  /// moment of export (`feedback.zip-entries-have-no-timestamp#1`). It is a
+  /// parameter only so that a test can pin it.
+  ZipWriter({DateTime? modifiedAt})
+      : _modifiedAt = modifiedAt ?? DateTime.now();
+
+  final DateTime _modifiedAt;
+
   final List<_PendingEntry> _entries = <_PendingEntry>[];
   Uint8List? _bytes;
   bool _closed = false;
@@ -165,13 +177,31 @@ class ZipWriter {
     return out.takeBytes();
   }
 
+  /// [_modifiedAt] as an MS-DOS packed time: hour, minute, and seconds in
+  /// units of two.
+  int get _dosTime =>
+      (_modifiedAt.hour << 11) |
+      (_modifiedAt.minute << 5) |
+      (_modifiedAt.second ~/ 2);
+
+  /// [_modifiedAt] as an MS-DOS packed date, whose epoch is 1980. A date the
+  /// format cannot express is clamped to its ends rather than wrapped, which
+  /// is what `ZipEntry.setTime` does with `javaToDosTime`.
+  int get _dosDate {
+    final year = _modifiedAt.year.clamp(1980, 2107);
+    if (year != _modifiedAt.year) {
+      return year == 1980 ? (0 << 9) | (1 << 5) | 1 : (127 << 9) | (12 << 5) | 31;
+    }
+    return ((year - 1980) << 9) | (_modifiedAt.month << 5) | _modifiedAt.day;
+  }
+
   void _writeLocalHeader(BytesBuilder out, _PendingEntry entry) {
     _writeUint32(out, _localHeaderSignature);
     _writeUint16(out, 20); // version needed to extract
     _writeUint16(out, _flagUtf8Names);
     _writeUint16(out, _methodDeflated);
-    _writeUint16(out, 0); // last mod time
-    _writeUint16(out, 0); // last mod date
+    _writeUint16(out, _dosTime);
+    _writeUint16(out, _dosDate);
     _writeUint32(out, entry.crc);
     _writeUint32(out, entry.compressed.length);
     _writeUint32(out, entry.uncompressedSize);
@@ -187,8 +217,8 @@ class ZipWriter {
     _writeUint16(out, 20); // version needed to extract
     _writeUint16(out, _flagUtf8Names);
     _writeUint16(out, _methodDeflated);
-    _writeUint16(out, 0); // last mod time
-    _writeUint16(out, 0); // last mod date
+    _writeUint16(out, _dosTime);
+    _writeUint16(out, _dosDate);
     _writeUint32(out, entry.crc);
     _writeUint32(out, entry.compressed.length);
     _writeUint32(out, entry.uncompressedSize);

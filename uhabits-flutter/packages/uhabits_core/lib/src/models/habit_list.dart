@@ -1,6 +1,7 @@
 import 'habit.dart';
 import 'habit_matcher.dart';
 import 'model_observable.dart';
+import '../io/printf.dart' show format;
 
 /// Port of uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/HabitList.kt
 ///
@@ -140,8 +141,15 @@ abstract class HabitList extends Iterable<Habit> {
         habit.color.toCsvColor(),
         habit.isNumerical ? habit.unit : '',
         habit.isNumerical ? habit.targetType.csvName : '',
-        // Kotlin: format("%.1f", habit.targetValue)
-        habit.isNumerical ? habit.targetValue.toStringAsFixed(1) : '',
+        // Kotlin: format("%.1f", habit.targetValue).
+        //
+        // The port's own `format` and not `toStringAsFixed`: java.util.Formatter
+        // rounds the shortest decimal that round-trips the double — what
+        // Double.toString prints — HALF_UP, while toStringAsFixed rounds the
+        // exact binary value. 0.15 is stored as 0.1499999999999999944…, so the
+        // two disagree on roughly half of all x.x5 targets
+        // (`feedback.csv-target-value-rounds-unlike-java#1`).
+        habit.isNumerical ? format('%.1f', habit.targetValue) : '',
         habit.isArchived.toString(),
       ];
       sb.write(_csvLine(cols));

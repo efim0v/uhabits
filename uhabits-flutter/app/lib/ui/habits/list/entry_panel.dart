@@ -27,6 +27,8 @@ library;
 // yet; until it does, these are the documented import paths.
 // ignore_for_file: implementation_imports
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart' as core;
@@ -68,6 +70,35 @@ typedef EntryPressedCallback = void Function(
 /// position `i` stands for `today - (i + dataOffset)` and reads
 /// `values[i + dataOffset]`. Indices past the end of [values] fall back the way
 /// the Kotlin panels do: UNKNOWN for a checkmark, 0.0 for a measurement.
+/// `performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)`, the last thing
+/// `CheckmarkButtonView.performToggle` does
+/// (`audit3.toggling-a-check-mark-on-the#1`).
+///
+/// The argument-less `HapticFeedback.vibrate()` is that exact constant on
+/// Android: the embedder answers `HapticFeedbackType.STANDARD` with
+/// `LONG_PRESS`. It is the wrong call everywhere else, though — a typeless
+/// message reaches iOS as `AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)`,
+/// the alert buzz that shakes the whole device for about a third of a second.
+/// Toggling is the most frequent interaction in the app, so that lands once per
+/// check-mark (`feedback.checkmark-haptics-are-the-ios-alert-buzz#1`).
+///
+/// `mediumImpact` is the tap-sized analogue — `KEYBOARD_TAP` on Android,
+/// `UIImpactFeedbackStyleMedium` on iOS — and stays firmer than the
+/// `lightImpact` the port uses for `VIRTUAL_KEY`, which keeps the two in the
+/// order Android puts them in.
+void performToggleFeedback() {
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.iOS:
+    case TargetPlatform.macOS:
+      HapticFeedback.mediumImpact();
+    case TargetPlatform.android:
+    case TargetPlatform.fuchsia:
+    case TargetPlatform.linux:
+    case TargetPlatform.windows:
+      HapticFeedback.vibrate();
+  }
+}
+
 class EntryPanel extends StatefulWidget {
   const EntryPanel({
     required this.values,
@@ -269,12 +300,7 @@ class _EntryPanelState extends State<EntryPanel> {
       // or not the command ever comes back.
       setState(() => _optimisticValues[date.daysSince2000] = next);
       widget.onToggle?.call(date, next, note);
-      // `performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)`, the last
-      // thing performToggle does. The argument-less `HapticFeedback.vibrate()`
-      // is that same constant: the Android embedder answers
-      // HapticFeedbackType.STANDARD with LONG_PRESS
-      // (`audit3.toggling-a-check-mark-on-the#1`).
-      HapticFeedback.vibrate();
+      performToggleFeedback();
     }
 
     void edit() {

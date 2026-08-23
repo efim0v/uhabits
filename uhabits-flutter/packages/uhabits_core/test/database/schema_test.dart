@@ -274,7 +274,21 @@ void main() {
               'target version');
     });
 
-    test('an interrupted upgrade resumes at the first unapplied version', () {
+    // CORRECTED, LOUDLY. This test used to assert that a failure at version 15
+    // left user_version standing at 14 and that the next attempt resumed at 15,
+    // citing `persistence.migration-runner#5`. That rule reads
+    // `Database.migrateTo` in isolation, and in isolation it is true — but the
+    // Android app never calls it in isolation. `HabitsDatabaseOpener.onUpgrade`
+    // is invoked by `SQLiteOpenHelper.getDatabaseLocked`, which wraps the whole
+    // upgrade in one transaction: beginTransaction() → onUpgrade(...) →
+    // setVersion(mNewVersion) → setTransactionSuccessful() → endTransaction().
+    // `PRAGMA user_version` is transactional, so on Android a failed upgrade
+    // rolls back schema *and* version, and the next launch replays the range
+    // from the beginning. The old assertion pinned a port-only behaviour — one
+    // that had already destroyed a database in this project, because a
+    // half-applied migration 23 left `user_version` at 22 and every later
+    // launch died on `duplicate column name: question`.
+    test('an interrupted upgrade rolls back and replays the whole range', () {
       final db = openMemoryDatabase();
       addTearDown(db.close);
       db.setVersion(8);
@@ -288,27 +302,27 @@ void main() {
         reason: 'persistence.migration-runner#5 — an upgrade can be '
             'interrupted part way through the range',
       );
-      expect(db.getVersion(), 14,
-          reason: 'persistence.migration-runner#5 — user_version is written '
-              'after each individual migration completes, so it stands at the '
-              'last version that fully applied');
+      expect(db.getVersion(), 8,
+          reason: 'feedback.migrations-are-not-atomic#1 — the whole upgrade is '
+              'one transaction, so a failure leaves the version where it was');
+      expect(tableInfo(db, 'Habits'), isEmpty,
+          reason: 'feedback.migrations-are-not-atomic#1 — and leaves no half '
+              'built schema behind either');
 
       final resumedVersions = <int>[];
       db.migrateTo(databaseVersion, (v) {
         resumedVersions.add(v);
         return migrationSql[v]!;
       });
-      expect(resumedVersions.first, 15,
-          reason: 'persistence.migration-runner#5 — the next attempt resumes '
-              'at the first unapplied version');
-      expect(resumedVersions, List<int>.generate(11, (i) => 15 + i),
-          reason: 'persistence.migration-runner#5 — and applies 15..25, never '
-              'replaying 09..14');
+      expect(resumedVersions, List<int>.generate(17, (i) => 9 + i),
+          reason: 'feedback.migrations-are-not-atomic#1 — the retry starts '
+              'from the beginning of the range, which is only safe because '
+              'nothing from the failed attempt survived');
       expect(db.getVersion(), databaseVersion,
-          reason: 'persistence.migration-runner#5 — the resumed upgrade '
+          reason: 'persistence.migration-runner#5 — the retried upgrade '
               'finishes the range');
       expect(tableInfo(db, 'Habits').length, 18,
-          reason: 'persistence.migration-runner#5 — the resumed database has '
+          reason: 'persistence.migration-runner#5 — the retried database has '
               'the same schema as an uninterrupted one');
     });
 

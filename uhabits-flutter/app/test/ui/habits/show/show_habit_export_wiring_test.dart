@@ -38,7 +38,7 @@ class _RecordingSharer implements FileSharer {
       <({String path, String mimeType})>[];
 
   @override
-  Future<void> shareFile(String path, {required String mimeType}) async {
+  Future<void> shareFile(String path, {required String mimeType, Rect? origin}) async {
     shared.add((path: path, mimeType: mimeType));
     // `startActivitySafely` catches ActivityNotFoundException.
     if (throws) throw StateError('no activity found');
