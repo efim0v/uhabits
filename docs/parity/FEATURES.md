@@ -6987,3 +6987,116 @@ the work to close it.
 1. `audit4.harness-blind-spots#1` — A journey drives the Flutter tree, so it can prove a screen is reachable and cannot say anything about Swift, Kotlin, AndroidManifest.xml or Info.plist. Both blockers of this pass live there: the iOS App Group is never set, so every iOS widget is permanently empty. — **не применимо к порту:** правило описывает границу возможностей сценария, а не требование к приложению: утверждать его — значит утверждать, что Dart-тест умеет читать Swift. Работа несёт `#2` (контракт данных виджета) и `#3` (нативные декларации), обе процитированы.
 2. `audit4.harness-blind-spots#2` — The widget bridge is Dart and still escaped every test, because no journey places a widget and inspects what it was given. The port needs a test that asserts the published document against what each widget kind needs to draw: the score for the checkmark ring, the score series for the score widget, enough history for the streak and frequency widgets, and the first-weekday preference.
 3. `audit4.harness-blind-spots#3` — Native declarations that carry behaviour must be asserted from a test that reads them: the App Group id shared by the app and the extension, the URL scheme the widgets tap into, localeConfig, and the widget labels. Reading the file is enough; it is what catches a declaration that silently disappears.
+
+## Domain: Fifth audit pass (2026-08-23)
+
+Ten findings, down from twenty. Two are blockers and they share a cause worth naming: since
+version 16 `flutter_local_notifications` declares none of its own broadcast receivers, and the
+app must declare them. Without `ScheduledNotificationReceiver` the alarm fires into nothing and
+no reminder is ever posted on Android; without `ActionBroadcastReceiver` the Yes and No buttons
+resolve to no component even with the app in the foreground.
+
+One of them was held in place by a test. `manifest_components_test.dart` asserted that exactly
+one plain receiver is declared, which is an assertion that the two missing ones stay missing.
+A test can enforce a defect as easily as it can catch one, and that is why the ledger read
+green while reminders did not work at all.
+
+#### audit5.android-reminders-never-fire-flutter-local
+
+- [ ] `audit5.android-reminders-never-fire-flutter-local` — Android reminders never fire: flutter_local_notifications' ScheduledNotificationReceiver is not declared in the manifest
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/AndroidManifest.xml (<receiver .receivers.ReminderReceiver>) + uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentScheduler.kt / PendingIntentFactory.showReminder`
+- **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (application block, next to the ScheduledNotificationBootReceiver declared at line 145); the caller is uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart:390 (FlutterAlarmScheduler.scheduleExact -> plugin.zonedSchedule)`
+- **Severity:** blocker
+
+1. `audit5.android-reminders-never-fire-flutter-local#1` — In the Kotlin app: AlarmManager fires an explicit broadcast PendingIntent at .receivers.ReminderReceiver, which is declared in the manifest; ReminderController.onShowReminder posts the notification. Every habit reminder appears at its scheduled time.
+
+#### audit5.reminder-yes-no-buttons-are-dead
+
+- [ ] `audit5.reminder-yes-no-buttons-are-dead` — Reminder 'Yes'/'No' buttons are dead even with the app running: ActionBroadcastReceiver is not declared
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/AndroidManifest.xml (<receiver .receivers.WidgetReceiver>) + uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt (addAction with PendingIntentFactory.addCheckmark / removeRepetition)`
+- **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (application block); the actions are built in uhabits-flutter/app/lib/platform/flutter_notification_tray.dart:876 (AndroidNotificationAction with showsUserInterface: false for ReminderActions.addRepetition / removeRepetition)`
+- **Severity:** blocker
+
+1. `audit5.reminder-yes-no-buttons-are-dead#1` — In the Kotlin app: 'Yes' and 'No' are broadcast PendingIntents to WidgetReceiver, declared in the manifest; WidgetBehavior.onAddRepetition / onRemoveRepetition writes the entry and cancels the notification, whether or not the app process is alive.
+
+#### audit5.home-screen-widgets-never-roll-over
+
+- [ ] `audit5.home-screen-widgets-never-roll-over` — Home-screen widgets never roll over to the new day unless the app is in the foreground at midnight
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/WidgetUpdater.kt (`scheduleStartDayWidgetUpdate`), uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentScheduler.kt (`scheduleWidgetUpdate`), uhabits-android/src/main/java/org/isoron/uhabits/receivers/WidgetReceiver.kt (`ACTION_UPDA`
+- **Where the port should do it:** `uhabits-flutter/app/lib/state/widget_sync.dart (`scheduleStartDayWidgetUpdate`, `_onMidnight`), uhabits-flutter/app/lib/main.dart (`_onPause`), uhabits-flutter/packages/uhabits_core/lib/src/utils/midnight_timer.dart (`onPause`)`
+- **Severity:** major
+
+1. `audit5.home-screen-widgets-never-roll-over#1` — In the Kotlin app: `scheduleStartDayWidgetUpdate()` computes `getStartOfTomorrowWithOffset(midnightDelayHours, 0)` and hands it to `IntentScheduler.scheduleWidgetUpdate`, which sets an AlarmManager RTC `setExactAndAllowWhileIdle` alarm on a broadcast PendingIntent addressed to the manifest-declared `WidgetReceiver`. At the logical midnight Android delivers that broadcast — starting the app process if it is dead — and the receiver runs `setToday(computeToday(...))`, `widgetUpdater.updateWidgets()` and `scheduleStartDayWidgetUpdate()` in that order. Every home-screen widget therefore redraws for the new day whether or not the user has opened the app.
+
+#### audit5.checkmark-home-screen-widget-never-draws
+
+- [ ] `audit5.checkmark-home-screen-widget-never-draws` — Checkmark home-screen widget never draws the question-mark glyph — the "Show question marks for missing data" preference is not published to the widget, on either platform
+- **Platform:** ui · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/views/CheckmarkWidgetView.kt (`private val text` getter, lines 104-125; `init()` line 157 `preferences = appComponent.preferences`), driven by uhabits-android/src/main/res/values/fontawesome.xml (`fa_question` = U+F128), uhabits-android/src/ma`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/home_widget_bridge.dart — `buildWidgetDocument` (lines 341-367) and `_habitDocument` (lines 462-...) never put `areQuestionMarksEnabled` in the per-widget document, although `buildIndexDocument` (line 332) already publishes it for i`
+- **Severity:** major
+
+1. `audit5.checkmark-home-screen-widget-never-draws#1` — In the Kotlin app: `CheckmarkWidgetView` holds a live `Preferences` (resolved in `init()` from the application component) and reads it every time it redraws. For a boolean habit whose today entry is UNKNOWN (-1), the glyph is `R.string.fa_question` when `preferences.areQuestionMarksEnabled` is true and `R.string.fa_times` otherwise. So a user who turns on the Interface preference "Show question marks for missing data" — whose own summary is "Differentiate days without data from actual lapses" — sees "?" on the home-screen Checkmark widget for a day with no data, and "✗" only for a day they explicitly marked as a lapse.
+
+#### audit5.target-widget-s-interval-labels-are
+
+- [ ] `audit5.target-widget-s-interval-labels-are` — Target widget's interval labels are hard-coded English instead of localized resources
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/TargetWidget.kt (`refreshData` → `chart.setLabels(data.intervals.map { intervalToLabel(context.resources, it) })`) and uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/TargetCardView.kt:44 (`intervalToLabel`)`
+- **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/TargetWidget.kt:136-140 (`intervalToLabel`), mirrored in uhabits-flutter/app/ios/HabitsWidget/TargetWidget.swift:274-278`
+- **Severity:** minor
+
+1. `audit5.target-widget-s-interval-labels-are#1` — In the Kotlin app: `intervalToLabel(resources, interval)` resolves `R.string.today`, `R.string.week`, `R.string.month`, `R.string.quarter`, `R.string.year`, so the row labels on the Target widget appear in the device language (all 45 shipped locales, including the Android 13 per-app language).
+
+#### audit5.checkmark-widget-always-draws-for-an
+
+- [ ] `audit5.checkmark-widget-always-draws-for-an` — Checkmark widget always draws ✗ for an unanswered day, never the ? glyph, even with question marks enabled
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/views/CheckmarkWidgetView.kt (the `text` getter: `UNKNOWN -> if (preferences.areQuestionMarksEnabled) R.string.fa_question else R.string.fa_times`)`
+- **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/views/CheckmarkWidgetView.kt:56 (`var areQuestionMarksEnabled = false`, never assigned) and .../widgets/CheckmarkWidget.kt (`refreshData` never sets it); the flag is also missing from the per-widget document written by uhabit`
+- **Severity:** minor
+
+1. `audit5.checkmark-widget-always-draws-for-an#1` — In the Kotlin app: The widget view holds the app's `Preferences` and, for a boolean habit whose entry for today is `UNKNOWN`, draws `fa_question` (?) when the user has turned on question marks in Settings, and `fa_times` (✗) otherwise. An unanswered day is therefore visually distinct from a day the user explicitly answered "No".
+
+#### audit5.the-habit-list-command-toast-listener
+
+- [ ] `audit5.the-habit-list-command-toast-listener` — The habit-list command-toast listener stays subscribed while another screen is on top, so the detail screen shows duplicate/spurious toasts
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt — `onAttached()` / `onDetached()` / `onCommandFinished(command)` / `getExecuteString(command)`, called from `ListHabitsActivity.onResume` / `onPause` (uhabits-android/.../habits/list/ListHabitsActivity.kt)`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart lines 250-257 (`_toasts = ListHabitsCommandToasts(...)..onAttached()` in `initState`) and line 340 (`_toasts.onDetached()` in `dispose`); the listener class is /Users/artemefimov/Desktop/uhabits/uhabits-`
+- **Severity:** minor
+
+1. `audit5.the-habit-list-command-toast-listener#1` — In the Kotlin app: `ListHabitsScreen` registers with the `CommandRunner` in `onAttached()` — called from `ListHabitsActivity.onResume` — and unregisters in `onDetached()` from `onPause`. The moment `ShowHabitActivity`, `EditHabitActivity` or `SettingsActivity` is started, the list activity is paused and its listener is gone, so no command run from those screens produces a list toast. Archiving from the detail screen therefore shows exactly one snackbar, the presenter's own `ShowHabitMenuPresenter.Message.HABIT_ARCHIVED`; deleting from the detail screen shows none at all (the activity finishes before the list re-attaches); saving in the habit editor shows none either. This is exactly what `commands.listener-list-habits-toasts#1` and `#6` state ("toasts appear only while the habit list screen is in the foreground"; "the habit detail screen shows its own messages instead ... rather than from the command listener").
+
+#### audit5.the-habit-detail-screen-never-refreshes
+
+- [ ] `audit5.the-habit-detail-screen-never-refreshes` — The habit detail screen never refreshes when the app returns to the foreground, and never dismisses its open popup when it leaves
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt — `onResume()` (`commandRunner.addListener(this)`, the `findFragmentByTag("historyEditor")` re-attach, `screen.refresh()`) and `onPause()` (`dismissCurrentDialog()`, `commandRunner.removeListener(this)`)`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart lines 259-276 (`_ShowHabitViewState.initState` calls `_model.attach()`, `dispose` calls `_dismissCurrentDialog()` + `_model.dispose()`); the model's `attach()` / `detach()` are /Users/artemefimov/Desktop`
+- **Severity:** minor
+
+1. `audit5.the-habit-detail-screen-never-refreshes#1` — In the Kotlin app: `ShowHabitActivity.onResume` runs `screen.refresh()` on every return to the foreground, which re-runs `ShowHabitPresenter.buildState(...)` against a freshly read `getToday()`, so the History, Bar, Score, Streak, Frequency and Overview cards all move to the new day after the app has been backgrounded across midnight. `onPause` calls `dismissCurrentDialog()`, so an open number/check-mark popup is gone when the user comes back. These are `show-habit.screen-scaffold#4` ("refresh() is invoked (1) in onResume …"), `#6` and `#7`.
+
+#### audit5.toolbar-action-items-are-dropped-rather
+
+- [ ] `audit5.toolbar-action-items-are-dropped-rather` — Toolbar action items are dropped rather than moved into the overflow when the toolbar is narrow
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/menu/list_habits.xml (actionCreateHabit and action_filter, both app:showAsAction="always") + activities/habits/list/ListHabitsMenu.kt`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_habits_menu.dart:261-370 (_buildToolbar's showCreate/showFilter width test and _buildActionItems)`
+- **Severity:** cosmetic
+
+1. `audit5.toolbar-action-items-are-dropped-rather#1` — In the Kotlin app: showAsAction="always" keeps both icons in the action bar at any width; an item the ActionBar cannot fit is moved into the overflow menu, never removed, so 'Create habit', 'Hide archived', 'Hide completed', 'Sort' and 'Search' are always reachable.
+
+#### audit5.habit-list-re-sort-is-unstable
+
+- [ ] `audit5.habit-list-re-sort-is-unstable` — Habit list re-sort is unstable in Dart where Kotlin's sortWith is stable, so habits that tie on both comparators can swap places between refreshes
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryHabitList.kt — MemoryHabitList.resort(): `if (comparator != null) list.sortWith(comparator!!)``
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/models/memory/memory_habit_list.dart:232-236 — MemoryHabitList.resort(): `if (comparator != null) _list.sort(comparator);``
+- **Severity:** cosmetic
+
+1. `audit5.habit-list-re-sort-is-unstable#1` — In the Kotlin app: `kotlin.collections.MutableList.sortWith` delegates to `java.util.List.sort`, which is TimSort and is contractually stable. When the composed comparator (primary order, then secondary order) returns 0 for two habits, their previous relative order in the backing list is preserved. Because `resort()` runs on every `add`, every `update`, every `CreateRepetitionCommand` and every filter/order change, a tied pair keeps a fixed, non-jumping position for the whole session.
