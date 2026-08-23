@@ -949,6 +949,90 @@ void main() {
           reason: 'models.habit-list-csv#8');
     });
   });
+
+  // =======================================================================
+  // audit5.habit-list-re-sort-is-unstable
+  //
+  // `MutableList.sortWith` is `java.util.List.sort`, i.e. TimSort, which is
+  // contractually stable: two habits the composed comparator calls equal keep
+  // the relative order they already had in the backing list. `List<E>.sort`
+  // in Dart is an introsort — insertion sort below 32 elements, dual-pivot
+  // quicksort above it — and is stable at neither size by contract.
+  // `resort()` runs on every add, every update, every CreateRepetitionCommand
+  // and every filter or order change, so an unstable comparison makes a tied
+  // pair jump around for the whole session.
+  // =======================================================================
+
+  group('audit5.habit-list-re-sort-is-unstable', () {
+    /// Enough habits to take Dart's `List.sort` past its 32-element insertion
+    /// sort threshold and into the dual-pivot quicksort, which reorders ties.
+    const int tiedHabitCount = 40;
+
+    List<String> namesOf(HabitList list) =>
+        <String>[for (final h in list) h.name];
+
+    MemoryHabitList buildTiedList() {
+      final list = modelFactory.buildHabitList();
+      final tiedFixtures = HabitFixtures(modelFactory, list);
+      for (var i = 0; i < tiedHabitCount; i++) {
+        // Same position and same color for every habit, so both halves of the
+        // composed comparator below return 0 for every pair.
+        list.add(
+          tiedFixtures.createEmptyHabit(
+            name: 'Habit ${i.toString().padLeft(2, '0')}',
+            color: const PaletteColor(7),
+          ),
+        );
+      }
+      return list;
+    }
+
+    test('#1 a resort keeps the previous relative order of habits that tie on '
+        'both comparators', () {
+      final list = buildTiedList();
+      // The habits were added under the default BY_POSITION / BY_NAME_ASC
+      // pair, whose tie-break is the name, so the list starts in name order.
+      final before = namesOf(list);
+      expect(before, List<String>.from(before)..sort(),
+          reason: 'audit5.habit-list-re-sort-is-unstable#1 — the fixture '
+              'starts in a known order');
+
+      // Now every comparison is a tie: BY_COLOR_ASC over one single color,
+      // twice.
+      list.primaryOrder = HabitListOrder.byColorAsc;
+      list.secondaryOrder = HabitListOrder.byColorAsc;
+
+      expect(namesOf(list), before,
+          reason: 'audit5.habit-list-re-sort-is-unstable#1 — sortWith is '
+              'TimSort and is contractually stable, so a comparator that '
+              'returns 0 leaves the two habits exactly where they were');
+
+      // …and it stays put across the repeated resorts that add / update /
+      // CreateRepetitionCommand trigger.
+      for (var i = 0; i < 5; i++) {
+        list.resort();
+        expect(namesOf(list), before,
+            reason: 'audit5.habit-list-re-sort-is-unstable#1 — a tied pair '
+                'keeps a fixed, non-jumping position for the whole session');
+      }
+    });
+
+    test('#1 a filtered view resorts its tied habits just as stably', () {
+      final list = buildTiedList();
+      list.primaryOrder = HabitListOrder.byColorAsc;
+      list.secondaryOrder = HabitListOrder.byColorAsc;
+      final before = namesOf(list);
+
+      final filtered = list.getFiltered(const HabitMatcher());
+      expect(namesOf(filtered), before,
+          reason: 'audit5.habit-list-re-sort-is-unstable#1 — the child list '
+              'loads from the parent and resorts, and the tie order survives');
+
+      filtered.resort();
+      expect(namesOf(filtered), before,
+          reason: 'audit5.habit-list-re-sort-is-unstable#1');
+    });
+  });
 }
 
 /// Records every `update(List<Habit>)` call so the single-habit overload can be

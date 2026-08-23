@@ -51,6 +51,7 @@ import '../../common/dialogs/checkmark_dialog.dart';
 import '../../common/dialogs/color_picker_dialog.dart';
 import '../../common/dialogs/confirm_delete_dialog.dart';
 import '../../common/dialogs/number_dialog.dart';
+import '../../common/screen_route_observer.dart';
 import '../../intro/intro_screen.dart';
 import '../../settings/data_actions.dart';
 import '../../settings/settings_screen.dart';
@@ -133,7 +134,8 @@ class _HabitListView extends StatefulWidget {
 }
 
 class _HabitListViewState extends State<_HabitListView>
-    with RestorationMixin, WidgetsBindingObserver {
+    with RestorationMixin, WidgetsBindingObserver
+    implements RouteAware {
   /// `HabitCardListView.dataOffset`, fed by the header's scroll controller —
   /// `ListHabitsRootView.setupControllers`.
   ///
@@ -283,6 +285,11 @@ class _HabitListViewState extends State<_HabitListView>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // `ListHabitsActivity.onPause` also runs when another *activity* covers
+    // this one, which in a one-activity Flutter app is another route pushed
+    // over this screen. [screenRouteObserver] is where those two callbacks
+    // come from (`audit5.the-habit-list-command-toast-listener#1`).
+    subscribeToScreenRoutes(this, context);
     // `HintListFactory.create(resources.getStringArray(R.array.hints))`: the
     // factory closes over the application-scoped Preferences and takes only
     // the array.
@@ -305,6 +312,12 @@ class _HabitListViewState extends State<_HabitListView>
       // `midnightTimer.onPause(); screen.onDetached(); adapter.cancelRefresh()`
       // — the app-level half of `onPause` lives in main.dart, next to the
       // timer it pauses.
+      //
+      // `screen.onDetached()` is the toast listener: a command that finishes
+      // while the app is in the background raises no snackbar, because the
+      // screen that would show it is not in the foreground
+      // (`audit5.the-habit-list-command-toast-listener#1`).
+      _toasts.onDetached();
       _model.detach();
       return;
     }
@@ -319,7 +332,39 @@ class _HabitListViewState extends State<_HabitListView>
       core.computeToday(_model.scope.preferences.midnightDelayHours, 0),
     );
     _model.attach();
+    // `screen.onAttached()`, the other half of the pair above.
+    _toasts.onAttached();
   }
+
+  // -----------------------------------------------------------------------
+  // RouteAware: `onPause` / `onResume` for a screen pushed over this one
+  // -----------------------------------------------------------------------
+
+  /// `ListHabitsActivity.onPause` when `ShowHabitActivity`, `EditHabitActivity`
+  /// or `SettingsActivity` is started: `screen.onDetached()` unregisters the
+  /// command listener, so a command run from the screen on top produces no
+  /// list toast — the detail screen shows its own message instead
+  /// (`commands.listener-list-habits-toasts#1`, `#6`).
+  ///
+  /// The adapter is deliberately left attached: the cache under it belongs to
+  /// the application, not to this screen, and the widgets, the notification
+  /// tray and the screen on top all read it while this one is covered.
+  @override
+  void didPushNext() => _toasts.onDetached();
+
+  /// `ListHabitsActivity.onResume` when that screen is finished: the toast
+  /// listener is registered again, so the first command run back on the list
+  /// shows its snackbar.
+  @override
+  void didPopNext() => _toasts.onAttached();
+
+  /// The route this screen sits on was itself pushed or popped; the mount and
+  /// the unmount already cover both, exactly as `onCreate` / `onDestroy` do.
+  @override
+  void didPush() {}
+
+  @override
+  void didPop() {}
 
   /// `ListHabitsActivity.onNewIntent` -> `setIntent(intent)`, followed by the
   /// `parseIntents()` its next `onResume` would have run.
@@ -335,6 +380,7 @@ class _HabitListViewState extends State<_HabitListView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    screenRouteObserver.unsubscribe(this);
     _dataOffsetState.dispose();
     // `ListHabitsActivity.onPause` -> `screen.onDetached()`.
     _toasts.onDetached();

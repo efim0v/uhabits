@@ -155,6 +155,65 @@
         </receiver>
 
         <!-- ============================================================== -->
+        <!-- Delivering a reminder at its scheduled time                    -->
+        <!--                                                                -->
+        <!-- audit5.android-reminders-never-fire-flutter-local#1: upstream  -->
+        <!-- AlarmManager fires an explicit broadcast PendingIntent at      -->
+        <!-- .receivers.ReminderReceiver, declared in                       -->
+        <!-- uhabits-android/src/main/AndroidManifest.xml, and              -->
+        <!-- ReminderController.onShowReminder posts the notification.      -->
+        <!--                                                                -->
+        <!-- Here the alarm IS the finished notification: zonedSchedule     -->
+        <!-- hands it to AlarmManager and the plugin's                      -->
+        <!-- ScheduledNotificationReceiver is the component the broadcast   -->
+        <!-- is addressed to at the scheduled instant. It is what turns an  -->
+        <!-- armed alarm into a posted notification, and since version 16   -->
+        <!-- flutter_local_notifications declares NO receivers in its own   -->
+        <!-- manifest (it now ships only the VIBRATE and POST_NOTIFICATIONS -->
+        <!-- permissions) — so while this was missing, every reminder was   -->
+        <!-- scheduled successfully and then delivered to a component that  -->
+        <!-- did not exist. No habit reminder ever appeared.                -->
+        <!--                                                                -->
+        <!-- No intent-filter: AlarmManager addresses it by component name. -->
+        <!-- Not exported: the PendingIntent is one this app built for      -->
+        <!-- itself, so nothing outside the app needs to reach it.          -->
+        <!-- ============================================================== -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+
+        <!-- ============================================================== -->
+        <!-- The 'Yes' and 'No' buttons on a reminder                       -->
+        <!--                                                                -->
+        <!-- audit5.reminder-yes-no-buttons-are-dead#1: upstream both are   -->
+        <!-- broadcast PendingIntents to the manifest-declared              -->
+        <!-- WidgetReceiver, and WidgetBehavior.onAddRepetition /           -->
+        <!-- onRemoveRepetition writes the entry and cancels the            -->
+        <!-- notification whether or not the app process is alive.          -->
+        <!--                                                                -->
+        <!-- flutter_notification_tray builds those two as                  -->
+        <!-- AndroidNotificationAction(showsUserInterface: false), which is -->
+        <!-- exactly the branch where the plugin posts a                    -->
+        <!-- PendingIntent.getBroadcast addressed to its own                -->
+        <!-- ActionBroadcastReceiver; that receiver cancels the             -->
+        <!-- notification if asked, then spins up a background isolate and  -->
+        <!-- calls the entry point registered as                            -->
+        <!-- onDidReceiveBackgroundNotificationResponse. Without this       -->
+        <!-- declaration the broadcast has no target: tapping Yes or No did -->
+        <!-- nothing at all, not even with the app in the foreground,       -->
+        <!-- because the tap never left the system.                         -->
+        <!--                                                                -->
+        <!-- Not exported, per the plugin README. That is also what keeps   -->
+        <!-- the port from reopening the hole upstream left with            -->
+        <!-- android:permission="false" on WidgetReceiver                   -->
+        <!-- (intents.widget-receiver-dispatch#12): only this app's own     -->
+        <!-- notification can drive it.                                     -->
+        <!-- ============================================================== -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false" />
+
+        <!-- ============================================================== -->
         <!-- Home-screen widgets                                            -->
         <!--                                                                -->
         <!-- Port of the widget block in                                    -->

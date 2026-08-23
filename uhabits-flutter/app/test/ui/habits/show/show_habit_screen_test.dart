@@ -37,6 +37,8 @@ import 'package:uhabits/ui/theme/app_theme.dart' show appThemeData;
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
 import 'package:uhabits_core/src/io/files.dart' show LocalUserFile, UserFile;
 import 'package:uhabits_core/src/preferences/preferences.dart' show Preferences;
+import 'package:uhabits_core/src/time/date_utils.dart'
+    show defaultCurrentTimeMillis, systemCurrentTimeMillis;
 import 'package:uhabits_core/src/ui/intent_parser.dart' show parseContentUriId;
 // `Color` and `Theme` collide with the Material ones, so they come in under a
 // prefix and everything else stays bare.
@@ -1943,6 +1945,147 @@ void main() {
         reason: 'show-habit.screen-scaffold#2 — and the `!!` dereferences it '
             'rather than falling back to an empty state',
       );
+    });
+  });
+
+  // =======================================================================
+  // audit5.the-habit-detail-screen-never-refreshes
+  //
+  // `ShowHabitActivity.onResume` runs `commandRunner.addListener(this)`, the
+  // `findFragmentByTag("historyEditor")` re-attach and `screen.refresh()`;
+  // `onPause` runs `dismissCurrentDialog()` and `removeListener(this)`. In the
+  // port those two blocks are `ShowHabitModel.attach()` / `detach()`, and they
+  // were driven only by the widget mounting and unmounting — while a
+  // background/foreground round trip mounts nothing.
+  // =======================================================================
+
+  group('audit5.the-habit-detail-screen-never-refreshes', () {
+    /// The clock the resume path reads, pinned to local noon of [date].
+    void pinClockTo(LocalDate date) {
+      final millis =
+          DateTime(date.year, date.month, date.day, 12).millisecondsSinceEpoch;
+      systemCurrentTimeMillis = () => millis;
+    }
+
+    tearDown(() => systemCurrentTimeMillis = defaultCurrentTimeMillis);
+
+    /// The states the engine sends on the way out of the foreground, in the
+    /// order the framework insists on. Nothing is pumped: a paused app draws
+    /// no frames, exactly as it does not on a device.
+    void goToBackground(WidgetTester tester) {
+      for (final AppLifecycleState state in <AppLifecycleState>[
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+    }
+
+    /// …and the way back in, which is what `onResume` reacts to.
+    Future<void> returnToForeground(WidgetTester tester) async {
+      for (final AppLifecycleState state in <AppLifecycleState>[
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('#1 coming back to the foreground refreshes the cards against '
+        'a freshly read today', (tester) async {
+      pinClockTo(LocalDate.ymd(2015, 1, 25));
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      final model = modelOf(tester);
+
+      expect(model.state.history.today, LocalDate.ymd(2015, 1, 25),
+          reason: 'audit5.the-habit-detail-screen-never-refreshes#1 — the '
+              'first build is against the day the screen opened on');
+
+      // The user leaves the app…
+      goToBackground(tester);
+
+      // …and comes back the next day.
+      pinClockTo(LocalDate.ymd(2015, 1, 26));
+      await returnToForeground(tester);
+
+      expect(model.state.history.today, LocalDate.ymd(2015, 1, 26),
+          reason: 'audit5.the-habit-detail-screen-never-refreshes#1 — '
+              'onResume runs screen.refresh(), which re-runs buildState '
+              'against a freshly read getToday(), so the History, Bar, Score, '
+              'Streak, Frequency and Overview cards all move to the new day '
+              '(show-habit.screen-scaffold#4)');
+      expect(getToday(), LocalDate.ymd(2015, 1, 26),
+          reason: 'audit5.the-habit-detail-screen-never-refreshes#1 — the '
+              "port's process-global today is re-stamped on the way in, "
+              'because upstream getToday() is a clock read on every call');
+    });
+
+    testWidgets('#1 the command listener is registered again after a resume',
+        (tester) async {
+      pinClockTo(LocalDate.ymd(2015, 1, 25));
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      final model = modelOf(tester);
+
+      goToBackground(tester);
+      await returnToForeground(tester);
+
+      var notifications = 0;
+      model.addListener(() => notifications++);
+      scope.commandRunner.notifyListeners(
+        CreateRepetitionCommand(
+          scope.habitList,
+          habit,
+          getToday(),
+          Entry.yesManual,
+          '',
+        ),
+      );
+      expect(notifications, 1,
+          reason: 'audit5.the-habit-detail-screen-never-refreshes#1 — '
+              'onResume runs commandRunner.addListener(this), so the screen '
+              'is a CommandRunner.Listener again (show-habit'
+              '.screen-scaffold#6)');
+    });
+
+    testWidgets('#1 leaving the app dismisses the open entry popup',
+        (tester) async {
+      pinClockTo(LocalDate.ymd(2015, 1, 25));
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate');
+      await tester.pumpWidget(wrap(scope, habit));
+      await tester.pumpAndSettle();
+      final model = modelOf(tester);
+
+      // A tap on a calendar day opens the check-mark popup, one of the dialogs
+      // the current-dialog slot tracks.
+      model.presenter.historyCardPresenter.onDateShortPress(getToday());
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckmarkDialog), findsOneWidget,
+          reason: 'audit5.the-habit-detail-screen-never-refreshes#1 — the '
+              'popup is open');
+
+      // A paused app draws no frames — the framework disables them — so the
+      // dismissal is observed where the user observes it: on the way back.
+      goToBackground(tester);
+      await returnToForeground(tester);
+
+      expect(find.byType(CheckmarkDialog), findsNothing,
+          reason: 'audit5.the-habit-detail-screen-never-refreshes#1 — onPause '
+              'calls dismissCurrentDialog(), so an open number or check-mark '
+              'popup is gone when the user comes back '
+              '(show-habit.screen-scaffold#6)');
+      expect(find.byType(ShowHabitScreen), findsOneWidget,
+          reason: 'audit5.the-habit-detail-screen-never-refreshes#1 — the '
+              'screen itself is still there');
     });
   });
 }

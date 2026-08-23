@@ -253,20 +253,28 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
     );
   }
 
+  /// The width one action icon takes on the bar, `?attr/actionBarSize` in
+  /// miniature: the `minWidth` of a `IconButton`'s tap target.
+  static const double _iconWidth = 48.0;
+
   /// The title and the `actionItems` group side by side.
   ///
-  /// `showAsAction="always"` still yields to a toolbar with no room: the
-  /// ActionBar drops whatever does not fit into the overflow, which is what
-  /// the width test below reproduces.
+  /// `showAsAction="always"` still yields to a toolbar with no room — but what
+  /// the ActionBar does then is *move* the item into the overflow menu, not
+  /// remove it (`audit5.toolbar-action-items-are-dropped-rather#1`). So the
+  /// width test below decides where each of the two always-items is drawn, and
+  /// never whether it exists: 'Create habit', 'Hide archived', 'Hide
+  /// completed', 'Sort' and 'Search' are reachable at any toolbar width.
   Widget _buildToolbar(L10n l10n) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double iconWidth = 48.0;
         final available = constraints.maxWidth;
         final items = _buildActionItems(
           l10n,
-          showCreate: available >= 3 * iconWidth,
-          showFilter: available >= 2 * iconWidth,
+          // Room for the icon itself plus everything to its right: the filter
+          // icon and the overflow button.
+          showCreate: available >= 3 * _iconWidth,
+          showFilter: available >= 2 * _iconWidth,
         );
         return Row(
           children: <Widget>[
@@ -342,9 +350,27 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
         ),
       ),
       // Everything with `showAsAction="never"`, in orderInCategory order:
-      // Dark theme (50), then Settings, Help & FAQ and About (100 each).
+      // Dark theme (50), then Settings, Help & FAQ and About (100 each) —
+      // preceded by whichever of the two always-items the bar had no room
+      // for. An ActionBar moves such an item here rather than dropping it,
+      // and it keeps its place in menu order, which puts it above the
+      // never-items (`audit5.toolbar-action-items-are-dropped-rather#1`).
       MenuAnchor(
         menuChildren: <Widget>[
+          if (!showCreate)
+            MenuItemButton(
+              key: ListHabitsMenuItems.keyOf(ListHabitsMenuItems.createHabit),
+              leadingIcon: const Icon(Icons.add),
+              onPressed: () => _select(ListHabitsMenuItems.createHabit),
+              child: Text(l10n.addHabit),
+            ),
+          if (!showFilter)
+            SubmenuButton(
+              key: ListHabitsMenuItems.keyOf(ListHabitsMenuItems.filter),
+              leadingIcon: const Icon(Icons.filter_alt_outlined),
+              menuChildren: _buildFilterMenu(l10n),
+              child: Text(l10n.filter),
+            ),
           _checkableItem(
             id: ListHabitsMenuItems.toggleNightMode,
             label: l10n.nightMode,

@@ -231,7 +231,36 @@ class MemoryHabitList extends HabitList {
   @override
   void resort() {
     final comparator = _comparator;
-    if (comparator != null) _list.sort(comparator);
+    if (comparator != null) _stableSort(comparator);
     observable.notifyListeners();
+  }
+
+  /// `list.sortWith(comparator)`.
+  ///
+  /// Kotlin's `MutableList.sortWith` delegates to `java.util.List.sort`, which
+  /// is TimSort and is *contractually stable*: when the composed comparator
+  /// (primary order, then secondary order) returns 0 for two habits, their
+  /// previous relative order in the backing list is preserved. Dart's
+  /// `List<E>.sort` is an introsort — insertion sort up to 32 elements, then
+  /// dual-pivot quicksort — and guarantees stability at neither size, so a
+  /// list of more than 32 habits that tie on both comparators comes back in a
+  /// different order on every call. Because `resort()` runs on every `add`,
+  /// every `update`, every `CreateRepetitionCommand` and every filter or order
+  /// change, that difference is visible as habits swapping places between
+  /// refreshes (`audit5.habit-list-re-sort-is-unstable#1`).
+  ///
+  /// Stability is restored by making the current index the last tie-break,
+  /// which is what a stable sort is defined to do.
+  void _stableSort(Comparator<Habit> comparator) {
+    final indexed = <MapEntry<int, Habit>>[
+      for (var i = 0; i < _list.length; i++) MapEntry<int, Habit>(i, _list[i]),
+    ];
+    indexed.sort((a, b) {
+      final result = comparator(a.value, b.value);
+      return result != 0 ? result : a.key.compareTo(b.key);
+    });
+    for (var i = 0; i < indexed.length; i++) {
+      _list[i] = indexed[i].value;
+    }
   }
 }

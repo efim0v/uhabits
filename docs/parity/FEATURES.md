@@ -7003,7 +7003,7 @@ green while reminders did not work at all.
 
 #### audit5.android-reminders-never-fire-flutter-local
 
-- [ ] `audit5.android-reminders-never-fire-flutter-local` — Android reminders never fire: flutter_local_notifications' ScheduledNotificationReceiver is not declared in the manifest
+- [x] `audit5.android-reminders-never-fire-flutter-local` — Android reminders never fire: flutter_local_notifications' ScheduledNotificationReceiver is not declared in the manifest
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/AndroidManifest.xml (<receiver .receivers.ReminderReceiver>) + uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentScheduler.kt / PendingIntentFactory.showReminder`
 - **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (application block, next to the ScheduledNotificationBootReceiver declared at line 145); the caller is uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart:390 (FlutterAlarmScheduler.scheduleExact -> plugin.zonedSchedule)`
@@ -7013,7 +7013,7 @@ green while reminders did not work at all.
 
 #### audit5.reminder-yes-no-buttons-are-dead
 
-- [ ] `audit5.reminder-yes-no-buttons-are-dead` — Reminder 'Yes'/'No' buttons are dead even with the app running: ActionBroadcastReceiver is not declared
+- [x] `audit5.reminder-yes-no-buttons-are-dead` — Reminder 'Yes'/'No' buttons are dead even with the app running: ActionBroadcastReceiver is not declared
 - **Platform:** ui · **Port risk:** high
 - **Source:** `uhabits-android/src/main/AndroidManifest.xml (<receiver .receivers.WidgetReceiver>) + uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt (addAction with PendingIntentFactory.addCheckmark / removeRepetition)`
 - **Where the port should do it:** `uhabits-flutter/app/android/app/src/main/AndroidManifest.xml (application block); the actions are built in uhabits-flutter/app/lib/platform/flutter_notification_tray.dart:876 (AndroidNotificationAction with showsUserInterface: false for ReminderActions.addRepetition / removeRepetition)`
@@ -7063,7 +7063,7 @@ green while reminders did not work at all.
 
 #### audit5.the-habit-list-command-toast-listener
 
-- [ ] `audit5.the-habit-list-command-toast-listener` — The habit-list command-toast listener stays subscribed while another screen is on top, so the detail screen shows duplicate/spurious toasts
+- [x] `audit5.the-habit-list-command-toast-listener` — The habit-list command-toast listener stays subscribed while another screen is on top, so the detail screen shows duplicate/spurious toasts
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt — `onAttached()` / `onDetached()` / `onCommandFinished(command)` / `getExecuteString(command)`, called from `ListHabitsActivity.onResume` / `onPause` (uhabits-android/.../habits/list/ListHabitsActivity.kt)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart lines 250-257 (`_toasts = ListHabitsCommandToasts(...)..onAttached()` in `initState`) and line 340 (`_toasts.onDetached()` in `dispose`); the listener class is /Users/artemefimov/Desktop/uhabits/uhabits-`
@@ -7073,7 +7073,7 @@ green while reminders did not work at all.
 
 #### audit5.the-habit-detail-screen-never-refreshes
 
-- [ ] `audit5.the-habit-detail-screen-never-refreshes` — The habit detail screen never refreshes when the app returns to the foreground, and never dismisses its open popup when it leaves
+- [x] `audit5.the-habit-detail-screen-never-refreshes` — The habit detail screen never refreshes when the app returns to the foreground, and never dismisses its open popup when it leaves
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitActivity.kt — `onResume()` (`commandRunner.addListener(this)`, the `findFragmentByTag("historyEditor")` re-attach, `screen.refresh()`) and `onPause()` (`dismissCurrentDialog()`, `commandRunner.removeListener(this)`)`
 - **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart lines 259-276 (`_ShowHabitViewState.initState` calls `_model.attach()`, `dispose` calls `_dismissCurrentDialog()` + `_model.dispose()`); the model's `attach()` / `detach()` are /Users/artemefimov/Desktop`
@@ -7083,7 +7083,7 @@ green while reminders did not work at all.
 
 #### audit5.toolbar-action-items-are-dropped-rather
 
-- [ ] `audit5.toolbar-action-items-are-dropped-rather` — Toolbar action items are dropped rather than moved into the overflow when the toolbar is narrow
+- [x] `audit5.toolbar-action-items-are-dropped-rather` — Toolbar action items are dropped rather than moved into the overflow when the toolbar is narrow
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-android/src/main/res/menu/list_habits.xml (actionCreateHabit and action_filter, both app:showAsAction="always") + activities/habits/list/ListHabitsMenu.kt`
 - **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_habits_menu.dart:261-370 (_buildToolbar's showCreate/showFilter width test and _buildActionItems)`
@@ -7093,7 +7093,7 @@ green while reminders did not work at all.
 
 #### audit5.habit-list-re-sort-is-unstable
 
-- [ ] `audit5.habit-list-re-sort-is-unstable` — Habit list re-sort is unstable in Dart where Kotlin's sortWith is stable, so habits that tie on both comparators can swap places between refreshes
+- [x] `audit5.habit-list-re-sort-is-unstable` — Habit list re-sort is unstable in Dart where Kotlin's sortWith is stable, so habits that tie on both comparators can swap places between refreshes
 - **Platform:** ui · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/memory/MemoryHabitList.kt — MemoryHabitList.resort(): `if (comparator != null) list.sortWith(comparator!!)``
 - **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/models/memory/memory_habit_list.dart:232-236 — MemoryHabitList.resort(): `if (comparator != null) _list.sort(comparator);``

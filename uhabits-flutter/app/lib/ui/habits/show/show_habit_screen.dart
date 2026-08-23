@@ -35,6 +35,9 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 // `src` path.
 // ignore_for_file: implementation_imports
 import 'package:uhabits_core/src/io/files.dart' show UserFile;
+// The core package does not re-export lib/src/time/date_utils.dart; it is where
+// `computeToday` lives.
+import 'package:uhabits_core/src/time/date_utils.dart' as core;
 import 'package:uhabits_core/src/ui/intent_parser.dart' show parseContentUriId;
 import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dart'
     show CheckMarkDialogCallback, NumberPickerCallback;
@@ -237,6 +240,7 @@ class _ShowHabitView extends StatefulWidget {
 }
 
 class _ShowHabitViewState extends State<_ShowHabitView>
+    with WidgetsBindingObserver
     implements ShowHabitScreenDelegate {
   late final ShowHabitModel _model;
 
@@ -267,10 +271,51 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     _model.reattachHistoryEditor = _reattachHistoryEditor;
     // `onResume`.
     _model.attach();
+    // Upstream this screen *is* an activity, so the system runs `onPause` when
+    // the app leaves the foreground and `onResume` when it comes back. A
+    // Flutter app has one activity for the whole process: this widget stays
+    // mounted across a background/foreground round trip, and `attach()` /
+    // `detach()` above are driven only by the mount and the unmount. The
+    // observer is what gives the two callbacks their other half
+    // (`audit5.the-habit-detail-screen-never-refreshes#1`).
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// `ShowHabitActivity.onResume` / `onPause` for the transitions that are not
+  /// a mount.
+  ///
+  /// `onResume` is `commandRunner.addListener(this)`, the
+  /// `findFragmentByTag("historyEditor")` re-attach and `screen.refresh()`,
+  /// which re-runs `ShowHabitPresenter.buildState(...)` against a freshly read
+  /// `getToday()` — all three are [ShowHabitModel.attach]. `onPause` is
+  /// `dismissCurrentDialog()` followed by `removeListener(this)`
+  /// (`show-habit.screen-scaffold#4`, `#6`, `#7`).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      // `onPause`: an open number or check-mark popup is gone when the user
+      // comes back.
+      _dismissCurrentDialog();
+      _model.detach();
+      return;
+    }
+    // `DateUtils.getToday()` is a clock read on every call upstream, so the
+    // refresh below sees the real day even when the process spent it in the
+    // background. The port stamps the day into a process-global instead, and
+    // its only writer — the midnight timer — was paused for exactly that
+    // interval and, on resume, schedules the *next* boundary rather than
+    // firing for one already crossed. Re-stamping here is what makes the
+    // refresh recompute today rather than yesterday, and it is the same
+    // statement `ListHabitsActivity.onResume` runs.
+    core.setToday(
+      core.computeToday(widget.scope.preferences.midnightDelayHours, 0),
+    );
+    _model.attach();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // `onPause`: dismiss whatever dialog is open, then unregister
     // (`show-habit.screen-scaffold#6`).
     _dismissCurrentDialog();

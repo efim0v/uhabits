@@ -115,6 +115,12 @@ void main() {
   List<String> plainReceivers() =>
       receivers.where((String r) => !widgetProviders().contains(r)).toList();
 
+  /// The `<receiver>` declared as [className].
+  String receiverNamed(String className) => plainReceivers().firstWhere(
+        (String r) => xmlAttributes(r)['android:name'] == className,
+        orElse: () => throw StateError('no <receiver> named $className'),
+      );
+
   // =======================================================================
   // platform-glue.manifest-components
   // =======================================================================
@@ -338,8 +344,8 @@ void main() {
           reason: '$rule Only the system may bind a RemoteViewsService.');
     });
 
-    test('#9 one non-widget receiver, exported, with a boot filter — and no '
-        'android:permission="false" anywhere', () {
+    test('#9 three non-widget receivers, one exported with a boot filter — and '
+        'no android:permission="false" anywhere', () {
       final List<String> plain = plainReceivers();
       const String rule = 'platform-glue.manifest-components#9 — Three '
           'non-widget receivers are declared: .receivers.ReminderReceiver '
@@ -353,19 +359,62 @@ void main() {
           'into the one activity (intents.widget-receiver-dispatch#12) and the '
           'Tasker receiver was dropped with the rest of the plugin.';
 
-      expect(plain, hasLength(1), reason: rule);
-      final Map<String, String> boot = xmlAttributes(plain.single);
+      // This count used to read `hasLength(1)`, on the claim that upstream's
+      // ReminderReceiver had exactly one counterpart here — the plugin's boot
+      // receiver. That was wrong, and it was the assertion that locked in the
+      // two worst defects in the port: with only the boot receiver declared,
+      // no reminder was ever delivered
+      // (`audit5.android-reminders-never-fire-flutter-local#1`) and the Yes/No
+      // buttons were dead (`audit5.reminder-yes-no-buttons-are-dead#1`). What
+      // upstream did in one manifest-declared component per job, this port
+      // needs three plugin components for, because since version 16
+      // flutter_local_notifications declares none of them itself. The three
+      // are owned by test/platform/notification_receivers_test.dart; the count
+      // is here so that adding a fourth non-widget receiver has to be
+      // deliberate.
       expect(
-        boot['android:name'],
-        'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
-        reason: '$rule The reschedule-after-reboot pass is the plugin\'s here, '
-            'because an alarm in this port *is* the finished notification.',
+        plain.map((String r) => xmlAttributes(r)['android:name']).toList(),
+        <String>[
+          'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+          'com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver',
+          'com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver',
+        ],
+        reason: '$rule ReminderReceiver splits in two here — the plugin\'s '
+            'ScheduledNotificationReceiver delivers the alarm, its '
+            'ScheduledNotificationBootReceiver re-arms them after a reboot — '
+            'and WidgetReceiver\'s role as the target of the notification '
+            'action buttons is the plugin\'s ActionBroadcastReceiver, which is '
+            'the one piece of it that could not become a deep link because a '
+            'notification action must not open the app.',
       );
+
+      final Map<String, String> boot = xmlAttributes(receiverNamed(
+        'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+      ));
       expect(boot['android:exported'], 'true',
           reason: '$rule A receiver the system broadcasts to must be '
               'exported.');
-      expect(actionsOf(plain.single),
-          contains('android.intent.action.BOOT_COMPLETED'), reason: rule);
+      expect(
+        actionsOf(receiverNamed(
+          'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+        )),
+        contains('android.intent.action.BOOT_COMPLETED'),
+        reason: rule,
+      );
+
+      // The other two are addressed by component name — by AlarmManager and by
+      // the notification action's own PendingIntent — so they are not
+      // exported and declare no filter.
+      for (final String name in <String>[
+        'com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver',
+        'com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver',
+      ]) {
+        expect(xmlAttributes(receiverNamed(name))['android:exported'], 'false',
+            reason: '$rule Nothing outside the app addresses $name.');
+        expect(xmlBlocks(receiverNamed(name), 'intent-filter'), isEmpty,
+            reason: '$rule $name is reached by component name, not by a '
+                'filter.');
+      }
 
       expect(body, isNot(contains('FireSettingReceiver')), reason: rule);
       expect(body, isNot(contains('android:permission="false"')),
@@ -422,7 +471,10 @@ void main() {
 
   group('intents.actions-and-extras', () {
     test('#15 the boot receiver is exported and answers BOOT_COMPLETED', () {
-      final String boot = plainReceivers().single;
+      // Was `plainReceivers().single` — see #9 for why there are three.
+      final String boot = receiverNamed(
+        'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+      );
       const String rule = 'intents.actions-and-extras#15 — The manifest '
           'exports ReminderReceiver with an intent-filter for '
           'android.intent.action.BOOT_COMPLETED only. The port\'s boot '
@@ -515,10 +567,18 @@ void main() {
       expect(
         plainReceivers()
             .where((String r) => xmlAttributes(r)['android:exported'] == 'true')
-            .length,
-        1,
+            .map((String r) => xmlAttributes(r)['android:name'])
+            .toList(),
+        <String>[
+          'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+        ],
         reason: '$rule The boot receiver is the only exported non-widget '
-            'receiver left.',
+            'receiver: ActionBroadcastReceiver — which is what actually took '
+            'over WidgetReceiver\'s ACTION_ADD_REPETITION and '
+            'ACTION_REMOVE_REPETITION for the two notification buttons '
+            '(audit5.reminder-yes-no-buttons-are-dead#1) — is exported="false", '
+            'so no other app can drive it the way '
+            'android:permission="false" once allowed.',
       );
       // What answers those four actions now.
       expect(WidgetIntentReceiver.tag, 'WidgetReceiver',

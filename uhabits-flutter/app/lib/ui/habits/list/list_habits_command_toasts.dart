@@ -93,11 +93,29 @@ class ListHabitsCommandToasts implements CommandRunnerListener {
   /// `activity.showMessage(msg)`.
   final void Function(String message) showMessage;
 
+  /// Whether this listener is currently registered.
+  ///
+  /// `CommandRunner.addListener` appends without a duplicate check, so a
+  /// second `onAttached()` would make every toast appear twice. Android cannot
+  /// reach that state — `onResume` always follows an `onPause` — but a Flutter
+  /// screen hears about a resume from two sources at once (the app lifecycle
+  /// and the route it sits on), so the guard is what keeps the pair balanced
+  /// (`audit5.the-habit-list-command-toast-listener#1`).
+  bool _attached = false;
+
   /// `ListHabitsActivity.onResume`.
-  void onAttached() => commandRunner.addListener(this);
+  void onAttached() {
+    if (_attached) return;
+    _attached = true;
+    commandRunner.addListener(this);
+  }
 
   /// `ListHabitsActivity.onPause`.
-  void onDetached() => commandRunner.removeListener(this);
+  void onDetached() {
+    if (!_attached) return;
+    _attached = false;
+    commandRunner.removeListener(this);
+  }
 
   @override
   void onCommandFinished(Command command) {

@@ -599,4 +599,158 @@ void main() {
           reason: 'list-habits.search#12');
     });
   });
+
+  // =======================================================================
+  // audit5.toolbar-action-items-are-dropped-rather
+  //
+  // `showAsAction="always"` keeps 'Add habit' and 'Filter' on the action bar
+  // at any width, and an item the ActionBar genuinely cannot fit is *moved
+  // into the overflow menu*, never removed. Every one of 'Create habit',
+  // 'Hide archived', 'Hide completed', 'Sort' and 'Search' is therefore
+  // always reachable.
+  // =======================================================================
+
+  group('audit5.toolbar-action-items-are-dropped-rather', () {
+    /// The toolbar on its own, inside a box of exactly [width] logical pixels,
+    /// so the width test inside `_buildToolbar` is driven directly rather than
+    /// through the whole screen's layout.
+    Future<void> pumpMenu(
+      WidgetTester tester,
+      AppScope scope,
+      double width,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Provider<AppScope>.value(
+            value: scope,
+            child: ChangeNotifierProvider<HabitListModel>(
+              create: (context) => HabitListModel(context.read<AppScope>()),
+              child: Builder(
+                builder: (context) => Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: width,
+                    height: 400,
+                    child: Scaffold(
+                      appBar: ListHabitsMenu(
+                        model: context.read<HabitListModel>(),
+                        title: 'Loop Habit Tracker',
+                        backgroundColor: Colors.blue,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('#1 a toolbar with no room for the Add habit icon moves it '
+        'into the overflow instead of dropping it', (tester) async {
+      final scope = openScope();
+      await pumpMenu(tester, scope, 160);
+
+      // The bar has no room for it…
+      expect(itemFinder(ListHabitsMenuItems.createHabit), findsNothing,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — the '
+              'toolbar is too narrow to fit the icon');
+
+      // …so it is in the overflow, which is where an ActionBar moves an item
+      // it cannot fit. It is never removed.
+      await openOverflowMenu(tester);
+      expect(itemFinder(ListHabitsMenuItems.createHabit), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — an item '
+              'the ActionBar cannot fit is moved into the overflow menu, '
+              "never removed, so 'Create habit' is always reachable");
+      expect(
+        tester.widget(itemFinder(ListHabitsMenuItems.createHabit)),
+        isA<MenuItemButton>(),
+        reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — as a '
+            'menu entry, not as the bar icon',
+      );
+      // …and it is the real menu item: selecting it runs onCreateHabit.
+      final requests = <void>[];
+      modelOf(tester).onShowSelectHabitTypeDialog = () => requests.add(null);
+      await tester.tap(itemFinder(ListHabitsMenuItems.createHabit));
+      await tester.pumpAndSettle();
+      expect(requests, hasLength(1),
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — the '
+              'moved item still dispatches to the presenter');
+    });
+
+    testWidgets('#1 a toolbar with no room for the Filter icon keeps Hide '
+        'archived, Hide completed, Sort and Search reachable', (tester) async {
+      final scope = openScope();
+      await pumpMenu(tester, scope, 100);
+
+      expect(itemFinder(ListHabitsMenuItems.filter), findsNothing,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — the bar '
+              'has no room for the Filter icon either');
+
+      await openOverflowMenu(tester);
+      expect(itemFinder(ListHabitsMenuItems.filter), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — the '
+              'Filter item moves into the overflow menu, submenu and all');
+      await tester.tap(itemFinder(ListHabitsMenuItems.filter));
+      await tester.pumpAndSettle();
+
+      for (final id in <String>[
+        ListHabitsMenuItems.hideArchived,
+        ListHabitsMenuItems.hideCompleted,
+        ListHabitsMenuItems.sort,
+        ListHabitsMenuItems.search,
+      ]) {
+        expect(itemFinder(id), findsOneWidget,
+            reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — $id '
+                'is always reachable');
+      }
+
+      // The submenu still works from there: 'Sort' opens the five orders…
+      await tester.tap(itemFinder(ListHabitsMenuItems.sort));
+      await tester.pumpAndSettle();
+      expect(itemFinder(ListHabitsMenuItems.sortName), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1');
+      await tester.tap(itemFinder(ListHabitsMenuItems.sortName));
+      await tester.pumpAndSettle();
+      expect(scope.preferences.defaultPrimaryOrder, HabitListOrder.byNameAsc,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — a moved '
+              'item dispatches exactly as it does from the action bar');
+    });
+
+    testWidgets('#1 a wide toolbar still shows both icons and leaves the '
+        'overflow to the four never-items', (tester) async {
+      final scope = openScope();
+      await pumpMenu(tester, scope, 400);
+
+      expect(itemFinder(ListHabitsMenuItems.createHabit), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1');
+      expect(itemFinder(ListHabitsMenuItems.filter), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1');
+
+      await openOverflowMenu(tester);
+      expect(itemFinder(ListHabitsMenuItems.createHabit), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — with '
+              'room on the bar the item is not duplicated into the overflow');
+      expect(
+        tester.widget(itemFinder(ListHabitsMenuItems.createHabit)),
+        isA<IconButton>(),
+        reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — the one '
+            'left is the bar icon',
+      );
+      expect(itemFinder(ListHabitsMenuItems.filter), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1');
+      expect(
+        tester.widget(itemFinder(ListHabitsMenuItems.filter)),
+        isA<IconButton>(),
+        reason: 'audit5.toolbar-action-items-are-dropped-rather#1');
+      expect(itemFinder(ListHabitsMenuItems.settings), findsOneWidget,
+          reason: 'audit5.toolbar-action-items-are-dropped-rather#1 — the '
+              'four showAsAction="never" items are unaffected');
+    });
+  });
 }

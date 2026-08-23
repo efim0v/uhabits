@@ -17,6 +17,7 @@ import 'state/theme_model.dart';
 import 'state/widget_link.dart';
 import 'state/widget_sync.dart';
 import 'ui/common/dialogs/snooze_picker_dialog.dart';
+import 'ui/common/screen_route_observer.dart';
 import 'ui/common/window_insets.dart';
 import 'ui/habits/list/habit_list_screen.dart';
 import 'ui/habits/show/show_habit_screen.dart';
@@ -46,6 +47,7 @@ class UhabitsApp extends StatelessWidget {
         onGenerateTitle: (context) => L10n.of(context).appName,
         localizationsDelegates: L10n.localizationsDelegates,
         supportedLocales: L10n.supportedLocales,
+        navigatorObservers: <NavigatorObserver>[screenRouteObserver],
         home: const _BootstrapScreen(),
       );
     }
@@ -373,6 +375,10 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
       navigatorKey: _navigatorKey,
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: L10n.supportedLocales,
+      // Android runs `onPause` on the activity a new activity covers, and
+      // `onResume` when it is finished. This is where a screen hears about
+      // that — see lib/ui/common/screen_route_observer.dart.
+      navigatorObservers: <NavigatorObserver>[screenRouteObserver],
       theme: appThemeData(theme),
       // `getFirstWeekdayNumberAccordingToLocale()`, which on Android is
       // `GregorianCalendar(Locale.getDefault()).firstDayOfWeek`. It has to be
