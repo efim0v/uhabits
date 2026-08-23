@@ -134,12 +134,37 @@ void main() {
   // `finish()` of `edit-habit.save#11` has somewhere to pop back to.
   // -----------------------------------------------------------------------
 
+  /// [dark] stands for `AndroidThemeSwitcher` having applied a night theme,
+  /// and [use24HourFormat] for the Android system setting
+  /// `DateFormat.is24HourFormat` — which is what `MediaQuery.alwaysUse24Hour
+  /// Format` carries in Flutter (`edit-habit.reminder-time#4`, `#8`).
   Future<void> pumpEditor(
     WidgetTester tester,
     AppScope scope, {
     int? habitId,
     HabitType habitType = HabitType.yesNo,
+    bool dark = false,
+    bool? use24HourFormat,
   }) async {
+    final Widget host = Provider<AppScope>.value(
+      value: scope,
+      child: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(context).push(
+                EditHabitScreen.route(
+                  scope: scope,
+                  habitId: habitId,
+                  habitType: habitType,
+                ),
+              ),
+              child: const Text('host'),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpWidget(
       MaterialApp(
         // A fresh key per call: a test that opens the editor twice must get a
@@ -147,25 +172,17 @@ void main() {
         key: ValueKey<int>(nextTree++),
         localizationsDelegates: L10n.localizationsDelegates,
         supportedLocales: L10n.supportedLocales,
-        home: Provider<AppScope>.value(
-          value: scope,
-          child: Builder(
-            builder: (context) => Scaffold(
-              body: Center(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).push(
-                    EditHabitScreen.route(
-                      scope: scope,
-                      habitId: habitId,
-                      habitType: habitType,
-                    ),
-                  ),
-                  child: const Text('host'),
+        theme: dark ? ThemeData.dark() : ThemeData.light(),
+        // `builder` sits *above* the navigator, so the pushed editor route —
+        // and the dialogs it opens — see the overridden MediaQuery too.
+        builder: use24HourFormat == null
+            ? null
+            : (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(alwaysUse24HourFormat: use24HourFormat),
+                  child: child!,
                 ),
-              ),
-            ),
-          ),
-        ),
+        home: host,
       ),
     );
     await tester.tap(find.text('host'));
@@ -1396,6 +1413,66 @@ void main() {
               'WeekdayList.EVERY_DAY');
     });
 
+    testWidgets(
+        '#10 the three reminder fields survive a configuration change',
+        (tester) async {
+      // `onSaveInstanceState` persists "reminderHour", "reminderMin" and
+      // "reminderDays" so that a rotation does not lose an unsaved reminder.
+      // Flutter never destroys the route on a metrics change, so what stands
+      // in for the rotation here is the resize itself: the same three fields
+      // must still be there, and still be on screen, afterwards.
+      await tester.binding.setSurfaceSize(const Size(400, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        use24HourFormat: true,
+      );
+      modelOf(tester)
+        ..setReminderTime(21, 45)
+        ..setReminderDays(WeekdayList(3));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('21:45'),
+        ),
+        findsOneWidget,
+        reason: 'reminders.edit-ui#10: instance state persists "reminderHour" '
+            '(Int), "reminderMin" (Int) and "reminderDays" (Int, the packed '
+            'WeekdayList) across rotation',
+      );
+
+      // Landscape.
+      await tester.binding.setSurfaceSize(const Size(900, 400));
+      await tester.pumpAndSettle();
+
+      final model = modelOf(tester);
+      expect(
+        <Object?>[model.reminderHour, model.reminderMin, model.reminderDays],
+        <Object?>[21, 45, WeekdayList(3)],
+        reason: 'reminders.edit-ui#10: instance state persists "reminderHour" '
+            '(Int), "reminderMin" (Int) and "reminderDays" (Int, the packed '
+            'WeekdayList) across rotation',
+      );
+      expect(model.reminderDays.toInteger(), 3,
+          reason: 'reminders.edit-ui#10: reminderDays travels as the packed '
+              'integer');
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('21:45'),
+        ),
+        findsOneWidget,
+        reason: 'reminders.edit-ui#10: and the rebuilt screen shows them again',
+      );
+      expect(find.byKey(EditHabitScreen.reminderDaysPickerKey), findsOneWidget,
+          reason: 'reminders.edit-ui#10: including the weekday row, which only '
+              'exists while a reminder is set');
+    });
+
     test('#8 an empty weekday selection is silently replaced by every day',
         () {
       final model = createModel(openScope())
@@ -1685,4 +1762,788 @@ void main() {
           reason: 'intents.actions-and-extras#14');
     });
   });
+
+  // =======================================================================
+  // Rules that only became assertable once the whole screen existed.
+  // =======================================================================
+
+  group('edit-habit.form-layout, revisited', () {
+    test('#5 Name and Question are two independent fields', () {
+      final scope = openScope();
+      final model = createModel(scope)
+        ..nameController.text = 'Meditate'
+        ..questionController.text = 'Did you meditate today?';
+      expect(model.save(), isTrue);
+
+      final saved = scope.habitList.getByPosition(0);
+      expect(saved.name, 'Meditate',
+          reason: 'edit-habit.form-layout#5 — Habit.name is stored on its own');
+      expect(saved.question, 'Did you meditate today?',
+          reason: 'edit-habit.form-layout#5 — Habit.question is stored on its '
+              'own, and neither field is derived from the other');
+
+      // Editing one leaves the other alone, in both directions.
+      final second = createModel(scope, habitId: saved.id)
+        ..questionController.text = 'Did you sit today?';
+      expect(second.save(), isTrue);
+      final again = scope.habitList.getById(saved.id!)!;
+      expect(again.name, 'Meditate', reason: 'edit-habit.form-layout#5');
+      expect(again.question, 'Did you sit today?',
+          reason: 'edit-habit.form-layout#5');
+    });
+
+    testWidgets('#9 Target Type is a dropdown, not a text field',
+        (tester) async {
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        habitType: HabitType.numerical,
+      );
+
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.targetTypeBoxKey),
+          matching: find.text('Target Type'),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.form-layout#9 — the box is labelled "Target Type"',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.targetTypeBoxKey),
+          matching: find.byType(TextField),
+        ),
+        findsNothing,
+        reason: 'edit-habit.form-layout#9 — it is a TextView, so there is no '
+            'free text to type into',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.targetTypePickerKey),
+          matching: find.byIcon(Icons.arrow_drop_down),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.form-layout#9',
+      );
+    });
+
+    testWidgets('#10 the colour control is an 80dp button tinted with the '
+        'resolved habit colour', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      final habit = addHabit(scope, 'Meditate', color: const PaletteColor(4));
+      await pumpEditor(tester, scope, habitId: habit.id);
+
+      expect(EditHabitMetrics.colorBoxWidth, 80.0,
+          reason: 'edit-habit.form-layout#10 — an 80dp-wide button');
+      final colorColumn = find.byWidgetPredicate(
+        (w) => w is SizedBox && w.width == EditHabitMetrics.colorBoxWidth,
+      );
+      expect(tester.getSize(colorColumn).width, EditHabitMetrics.colorBoxWidth,
+          reason: 'edit-habit.form-layout#10 — the colour column really is '
+              'laid out 80dp wide, whatever the name field beside it takes');
+      expect(find.text('Color'), findsOneWidget,
+          reason: 'edit-habit.form-layout#10 — its label is "Color"');
+      expect(
+        tester
+            .widget<Material>(find.byKey(EditHabitScreen.colorButtonKey))
+            .color,
+        toFlutterColor(LightTheme().color(4)),
+        reason: 'edit-habit.form-layout#10 — the background tint is the '
+            'resolved habit colour',
+      );
+    });
+
+    testWidgets('#11 both frequency controls and the reminder controls are '
+        'dropdown TextViews', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+
+      await pumpEditor(tester, scope);
+      for (final key in <Key>[
+        EditHabitScreen.frequencyPickerKey,
+        EditHabitScreen.reminderTimePickerKey,
+      ]) {
+        expect(
+          find.descendant(of: find.byKey(key), matching: find.byType(TextField)),
+          findsNothing,
+          reason: 'edit-habit.form-layout#11 — no spinner and no free text',
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(key),
+            matching: find.byIcon(Icons.arrow_drop_down),
+          ),
+          findsOneWidget,
+          reason: 'edit-habit.form-layout#11 — @style/FormDropdown draws a '
+              'drop-down arrow',
+        );
+      }
+
+      // The reminder-days control only exists while a reminder is set.
+      modelOf(tester).setReminderTime(8, 0);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderDaysPickerKey),
+          matching: find.byIcon(Icons.arrow_drop_down),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.form-layout#11',
+      );
+
+      await pumpEditor(tester, scope, habitType: HabitType.numerical);
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.numericalFrequencyPickerKey),
+          matching: find.byIcon(Icons.arrow_drop_down),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.form-layout#11 — the numerical frequency control '
+            'too',
+      );
+    });
+  });
+
+  group('edit-habit.type-field-visibility, revisited', () {
+    testWidgets('#3 the visible fields are decided once and never change',
+        (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope, habitType: HabitType.numerical);
+
+      // There is no control for the type on screen at all
+      // (`edit-habit.entry-points#6`), so nothing can flip the visibility.
+      expect(find.byKey(EditHabitScreen.yesNoTypeCardKey), findsNothing,
+          reason: 'edit-habit.type-field-visibility#3');
+      expect(find.byKey(EditHabitScreen.measurableTypeCardKey), findsNothing,
+          reason: 'edit-habit.type-field-visibility#3');
+
+      // Exercise everything the form *can* change and re-check the boxes.
+      await tester.enterText(find.byKey(EditHabitScreen.nameFieldKey), 'Run');
+      await tester.enterText(find.byKey(EditHabitScreen.targetFieldKey), '15');
+      modelOf(tester)
+        ..setColor(const PaletteColor(2))
+        ..setFrequencyDenominator(30)
+        ..setTargetType(NumericalHabitType.atMost)
+        ..setReminderTime(8, 30);
+      await tester.pumpAndSettle();
+
+      expect(modelOf(tester).habitType, HabitType.numerical,
+          reason: 'edit-habit.type-field-visibility#3 — habitType is a '
+              '`late final`: the screen cannot change it');
+      expect(find.byKey(EditHabitScreen.unitBoxKey), findsOneWidget,
+          reason: 'edit-habit.type-field-visibility#3');
+      expect(find.byKey(EditHabitScreen.targetBoxKey), findsOneWidget,
+          reason: 'edit-habit.type-field-visibility#3');
+      expect(find.byKey(EditHabitScreen.targetTypeBoxKey), findsOneWidget,
+          reason: 'edit-habit.type-field-visibility#3');
+      expect(find.byKey(EditHabitScreen.frequencyBoxKey), findsNothing,
+          reason: 'edit-habit.type-field-visibility#3 — the yes/no frequency '
+              'box stays gone for the life of the screen');
+    });
+  });
+
+  group('edit-habit.validation, revisited', () {
+    testWidgets('#3 both inline errors are rendered the same way', (
+      tester,
+    ) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope, habitType: HabitType.numerical);
+
+      await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
+      await tester.pumpAndSettle();
+
+      final errors = tester
+          .widgetList<TextField>(find.byType(TextField))
+          .map((f) => f.decoration?.errorText)
+          .where((t) => t != null)
+          .toList();
+      expect(errors, <String>['Cannot be blank', 'Cannot be blank'],
+          reason: 'edit-habit.validation#3 (deviation) — Kotlin wraps only the '
+              'name error in <font color=#FFFFFF>…</font> and renders it with '
+              'Html.fromHtml, an artifact of the Android error popup. The port '
+              'has no such popup, so both errors carry the same plain string '
+              'and are drawn identically',
+      );
+      // Neither error carries markup of any kind.
+      expect(find.textContaining('<font'), findsNothing,
+          reason: 'edit-habit.validation#3 (deviation)');
+    });
+  });
+
+  group('edit-habit.save, revisited', () {
+    test('#1 edit mode starts from copyFrom(original), which copies every '
+        'field except the id', () {
+      final scope = openScope();
+      final original = addHabit(
+        scope,
+        'Run',
+        color: const PaletteColor(2),
+        type: HabitType.numerical,
+        frequency: Frequency(3, 7),
+        reminder: Reminder(6, 15, WeekdayList(12)),
+        question: 'How far?',
+        description: 'morning loop',
+        unit: 'miles',
+        targetValue: 15.0,
+        targetType: NumericalHabitType.atMost,
+      );
+      original.isArchived = true;
+      scope.habitList.updateOne(original);
+
+      // What `save()` builds before any form value is written: a fresh habit
+      // from the factory with the original copied over it.
+      final copy = scope.modelFactory.buildHabit()..copyFrom(original);
+      expect(copy.color, original.color, reason: 'edit-habit.save#1');
+      expect(copy.description, original.description,
+          reason: 'edit-habit.save#1');
+      expect(copy.frequency, original.frequency, reason: 'edit-habit.save#1');
+      expect(copy.isArchived, original.isArchived, reason: 'edit-habit.save#1');
+      expect(copy.name, original.name, reason: 'edit-habit.save#1');
+      expect(copy.position, original.position, reason: 'edit-habit.save#1');
+      expect(copy.question, original.question, reason: 'edit-habit.save#1');
+      expect(copy.reminder, original.reminder, reason: 'edit-habit.save#1');
+      expect(copy.targetType, original.targetType, reason: 'edit-habit.save#1');
+      expect(copy.targetValue, original.targetValue,
+          reason: 'edit-habit.save#1');
+      expect(copy.type, original.type, reason: 'edit-habit.save#1');
+      expect(copy.unit, original.unit, reason: 'edit-habit.save#1');
+      expect(copy.uuid, original.uuid, reason: 'edit-habit.save#1');
+      expect(copy.id, isNull,
+          reason: 'edit-habit.save#1 — the id is the one field copyFrom does '
+              'NOT take, which is what keeps the command able to tell an edit '
+              'from a create');
+
+      // …and the form values then overwrite the relevant fields.
+      final model = createModel(scope, habitId: original.id)
+        ..nameController.text = 'Run further';
+      expect(model.save(), isTrue, reason: 'edit-habit.save#1');
+      final saved = scope.habitList.getById(original.id!)!;
+      expect(saved.name, 'Run further', reason: 'edit-habit.save#1');
+      expect(saved.isArchived, isTrue,
+          reason: 'edit-habit.save#1 — untouched fields survive the copy');
+    });
+
+    test('#15 the form values are applied in the documented order', () {
+      final scope = openScope();
+      final model = createModel(scope, habitType: HabitType.numerical)
+        ..nameController.text = '  Run  '
+        ..questionController.text = '  How far?  '
+        ..notesController.text = '  morning loop  '
+        ..unitController.text = '  miles  '
+        ..targetController.text = '15'
+        ..setColor(const PaletteColor(4))
+        ..setFrequency(3, 7)
+        ..setTargetType(NumericalHabitType.atMost)
+        ..setReminderTime(6, 15)
+        ..setReminderDays(WeekdayList(12));
+      expect(model.save(), isTrue);
+
+      final saved = scope.habitList.getByPosition(0);
+      expect(saved.name, 'Run', reason: 'edit-habit.save#15 — name trimmed');
+      expect(saved.question, 'How far?',
+          reason: 'edit-habit.save#15 — question trimmed');
+      expect(saved.description, 'morning loop',
+          reason: 'edit-habit.save#15 — description trimmed');
+      expect(saved.color, const PaletteColor(4),
+          reason: 'edit-habit.save#15 — colour from the picker');
+      expect(saved.reminder, Reminder(6, 15, WeekdayList(12)),
+          reason: 'edit-habit.save#15 — reminderHour >= 0 writes a Reminder');
+      expect(saved.frequency, Frequency(3, 7),
+          reason: 'edit-habit.save#15 — Frequency(freqNum, freqDen)');
+      expect(saved.targetValue, 15.0,
+          reason: 'edit-habit.save#15 — numerical habits write the target');
+      expect(saved.targetType, NumericalHabitType.atMost,
+          reason: 'edit-habit.save#15');
+      expect(saved.unit, 'miles',
+          reason: 'edit-habit.save#15 — the unit is trimmed too');
+      expect(saved.type, HabitType.numerical,
+          reason: 'edit-habit.save#15 — habit.type is assigned last');
+
+      // reminderHour < 0 is the other branch of the same statement.
+      final second = createModel(scope)..nameController.text = 'Meditate';
+      expect(second.save(), isTrue);
+      expect(scope.habitList.getByPosition(1).reminder, isNull,
+          reason: 'edit-habit.save#15 — otherwise the reminder is null');
+    });
+
+    testWidgets('#17 the dispatch branches on habitId and the screen closes '
+        'without waiting for the command', (tester) async {
+      // CREATE: habitId < 0.
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope);
+      expect(modelOf(tester).habitId, -1, reason: 'edit-habit.save#17');
+      await tester.enterText(
+        find.byKey(EditHabitScreen.nameFieldKey),
+        'Meditate',
+      );
+      await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
+      await tester.pumpAndSettle();
+      expect(scope.habitList.size(), 1,
+          reason: 'edit-habit.save#17 — CreateHabitCommand(modelFactory, '
+              'habitList, habit)');
+      final created = scope.habitList.getByPosition(0);
+
+      // EDIT: habitId >= 0 runs EditHabitCommand instead, so the list keeps
+      // its size and the same row is rewritten.
+      await pumpEditor(tester, scope, habitId: created.id);
+      expect(modelOf(tester).habitId, created.id, reason: 'edit-habit.save#17');
+      await tester.enterText(
+        find.byKey(EditHabitScreen.nameFieldKey),
+        'Meditate more',
+      );
+      await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
+      await tester.pumpAndSettle();
+      expect(scope.habitList.size(), 1,
+          reason: 'edit-habit.save#17 — EditHabitCommand(habitList, habitId, '
+              'habit)');
+      expect(scope.habitList.getById(created.id!)!.name, 'Meditate more',
+          reason: 'edit-habit.save#17');
+    });
+
+    test('#17 the command is handed to the runner and save() returns without '
+        'waiting for it', () async {
+      // The Android activity calls `finish()` on the next line after
+      // `commandRunner.run(command)`; `save()` is that line's counterpart, so
+      // what it must guarantee is that it returns before the command has run.
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      final model = createModel(scope)..nameController.text = 'Meditate';
+
+      expect(model.save(), isTrue, reason: 'edit-habit.save#17');
+      expect(scope.habitList.isEmpty, isTrue,
+          reason: 'edit-habit.save#17 — the runner has not executed the '
+              'command yet, and the screen is already gone');
+
+      await pumpEventQueue();
+      expect(scope.habitList.size(), 1,
+          reason: 'edit-habit.save#17 — it lands one turn later');
+    });
+
+    testWidgets('#18 the editor itself shows no confirmation', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope);
+      await tester.enterText(
+        find.byKey(EditHabitScreen.nameFieldKey),
+        'Meditate',
+      );
+      await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SnackBar), findsNothing,
+          reason: 'edit-habit.save#18 — the editor is already gone by the time '
+              'the command finishes, so the "Habit created" toast is the list '
+              "screen's to show, not this screen's");
+      expect(find.text('host'), findsOneWidget,
+          reason: 'edit-habit.save#18 — control has returned to the caller');
+    });
+  });
+
+  group('edit-habit.color-control, revisited', () {
+    testWidgets('#4 the toolbar takes the habit colour in the dark theme too',
+        (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      final habit = addHabit(scope, 'Meditate', color: const PaletteColor(4));
+
+      await pumpEditor(tester, scope, habitId: habit.id, dark: true);
+      expect(
+        tester.widget<AppBar>(find.byType(AppBar)).backgroundColor,
+        toFlutterColor(DarkTheme().color(4)),
+        reason: 'edit-habit.color-control#4 (deviation) — updateColors() '
+            'repaints the toolbar and the status bar only when the theme is '
+            'not night mode, because the Android dark themes set '
+            'useHabitColorAsPrimary=false and fall back to ?attr/colorPrimary. '
+            'The ported core Theme carries no colorPrimary, so — exactly as '
+            'ShowHabitScreen already does — the habit colour is used in both '
+            'themes',
+      );
+    });
+
+    test('#6 the LightTheme palette', () {
+      const List<int> rgb = <int>[
+        0xD32F2F, 0xE64A19, 0xF57C00, 0xFF8F00, 0xF9A825,
+        0xAFB42B, 0x7CB342, 0x388E3C, 0x00897B, 0x00ACC1,
+        0x039BE5, 0x1976D2, 0x303F9F, 0x5E35B1, 0x8E24AA,
+        0xD81B60, 0x5D4037, 0x424242, 0x757575, 0x9E9E9E,
+      ];
+      final theme = LightTheme();
+      for (var i = 0; i < rgb.length; i++) {
+        expect(theme.color(i).toInt(), 0xFF000000 | rgb[i],
+            reason: 'edit-habit.color-control#6 — palette index $i');
+      }
+      for (final index in <int>[-1, 20, 99]) {
+        expect(theme.color(index).toInt(), 0xFF000000,
+            reason: 'edit-habit.color-control#6 — any other index is black');
+      }
+    });
+
+    test('#7 the DarkTheme palette', () {
+      const List<int> rgb = <int>[
+        0xEF9A9A, 0xFFAB91, 0xFFCC80, 0xFFECB3, 0xFFF59D,
+        0xE6EE9C, 0xC5E1A5, 0x69F0AE, 0x80CBC4, 0x80DEEA,
+        0x81D4FA, 0x64B5F6, 0x9FA8DA, 0xB39DDB, 0xCE93D8,
+        0xF48FB1, 0xBCAAA4, 0xF5F5F5, 0xE0E0E0, 0x9E9E9E,
+      ];
+      final theme = DarkTheme();
+      for (var i = 0; i < rgb.length; i++) {
+        expect(theme.color(i).toInt(), 0xFF000000 | rgb[i],
+            reason: 'edit-habit.color-control#7 — palette index $i');
+      }
+      for (final index in <int>[-1, 20, 99]) {
+        expect(theme.color(index).toInt(), 0xFFFFFFFF,
+            reason: 'edit-habit.color-control#7 — any other index is white');
+      }
+    });
+  });
+
+  group('edit-habit.numerical-frequency-picker, revisited', () {
+    testWidgets('#4 the list dismisses itself and the label is re-rendered',
+        (tester) async {
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        habitType: HabitType.numerical,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.numericalFrequencyPickerKey),
+          matching: find.text('Every day'),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.frequency-display#4',
+      );
+
+      await tester.tap(find.byKey(EditHabitScreen.numericalFrequencyPickerKey));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SimpleDialog),
+          matching: find.text('Every week'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SimpleDialog), findsNothing,
+          reason: 'edit-habit.numerical-frequency-picker#4 — the click handler '
+              'dismisses the dialog');
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.numericalFrequencyPickerKey),
+          matching: find.text('Every week'),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.numerical-frequency-picker#4 — and the label is '
+            're-rendered',
+      );
+    });
+
+    testWidgets('#6 there is no cancel button, and tapping outside changes '
+        'nothing', (tester) async {
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        habitType: HabitType.numerical,
+      );
+      await tester.tap(find.byKey(EditHabitScreen.numericalFrequencyPickerKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TextButton), findsNothing,
+          reason: 'edit-habit.numerical-frequency-picker#6 — the builder sets '
+              'an adapter and no buttons at all');
+      expect(find.text('Cancel'), findsNothing,
+          reason: 'edit-habit.numerical-frequency-picker#6');
+
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SimpleDialog), findsNothing,
+          reason: 'edit-habit.numerical-frequency-picker#6 — a tap outside '
+              'dismisses it');
+      expect(modelOf(tester).freqDen, 1,
+          reason: 'edit-habit.numerical-frequency-picker#6 — without changing '
+              'the frequency');
+    });
+  });
+
+  group('edit-habit.target-type-picker, revisited', () {
+    testWidgets('#3 the click handler dismisses the dialog', (tester) async {
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        habitType: HabitType.numerical,
+      );
+      await tester.tap(find.byKey(EditHabitScreen.targetTypePickerKey));
+      await tester.pumpAndSettle();
+      expect(find.byType(SimpleDialog), findsOneWidget,
+          reason: 'edit-habit.target-type-picker#3');
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(SimpleDialog),
+          matching: find.text('At most'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SimpleDialog), findsNothing,
+          reason: 'edit-habit.target-type-picker#3 — dialog.dismiss() runs '
+              'inside the click handler, not on a button');
+    });
+
+    testWidgets('#5 the dropdown is unreachable for a yes/no habit',
+        (tester) async {
+      await pumpEditor(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      expect(find.byKey(EditHabitScreen.targetTypeBoxKey), findsNothing,
+          reason: 'edit-habit.target-type-picker#5 — the whole box is GONE');
+      expect(find.byKey(EditHabitScreen.targetTypePickerKey), findsNothing,
+          reason: 'edit-habit.target-type-picker#5');
+      expect(find.text('Target Type'), findsNothing,
+          reason: 'edit-habit.target-type-picker#5');
+    });
+  });
+
+  group('edit-habit.reminder-time, revisited', () {
+    testWidgets('#4 the picker is a 24-hour one exactly when the system says '
+        'so', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+
+      await pumpEditor(tester, scope, use24HourFormat: true);
+      await tester.tap(find.byKey(EditHabitScreen.reminderTimePickerKey));
+      await tester.pumpAndSettle();
+      expect(find.text('AM'), findsNothing,
+          reason: 'edit-habit.reminder-time#4 — DateFormat.is24HourFormat is '
+              'MediaQuery.alwaysUse24HourFormat here, and a 24-hour picker '
+              'hides the AM/PM control');
+      expect(find.text('PM'), findsNothing,
+          reason: 'edit-habit.reminder-time#4');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await pumpEditor(tester, scope, use24HourFormat: false);
+      await tester.tap(find.byKey(EditHabitScreen.reminderTimePickerKey));
+      await tester.pumpAndSettle();
+      expect(find.text('AM'), findsOneWidget,
+          reason: 'edit-habit.reminder-time#4 — and a 12-hour one shows it');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+    });
+
+    test('#5 onTimeSet stores the hour and the minute', () {
+      final model = createModel(openScope());
+      expect(model.hasReminder, isFalse, reason: 'edit-habit.reminder-time#5');
+
+      model.setReminderTime(21, 45);
+      expect(model.reminderHour, 21, reason: 'edit-habit.reminder-time#5');
+      expect(model.reminderMin, 45, reason: 'edit-habit.reminder-time#5');
+      expect(model.hasReminder, isTrue, reason: 'edit-habit.reminder-time#5');
+    });
+
+    testWidgets('#5 #8 the control re-renders the stored time in the system '
+        '12/24h format', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+
+      await pumpEditor(tester, scope, use24HourFormat: false);
+      modelOf(tester).setReminderTime(8, 0);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('8:00 AM'),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.reminder-time#5 — onTimeSet re-renders the '
+            'control; #8 — formatTime uses DateFormat.getTimeFormat(context), '
+            'which follows the 12/24h system preference',
+      );
+
+      await pumpEditor(tester, scope, use24HourFormat: true);
+      modelOf(tester).setReminderTime(8, 0);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('08:00'),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.reminder-time#8 — the same instant renders as '
+            '"08:00" under a 24-hour preference',
+      );
+    });
+
+    test('#9 a saved habit has a complete reminder or none at all', () {
+      final scope = openScope();
+      final withReminder = createModel(scope)
+        ..nameController.text = 'Meditate'
+        ..setReminderTime(8, 30)
+        ..setReminderDays(WeekdayList(12));
+      expect(withReminder.save(), isTrue);
+      final saved = scope.habitList.getByPosition(0).reminder!;
+      expect(saved.hour, 8, reason: 'edit-habit.reminder-time#9');
+      expect(saved.minute, 30, reason: 'edit-habit.reminder-time#9');
+      expect(saved.days, WeekdayList(12), reason: 'edit-habit.reminder-time#9');
+
+      // Clearing the time clears the whole reminder: there is no state in
+      // which only the hour or only the days survive.
+      final cleared = createModel(scope, habitId: scope.habitList
+          .getByPosition(0)
+          .id)
+        ..clearReminder();
+      expect(cleared.save(), isTrue);
+      expect(scope.habitList.getByPosition(0).reminder, isNull,
+          reason: 'edit-habit.reminder-time#9 — no partial state');
+    });
+  });
+
+  group('edit-habit.instance-state', () {
+    testWidgets('#3 the Target Type is NOT reset behind the user\'s back',
+        (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope, habitType: HabitType.numerical);
+
+      modelOf(tester).setTargetType(NumericalHabitType.atMost);
+      await tester.pumpAndSettle();
+
+      // The Android bundle never writes targetType, so a rotation silently
+      // put the control back to AT_LEAST. The port keeps the value in the
+      // model for the life of the route, which the ledger asks for
+      // explicitly: "Reproduce it in the port only if bug-for-bug fidelity is
+      // wanted; otherwise persist it."
+      await tester.binding.setSurfaceSize(const Size(1400, 600));
+      await tester.pumpAndSettle();
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      expect(modelOf(tester).targetType, NumericalHabitType.atMost,
+          reason: 'edit-habit.instance-state#3 (deviation) — the upstream bug '
+              'is deliberately not reproduced');
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.targetTypePickerKey),
+          matching: find.text('At most'),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.instance-state#3 (deviation)',
+      );
+    });
+
+    testWidgets('#4 the five text fields survive the same way', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope, habitType: HabitType.numerical);
+
+      await tester.enterText(find.byKey(EditHabitScreen.nameFieldKey), 'Run');
+      await tester.enterText(
+        find.byKey(EditHabitScreen.questionFieldKey),
+        'How far?',
+      );
+      await tester.enterText(
+        find.byKey(EditHabitScreen.notesFieldKey),
+        'morning loop',
+      );
+      await tester.enterText(find.byKey(EditHabitScreen.unitFieldKey), 'miles');
+      await tester.enterText(find.byKey(EditHabitScreen.targetFieldKey), '15');
+
+      await tester.binding.setSurfaceSize(const Size(1400, 600));
+      await tester.pumpAndSettle();
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final model = modelOf(tester);
+      // Upstream these five are not in the bundle at all; they survive only
+      // because the platform saves EditText view state. Here they are fields
+      // of the model, so they survive by construction.
+      expect(model.nameController.text, 'Run',
+          reason: 'edit-habit.instance-state#4');
+      expect(model.questionController.text, 'How far?',
+          reason: 'edit-habit.instance-state#4');
+      expect(model.notesController.text, 'morning loop',
+          reason: 'edit-habit.instance-state#4');
+      expect(model.unitController.text, 'miles',
+          reason: 'edit-habit.instance-state#4');
+      expect(model.targetController.text, '15',
+          reason: 'edit-habit.instance-state#4');
+    });
+  });
+
+  group('edit-habit.window-insets-and-chrome', () {
+    testWidgets('#1 #2 the Save button and the toolbar', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope);
+
+      final save = tester.widget<OutlinedButton>(
+        find.byKey(EditHabitScreen.saveButtonKey),
+      );
+      expect(save.style?.foregroundColor?.resolve(<WidgetState>{}),
+          Colors.white,
+          reason: 'edit-habit.window-insets-and-chrome#1 — white text');
+      expect(save.style?.side?.resolve(<WidgetState>{})?.color, Colors.white,
+          reason: 'edit-habit.window-insets-and-chrome#1 — white stroke');
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.saveButtonKey),
+          matching: find.text('SAVE'),
+        ),
+        findsOneWidget,
+        reason: 'edit-habit.window-insets-and-chrome#1 — R.string.save, '
+            'rendered upper-case by the Material outlined button style',
+      );
+      // Gravity end with a 16dp end margin.
+      final bar = tester.getRect(find.byType(AppBar));
+      final button = tester.getRect(find.byKey(EditHabitScreen.saveButtonKey));
+      expect(bar.right - button.right, 16.0,
+          reason: 'edit-habit.window-insets-and-chrome#1 — 16dp end margin');
+
+      final appBar = tester.widget<AppBar>(find.byType(AppBar));
+      expect(appBar.elevation, 10.0,
+          reason: 'edit-habit.window-insets-and-chrome#2 — '
+              'supportActionBar.elevation = 10.0f');
+      expect(find.byType(BackButton), findsOneWidget,
+          reason: 'edit-habit.window-insets-and-chrome#2 — '
+              'setDisplayHomeAsUpEnabled');
+    });
+
+    testWidgets('#3 #4 the form scrolls inside the safe area over a contrast0 '
+        'background', (tester) async {
+      final scope = openScope(dispatcher: const AsyncDispatcher());
+      await pumpEditor(tester, scope);
+
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        toFlutterColor(LightTheme().appBackgroundColor),
+        reason: 'edit-habit.window-insets-and-chrome#4 — the root and the '
+            'ScrollView both take ?attr/contrast0',
+      );
+      final scroll = find.descendant(
+        of: find.byType(Scaffold).last,
+        matching: find.byType(SingleChildScrollView),
+      );
+      expect(scroll, findsOneWidget,
+          reason: 'edit-habit.window-insets-and-chrome#4 — the form is inside '
+              'a scroll view filling everything under the AppBar');
+      expect(
+        find.ancestor(of: scroll, matching: find.byType(SafeArea)),
+        findsWidgets,
+        reason: 'edit-habit.window-insets-and-chrome#3 — the bottom inset is '
+            'applied so the last field is not covered by the navigation bar '
+            '(Flutter SafeArea stands in for the manual inset plumbing)',
+      );
+    });
+
+    test('#5 the form and box metrics', () {
+      expect(EditHabitMetrics.formPadding.top, 8.0,
+          reason: 'edit-habit.window-insets-and-chrome#5 — 8dp top padding');
+      expect(EditHabitMetrics.formPadding.left, 4.0,
+          reason: 'edit-habit.window-insets-and-chrome#5 — 4dp side padding');
+      expect(EditHabitMetrics.formPadding.right, 4.0,
+          reason: 'edit-habit.window-insets-and-chrome#5');
+      expect(EditHabitMetrics.outerBoxPadding,
+          const EdgeInsets.fromLTRB(4, 4, 4, 8),
+          reason: 'edit-habit.window-insets-and-chrome#5 — @style/FormOuterBox '
+              'is 4dp top, 8dp bottom, 4dp sides');
+      expect(EditHabitMetrics.innerBoxRadius, 4.0,
+          reason: 'edit-habit.window-insets-and-chrome#5 — a rounded outlined '
+              'background');
+      expect(EditHabitMetrics.innerBoxStrokeWidth, 1.0,
+          reason: 'edit-habit.window-insets-and-chrome#5');
+      expect(EditHabitMetrics.labelOffset, lessThan(0.0),
+          reason: 'edit-habit.window-insets-and-chrome#5 — the floating label '
+              'overlaps the top border (-15dp top margin upstream)');
+    });
+  });
+
 }

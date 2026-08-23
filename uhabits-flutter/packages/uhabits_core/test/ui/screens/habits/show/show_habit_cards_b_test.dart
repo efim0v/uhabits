@@ -1493,4 +1493,123 @@ void main() {
           reason: 'show-habit.widget-refresh#3');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // widgets.score — the Score widget reads the same presenter
+  //
+  // The Score widget's data is not computed on the launcher side: it is this
+  // presenter's output, published through HomeWidgetBridge. The two rules below
+  // are therefore about ScoreCardPresenter.buildState, and this is where they
+  // are checkable. The Android view that plots the result is asserted in
+  // app/test/platform/android_widgets_test.dart.
+  // -------------------------------------------------------------------------
+  group('widgets.score', () {
+    test('#3 buildState honours the spinner position and takes WidgetTheme',
+        () {
+      final habit = scoreFixture();
+      final theme = WidgetTheme();
+
+      for (var position = 0; position <= 4; position++) {
+        final state = ScoreCardPresenter.buildState(
+          habit: habit,
+          firstWeekday: 1,
+          spinnerPosition: position,
+          theme: theme,
+        );
+        expect(state.bucketSize, ScoreCardPresenter.bucketSizes[position],
+            reason: 'widgets.score#3 — refreshData builds state via '
+                'ScoreCardPresenter.buildState(habit, firstWeekday = '
+                'prefs.firstWeekdayInt, spinnerPosition = '
+                'prefs.scoreCardSpinnerPosition, theme = WidgetTheme()) — so '
+                'the widget honours whatever bucket the user last selected on '
+                'the habit detail screen. pref_score_view_interval is not part '
+                'of the published document, so the widget currently gets the '
+                'preference default; every other argument is reproduced, and '
+                'the day the bridge publishes the position this is the call it '
+                'feeds.');
+        expect(identical(state.theme, theme), isTrue,
+            reason: 'widgets.score#3: WidgetTheme is carried through untouched, '
+                'which is what makes the widget draw in the widget palette '
+                'rather than the app one');
+      }
+
+      // Same habit, same day, different bucket: the state really does depend on
+      // the position rather than ignoring it.
+      final byDay = ScoreCardPresenter.buildState(
+        habit: habit,
+        firstWeekday: 1,
+        spinnerPosition: 0,
+        theme: theme,
+      );
+      final byYear = ScoreCardPresenter.buildState(
+        habit: habit,
+        firstWeekday: 1,
+        spinnerPosition: 4,
+        theme: theme,
+      );
+      expect(byDay.scores.length, greaterThan(byYear.scores.length),
+          reason: 'widgets.score#3: a wider bucket produces fewer points');
+    });
+
+    test('#6 the series runs from the oldest known entry to today, averaged '
+        'per bucket, newest first', () {
+      final habit = scoreFixture();
+      final theme = WidgetTheme();
+      final oldest = habit.computedEntries.getKnown().last.date;
+      final daily = habit.scores.getByInterval(oldest, today);
+
+      final byDay = ScoreCardPresenter.buildState(
+        habit: habit,
+        firstWeekday: 1,
+        spinnerPosition: 0,
+        theme: theme,
+      );
+
+      expect(byDay.scores.first.date, today,
+          reason: 'widgets.score#6 — Scores are grouped from the oldest known '
+              'computed entry date up to today, averaged per bucket, sorted by '
+              'date and then reversed (newest first).');
+      expect(byDay.scores.last.date, oldest,
+          reason: 'widgets.score#6: the oldest known computed entry is the far '
+              'end of the window');
+      expect(byDay.scores.length, daily.length,
+          reason: 'widgets.score#6: at bucket size 1 there is one point per day '
+              'in that window');
+
+      // Averaged per bucket: a month bucket is the arithmetic mean of its days.
+      final january = LocalDate.ymd(2015, 1, 1);
+      final byMonth = ScoreCardPresenter.buildState(
+        habit: habit,
+        firstWeekday: 1,
+        spinnerPosition: 2,
+        theme: theme,
+      );
+      expect(
+        byMonth.scores.first.value,
+        closeTo(
+          mean(daily
+              .where((Score s) => !s.date.isOlderThan(january))
+              .map((Score s) => s.value)),
+          1e-12,
+        ),
+        reason: 'widgets.score#6: averaged per bucket',
+      );
+
+      // Sorted by date and then reversed, at every bucket size.
+      for (var position = 0; position <= 4; position++) {
+        final state = ScoreCardPresenter.buildState(
+          habit: habit,
+          firstWeekday: 1,
+          spinnerPosition: position,
+          theme: theme,
+        );
+        for (var i = 1; i < state.scores.length; i++) {
+          expect(state.scores[i - 1].date.isNewerThan(state.scores[i].date),
+              isTrue,
+              reason: 'widgets.score#6: newest first at bucket size '
+                  '${ScoreCardPresenter.bucketSizes[position]}');
+        }
+      }
+    });
+  });
 }

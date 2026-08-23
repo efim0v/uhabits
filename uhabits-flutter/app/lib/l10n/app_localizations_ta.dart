@@ -39,6 +39,9 @@ class L10nTa extends L10n {
   String get toastHabitCreated => 'பழக்கம் உருவாக்கப்பட்டது';
 
   @override
+  String get overview => 'மேற்பார்வை';
+
+  @override
   String get habitStrength => 'பழக்கத்தின் வலிமை';
 
   @override

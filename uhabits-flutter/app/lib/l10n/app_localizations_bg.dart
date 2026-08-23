@@ -39,6 +39,9 @@ class L10nBg extends L10n {
   String get toastHabitCreated => 'Навикът е създаден';
 
   @override
+  String get overview => 'Обобщение';
+
+  @override
   String get habitStrength => 'Сила на навика';
 
   @override

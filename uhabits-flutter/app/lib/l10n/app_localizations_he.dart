@@ -39,6 +39,9 @@ class L10nHe extends L10n {
   String get toastHabitCreated => 'ההרגל נוצר';
 
   @override
+  String get overview => 'מבט על';
+
+  @override
   String get habitStrength => 'חוזק ההרגל';
 
   @override

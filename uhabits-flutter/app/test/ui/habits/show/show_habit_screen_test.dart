@@ -793,6 +793,63 @@ void main() {
       expect(find.byType(ShowHabitScreen), findsNothing);
       expect(find.byType(HabitListScreen), findsOneWidget);
     });
+
+    testWidgets('show-habit.edit-action#4: Back from the refreshed detail '
+        'screen lands on a list that shows the new name', (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Provider<AppScope>.value(
+            value: scope,
+            child: const HabitListScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Meditate'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ShowHabitScreen.editActionKey));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(EditHabitScreen.nameFieldKey),
+        'Meditate longer',
+      );
+      await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
+      await tester.pumpAndSettle();
+
+      // The editor finished; the show screen underneath refreshed on the
+      // finished command (show-habit.edit-action#3).
+      expect(find.byType(EditHabitScreen), findsNothing,
+          reason: 'show-habit.edit-action#4');
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('Meditate longer'),
+        ),
+        findsOneWidget,
+        reason: 'show-habit.edit-action#4 — the refreshed detail screen shows '
+            'the new name',
+      );
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShowHabitScreen), findsNothing,
+          reason: 'show-habit.edit-action#4 — Back returns to the habit list');
+      expect(find.byType(HabitListScreen), findsOneWidget,
+          reason: 'show-habit.edit-action#4');
+      expect(find.text('Meditate longer'), findsOneWidget,
+          reason: 'show-habit.edit-action#4 — which also shows the updated '
+              'name');
+      expect(find.text('Meditate'), findsNothing,
+          reason: 'show-habit.edit-action#4');
+    });
   });
 
   // =======================================================================

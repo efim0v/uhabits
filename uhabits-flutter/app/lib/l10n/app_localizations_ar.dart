@@ -39,6 +39,9 @@ class L10nAr extends L10n {
   String get toastHabitCreated => 'تم إنشاء عادة';
 
   @override
+  String get overview => 'نظرة عامة';
+
+  @override
   String get habitStrength => 'قوة العادة';
 
   @override

@@ -197,7 +197,10 @@ class _ListHeaderState extends State<ListHeader> {
         width: double.infinity,
         child: CoreView(
           view: widget.isCheckmarkSequenceReversed
-              ? MirroredView(header)
+              ? MirroredView(
+                  header,
+                  stripWidth: widget.buttonCount * theme.checkmarkButtonSize,
+                )
               : header,
         ),
       ),
@@ -205,20 +208,34 @@ class _ListHeaderState extends State<ListHeader> {
   }
 }
 
-/// A [core.View] drawn flipped about the vertical centre line of its canvas.
+/// A [core.View] whose date columns are drawn flipped about the vertical
+/// centre line of the *checkmark strip* — the right-aligned band of
+/// [stripWidth] pixels the habit rows fill with their entry buttons.
 ///
-/// `HabitListHeader` always puts today leftmost. Reversing the checkmark
-/// sequence keeps the dates and swaps the positions — `ButtonPanelView` does
-/// exactly that by adding its buttons in reverse order — so the reversed strip
-/// is the mirror image of the normal one, and no second copy of the drawing
-/// code is needed.
+/// `HabitListHeader` always puts today leftmost inside that band.
+/// `HeaderView.Drawer` reverses the order **within the same band**: both
+/// branches start from `canvas.width` and offset left, `(index - buttonCount) *
+/// checkmarkWidth` normally and `-(index + 1) * checkmarkWidth` when reversed
+/// (`settings.preferences.checkmark-reverse-order#7`,
+/// `list-habits.header-dates#3`, `#4`). That is the same thing
+/// `ButtonPanelView` does by adding its buttons in reverse order, which is why
+/// the strip has to stay put: the dates line up with the buttons under it.
+///
+/// Mirroring about the canvas instead of about the band would slide the whole
+/// strip to the left edge of a full-width header, leaving the dates floating
+/// over the habit-name column — so the axis here is `2 * width - stripWidth`,
+/// and no second copy of the drawing code is needed.
 class MirroredView extends core.View {
-  MirroredView(this._inner);
+  MirroredView(this._inner, {required this.stripWidth});
 
   final core.View _inner;
 
+  /// `buttonCount * R.dimen.checkmarkWidth`.
+  final double stripWidth;
+
   @override
-  void draw(core.Canvas canvas) => _inner.draw(_MirrorCanvas(canvas));
+  void draw(core.Canvas canvas) =>
+      _inner.draw(_MirrorCanvas(canvas, stripWidth));
 
   /// Coordinates are forwarded unmirrored: the mirrored views have no
   /// position-dependent hit testing (the header ignores taps entirely).
@@ -229,15 +246,22 @@ class MirroredView extends core.View {
   void onLongClick(double x, double y) => _inner.onLongClick(x, y);
 }
 
-/// Delegates every drawing call to [_target] with x mirrored about the canvas
-/// width. Text alignment is mirrored with it, so a right-aligned label lands
-/// where its mirror image belongs.
+/// Delegates every drawing call to [_target], mirroring the per-column
+/// primitives about the checkmark strip. Text alignment is mirrored with them,
+/// so a right-aligned label lands where its mirror image belongs.
+///
+/// Rectangles and lines are forwarded verbatim: in this view they are the
+/// header background and the hairline along its bottom edge, both of which span
+/// the whole width and must not travel with the strip.
 class _MirrorCanvas extends core.Canvas {
-  _MirrorCanvas(this._target);
+  _MirrorCanvas(this._target, this._stripWidth);
 
   final core.Canvas _target;
 
-  double _mirrorX(double x) => _target.getWidth() - x;
+  final double _stripWidth;
+
+  /// Reflection about the band `[width - stripWidth, width)`.
+  double _mirrorX(double x) => 2 * _target.getWidth() - _stripWidth - x;
 
   @override
   double getWidth() => _target.getWidth();
@@ -268,7 +292,7 @@ class _MirrorCanvas extends core.Canvas {
 
   @override
   void drawLine(double x1, double y1, double x2, double y2) =>
-      _target.drawLine(_mirrorX(x1), y1, _mirrorX(x2), y2);
+      _target.drawLine(x1, y1, x2, y2);
 
   @override
   void drawText(String text, double x, double y) =>
@@ -276,11 +300,11 @@ class _MirrorCanvas extends core.Canvas {
 
   @override
   void fillRect(double x, double y, double width, double height) =>
-      _target.fillRect(_mirrorX(x) - width, y, width, height);
+      _target.fillRect(x, y, width, height);
 
   @override
   void drawRect(double x, double y, double width, double height) =>
-      _target.drawRect(_mirrorX(x) - width, y, width, height);
+      _target.drawRect(x, y, width, height);
 
   @override
   void fillRoundRect(
@@ -290,13 +314,7 @@ class _MirrorCanvas extends core.Canvas {
     double height,
     double cornerRadius,
   ) =>
-      _target.fillRoundRect(
-        _mirrorX(x) - width,
-        y,
-        width,
-        height,
-        cornerRadius,
-      );
+      _target.fillRoundRect(x, y, width, height, cornerRadius);
 
   @override
   void fillCircle(double centerX, double centerY, double radius) =>

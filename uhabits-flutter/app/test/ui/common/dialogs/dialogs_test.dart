@@ -1315,9 +1315,8 @@ void main() {
       );
     });
 
-    testWidgets('#5 the keypad accepts digits and the decimal separator only', (
-      tester,
-    ) async {
+    testWidgets('#5 #16 the keypad accepts digits and the decimal separator '
+        'only', (tester) async {
       await _openNumber(tester, value: 1.0);
 
       await tester.enterText(
@@ -1326,7 +1325,67 @@ void main() {
       );
       await tester.pump();
 
-      expect(_numberValue(tester), '12.5', reason: 'number-dialog.popup#5');
+      expect(_numberValue(tester), '12.5',
+          reason: 'number-dialog.popup#5 and number-dialog.popup#16 — the key '
+              "listener is restricted to 0-9 plus the locale's decimal "
+              'separator. The second clause of number-dialog.popup#16 — '
+              'switching inputType to TYPE_CLASS_TEXT on SwiftKey and Samsung '
+              'keyboards so the separator key appears — is Android '
+              'input-method sniffing with no Flutter counterpart');
+    });
+
+    testWidgets('#1 the dialog takes exactly colour, value and notes', (
+      tester,
+    ) async {
+      // `arguments` upstream: "color" (Int ARGB), "value" (Double, already
+      // divided by 1000) and "notes" (String). All three are required here.
+      final dialog = NumberDialog(
+        value: 12.345,
+        notes: 'a note',
+        color: const core.Color.fromRgb(0xD32F2F),
+        preferences: Preferences(MemoryStorage()),
+      );
+      expect(dialog.value, 12.345, reason: 'number-dialog.popup#1');
+      expect(dialog.notes, 'a note', reason: 'number-dialog.popup#1');
+      expect(dialog.color, const core.Color.fromRgb(0xD32F2F),
+          reason: 'number-dialog.popup#1');
+
+      // And the value really is the entry value divided by 1000: the raw
+      // 12345 opens the field on 12.35.
+      await _openNumber(tester, value: 12345 / 1000.0, notes: 'a note');
+      expect(_numberValue(tester), '12.35', reason: 'number-dialog.popup#1');
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey<String>('number_notes')))
+            .controller!
+            .text,
+        'a note',
+        reason: 'number-dialog.popup#1',
+      );
+    });
+
+    testWidgets('#15 Save reports the amount and the notes, and nothing else', (
+      tester,
+    ) async {
+      final result = await _openNumber(tester, value: 1.0);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('number_value')),
+        '2.5',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('number_save_button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.value, const NumberDialogResult(2.5, ''),
+          reason: 'number-dialog.popup#15 — `view.saveBtn.getCenter()` is '
+              'computed in Kotlin save() and never used; the port has no '
+              'counterpart, so the result carries the amount and the notes '
+              'and no coordinates at all');
+      expect(result.value!.toString(), 'NumberDialogResult(value=2.5, notes=)',
+          reason: 'number-dialog.popup#15 — those two fields are the whole of '
+              'what the dialog reports');
     });
 
     testWidgets('#8 ENTER in the value field saves', (tester) async {

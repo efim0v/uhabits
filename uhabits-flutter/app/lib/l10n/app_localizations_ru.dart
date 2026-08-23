@@ -39,6 +39,9 @@ class L10nRu extends L10n {
   String get toastHabitCreated => 'Привычка создана';
 
   @override
+  String get overview => 'Обзор';
+
+  @override
   String get habitStrength => 'Сила привычки';
 
   @override

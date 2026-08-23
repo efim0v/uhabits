@@ -39,6 +39,9 @@ class L10nMl extends L10n {
   String get toastHabitCreated => 'ശീലം സൃഷ്ടിച്ചു';
 
   @override
+  String get overview => 'അവലോകനം';
+
+  @override
   String get habitStrength => 'ശീലത്തിന്റെ ശക്തി';
 
   @override

@@ -39,6 +39,9 @@ class L10nFi extends L10n {
   String get toastHabitCreated => 'Rutiini luotu';
 
   @override
+  String get overview => 'Yleiskatsaus';
+
+  @override
   String get habitStrength => 'Rutiinin vahvuus';
 
   @override

@@ -39,6 +39,9 @@ class L10nIs extends L10n {
   String get toastHabitCreated => 'Venja sköpuð';
 
   @override
+  String get overview => 'Yfirlit';
+
+  @override
   String get habitStrength => 'Habit strength';
 
   @override

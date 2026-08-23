@@ -39,6 +39,9 @@ class L10nFa extends L10n {
   String get toastHabitCreated => 'عادت ایجاد شد';
 
   @override
+  String get overview => 'مرور';
+
+  @override
   String get habitStrength => 'قدرت عادت';
 
   @override

@@ -39,6 +39,9 @@ class L10nKa extends L10n {
   String get toastHabitCreated => 'ჩვევა შეიქმნა';
 
   @override
+  String get overview => 'მიმოხილვა';
+
+  @override
   String get habitStrength => 'ჩვევის გაჯდომის დონე';
 
   @override

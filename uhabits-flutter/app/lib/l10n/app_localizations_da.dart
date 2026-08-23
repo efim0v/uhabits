@@ -39,6 +39,9 @@ class L10nDa extends L10n {
   String get toastHabitCreated => 'Vanen er skabt.';
 
   @override
+  String get overview => 'Overblik';
+
+  @override
   String get habitStrength => 'Vanestyrke';
 
   @override

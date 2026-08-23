@@ -39,6 +39,9 @@ class L10nPl extends L10n {
   String get toastHabitCreated => 'Utworzono nawyk';
 
   @override
+  String get overview => 'Przegląd';
+
+  @override
   String get habitStrength => 'Siła nawyku';
 
   @override

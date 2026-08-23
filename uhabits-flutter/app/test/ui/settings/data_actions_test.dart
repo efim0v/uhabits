@@ -23,6 +23,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/platform/flutter_files.dart';
 import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/state/settings_model.dart' show SettingsResult;
 import 'package:uhabits/ui/settings/data_actions.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
@@ -44,6 +45,22 @@ class _FakeChooser implements FileChooser {
 class _FakeSharer implements FileSharer {
   @override
   Future<void> shareFile(String path, {required String mimeType}) async {}
+}
+
+/// Records what the share sheet was asked for, or refuses outright — the two
+/// halves of `ACTION_SEND` plus `startActivitySafely`.
+class _RecordingSharer implements FileSharer {
+  _RecordingSharer({this.throws = false});
+
+  final bool throws;
+  final List<({String path, String mimeType})> shared =
+      <({String path, String mimeType})>[];
+
+  @override
+  Future<void> shareFile(String path, {required String mimeType}) async {
+    shared.add((path: path, mimeType: mimeType));
+    if (throws) throw StateError('no activity found');
+  }
 }
 
 class _FakeUrlOpener implements UrlOpener {
@@ -126,6 +143,7 @@ void main() {
     AppScope scope, {
     required String? pickedPath,
     int result = ImportDataTask.success,
+    FileSharer? fileSharer,
   }) {
     final messages = <DataActionMessage>[];
     final refreshes = <String>[];
@@ -143,7 +161,7 @@ void main() {
         dirFinder: HabitsDirFinder(<String>[tempDir.path]),
         cacheDir: cacheDir,
         fileChooser: _FakeChooser(pickedPath),
-        fileSharer: _FakeSharer(),
+        fileSharer: fileSharer ?? _FakeSharer(),
         urlOpener: _FakeUrlOpener(),
         importTaskFactory: factory,
         showMessage: messages.add,
@@ -156,6 +174,172 @@ void main() {
   }
 
   group('list-habits.data-io-actions', () {
+    test('#1 the five settings result codes and where each one goes',
+        () async {
+      // `ListHabitsScreen.onSettingsResult(resultCode)`: the data actions are
+      // not on the list menu at all — they arrive as result codes from the
+      // settings screen. The numbers are kept verbatim.
+      expect(
+        <SettingsResult, int>{
+          for (final r in SettingsResult.values) r: r.code,
+        },
+        <SettingsResult, int>{
+          SettingsResult.importData: 101,
+          SettingsResult.exportCsv: 102,
+          SettingsResult.exportDb: 103,
+          SettingsResult.bugReport: 104,
+          SettingsResult.repairDb: 105,
+        },
+        reason: 'list-habits.data-io-actions#1: 101 -> import, 102 -> export '
+            'CSV, 103 -> export DB, 104 -> bug report, 105 -> repair',
+      );
+
+      // 101 reaches the file picker…
+      final scope = openScope();
+      final built = buildActions(scope, pickedPath: null);
+      final actions = built.actions;
+      await actions.onSettingsResult(SettingsResult.importData);
+      expect((actions.fileChooser as _FakeChooser).calls, 1,
+          reason: 'list-habits.data-io-actions#1: 101 shows the import file '
+              'picker');
+
+      // …102 and 103 write a file each…
+      final csvDir = Directory(
+        '${tempDir.path}/${HabitsDirFinder.csvDirName}',
+      );
+      final backupDir = Directory(
+        '${tempDir.path}/${HabitsDirFinder.backupsDirName}',
+      );
+      await actions.onSettingsResult(SettingsResult.exportCsv);
+      expect(csvDir.listSync(), hasLength(1),
+          reason: 'list-habits.data-io-actions#1: 102 exports the CSV archive');
+      // The DB export copies the database file, so this branch needs a scope
+      // that knows where its file is.
+      final dbPath = '${tempDir.path}/habits103.db';
+      final dbScope = AppScope.open(
+        AppDatabase.openAndMigrate(dbPath),
+        databasePath: dbPath,
+      );
+      addTearDown(dbScope.close);
+      await buildActions(dbScope, pickedPath: null)
+          .actions
+          .onSettingsResult(SettingsResult.exportDb);
+      expect(backupDir.listSync(), hasLength(1),
+          reason: 'list-habits.data-io-actions#1: 103 exports the database');
+
+      // …and 104 / 105 are accepted without a crash, though the bug report and
+      // the repair themselves belong to the troubleshooting slice.
+      await actions.onSettingsResult(SettingsResult.bugReport);
+      await actions.onSettingsResult(SettingsResult.repairDb);
+      expect((actions.fileChooser as _FakeChooser).calls, 1,
+          reason: 'list-habits.data-io-actions#1: 104 and 105 are not the '
+              'import picker');
+      expect(built.messages, isEmpty,
+          reason: 'list-habits.data-io-actions#1');
+    });
+
+    test('platform-glue.time-and-date-formatting#3 — the backup filename is '
+        '"yyyy-MM-dd HHmmss" in Locale.US', () async {
+      const rule = 'platform-glue.time-and-date-formatting#3 — '
+          'DateFormats.getBackupDateFormat() is fixed to the pattern '
+          '"yyyy-MM-dd HHmmss" in Locale.US and is used both for backup '
+          'filenames and for the alarm-scheduling log line.';
+
+      final dbPath = '${tempDir.path}/habits_backup_name.db';
+      final scope = AppScope.open(
+        AppDatabase.openAndMigrate(dbPath),
+        databasePath: dbPath,
+      );
+      addTearDown(scope.close);
+      await buildActions(scope, pickedPath: null)
+          .actions
+          .onSettingsResult(SettingsResult.exportDb);
+
+      final backupDir = Directory(
+        '${tempDir.path}/${HabitsDirFinder.backupsDirName}',
+      );
+      final String name =
+          backupDir.listSync().single.uri.pathSegments.last;
+
+      expect(
+        name,
+        matches(RegExp(r'^Loop Habits Backup \d{4}-\d{2}-\d{2} \d{6}\.db$')),
+        reason: rule,
+      );
+
+      // "in Locale.US": the digits are ASCII and the pattern is fixed, so a
+      // device whose locale numbers differently still produces a filename the
+      // importer can read back.
+      expect(backupDateString(DateTime.utc(2015, 1, 26, 7, 4, 9)),
+          '2015-01-26 070409',
+          reason: '$rule — zero-padded, 24-hour, no separators in the time');
+      expect(backupDateString(DateTime.utc(2015, 12, 31, 23, 59, 59)),
+          '2015-12-31 235959',
+          reason: rule);
+      expect(backupFileName(DateTime.utc(2015, 1, 26, 7, 4, 9)),
+          'Loop Habits Backup 2015-01-26 070409.db',
+          reason: rule);
+      for (final int unit in backupDateString(DateTime.utc(2015, 1, 26))
+          .replaceAll(RegExp('[^0-9]'), '')
+          .codeUnits) {
+        expect(unit, inInclusiveRange(0x30, 0x39),
+            reason: '$rule — every digit is ASCII');
+      }
+    });
+
+    test('show-habit.export-csv#4 the archive goes to the share sheet as '
+        'application/zip', () async {
+      final scope = openScope();
+      final sharer = _RecordingSharer();
+      final built =
+          buildActions(scope, pickedPath: null, fileSharer: sharer);
+      final actions = built.actions;
+      final messages = built.messages;
+
+      await actions.exportCsv();
+
+      expect(sharer.shared, hasLength(1),
+          reason: 'show-habit.export-csv#4: on success the callback receives '
+              'the archive path and the screen launches a share sheet');
+      expect(sharer.shared.single.mimeType, DataActions.shareMimeType,
+          reason: 'show-habit.export-csv#4: type "application/zip"');
+      expect(DataActions.shareMimeType, 'application/zip',
+          reason: 'show-habit.export-csv#4');
+      expect(sharer.shared.single.path, endsWith('.zip'),
+          reason: 'show-habit.export-csv#4: EXTRA_STREAM is a provider URI for '
+              'the produced file — share_plus does the FileProvider wrapping '
+              'and the read-permission grant that ACTION_SEND needs');
+      expect(messages, isEmpty, reason: 'show-habit.export-csv#4');
+
+      // A file:// URI is reduced to its path before it is handed over; a
+      // content:// one is passed through untouched.
+      await actions.showSendFileScreen('file:///tmp/backup.zip');
+      expect(sharer.shared.last.path, '/tmp/backup.zip',
+          reason: 'show-habit.export-csv#4');
+      await actions
+          .showSendFileScreen('content://org.isoron.uhabits/backup.zip');
+      expect(sharer.shared.last.path,
+          'content://org.isoron.uhabits/backup.zip',
+          reason: 'show-habit.export-csv#4: a content URI is already what '
+              'FileProvider would have produced');
+    });
+
+    test('show-habit.export-csv#5 nothing able to handle the share falls back '
+        'to a message', () async {
+      final scope = openScope();
+      final sharer = _RecordingSharer(throws: true);
+      final built =
+          buildActions(scope, pickedPath: null, fileSharer: sharer);
+
+      await built.actions.exportCsv();
+
+      expect(built.messages,
+          <DataActionMessage>[DataActionMessage.activityNotFound],
+          reason: 'show-habit.export-csv#5: startActivitySafely catches the '
+              'ActivityNotFoundException and shows R.string.activity_not_found '
+              'instead of crashing');
+    });
+
     test('#5 the picked file is copied into the cache dir, imported, then '
         'deleted', () async {
       final scope = openScope();

@@ -1,4 +1,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ================================================================== -->
+    <!-- platform-glue.permissions#1: the five upstream declares, in its     -->
+    <!-- order. Three of them (POST_NOTIFICATIONS, RECEIVE_BOOT_COMPLETED,   -->
+    <!-- VIBRATE) would also arrive through the flutter_local_notifications  -->
+    <!-- manifest merge, but the two exact-alarm ones would not, and         -->
+    <!-- FlutterAlarmScheduler asks AlarmManager.canScheduleExactAlarms()    -->
+    <!-- before it sets anything: without them the answer is false on API    -->
+    <!-- 31+ and no reminder is ever scheduled                               -->
+    <!-- (reminders.exact-alarm-scheduling#3). Declaring all five here keeps  -->
+    <!-- the app's own manifest a complete statement of what it needs        -->
+    <!-- instead of a function of which plugins happen to be linked.         -->
+    <!--                                                                    -->
+    <!-- platform-glue.permissions#2: no storage permission — file output    -->
+    <!-- goes through path_provider, file_picker and share_plus.             -->
+    <!-- ================================================================== -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:label="uhabits"
         android:name="${applicationName}"

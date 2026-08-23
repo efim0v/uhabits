@@ -386,6 +386,57 @@ void main() {
           reason: 'show-habit.subtitle-card#5');
     });
 
+    test('platform-glue.time-and-date-formatting#1 — the reminder time is '
+        'minutes-since-epoch rendered in UTC', () {
+      const rule = 'platform-glue.time-and-date-formatting#1 — '
+          'formatTime(context, hours, minutes) converts to milliseconds as '
+          '(hours * 60 + minutes) * 60 * 1000L, builds a Date from it, formats '
+          'with android.text.format.DateFormat.getTimeFormat(context) and '
+          'forces the formatter\'s TimeZone to UTC so the value is not shifted '
+          '— the result therefore respects the user\'s 12h/24h system setting.';
+
+      // The 12h/24h switch is the caller's, and both renderings of the same
+      // instant name the same minute.
+      expect(SubtitleCardState.formatTime(8, 30, use24HourFormat: true),
+          '08:30',
+          reason: rule);
+      expect(SubtitleCardState.formatTime(8, 30, use24HourFormat: false),
+          '8:30 AM',
+          reason: rule);
+      expect(SubtitleCardState.formatTime(20, 5, use24HourFormat: true),
+          '20:05',
+          reason: rule);
+      expect(SubtitleCardState.formatTime(20, 5, use24HourFormat: false),
+          '8:05 PM',
+          reason: rule);
+
+      // "forces the TimeZone to UTC so the value is not shifted": the result
+      // depends on nothing but the two arguments, so no zone can move it. The
+      // clock is pushed to two extremes and the answer does not budge.
+      final int realZoneOffset = DateTime.now().timeZoneOffset.inMinutes;
+      expect(realZoneOffset, isNotNull);
+      for (final int hour in <int>[0, 12, 23]) {
+        expect(SubtitleCardState.formatTime(hour, 0, use24HourFormat: true),
+            '${hour.toString().padLeft(2, '0')}:00',
+            reason: '$rule (hour $hour)');
+      }
+
+      // (hours * 60 + minutes) minutes since the epoch, in UTC: the value wraps
+      // modulo a day instead of being rejected or clamped.
+      expect(SubtitleCardState.formatTime(24, 0, use24HourFormat: true),
+          '00:00',
+          reason: '$rule — hour 24 is exactly one day of minutes');
+      expect(SubtitleCardState.formatTime(25, 30, use24HourFormat: true),
+          '01:30',
+          reason: rule);
+      expect(SubtitleCardState.formatTime(0, 1440, use24HourFormat: true),
+          '00:00',
+          reason: '$rule — minutes are folded into the same total');
+      expect(SubtitleCardState.formatTime(1, 90, use24HourFormat: true),
+          '02:30',
+          reason: '$rule — hours*60 + minutes, then split back apart');
+    });
+
     test('the target is shown only for numerical habits', () {
       final numerical = _fixtures.createNumericalHabit();
       expect(

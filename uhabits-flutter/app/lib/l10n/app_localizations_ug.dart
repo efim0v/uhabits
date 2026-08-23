@@ -39,6 +39,9 @@ class L10nUg extends L10n {
   String get toastHabitCreated => 'ئادەت قۇرۇلدى';
 
   @override
+  String get overview => 'Overview';
+
+  @override
   String get habitStrength => 'Habit strength';
 
   @override

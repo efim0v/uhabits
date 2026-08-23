@@ -39,6 +39,9 @@ class L10nCs extends L10n {
   String get toastHabitCreated => 'Zvyk vytvořen.';
 
   @override
+  String get overview => 'Přehled';
+
+  @override
   String get habitStrength => 'Síla zvyku';
 
   @override

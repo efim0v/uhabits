@@ -29,6 +29,9 @@
 /// (`number-dialog.popup#5`, `#16`), the two agree on everything the keypad can
 /// produce, and a throw lands in the same branch as a Java `ParseException`:
 /// the original value is kept (`number-dialog.popup#11`).
+///
+/// The other `intl`-versus-Java gap is locale coverage, and it is not a
+/// narrowing but a crash: see [NumberDialog.resolveLocale].
 library;
 
 import 'package:flutter/material.dart';
@@ -131,6 +134,31 @@ class NumberDialog extends StatefulWidget {
   /// after a dismissal. Null when the widget is hosted directly.
   final NotesDraft? draft;
 
+  /// The locale actually used to format and parse the amount.
+  ///
+  /// `DecimalFormatSymbols.getInstance()` and `NumberFormat.getInstance()`
+  /// cannot fail: a locale the JDK has no data for silently degrades to the
+  /// root locale, which uses ASCII digits, `.` as the decimal separator and
+  /// `-` as the minus sign. `intl` is stricter and throws `ArgumentError` for
+  /// a locale it has no number symbols for — and two of the locales this app
+  /// ships translations for, Esperanto (`eo`) and Uyghur (`ug`), are exactly
+  /// that. Left unresolved, opening the popup in either one throws out of
+  /// `build`, so every format in this file is built through here
+  /// (`number-dialog.popup#4`, `#5`, `#11`, `#16`).
+  ///
+  /// `Intl.verifiedLocale` already walks the CLDR fallbacks, keeping the
+  /// region and script of a locale it does know (`pt_BR`, `sr_Latn`) and
+  /// falling back to the bare language for one it does not. [rootLocaleName]
+  /// stands in for Java's root locale when even that finds nothing.
+  static String? resolveLocale(String? localeName) => intl.Intl.verifiedLocale(
+    localeName,
+    intl.NumberFormat.localeExists,
+    onFailure: (_) => rootLocaleName,
+  );
+
+  /// The stand-in for Java's root locale: ASCII digits, `.` and `-`.
+  static const String rootLocaleName = 'en';
+
   /// The initial text of the value field (`number-dialog.popup#4`).
   ///
   /// Anything below 0.01 shows as the literal "0", which is why UNKNOWN
@@ -141,13 +169,16 @@ class NumberDialog extends StatefulWidget {
   /// "12.35" and 15.0 becomes "15".
   static String formatValue(double value, [String? localeName]) {
     if (value < 0.01) return '0';
-    return intl.NumberFormat('0.##', localeName).format(value);
+    return intl.NumberFormat('0.##', resolveLocale(localeName)).format(value);
   }
 
   /// `DecimalFormat("#.###").format(Entry.SKIP / 1000.0)` and its UNKNOWN twin
   /// (`number-dialog.popup#9`, `#10`).
   static String formatReserved(int entryValue, [String? localeName]) =>
-      intl.NumberFormat('0.###', localeName).format(entryValue / 1000.0);
+      intl.NumberFormat(
+        '0.###',
+        resolveLocale(localeName),
+      ).format(entryValue / 1000.0);
 
   @override
   State<NumberDialog> createState() => _NumberDialogState();
@@ -162,7 +193,9 @@ class _NumberDialogState extends State<NumberDialog> {
 
   final FocusNode _valueNode = FocusNode();
 
-  /// Resolved in [didChangeDependencies], where the ambient locale is known.
+  /// Resolved in [didChangeDependencies], where the ambient locale is known,
+  /// and put through [NumberDialog.resolveLocale] so it is a locale `intl`
+  /// really has number symbols for.
   String? _localeName;
 
   bool _initialized = false;
@@ -185,7 +218,9 @@ class _NumberDialogState extends State<NumberDialog> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
-    _localeName = Localizations.maybeLocaleOf(context)?.toString();
+    _localeName = NumberDialog.resolveLocale(
+      Localizations.maybeLocaleOf(context)?.toString(),
+    );
     _value.text = NumberDialog.formatValue(widget.value, _localeName);
   }
 
@@ -197,8 +232,15 @@ class _NumberDialogState extends State<NumberDialog> {
     super.dispose();
   }
 
-  intl.NumberFormat get _parser =>
-      intl.NumberFormat.decimalPattern(_localeName);
+  /// `NumberFormat.getInstance()` — the grouping decimal format of the current
+  /// locale, which is both what `save()` parses with and where the field's
+  /// accepted separator comes from (`number-dialog.popup#5`, `#11`).
+  ///
+  /// Built once: `_localeName` is fixed in [didChangeDependencies], which runs
+  /// before the first [build].
+  late final intl.NumberFormat _parser = intl.NumberFormat.decimalPattern(
+    _localeName,
+  );
 
   /// `save()` (`number-dialog.popup#11`).
   void _save() {
@@ -293,7 +335,12 @@ class _NumberDialogState extends State<NumberDialog> {
                         decimal: true,
                       ),
                       // The keypad accepts digits and the locale decimal
-                      // separator only (`number-dialog.popup#5`, `#16`).
+                      // separator only (`number-dialog.popup#5`, `#16`) —
+                      // literally `DigitsKeyListener.getInstance("0123456789" +
+                      // separator)`, so ASCII digits even where the locale
+                      // formats with its own (Persian). No minus sign: upstream
+                      // has none either, which is why the UNKNOWN shortcut has
+                      // to write "-0.001" into the controller itself.
                       inputFormatters: <TextInputFormatter>[
                         FilteringTextInputFormatter.allow(
                           RegExp('[0-9${RegExp.escape(separator)}]'),

@@ -39,6 +39,9 @@ class L10nTe extends L10n {
   String get toastHabitCreated => 'అలవాటు సృష్టించబడింది';
 
   @override
+  String get overview => 'అవలోకనం';
+
+  @override
   String get habitStrength => 'Habit strength';
 
   @override

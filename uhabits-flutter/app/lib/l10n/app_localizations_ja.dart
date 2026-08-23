@@ -39,6 +39,9 @@ class L10nJa extends L10n {
   String get toastHabitCreated => '習慣を作成しました';
 
   @override
+  String get overview => '概要';
+
+  @override
   String get habitStrength => '習慣の強さ';
 
   @override

@@ -514,8 +514,10 @@ void main() {
       expect(
         habit2.computedEntries.get(today).value,
         100000,
-        reason: 'list-habits.toggle-from-row#7 — value = '
-            '(newValue * 1000).roundToInt(), so 100.0 stores 100000',
+        reason: 'list-habits.toggle-from-row#7, number-dialog.popup#13 and '
+            'number-dialog.popup#17 — the caller converts the Double the '
+            'popup returned back to storage units with '
+            '(value * 1000).roundToInt(), so 100.0 stores 100000',
       );
       expect(
         h.commandListener.commands.single,
@@ -570,8 +572,60 @@ void main() {
       expect(
         h.screen.confetti,
         isEmpty,
-        reason: 'list-habits.toggle-from-row#7 — AT_LEAST habit with target '
-            '2.0: 1.0 is below target, so no confetti',
+        reason: 'list-habits.toggle-from-row#7 and number-dialog.popup#14 — '
+            'AT_LEAST habit with target 2.0: 1.0 is below target, so no '
+            'confetti',
+      );
+    });
+
+    test('NUMERICAL branch: the popup value is rounded half up on the way '
+        'back into storage units', () {
+      // Kotlin's Double.roundToInt() delegates to Math.round, which breaks
+      // ties towards positive infinity — the port reproduces that rather than
+      // Dart's round-half-away-from-zero.
+      h.behavior.onEdit(habit2, today, 0.0, 0.0);
+      h.screen.numberPopupCallback!.onNumberPicked(0.0015, '');
+      expect(
+        habit2.computedEntries.get(today).value,
+        2,
+        reason: 'number-dialog.popup#13, number-dialog.popup#17 and '
+            'list-habits.toggle-from-row#7 — 0.0015 * 1000 = 1.5 rounds up '
+            'to 2',
+      );
+
+      h.behavior.onEdit(habit2, today, 0.0, 0.0);
+      h.screen.numberPopupCallback!.onNumberPicked(0.0025, '');
+      expect(
+        habit2.computedEntries.get(today).value,
+        3,
+        reason: 'number-dialog.popup#13 and number-dialog.popup#17 — 2.5 '
+            'rounds up to 3, not to the nearest even',
+      );
+    });
+
+    test('NUMERICAL branch: AT_MOST habits also gate the confetti on the '
+        'target', () {
+      final atMost =
+          h.fixtures.createEmptyNumericalHabit(NumericalHabitType.atMost);
+      h.habitList.add(atMost);
+      h.resetLog();
+
+      h.behavior.onEdit(atMost, today, 0.0, 0.0);
+      h.screen.numberPopupCallback!.onNumberPicked(5.0, '');
+      expect(
+        h.screen.confetti,
+        isEmpty,
+        reason: 'number-dialog.popup#14 — the list screen fires confetti only '
+            'when the value changed AND ((AT_LEAST && new >= target) || '
+            '(AT_MOST && new <= target)); 5.0 > 2.0 fails the second clause',
+      );
+
+      h.behavior.onEdit(atMost, today, 0.0, 0.0);
+      h.screen.numberPopupCallback!.onNumberPicked(1.0, '');
+      expect(
+        h.screen.confetti.length,
+        1,
+        reason: 'number-dialog.popup#14 — and 1.0 <= 2.0 passes it',
       );
     });
 

@@ -39,6 +39,9 @@ class L10nUk extends L10n {
   String get toastHabitCreated => 'Звичку створено';
 
   @override
+  String get overview => 'Огляд';
+
+  @override
   String get habitStrength => 'Сила звички';
 
   @override

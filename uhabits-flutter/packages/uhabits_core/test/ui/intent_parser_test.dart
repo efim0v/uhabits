@@ -88,6 +88,27 @@ void main() {
       expect(parseContentUriId(Uri.parse(second.uriString)), second.id,
           reason: 'intents.parser-validation#2: the habit id is the last path '
               'segment of the content uri');
+
+      expect(
+        parseContentUriId(Uri.parse(habit.uriString)),
+        habit.id,
+        reason: 'platform-glue.habit-content-uri#2 — All habit-carrying intents '
+            'put this URI in Intent.data, and the receiving side recovers the '
+            'id with android.content.ContentUris.parseId(uri), i.e. by parsing '
+            'the last path segment as a Long. [parseContentUriId] is that '
+            'function, and it is the only way a habit is recovered from an '
+            'intent anywhere in this port.',
+      );
+      expect(parseContentUriId(Uri.parse('content://org.isoron.uhabits')), -1,
+          reason: 'platform-glue.habit-content-uri#2: ContentUris.parseId '
+              'returns -1 when the uri has no path segment to parse');
+      expect(
+        () => parseContentUriId(Uri.parse('content://org.isoron.uhabits/habit/x')),
+        throwsFormatException,
+        reason: 'platform-glue.habit-content-uri#2: and throws when the last '
+            'segment is not a number, the way ContentUris.parseId raises '
+            'NumberFormatException',
+      );
     });
 
     test('rejects an intent whose habit is not on the list', () {

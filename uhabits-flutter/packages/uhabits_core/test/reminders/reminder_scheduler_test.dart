@@ -1024,6 +1024,71 @@ void main() {
   });
 
   // -----------------------------------------------------------------------
+  // reminders.boot-reschedule
+  // -----------------------------------------------------------------------
+
+  group('reminders.boot-reschedule', () {
+    /// Everything the process owned is rebuilt; only the preference store —
+    /// the one thing that survives a reboot — is carried over.
+    ReminderScheduler reboot() => ReminderScheduler(
+          CommandRunner(
+            CoroutineTaskRunner(
+              mainDispatcher: const UnconfinedTestDispatcher(),
+              ioDispatcher: const UnconfinedTestDispatcher(),
+            ),
+          ),
+          habitList,
+          sys,
+          WidgetPreferences(storage),
+        );
+
+    test('#4 a snooze outlives the reboot while it is still in the future', () {
+      DateUtils.setFixedLocalTime(
+          DateUtils.removeTimezone(unixTime(2015, 1, 26, 13, 0)));
+      habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habitList.add(habit);
+      reminderScheduler.snoozeReminder(habit, 120);
+      final int snoozedUntil = unixTime(2015, 1, 26, 15, 0);
+      sys.clear();
+
+      // ReminderController.onBootCompleted() does exactly one thing:
+      // reminderScheduler.scheduleAll().
+      reboot().scheduleAll();
+
+      expect(sys.scheduled.single.reminderTime, snoozedUntil,
+          reason: 'reminders.boot-reschedule#4: because snooze times are '
+              'persisted, a habit snoozed before the reboot keeps its snooze '
+              'after the reboot as long as the snoozed-until instant is still '
+              'in the future');
+      expect(widgetPreferences.getSnoozeTime(habitId), snoozedUntil,
+          reason: 'reminders.boot-reschedule#4: the stored instant is what '
+              'carries the snooze across the process boundary');
+    });
+
+    test('#4 a snooze whose instant has passed does not', () {
+      DateUtils.setFixedLocalTime(
+          DateUtils.removeTimezone(unixTime(2015, 1, 26, 13, 0)));
+      habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habitList.add(habit);
+      reminderScheduler.snoozeReminder(habit, 120);
+      sys.clear();
+
+      // The reboot happens after the snooze has expired.
+      DateUtils.setFixedLocalTime(
+          DateUtils.removeTimezone(unixTime(2015, 1, 26, 16, 0)));
+      reboot().scheduleAll();
+
+      expect(sys.scheduled.single.reminderTime, unixTime(2015, 1, 27, 12, 30),
+          reason: 'reminders.boot-reschedule#4: the snooze is kept only "as '
+              'long as the snoozed-until instant is still in the future" — '
+              'otherwise the regular reminder time comes back');
+      expect(widgetPreferences.getSnoozeTime(habitId), 0,
+          reason: 'reminders.boot-reschedule#4: and the expired value is '
+              'discarded by the same scheduleAll that read it');
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // reminders.snooze-custom-time
   // -----------------------------------------------------------------------
 
@@ -1140,6 +1205,40 @@ void main() {
       expect(reminderScheduler.hasHabitsWithReminders(), isTrue,
           reason: 'reminders.app-start-and-permission#6: the gate is '
               'getFiltered(WITH_ALARM), which does include archived habits');
+
+      expect(reminderScheduler.hasHabitsWithReminders(), isTrue,
+          reason: 'platform-glue.permissions#6 — If there are no habits with '
+              'reminders, the permission is never requested at all. '
+              'hasHabitsWithReminders() is that gate, and it is the whole of '
+              'the rule that is portable: the once-per-activity guard and the '
+              'SDK_INT check around it are Activity lifecycle and have no '
+              'counterpart here.');
+    });
+
+    test('the permission gate opens only once a reminder exists', () {
+      // The gate, walked from empty to armed, because "never requested at all"
+      // is a statement about the false case rather than the true one.
+      expect(reminderScheduler.hasHabitsWithReminders(), isFalse,
+          reason: 'platform-glue.permissions#6: an empty list asks for '
+              'nothing');
+
+      final plain = fixtures.createEmptyHabit(name: 'plain');
+      habitList.add(plain);
+      expect(reminderScheduler.hasHabitsWithReminders(), isFalse,
+          reason: 'platform-glue.permissions#6: nor does a habit that would '
+              'never post a notification');
+
+      plain.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habitList.update(<Habit>[plain]);
+      expect(reminderScheduler.hasHabitsWithReminders(), isTrue,
+          reason: 'platform-glue.permissions#6: giving it a reminder is what '
+              'opens the gate');
+
+      plain.reminder = null;
+      habitList.update(<Habit>[plain]);
+      expect(reminderScheduler.hasHabitsWithReminders(), isFalse,
+          reason: 'platform-glue.permissions#6: and taking it away closes it '
+              'again');
     });
   });
 }

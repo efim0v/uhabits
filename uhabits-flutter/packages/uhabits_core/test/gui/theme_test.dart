@@ -720,4 +720,90 @@ void main() {
       }
     });
   });
+
+  // -------------------------------------------------------------------------
+  // The same WidgetTheme, read against the home-screen widget rules.
+  //
+  // `widgets.theme` splits the palette across two classes upstream: the Android
+  // style R.style.WidgetTheme supplies the ?attr/ colours a RemoteViews tree
+  // resolves, and this core class supplies the habit colours the charts draw
+  // with. Only the second half is portable Dart, and it is this one; the
+  // Android half is asserted in app/test/platform/android_widgets_test.dart.
+  // -------------------------------------------------------------------------
+  group('widgets.theme', () {
+    test('#2 the habit colours a widget draws with, indices 0..19', () {
+      const rule = 'widgets.theme#2';
+      final theme = WidgetTheme();
+
+      expect(theme, isA<LightTheme>(),
+          reason: '$rule: WidgetTheme is a LightTheme subclass');
+      for (var i = 0; i < 20; i++) {
+        expectOpaque(theme.color(i), widgetPalette[i], '$rule (index $i)');
+      }
+
+      // The two substitutions that make the palette legible over a wallpaper,
+      // spelled out because they are the whole reason this class exists.
+      expectOpaque(theme.color(12), 0x6275F0, '$rule: brighter indigo at 12');
+      expect(hexOf(theme.color(12)), isNot(hexOf(LightTheme().color(12))),
+          reason: '$rule: index 12 differs from the light palette');
+      expectOpaque(theme.color(17), 0x757575, '$rule: lighter grey at 17');
+      expect(hexOf(theme.color(17)), isNot(hexOf(LightTheme().color(17))),
+          reason: '$rule: index 17 differs from the light palette');
+    });
+
+    test('#2 any other index is black', () {
+      const rule = 'widgets.theme#2';
+      final theme = WidgetTheme();
+      expectOpaque(theme.color(-1), 0x000000, rule);
+      expectOpaque(theme.color(20), 0x000000, rule);
+      expectOpaque(theme.color(999), 0x000000, rule);
+    });
+
+    test('#3 transparent card, white text, white at 50% and 10%', () {
+      const rule = 'widgets.theme#3';
+      final theme = WidgetTheme();
+
+      expect(theme.cardBackgroundColor, Color.TRANSPARENT,
+          reason: '$rule: cardBackgroundColor = TRANSPARENT');
+      expect(theme.cardBackgroundColor.alpha, 0.0,
+          reason: '$rule: which is what makes the widget bitmap see-through');
+      expect(theme.highContrastTextColor, Color.WHITE,
+          reason: '$rule: highContrastTextColor = WHITE');
+      expect(theme.mediumContrastTextColor, Color.WHITE.withAlpha(0.50),
+          reason: '$rule: mediumContrastTextColor = WHITE at 50% alpha');
+      expect(theme.mediumContrastTextColor.alpha, 0.50, reason: rule);
+      expect(theme.lowContrastTextColor, Color.WHITE.withAlpha(0.10),
+          reason: '$rule: lowContrastTextColor = WHITE at 10% alpha');
+      expect(theme.lowContrastTextColor.alpha, 0.10, reason: rule);
+
+      // All three keep white's channels; only the alpha moves.
+      for (final Color c in <Color>[
+        theme.highContrastTextColor,
+        theme.mediumContrastTextColor,
+        theme.lowContrastTextColor,
+      ]) {
+        expect(hexOf(c), '0xFFFFFF', reason: '$rule: white underneath');
+      }
+    });
+
+    test('#4 Color.toInt packs a widget colour into an Android ARGB int', () {
+      const rule = 'widgets.theme#4';
+      final theme = WidgetTheme();
+
+      // argb(round(255*alpha), round(255*red), round(255*green), round(255*blue))
+      expect(theme.color(0).toInt(), 0xFFD32F2F,
+          reason: '$rule: an opaque habit colour keeps 0xFF in the top byte');
+      expect(theme.color(12).toInt(), 0xFF6275F0, reason: rule);
+      expect(theme.color(99).toInt(), 0xFF000000,
+          reason: '$rule: and so does the out-of-range black');
+
+      expect(theme.cardBackgroundColor.toInt(), 0x00000000,
+          reason: '$rule: alpha 0 rounds to an alpha byte of 0');
+      expect(theme.highContrastTextColor.toInt(), 0xFFFFFFFF, reason: rule);
+      expect(theme.mediumContrastTextColor.toInt(), 0x80FFFFFF,
+          reason: '$rule: 255 * 0.50 rounds to 0x80, not 0x7F');
+      expect(theme.lowContrastTextColor.toInt(), 0x1AFFFFFF,
+          reason: '$rule: 255 * 0.10 rounds to 0x1A');
+    });
+  });
 }

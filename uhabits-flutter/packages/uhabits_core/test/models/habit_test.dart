@@ -314,6 +314,40 @@ void main() {
           reason: 'models.habit-fields-defaults#5');
     });
 
+    test('uriString is the addressing convention, not a real provider', () {
+      final h = buildHabit();
+      h.id = 0;
+
+      expect(h.uriString, 'content://org.isoron.uhabits/habit/0',
+          reason: 'platform-glue.habit-content-uri#1 — Habit.uriString is '
+              'exactly "content://org.isoron.uhabits/habit/\$id" — e.g. a habit '
+              'with id 0 yields "content://org.isoron.uhabits/habit/0".');
+
+      // The three parts the receiving side matches on: scheme, authority and a
+      // two-segment path whose last element is the id.
+      final Uri uri = Uri.parse(h.uriString);
+      expect(uri.scheme, 'content',
+          reason: 'platform-glue.habit-content-uri#1');
+      expect(uri.host, 'org.isoron.uhabits',
+          reason: 'platform-glue.habit-content-uri#1: the authority is the '
+              'application id, which is why renaming the package would orphan '
+              'every existing widget and Tasker task');
+      expect(uri.pathSegments, <String>['habit', '0'],
+          reason: 'platform-glue.habit-content-uri#1');
+
+      expect(
+        h.uriString,
+        startsWith('content://org.isoron.uhabits/habit/'),
+        reason: 'platform-glue.habit-content-uri#8 — There is no ContentProvider '
+            'actually serving content://org.isoron.uhabits — the scheme is used '
+            'purely as an opaque intent-addressing convention. The only real '
+            'provider is the FileProvider registered on the same authority. '
+            'Nothing in this package resolves the URI against a provider: '
+            'IntentParser parses the id straight out of the last path segment '
+            'and looks the habit up in the HabitList.',
+      );
+    });
+
     test('hasReminder', () {
       // Ported from HabitTest.test_hasReminder.
       final h = buildHabit();

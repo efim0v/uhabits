@@ -39,6 +39,9 @@ class L10nVi extends L10n {
   String get toastHabitCreated => 'Thói quen đã được tạo';
 
   @override
+  String get overview => 'Tổng quan';
+
+  @override
   String get habitStrength => 'Độ mạnh của thói quen';
 
   @override

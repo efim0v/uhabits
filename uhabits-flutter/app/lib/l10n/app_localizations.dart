@@ -248,6 +248,12 @@ abstract class L10n {
   /// **'Habit created'**
   String get toastHabitCreated;
 
+  /// No description provided for @overview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get overview;
+
   /// No description provided for @habitStrength.
   ///
   /// In en, this message translates to:

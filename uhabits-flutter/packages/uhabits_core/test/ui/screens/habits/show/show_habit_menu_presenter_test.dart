@@ -610,6 +610,27 @@ void main() {
             'the command, then the close');
   });
 
+  test('show-habit.delete#5 the confirmation is always the singular one', () {
+    screen.confirmDelete = true;
+
+    menu.onDeleteHabit();
+
+    // The one call the presenter makes is
+    // `screen.showDeleteConfirmationScreen(callback)` — one argument, no
+    // count. `ListHabitsSelectionMenuBehavior` passes
+    // `quantity = adapter.getSelected().size` to its own screen because a
+    // multiple selection can be plural; this screen deletes exactly one habit,
+    // so no count crosses the interface and the plural strings are always
+    // resolved at quantity 1.
+    expect(screen.deleteConfirmationCount, 1,
+        reason: 'show-habit.delete#5 — the quantity used for the plural '
+            'strings is always 1 on this screen');
+    expect(commandRunner.commands.single,
+        equals(DeleteHabitsCommand(habitList, <Habit>[habit])),
+        reason: 'show-habit.delete#5 — and the command deletes exactly one '
+            'habit, which is why 1 is right');
+  });
+
   // -------------------------------------------------------------------------
   // Randomize
   // -------------------------------------------------------------------------

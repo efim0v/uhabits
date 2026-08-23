@@ -39,6 +39,9 @@ class L10nCa extends L10n {
   String get toastHabitCreated => 'Hàbit creat.';
 
   @override
+  String get overview => 'Visió general';
+
+  @override
   String get habitStrength => 'Fortalesa de l\'hàbit';
 
   @override

@@ -11,6 +11,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
+import 'package:uhabits/l10n/app_localizations_en.dart';
 import 'package:uhabits/ui/common/dialogs/snooze_picker_dialog.dart';
 import 'package:uhabits/ui/theme/app_theme.dart';
 // None of these four are re-exported from uhabits_core.dart yet.
@@ -65,6 +66,17 @@ void main() {
         reason: 'reminders.snooze-picker-ui#2: it finishes immediately when '
             'intent is null, when intent.data is null, or when no habit '
             'matches ContentUris.parseId(data)',
+      );
+      expect(
+        result.completed,
+        isTrue,
+        reason: 'platform-glue.habit-content-uri#7 — SnoozeDelayPickerActivity '
+            'finishes immediately if intent.data is null, and finishes if the '
+            'habit id does not resolve. There is no Activity and no data URI '
+            'here: the picker is handed the habit the notification named, and '
+            '"the id did not resolve" arrives as a null habit — which it '
+            'answers the same way, by closing with no result rather than '
+            'showing an empty list.',
       );
     });
 
@@ -156,6 +168,70 @@ void main() {
         reason: 'reminders.snooze-picker-ui#14: snooze_picker_values is marked '
             'translatable="false"',
       );
+    });
+
+    test('platform-glue.localized-arrays#1 — the eight names stay '
+        'index-aligned with the eight values', () {
+      final names = SnoozePickerDialog.names(L10nEn());
+
+      expect(
+        names,
+        <String>[
+          '15 minutes',
+          '30 minutes',
+          '1 hour',
+          '2 hours',
+          '4 hours',
+          '8 hours',
+          '24 hours',
+          'Custom...',
+        ],
+        reason: 'platform-glue.localized-arrays#1 — snooze_picker_names has 8 '
+            'entries in this order and must stay index-aligned with the integer '
+            'array snooze_picker_values [15, 30, 60, 120, 240, 480, 1440, -1]: '
+            'interval_15_minutes, interval_30_minutes, interval_1_hour, '
+            'interval_2_hour, interval_4_hour, interval_8_hour, '
+            'interval_24_hour, interval_custom.',
+      );
+      expect(names.length, SnoozePickerDialog.values.length,
+          reason: 'platform-glue.localized-arrays#1: index-aligned');
+
+      // The alignment is the contract: entry i names value i, and the last
+      // pair is the custom sentinel.
+      final l10n = L10nEn();
+      expect(
+        <String>[
+          l10n.interval15Minutes,
+          l10n.interval30Minutes,
+          l10n.interval1Hour,
+          l10n.interval2Hour,
+          l10n.interval4Hour,
+          l10n.interval8Hour,
+          l10n.interval24Hour,
+          l10n.intervalCustom,
+        ],
+        names,
+        reason: 'platform-glue.localized-arrays#1: in the order the array '
+            'declares them',
+      );
+      expect(names.last, l10n.intervalCustom,
+          reason: 'platform-glue.localized-arrays#1: interval_custom is the '
+              'eighth name');
+      expect(SnoozePickerDialog.values.last, SnoozePickerDialog.customValue,
+          reason: 'platform-glue.localized-arrays#1: paired with -1');
+    });
+
+    test('platform-glue.localized-arrays#7 — "Always ask" exists but is not '
+        'one of the eight', () {
+      final l10n = L10nEn();
+
+      expect(l10n.intervalAlwaysAsk, 'Always ask',
+          reason: 'platform-glue.localized-arrays#7 — interval_always_ask '
+              '("Always ask") is defined but is not referenced by the '
+              'snooze_picker_names array.');
+      expect(SnoozePickerDialog.names(l10n), isNot(contains('Always ask')),
+          reason: 'platform-glue.localized-arrays#7: and the picker never '
+              'offers it');
     });
 
     testWidgets('#5 tapping a delay reports its minutes and closes', (
@@ -417,6 +493,84 @@ void main() {
         reason: 'reminders.snooze-picker-ui#7: Dismissing the dialog (back '
             'press / outside tap) finishes the activity',
       );
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // reminders.snooze-by-delay — the menu of delays the picker offers
+  // -------------------------------------------------------------------
+
+  group('reminders.snooze-by-delay', () {
+    test('#4 the available delays, plus the "Custom..." sentinel', () {
+      expect(
+        SnoozePickerDialog.values.take(7),
+        <int>[15, 30, 60, 120, 240, 480, 1440],
+        reason: 'reminders.snooze-by-delay#4: Available delays in minutes are '
+            'exactly: 15, 30, 60, 120, 240, 480, 1440, plus the sentinel -1 '
+            'meaning "Custom..."',
+      );
+      expect(
+        SnoozePickerDialog.values.last,
+        -1,
+        reason: 'reminders.snooze-by-delay#4: plus the sentinel -1 meaning '
+            '"Custom..."',
+      );
+      expect(
+        SnoozePickerDialog.values.where((minutes) => minutes < 0).length,
+        1,
+        reason: 'reminders.snooze-by-delay#4: -1 is the only sentinel; every '
+            'other entry is a real number of minutes',
+      );
+    });
+
+    testWidgets('#5 the labels, in order', (tester) async {
+      await _open(tester, habit: _habit());
+
+      const List<String> labels = <String>[
+        '15 minutes',
+        '30 minutes',
+        '1 hour',
+        '2 hours',
+        '4 hours',
+        '8 hours',
+        '24 hours',
+        'Custom...',
+      ];
+      for (var i = 0; i < labels.length; i++) {
+        expect(
+          find.descendant(of: _item(i), matching: find.text(labels[i])),
+          findsOneWidget,
+          reason: 'reminders.snooze-by-delay#5: Delay labels in order are: '
+              '"15 minutes", "30 minutes", "1 hour", "2 hours", "4 hours", '
+              '"8 hours", "24 hours", "Custom..."',
+        );
+      }
+      expect(
+        SnoozePickerDialog.names(L10nEn()),
+        labels,
+        reason: 'reminders.snooze-by-delay#5: the label at position i is the '
+            'one that carries the delay at position i',
+      );
+    });
+
+    testWidgets('#5 each label answers with the delay next to it in #4', (
+      tester,
+    ) async {
+      const List<int> minutes = <int>[15, 30, 60, 120, 240, 480, 1440];
+      for (var i = 0; i < minutes.length; i++) {
+        final result = await _open(tester, habit: _habit());
+        await tester.tap(_item(i));
+        await tester.pumpAndSettle();
+
+        expect(
+          result.value,
+          isA<SnoozeDelay>()
+              .having((choice) => choice.minutes, 'minutes', minutes[i]),
+          reason: 'reminders.snooze-by-delay#5: the two arrays are parallel, '
+              'so "${SnoozePickerDialog.names(L10nEn())[i]}" is exactly '
+              '${minutes[i]} minutes',
+        );
+      }
     });
   });
 }

@@ -39,6 +39,9 @@ class L10nPt extends L10n {
   String get toastHabitCreated => 'Hábito criado.';
 
   @override
+  String get overview => 'Visão geral';
+
+  @override
   String get habitStrength => 'Estabilidade';
 
   @override
@@ -706,6 +709,9 @@ class L10nPtBr extends L10nPt {
   String get toastHabitCreated => 'Hábito criado.';
 
   @override
+  String get overview => 'Visão geral';
+
+  @override
   String get habitStrength => 'Estabilidade';
 
   @override
@@ -1343,6 +1349,9 @@ class L10nPtPt extends L10nPt {
 
   @override
   String get toastHabitCreated => 'Hábito criado';
+
+  @override
+  String get overview => 'Visão geral';
 
   @override
   String get habitStrength => 'Pontuação';

@@ -16,8 +16,20 @@ import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_cache.da
 import 'package:uhabits_core/src/utils/midnight_timer.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
+import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:uhabits_core/src/preferences/widget_preferences.dart';
+import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
+import 'package:uhabits_core/src/ui/notification_tray.dart';
+
+import '../l10n/app_localizations.dart';
 import '../platform/app_database.dart';
 import '../platform/file_preferences_storage.dart';
+import '../platform/flutter_alarm_scheduler.dart';
+import '../platform/flutter_notification_tray.dart';
+import '../platform/home_widget_bridge.dart';
+import 'widget_sync.dart';
 
 /// The long-lived objects of the application, built once and shared by every
 /// screen.
@@ -90,12 +102,104 @@ class AppScope {
     // app keeps them in SharedPreferences. Without this they would reset on
     // every launch.
     final storage = await FilePreferencesStorage.open();
-    return AppScope.open(
+    final scope = AppScope.open(
       appDatabase.database,
       databasePath: appDatabase.path,
       preferencesStorage: storage,
     );
+    await scope.startPlatformServices();
+    return scope;
   }
+
+  /// Constructs and starts the singletons `HabitsApplication.onCreate` starts:
+  /// the notification tray, the reminder scheduler and the widget publisher.
+  ///
+  /// They are deliberately absent from [open] so that widget tests can build a
+  /// scope without touching a plugin. Skipping this on a real device is what
+  /// made the app schedule no reminders and publish no widget data even though
+  /// every one of these classes was written and tested.
+  Future<void> startPlatformServices() async {
+    // Reminders and widgets are conveniences layered on top of a working app.
+    // If a host cannot provide them — macOS has no widget extension, a test
+    // has no method channels — the app still has to open.
+    try {
+      await _startPlatformServices();
+    } on Object catch (error) {
+      logging
+          .getLogger('HabitsApplication')
+          .error('Platform services unavailable: $error');
+    }
+  }
+
+  Future<void> _startPlatformServices() async {
+    await LocalNotificationsAlarmPlugin.ensureTimeZones();
+
+    // Notification copy has to come from somewhere before any widget exists,
+    // so it is looked up by locale rather than by BuildContext.
+    final l10n = lookupL10n(PlatformDispatcher.instance.locale);
+    final builder = ReminderNotificationBuilder(
+      preferences: preferences,
+      strings: NotificationStrings.from(l10n),
+    );
+    final plugin = FlutterLocalNotificationsPlugin();
+    final presenter =
+        LocalNotificationsPresenter(plugin: plugin, builder: builder);
+
+    final tray = NotificationTray(
+      taskRunner,
+      commandRunner,
+      preferences,
+      FlutterNotificationTray(
+        presenter: presenter,
+        builder: builder,
+        logging: logging,
+      ),
+    );
+    tray.startListening();
+
+    final scheduler = ReminderScheduler(
+      commandRunner,
+      habitList,
+      FlutterAlarmScheduler(
+        plugin:
+            LocalNotificationsAlarmPlugin(plugin: plugin, presenter: presenter),
+        builder: builder,
+        logging: logging,
+      ),
+      WidgetPreferences(preferencesStorage),
+    );
+    scheduler.startListening();
+    // Nothing runs when an alarm fires (see DEVIATIONS.md), so this call at
+    // startup, plus the one after every command, is what keeps alarms armed.
+    scheduler.scheduleAll();
+
+    final sync = WidgetSync(
+      bridge: HomeWidgetBridge(
+        habitList: habitList,
+        registry: WidgetRegistry(preferencesStorage),
+        platform: HomeWidgetPlugin(),
+      ),
+      commandRunner: commandRunner,
+      taskRunner: taskRunner,
+      midnightTimer: midnightTimer,
+      preferences: preferences,
+    );
+    sync.startListening();
+
+    _started = _Started(tray: tray, scheduler: scheduler, sync: sync);
+  }
+
+  _Started? _started;
+
+  /// Posts and cancels reminder notifications. Null until
+  /// [startPlatformServices] has run, which widget tests never do.
+  NotificationTray? get notificationTray => _started?.tray;
+
+  /// Arms the next alarm for every habit that has a reminder.
+  ReminderScheduler? get reminderScheduler => _started?.scheduler;
+
+  /// Publishes the data the native home-screen widgets read.
+  WidgetSync? get widgetSync => _started?.sync;
 
   /// Wires the scope around an already-opened [database].
   ///
@@ -171,4 +275,14 @@ class AppScope {
     cache.cancelTasks();
     database.close();
   }
+}
+
+
+/// The platform singletons, once [AppScope.startPlatformServices] has run.
+class _Started {
+  _Started({required this.tray, required this.scheduler, required this.sync});
+
+  final NotificationTray tray;
+  final ReminderScheduler scheduler;
+  final WidgetSync sync;
 }

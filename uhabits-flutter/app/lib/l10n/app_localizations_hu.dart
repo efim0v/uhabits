@@ -39,6 +39,9 @@ class L10nHu extends L10n {
   String get toastHabitCreated => 'Szokás létrehozva';
 
   @override
+  String get overview => 'Áttekintés';
+
+  @override
   String get habitStrength => 'Szokás erőssége';
 
   @override

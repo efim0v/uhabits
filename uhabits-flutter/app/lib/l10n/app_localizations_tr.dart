@@ -39,6 +39,9 @@ class L10nTr extends L10n {
   String get toastHabitCreated => 'Alışkanlık oluşturuldu.';
 
   @override
+  String get overview => 'Genel Bakış';
+
+  @override
   String get habitStrength => 'Alışkanlık gücü';
 
   @override

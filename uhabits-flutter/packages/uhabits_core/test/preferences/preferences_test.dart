@@ -1344,6 +1344,29 @@ void main() {
       expect(storage.getString('last_version', ''), '23',
           reason: 'settings.preferences.first-run-and-launch-count#3');
     });
+
+    test('platform-glue.app-startup-order#5 — last_version is the int key the '
+        'startup step would write', () {
+      expect(prefs.lastAppVersion, 0,
+          reason: 'platform-glue.app-startup-order#5 — prefs.lastAppVersion is '
+              'persisted as SharedPreferences int key "last_version" (default '
+              '0 when absent) and is set to BuildConfig.VERSION_CODE (20301) on '
+              'every launch. The key, its type and its default are reproduced; '
+              'the writing half is not — nothing in the Flutter startup '
+              'sequence stamps it, so the value stays 0 for the whole life of '
+              'the install. Reported as a gap rather than asserted here.');
+      expect(storage.getInt('last_version', -1), -1,
+          reason: 'platform-glue.app-startup-order#5: absent until something '
+              'writes it');
+
+      prefs.lastAppVersion = 20301;
+      expect(prefs.lastAppVersion, 20301,
+          reason: 'platform-glue.app-startup-order#5: 20301 is the version code '
+              'the last Android release stamped, and the field round-trips it');
+      expect(storage.getInt('last_version', -1), 20301,
+          reason: 'platform-glue.app-startup-order#5: as an int, under that '
+              'key');
+    });
   });
 
   group('settings.preferences.show-archived-completed', () {

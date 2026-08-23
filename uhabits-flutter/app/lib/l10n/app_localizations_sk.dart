@@ -39,6 +39,9 @@ class L10nSk extends L10n {
   String get toastHabitCreated => 'Návyk vytvorený';
 
   @override
+  String get overview => 'Prehľad';
+
+  @override
   String get habitStrength => 'Sila návyku';
 
   @override

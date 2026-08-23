@@ -517,8 +517,11 @@ void main() {
         ),
       );
 
+      expect(ScrollableChart.defaultMaxDataOffset, 2400,
+          reason: 'show-habit.chart-scrolling#2 and show-habit.score-card#12 — '
+              'dataOffset is clamped to <= 2400 by default');
       expect(controller.maxX, 2400 * 40.0,
-          reason: 'show-habit.chart-scrolling#2');
+          reason: 'show-habit.chart-scrolling#2 and show-habit.score-card#12');
 
       await _dragBy(tester, 120);
       expect(reported, [3], reason: 'show-habit.chart-scrolling#2');
@@ -527,9 +530,16 @@ void main() {
 
       // Thirty-nine more pixels are still the third bucket.
       await _dragBy(tester, 39);
-      expect(reported, [3], reason: 'show-habit.chart-scrolling#2');
+      expect(reported, [3],
+          reason: 'show-habit.chart-scrolling#2 and show-habit.score-card#12 — '
+              'a drag scrolls the chart by whole columns only');
       await _dragBy(tester, 1);
       expect(reported, [3, 4], reason: 'show-habit.chart-scrolling#2');
+
+      // …and it can never scroll into the future.
+      await _dragBy(tester, -1000);
+      expect(reported.last, 0,
+          reason: 'show-habit.score-card#12 — dataOffset is clamped to >= 0');
     });
 
     testWidgets('#4 #5 a card that refreshes resets the chart to the newest '

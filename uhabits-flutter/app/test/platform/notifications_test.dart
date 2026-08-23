@@ -219,6 +219,49 @@ void main() {
           reason: 'intents.actions-and-extras#5');
       expect(ReminderActions.edit, 'org.isoron.uhabits.ACTION_EDIT',
           reason: 'intents.actions-and-extras#9');
+      expect(ReminderActions.edit, 'org.isoron.uhabits.ACTION_EDIT',
+          reason: 'platform-glue.deep-link-edit-entry#1 — '
+              'ListHabitsActivity.ACTION_EDIT is the literal string '
+              '"org.isoron.uhabits.ACTION_EDIT". It is the action the '
+              'notification\'s "Enter" button and the numerical Checkmark '
+              'widget both use, so the string has to stay byte-for-byte what '
+              'it was.');
+    });
+
+    test('there is one dismiss action, not two copies of one string', () {
+      // Upstream declares ACTION_DISMISS_REMINDER twice — once on
+      // ReminderReceiver and once on WidgetReceiver — and
+      // PendingIntentFactory.dismissNotification targets ReminderReceiver
+      // while naming WidgetReceiver's copy. The port has one constant, so the
+      // two spellings cannot drift apart.
+      final Set<String> dismissConstants = <String>{
+        ReminderActions.dismissReminder,
+      };
+
+      expect(dismissConstants, <String>{'org.isoron.uhabits.ACTION_DISMISS_REMINDER'},
+          reason: 'intents.actions-and-extras#8 — WidgetReceiver also declares '
+              'its own constant ACTION_DISMISS_REMINDER with the identical '
+              'string "org.isoron.uhabits.ACTION_DISMISS_REMINDER"; '
+              'PendingIntentFactory.dismissNotification actually targets '
+              'ReminderReceiver but uses WidgetReceiver\'s copy of the constant '
+              '— the strings are equal so behaviour is unaffected. There is one '
+              'copy here and the string is unchanged, so the behaviour stays '
+              'unaffected for the same reason and cannot stop being.');
+
+      // The one place the string is consumed still routes to dismissal.
+      expect(
+        ReminderResponse.decode(
+          actionId: ReminderActions.dismissReminder,
+          payload: const ReminderPayload(
+            habitId: 10,
+            timestamp: 0,
+            reminderTime: 0,
+          ).encode(),
+        )?.kind,
+        ReminderResponseKind.dismiss,
+        reason: 'intents.actions-and-extras#8: and it is the dismissal branch '
+            'that answers it, whichever receiver upstream would have used',
+      );
     });
   });
 
@@ -357,6 +400,36 @@ void main() {
       expect(spec.groupKey, isNull,
           reason: 'notifications.content#11: the notification carries no group '
               'or summary');
+    });
+
+    test(
+        'settings.reminder-sound-row-hidden#3 — every reminder plays the '
+        'system default notification sound', () {
+      // The ringtone picker is unreachable, so `pref_ringtone_uri` is never
+      // written; nothing in the notification pipeline reads it, and the
+      // notification therefore carries no sound of its own.
+      storage.putString('pref_ringtone_uri', 'content://media/ringtone/17');
+      final habit = yesNoHabit();
+      final spec = buildBuilder().build(habit, 10, LocalDate.ymd(2015, 1, 26), 0);
+
+      expect(spec.playSound, isTrue,
+          reason: 'settings.reminder-sound-row-hidden#3: RingtoneManager'
+              '.getURI() always returns its fallback '
+              'Settings.System.DEFAULT_NOTIFICATION_URI, so every reminder '
+              'plays the system default notification sound');
+      expect(spec.toString(), isNot(contains('content://media/ringtone/17')),
+          reason: "settings.reminder-sound-row-hidden#3: a value stored under "
+              'pref_ringtone_uri by anything other than the (dead) picker is '
+              'never read back — the notification carries no ringtone URI');
+      expect(
+        buildBuilder()
+            .build(habit, 10, LocalDate.ymd(2015, 1, 26), 0, disableSound: true)
+            .playSound,
+        isFalse,
+        reason: "settings.reminder-sound-row-hidden#3: the 'silent' state is "
+            'unreachable through the UI — the only thing that can silence a '
+            'reminder is the internal disableSound retry',
+      );
     });
   });
 
@@ -517,6 +590,31 @@ void main() {
       expect(tray.activeNotificationIds, {10},
           reason: 'notifications.sound#8: the retry succeeds, so the id is '
               'still recorded as active');
+    });
+
+    test(
+        'notifications.channel#2 — every post names the channel, so it is '
+        '(re)created immediately before notifying', () async {
+      tray.showNotification(yesNoHabit(), 10, LocalDate.ymd(2015, 1, 26), 500);
+      tray.showNotification(numericalHabit(), 11, LocalDate.ymd(2015, 1, 26), 0);
+      presenter.failNextShow = true;
+      tray.showNotification(yesNoHabit(id: 12), 12, LocalDate.ymd(2015, 1, 26), 0);
+      await tray.settle();
+
+      expect(presenter.shown, hasLength(4),
+          reason: 'notifications.channel#2: three posts plus the soundless '
+              'retry of the third');
+      for (final spec in presenter.shown) {
+        expect(spec.channelId, NotificationTray.remindersChannelId,
+            reason: 'notifications.channel#2: the channel is (re)created on '
+                'every showNotification call, immediately before notifying — '
+                'the id travels with the notification rather than being '
+                'assumed to exist');
+        expect(spec.channelName, strings.channelName,
+            reason: 'notifications.channel#2: with the name it would be '
+                '(re)created under, so a renamed channel follows the very '
+                'next post');
+      }
     });
 
     test('log() forwards the core\'s messages', () {
@@ -938,6 +1036,59 @@ void main() {
       }
     });
 
+    test('the show-reminder path carries the habit, the checkmark day and the '
+        'alarm instant', () async {
+      final habit = yesNoHabit();
+      habitList.add(habit);
+      final date = LocalDate.ymd(2015, 1, 26);
+      final int reminderTime = unixTime(2015, 1, 26, 8, 30);
+
+      final plugin = _FakeAlarmPlugin();
+      final scheduler = FlutterAlarmScheduler(
+        plugin: plugin,
+        builder: buildBuilder(),
+        logging: logging,
+        nowMillis: () => unixTime(2015, 1, 26, 6, 0),
+      );
+      scheduler.scheduleShowReminder(reminderTime, habit, date.unixTime);
+      await scheduler.settle();
+
+      final decoded =
+          ReminderPayload.decode(plugin.scheduled.single.spec.payload)!;
+
+      expect(decoded.habitId, habit.id,
+          reason: 'intents.reminder-receiver-dispatch#5 — ACTION_SHOW_REMINDER: '
+              'returns silently if habit is null; otherwise calls '
+              'reminderController.onShowReminder(habit, '
+              'LocalDate.fromUnixTime(timestamp), reminderTime). The port has '
+              'no fire-time hook — flutter_local_notifications posts a '
+              'notification the app built at schedule time — so the three '
+              'arguments travel with the alarm instead of being reassembled '
+              'when it fires; the gating onShowReminder would have applied runs '
+              'before the alarm is set. See the class doc on '
+              'FlutterAlarmScheduler.');
+      expect(decoded.date, date,
+          reason: 'intents.reminder-receiver-dispatch#5: the checkmark day, '
+              'recovered with LocalDate.fromUnixTime(timestamp)');
+      expect(decoded.timestamp, date.unixTime,
+          reason: 'intents.reminder-receiver-dispatch#5: which is the raw '
+              'extra');
+      expect(decoded.reminderTime, reminderTime,
+          reason: 'intents.reminder-receiver-dispatch#5: alongside the alarm '
+              'instant');
+
+      // "returns silently if habit is null": a payload naming a habit the list
+      // no longer holds resolves to an id nothing answers, and the caller gets
+      // nothing to act on rather than an exception.
+      habitList.remove(habit);
+      final response = ReminderResponse.decode(
+        payload: plugin.scheduled.single.spec.payload,
+      )!;
+      expect(habitList.getById(response.habitId), isNull,
+          reason: 'intents.reminder-receiver-dispatch#5: a deleted habit '
+              'resolves to nothing, and the branch stops there');
+    });
+
     test('an action with no branch has no effect', () {
       final payload = payloadFor(yesNoHabit(), LocalDate.ymd(2015, 1, 26), 500);
 
@@ -1121,6 +1272,41 @@ void main() {
           <SchedulerResult>[SchedulerResult.ignored, SchedulerResult.ok],
           reason: 'reminders.exact-alarm-scheduling#1: SchedulerResult has '
               'exactly two values: IGNORED and OK');
+    });
+
+    test('the scheduler holds the platform alarm service it was built with',
+        () async {
+      final plugin = _FakeAlarmPlugin();
+      final scheduler = FlutterAlarmScheduler(
+        plugin: plugin,
+        builder: buildBuilder(),
+        logging: logging,
+        nowMillis: () => 0,
+      );
+
+      expect(scheduler, isA<SystemScheduler>(),
+          reason: 'reminders.exact-alarm-scheduling#10: IntentScheduler '
+              'implements ReminderScheduler.SystemScheduler');
+      // `@AppScope` plus `context.getSystemService(ALARM_SERVICE)`: one
+      // long-lived object that owns the handle it schedules through. Here the
+      // handle is the AlarmPlugin, injected once at construction, and every
+      // alarm goes through that same instance.
+      final habit = yesNoHabit();
+      scheduler.scheduleShowReminder(
+        unixTime(2015, 1, 26, 8, 30),
+        habit,
+        unixTime(2015, 1, 26),
+      );
+      scheduler.scheduleShowReminder(
+        unixTime(2015, 1, 27, 8, 30),
+        habit,
+        unixTime(2015, 1, 27),
+      );
+      await scheduler.settle();
+      expect(plugin.scheduled, hasLength(2),
+          reason: 'reminders.exact-alarm-scheduling#10: the scheduler holds '
+              'the alarm service — nothing else is consulted, and no second '
+              'handle is obtained per call');
     });
 
     test('log(componentName, msg) writes under that component name', () {

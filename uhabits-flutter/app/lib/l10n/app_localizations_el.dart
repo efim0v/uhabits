@@ -39,6 +39,9 @@ class L10nEl extends L10n {
   String get toastHabitCreated => 'Η συνήθεια δημιουργήθηκε';
 
   @override
+  String get overview => 'Επισκόπηση';
+
+  @override
   String get habitStrength => 'Δύναμη συνήθειας';
 
   @override

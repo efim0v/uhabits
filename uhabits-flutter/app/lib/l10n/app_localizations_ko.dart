@@ -39,6 +39,9 @@ class L10nKo extends L10n {
   String get toastHabitCreated => '습관이 생성되었습니다.';
 
   @override
+  String get overview => '한눈에 보기';
+
+  @override
   String get habitStrength => '습관 강도';
 
   @override

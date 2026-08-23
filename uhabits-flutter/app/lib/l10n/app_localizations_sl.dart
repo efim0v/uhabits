@@ -39,6 +39,9 @@ class L10nSl extends L10n {
   String get toastHabitCreated => 'Navada ustvarjena';
 
   @override
+  String get overview => 'Pregled';
+
+  @override
   String get habitStrength => 'Moč navade';
 
   @override

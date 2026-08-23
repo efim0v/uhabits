@@ -39,6 +39,9 @@ class L10nRo extends L10n {
   String get toastHabitCreated => 'Obicei creat.';
 
   @override
+  String get overview => 'Prezentare generală';
+
+  @override
   String get habitStrength => 'Graficul obiceiurilor';
 
   @override

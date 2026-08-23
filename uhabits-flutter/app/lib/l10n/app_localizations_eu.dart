@@ -39,6 +39,9 @@ class L10nEu extends L10n {
   String get toastHabitCreated => 'Ohitura sortu da';
 
   @override
+  String get overview => 'Ikuspegi orokorra';
+
+  @override
   String get habitStrength => 'Ohituraren indarra';
 
   @override

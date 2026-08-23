@@ -642,6 +642,73 @@ void main() {
     });
 
     testWidgets(
+        'settings.screen.reminder-category#7 — the "reminderCustomize" row and '
+        'its two strings', (tester) async {
+      await open(tester);
+
+      expect(rowKeys(tester), contains('reminderCustomize'),
+          reason: 'settings.screen.reminder-category#7: Row '
+              '"reminderCustomize"');
+      expect(find.text('Customize notifications'), findsOneWidget,
+          reason: 'settings.screen.reminder-category#7: title "Customize '
+              'notifications"');
+      expect(
+        find.descendant(
+          of: rowNamed('reminderCustomize'),
+          matching: find.text(
+            'Change sound, vibration, light and other notification settings',
+          ),
+        ),
+        findsOneWidget,
+        reason: 'settings.screen.reminder-category#7: summary "Change sound, '
+            'vibration, light and other notification settings"',
+      );
+      // The other half of the rule — createAndroidNotificationChannel followed
+      // by Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS with EXTRA_APP_PACKAGE
+      // and EXTRA_CHANNEL_ID = "REMINDERS" — is an Android intent with no
+      // cross-platform counterpart, so the row carries no action at all.
+      expect(tester.widget<SettingsRow>(rowNamed('reminderCustomize')).onTap,
+          isNull,
+          reason: 'settings.screen.reminder-category#7: the click that would '
+              'create the channel and open its system settings screen has no '
+              'counterpart here, so nothing is wired to the row');
+    });
+
+    testWidgets(
+        'settings.reminder-sound-row-hidden#2,#3 — the ringtone picker is a '
+        'dead path and pref_ringtone_uri is never written', (tester) async {
+      final harness = await open(tester);
+
+      final row = tester.widget<SettingsRow>(rowNamed('reminderSound'));
+      expect(row.onTap, isNull,
+          reason: 'settings.reminder-sound-row-hidden#2: the '
+              "onPreferenceTreeClick showRingtonePicker() branch and "
+              'updateRingtoneDescription() are dead paths — nothing on this '
+              'row can launch ACTION_RINGTONE_PICKER');
+      expect(row.enabled, isFalse,
+          reason: 'settings.reminder-sound-row-hidden#2: RingtoneManager'
+              '.update() is never invoked');
+
+      // Tapping it — the gesture that upstream would have opened the picker
+      // with, request code 1 — changes nothing at all.
+      await tester.tap(rowNamed('reminderSound'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+
+      expect(harness.popped, isFalse,
+          reason: 'settings.reminder-sound-row-hidden#2: the dead branch is '
+              'not reachable through the row');
+      expect(harness.storage.getString('pref_ringtone_uri', ''), '',
+          reason: 'settings.reminder-sound-row-hidden#3: consequently the '
+              'SharedPreferences key pref_ringtone_uri is never written');
+      // The empty-string value is what would make getURI() return null and
+      // getName() return "None"; there is no way to reach it from the UI, so
+      // the key is not merely empty, it is absent.
+      expect(harness.storage.getString('pref_ringtone_uri', 'absent'), 'absent',
+          reason: "settings.reminder-sound-row-hidden#3: the 'silent' state "
+              '(empty-string value) is unreachable through the UI');
+    });
+
+    testWidgets(
         'settings.preferences.sticky-notifications#1,#2,#3 — writes '
         'pref_sticky_notifications and always fires onNotificationsChanged',
         (tester) async {
@@ -734,6 +801,97 @@ void main() {
       expect(
         tester.widget<SettingsRow>(rowNamed('publicBackupFolder')).enabled,
         isFalse,
+      );
+    });
+
+    testWidgets(
+        'io.public-backup-folder-pref#1 — key, title and default summary',
+        (tester) async {
+      await open(tester);
+
+      expect(rowKeys(tester), contains('publicBackupFolder'),
+          reason: "io.public-backup-folder-pref#1: The preference lives in "
+              "Settings > Database with key 'publicBackupFolder'");
+      expect(
+        rowKeys(tester).indexOf('publicBackupFolder'),
+        greaterThan(rowKeys(tester).indexOf('importData')),
+        reason: 'io.public-backup-folder-pref#1: it sits in the Database '
+            'category, after the three export/import rows',
+      );
+      expect(
+        find.descendant(
+          of: rowNamed('publicBackupFolder'),
+          matching: find.text('Select public backup folder'),
+        ),
+        findsOneWidget,
+        reason: "io.public-backup-folder-pref#1: title 'Select public backup "
+            "folder'",
+      );
+      expect(
+        find.descendant(
+          of: rowNamed('publicBackupFolder'),
+          matching: find.text('No folder selected'),
+        ),
+        findsOneWidget,
+        reason: "io.public-backup-folder-pref#1: default summary 'No folder "
+            "selected'",
+      );
+    });
+
+    testWidgets(
+        'io.public-backup-folder-pref#7 — a stored folder is shown as the '
+        'summary, an unset key as the "no folder" string', (tester) async {
+      final storage = MemoryStorage();
+      const String tree =
+          'content://com.android.externalstorage.documents/tree/primary%3ALoop';
+      storage.putString('publicBackupFolder', tree);
+
+      final harness = await open(tester, storage: storage);
+
+      expect(SettingsModel(harness.scope, storage: storage).publicBackupFolder,
+          tree,
+          reason: 'io.public-backup-folder-pref#7: the summary shows the '
+              'stored value; the human-readable path derived from the tree '
+              'document id needs DocumentsContract, so the raw URI string is '
+              'what is left');
+      expect(
+        find.descendant(
+          of: rowNamed('publicBackupFolder'),
+          matching: find.text(tree),
+        ),
+        findsOneWidget,
+        reason: 'io.public-backup-folder-pref#7: otherwise the raw URI string '
+            'is shown',
+      );
+      expect(
+        find.descendant(
+          of: rowNamed('publicBackupFolder'),
+          matching: find.text('No folder selected'),
+        ),
+        findsNothing,
+        reason: 'io.public-backup-folder-pref#7: the "no public backup folder '
+            'selected" string is only used when the key is unset',
+      );
+    });
+
+    testWidgets(
+        'io.public-backup-folder-pref#7 — an unset key falls back to the '
+        '"no folder selected" string', (tester) async {
+      final storage = MemoryStorage();
+      final harness = await open(tester, storage: storage);
+
+      expect(SettingsModel(harness.scope, storage: storage).publicBackupFolder,
+          isNull,
+          reason: 'io.public-backup-folder-pref#7: when the key is unset the '
+              'summary is the "no public backup folder selected" string');
+      expect(
+        find.descendant(
+          of: rowNamed('publicBackupFolder'),
+          matching: find.text('No folder selected'),
+        ),
+        findsOneWidget,
+        reason: 'io.public-backup-folder-pref#7: when the key is unset the '
+            'summary is the "no public backup folder selected" string',
       );
     });
 
@@ -1170,6 +1328,117 @@ void main() {
               'RESULT_BUG_REPORT');
       expect(harness.result!.code, 104,
           reason: 'io.bug-report-dump#1: RESULT_BUG_REPORT = 104');
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Localization rules the settings screen is the evidence for
+  // -------------------------------------------------------------------
+
+  group('platform-glue localization', () {
+    testWidgets(
+        'platform-glue.locale-config#10 — there is no language row; the '
+        'system picker is the whole mechanism', (tester) async {
+      await open(tester);
+
+      // Not one of the 22 rows offers a language choice, and no message in the
+      // catalogue would label one.
+      expect(rowKeys(tester).where((key) => key.contains('lang')), isEmpty,
+          reason: 'platform-glue.locale-config#10 — There is no in-app '
+              'language-selection row in preferences.xml; language selection '
+              'is delegated entirely to the Android 13+ per-app language '
+              'system setting driven by this locale-config. Flutter resolves '
+              'the locale from the platform the same way, through '
+              'MaterialApp.supportedLocales.');
+      expect(find.text('Language'), findsNothing,
+          reason: 'platform-glue.locale-config#10: nor any row titled so');
+      expect(categoryTitles(tester).where((t) => t.contains('Language')),
+          isEmpty,
+          reason: 'platform-glue.locale-config#10: nor a category');
+    });
+
+    testWidgets(
+        'platform-glue.locale-config#11 — Development and "Enable developer '
+        'mode" stay English while everything around them translates',
+        (tester) async {
+      final storage = MemoryStorage();
+      final scope = openScope(storage);
+      scope.preferences.isDeveloper = true;
+      await open(
+        tester,
+        storage: storage,
+        scope: scope,
+        locale: const Locale('ru'),
+      );
+
+      expect(categoryTitles(tester), contains('Development'),
+          reason: 'platform-glue.locale-config#11 — All user-facing settings '
+              'strings are localized resources except the Development category '
+              'title "Development" and its row title "Enable developer mode", '
+              'which are hard-coded English in preferences.xml.');
+      expect(find.text('Enable developer mode'), findsOneWidget,
+          reason: 'platform-glue.locale-config#11: the row title too');
+
+      // The categories on either side of it do translate, so this is the
+      // exception the rule describes and not a locale that simply failed to
+      // load.
+      expect(categoryTitles(tester), containsAll(<String>[
+        'Напоминание',
+        'База данных',
+        'Устранение неполадок',
+        'Ссылки',
+      ]), reason: 'platform-glue.locale-config#11: everything else is a '
+          'localized resource');
+    });
+
+    testWidgets(
+        'platform-glue.localized-arrays#5 — the widget opacity entries and '
+        'values stay index-aligned, defaulting to "255"', (tester) async {
+      expect(SettingsModel.widgetOpacityLabels,
+          <String>['100%', '80%', '60%', '40%', '20%', '0%'],
+          reason: 'platform-glue.localized-arrays#5 — widget_opacity_entries '
+              'are ["100%", "80%", "60%", "40%", "20%", "0%"] index-aligned '
+              'with widget_opacity_values [255, 204, 153, 102, 51, 0]; the '
+              'default persisted value is the string "255".');
+      expect(SettingsModel.widgetOpacityValues,
+          <String>['255', '204', '153', '102', '51', '0'],
+          reason: 'platform-glue.localized-arrays#5: the values array');
+      expect(SettingsModel.widgetOpacityLabels.length,
+          SettingsModel.widgetOpacityValues.length,
+          reason: 'platform-glue.localized-arrays#5: index-aligned');
+
+      final harness = await open(tester);
+      expect(SettingsModel.widgetOpacityValues.first, '255',
+          reason: 'platform-glue.localized-arrays#5: the default persisted '
+              'value is the string "255", not the int — it is the first entry '
+              'of the values array, which is what android:defaultValue names');
+      expect(harness.scope.preferences.widgetOpacity, 255,
+          reason: 'platform-glue.localized-arrays#5: and an untouched '
+              'preference reads back as that value');
+      await tester.tap(rowNamed('pref_widget_opacity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('100%'));
+      await tester.pumpAndSettle();
+      expect(harness.storage.getString('pref_widget_opacity', ''), '255',
+          reason: 'platform-glue.localized-arrays#5: picking the first entry '
+              'writes the string "255", not the int');
+
+      // The labels are percentages, so they are the same in every locale —
+      // which is why upstream could get away with translating them.
+      await tester.pumpAndSettle();
+      for (final String label in SettingsModel.widgetOpacityLabels) {
+        expect(int.tryParse(label.replaceAll('%', '')), isNotNull,
+            reason: 'platform-glue.localized-arrays#5: every entry is a '
+                'percentage of the value beside it ($label)');
+      }
+      for (var i = 0; i < SettingsModel.widgetOpacityLabels.length; i++) {
+        final int percent =
+            int.parse(SettingsModel.widgetOpacityLabels[i].replaceAll('%', ''));
+        final int alpha = int.parse(SettingsModel.widgetOpacityValues[i]);
+        expect((percent * 255 / 100).round(), alpha,
+            reason: 'platform-glue.localized-arrays#5: entry $i really is '
+                '$percent percent of 255');
+      }
     });
   });
 }

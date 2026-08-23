@@ -39,6 +39,9 @@ class L10nAf extends L10n {
   String get toastHabitCreated => 'Gewoonte geskep';
 
   @override
+  String get overview => 'Oorsig';
+
+  @override
   String get habitStrength => 'Habit strength';
 
   @override

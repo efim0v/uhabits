@@ -39,6 +39,9 @@ class L10nHr extends L10n {
   String get toastHabitCreated => 'Navika je stvorena';
 
   @override
+  String get overview => 'Pregled';
+
+  @override
   String get habitStrength => 'Snaga navike';
 
   @override

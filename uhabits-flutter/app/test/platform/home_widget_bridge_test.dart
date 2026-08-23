@@ -720,6 +720,86 @@ void main() {
             'delay disabled it is the next local 00:00 and with it enabled the '
             'next local 03:00.',
       );
+      expect(
+        sync.nextStartOfDayUpdate,
+        DateUtils.getStartOfTomorrowWithOffset(preferences.midnightDelayHours, 0),
+        reason: 'settings.preferences.midnight-delay#8: WidgetUpdater schedules '
+            'the start-of-day widget refresh at '
+            'DateUtils.getStartOfTomorrowWithOffset('
+            'preferences.midnightDelayHours, 0)',
+      );
+
+      // The preference is read every time, not captured once: turning it back
+      // off moves the next refresh back to midnight.
+      preferences.isMidnightDelayEnabled = false;
+      expect(
+        sync.scheduleStartDayWidgetUpdate(),
+        DateUtils.getStartOfTomorrowWithOffset(0, 0),
+        reason: 'settings.preferences.midnight-delay#8: WidgetUpdater schedules '
+            'the start-of-day widget refresh at '
+            'DateUtils.getStartOfTomorrowWithOffset('
+            'preferences.midnightDelayHours, 0)',
+      );
+    });
+
+    test(
+        'settings.preferences.midnight-delay#11 — every consumer of '
+        'midnightDelayHours reads it through Preferences', () {
+      final int now = DateTime.utc(2015, 1, 26, 1, 30).millisecondsSinceEpoch;
+      // `computeToday` reads the wall clock directly; `DateUtils.getLocalTime`
+      // is what the delay arithmetic reads.
+      systemCurrentTimeMillis = () => now;
+      DateUtils.setFixedLocalTime(now);
+      final executor = FakeExecutor();
+      final timer = MidnightTimer(logging, preferences);
+
+      // 1. MidnightTimer.onResume — the initial delay.
+      // 2. MidnightTimer._notifyListeners — computeToday.
+      preferences.isMidnightDelayEnabled = true;
+      timer.onResume(0, executor);
+      expect(
+        executor.delay,
+        DateUtils.millisecondsUntilTomorrowWithOffset(
+          preferences.midnightDelayHours,
+          0,
+        ),
+        reason: 'settings.preferences.midnight-delay#11: midnightDelayHours is '
+            'consumed by MidnightTimer.onResume (initial delay)',
+      );
+      executor.fire();
+      expect(
+        getToday(),
+        computeToday(preferences.midnightDelayHours, 0),
+        reason: 'settings.preferences.midnight-delay#11: …and by '
+            'MidnightTimer.notifyListeners (computeToday), which is also the '
+            'WidgetReceiver ACTION_UPDATE_WIDGETS_VALUE setToday step and the '
+            'HabitsApplication.onCreate initial setToday',
+      );
+      // At 01:30 with a three-hour delay, "today" is still the previous day.
+      expect(
+        getToday(),
+        LocalDate.ymd(2015, 1, 25),
+        reason: 'settings.preferences.midnight-delay#11: the offset is what '
+            'makes the logical day lag the calendar one',
+      );
+
+      // 3. WidgetUpdater.scheduleStartDayWidgetUpdate.
+      expect(
+        sync.scheduleStartDayWidgetUpdate(),
+        DateUtils.getStartOfTomorrowWithOffset(
+          preferences.midnightDelayHours,
+          0,
+        ),
+        reason: 'settings.preferences.midnight-delay#11: …and by '
+            'WidgetUpdater.scheduleStartDayWidgetUpdate',
+      );
+
+      expect(
+        preferences.midnightDelayHours,
+        3,
+        reason: 'settings.preferences.midnight-delay#11: every one of them '
+            'reads the same Preferences.midnightDelayHours',
+      );
     });
   });
 
@@ -1214,6 +1294,372 @@ void main() {
             'bound to that habit.',
       );
     });
+
+    test(
+        'notifications.auto-cancel#3,#4 — add and remove cancel before the '
+        'write, toggle, increment and decrement after it', () {
+      final numerical = fixtures.createNumericalHabit();
+      habitList.add(numerical);
+      numerical.originalEntries.add(Entry(today, 500));
+      numerical.recompute();
+
+      log.clear();
+      behavior.onAddRepetition(habit, today);
+      expect(
+        log,
+        <String>['cancel', 'run'],
+        reason: 'notifications.auto-cancel#3: WidgetBehavior.onAddRepetition '
+            'cancels the notification BEFORE writing the entry',
+      );
+
+      log.clear();
+      behavior.onRemoveRepetition(habit, today);
+      expect(
+        log,
+        <String>['cancel', 'run'],
+        reason: 'notifications.auto-cancel#3: onRemoveRepetition also cancels '
+            'before writing',
+      );
+
+      log.clear();
+      behavior.onToggleRepetition(habit, today);
+      expect(
+        log,
+        <String>['run', 'cancel'],
+        reason: 'notifications.auto-cancel#4: WidgetBehavior.onToggleRepetition '
+            'cancels the notification AFTER writing the entry',
+      );
+
+      log.clear();
+      behavior.onIncrement(numerical, today, 100);
+      expect(
+        log,
+        <String>['run', 'cancel'],
+        reason: 'notifications.auto-cancel#4: onIncrement cancels after writing',
+      );
+
+      log.clear();
+      behavior.onDecrement(numerical, today, 100);
+      expect(
+        log,
+        <String>['run', 'cancel'],
+        reason: 'notifications.auto-cancel#4: onDecrement cancels after writing',
+      );
+    });
+
+    test(
+        'notifications.auto-cancel#11 — the explicit cancel and the '
+        'command-runner one both fire, and the second is a no-op', () {
+      final taskRunner = CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      );
+      final realRunner = CommandRunner(taskRunner);
+      final systemTray = RecordingSystemTray();
+      // The real core tray, wired the way HabitsApplication wires it: it is a
+      // CommandRunner.Listener that cancels on every CreateRepetitionCommand.
+      final realTray =
+          NotificationTray(taskRunner, realRunner, preferences, systemTray);
+      realTray.startListening();
+      final tapBehavior = WidgetBehavior(
+        habitList: habitList,
+        commandRunner: realRunner,
+        notificationTray: realTray,
+        preferences: preferences,
+      );
+
+      // Something is showing for this habit, so the first cancel has work to
+      // do and the second one does not.
+      realTray.show(habit, today, 0);
+      systemTray.removals.clear();
+
+      tapBehavior.onAddRepetition(habit, today);
+
+      expect(
+        systemTray.removals,
+        <int>[habit.id!, habit.id!],
+        reason: 'notifications.auto-cancel#11: WidgetBehavior additionally '
+            'calls notificationTray.cancel(habit) explicitly around each entry '
+            'change, so the cancel can happen twice for one tap — once from '
+            'WidgetBehavior and once from the tray listening to the '
+            'CreateRepetitionCommand',
+      );
+
+      // Nothing is registered any more, and both cancels stay harmless.
+      systemTray.removals.clear();
+      tapBehavior.onToggleRepetition(habit, today);
+      expect(
+        systemTray.removals,
+        <int>[habit.id!, habit.id!],
+        reason: 'notifications.auto-cancel#11: the cancel can happen twice for '
+            'one tap (it is idempotent)',
+      );
+    });
+  });
+
+  // =======================================================================
+  // intents.widget-receiver-dispatch
+  //
+  // `WidgetReceiver` itself has no counterpart here: a broadcast receiver runs
+  // in another process and cannot execute Dart, so the four actions arrive as
+  // a deep link (see WidgetIntents.kt) or, for the rollover, as a MidnightTimer
+  // tick. What the port owes each action is the branch behind it, and that is
+  // what these assert. The receiver's own furniture — the static
+  // lastReceivedIntent, the INFO log line, the exported manifest filters, the
+  // referential action comparison — has nowhere to live and stays uncited.
+  // =======================================================================
+
+  group('intents.widget-receiver-dispatch', () {
+    late RecordingCommandRunner commandRunner;
+    late RecordingNotificationTray tray;
+    late SpyPreferences spyPreferences;
+    late WidgetBehavior behavior;
+    late Habit habit;
+    late LocalDate today;
+    late List<String> log;
+
+    setUp(() {
+      log = <String>[];
+      final taskRunner = CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      );
+      commandRunner = RecordingCommandRunner(taskRunner, log);
+      spyPreferences = SpyPreferences(storage);
+      tray = RecordingNotificationTray(
+        taskRunner,
+        commandRunner,
+        spyPreferences,
+        log,
+      );
+      behavior = WidgetBehavior(
+        habitList: habitList,
+        commandRunner: commandRunner,
+        notificationTray: tray,
+        preferences: spyPreferences,
+      );
+      habit = addHabit();
+      today = getToday();
+    });
+
+    int lastValue() =>
+        (commandRunner.commands.last as CreateRepetitionCommand).value;
+
+    test('#3 ACTION_ADD_REPETITION writes YES_MANUAL and keeps the notes', () {
+      habit.originalEntries.add(Entry(today, Entry.no, notes: 'kept'));
+
+      behavior.onAddRepetition(habit, today);
+
+      expect(lastValue(), Entry.yesManual,
+          reason: 'intents.widget-receiver-dispatch#3 — ACTION_ADD_REPETITION '
+              '-> WidgetBehavior.onAddRepetition(habit, date) -> cancel '
+              'notification, then write Entry.YES_MANUAL (2) keeping existing '
+              'notes.');
+      expect((commandRunner.commands.last as CreateRepetitionCommand).notes,
+          'kept',
+          reason: 'intents.widget-receiver-dispatch#3: keeping existing notes');
+      expect(log, <String>['cancel', 'run'],
+          reason: 'intents.widget-receiver-dispatch#3: cancel first, then '
+              'write');
+    });
+
+    test('#4 ACTION_REMOVE_REPETITION writes NO and keeps the notes', () {
+      habit.originalEntries.add(Entry(today, Entry.yesManual, notes: 'kept'));
+
+      behavior.onRemoveRepetition(habit, today);
+
+      expect(lastValue(), Entry.no,
+          reason: 'intents.widget-receiver-dispatch#4 — '
+              'ACTION_REMOVE_REPETITION -> '
+              'WidgetBehavior.onRemoveRepetition(habit, date) -> cancel '
+              'notification, then write Entry.NO (0) keeping existing notes.');
+      expect((commandRunner.commands.last as CreateRepetitionCommand).notes,
+          'kept',
+          reason: 'intents.widget-receiver-dispatch#4: keeping existing notes');
+      expect(log, <String>['cancel', 'run'],
+          reason: 'intents.widget-receiver-dispatch#4: cancel first, then '
+              'write');
+    });
+
+    test('#5 ACTION_TOGGLE_REPETITION walks the whole cycle, then cancels', () {
+      spyPreferences.isSkipEnabled = true;
+      spyPreferences.areQuestionMarksEnabled = true;
+
+      // The cycle the rule spells out, run end to end rather than asserted
+      // value by value: each toggle starts from where the previous one left off.
+      habit.originalEntries.add(Entry(today, Entry.yesAuto));
+      final List<int> observed = <int>[];
+      for (var i = 0; i < 5; i++) {
+        behavior.onToggleRepetition(habit, today);
+        observed.add(lastValue());
+        habit.originalEntries.add(Entry(today, lastValue()));
+      }
+
+      expect(
+        observed,
+        <int>[
+          Entry.yesManual, // YES_AUTO -> YES_MANUAL
+          Entry.skip, //      YES_MANUAL -> SKIP (skip enabled)
+          Entry.no, //        SKIP -> NO
+          Entry.unknown, //   NO -> UNKNOWN (question marks enabled)
+          Entry.yesManual, // UNKNOWN -> YES_MANUAL
+        ],
+        reason: 'intents.widget-receiver-dispatch#5 — ACTION_TOGGLE_REPETITION '
+            '-> WidgetBehavior.onToggleRepetition(habit, date) -> write '
+            'Entry.nextToggleValue(current, isSkipEnabled, '
+            'areQuestionMarksEnabled), then cancel notification. The cycle is '
+            'YES_AUTO->YES_MANUAL, YES_MANUAL->SKIP if skip enabled else NO, '
+            'SKIP->NO, NO->UNKNOWN if question marks enabled else YES_MANUAL, '
+            'UNKNOWN->YES_MANUAL, anything else->YES_MANUAL.',
+      );
+
+      // The two preference-off branches, and the fallthrough.
+      spyPreferences.isSkipEnabled = false;
+      spyPreferences.areQuestionMarksEnabled = false;
+      for (final MapEntry<int, int> step in <int, int>{
+        Entry.yesManual: Entry.no,
+        Entry.no: Entry.yesManual,
+        4242: Entry.yesManual,
+      }.entries) {
+        habit.originalEntries.add(Entry(today, step.key));
+        behavior.onToggleRepetition(habit, today);
+        expect(lastValue(), step.value,
+            reason: 'intents.widget-receiver-dispatch#5: ${step.key} -> '
+                '${step.value} with both preferences off');
+      }
+
+      log.clear();
+      habit.originalEntries.add(Entry(today, Entry.no));
+      behavior.onToggleRepetition(habit, today);
+      expect(log, <String>['run', 'cancel'],
+          reason: 'intents.widget-receiver-dispatch#5: the write comes first '
+              'and the cancel afterwards, the other way round from add and '
+              'remove');
+    });
+
+    test('#6 the rollover sets today, refreshes everything, then re-arms',
+        () async {
+      final TaskRunner taskRunner = CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      );
+      final MidnightTimer midnightTimer = MidnightTimer(logging, preferences);
+      final FakeExecutor executor = FakeExecutor();
+      final WidgetSync sync = WidgetSync(
+        bridge: bridge,
+        commandRunner: CommandRunner(taskRunner),
+        taskRunner: taskRunner,
+        midnightTimer: midnightTimer,
+        preferences: preferences,
+      );
+      registry.addWidget(1, <int>[habit.id!]);
+      registry.addWidget(2, <int>[]);
+
+      final int beforeMidnight =
+          DateTime.utc(2015, 1, 27, 23, 59).millisecondsSinceEpoch;
+      systemCurrentTimeMillis = () => beforeMidnight;
+      DateUtils.setFixedLocalTime(beforeMidnight);
+      sync.scheduleStartDayWidgetUpdate();
+      final int armedBefore = sync.nextStartOfDayUpdate!;
+      midnightTimer.onResume(0, executor);
+
+      final int afterMidnight =
+          DateTime.utc(2015, 1, 28, 0, 0, 30).millisecondsSinceEpoch;
+      systemCurrentTimeMillis = () => afterMidnight;
+      DateUtils.setFixedLocalTime(afterMidnight);
+      executor.fire();
+      await sync.settle();
+
+      expect(getToday(), LocalDate.ymd(2015, 1, 28),
+          reason: 'intents.widget-receiver-dispatch#6 — '
+              'ACTION_UPDATE_WIDGETS_VALUE -> '
+              'setToday(computeToday(preferences.midnightDelayHours, 0)); '
+              'widgetUpdater.updateWidgets(); '
+              'widgetUpdater.scheduleStartDayWidgetUpdate(). There is no '
+              'broadcast to receive here — MidnightTimer fires at the same '
+              'instant and performs the setToday step itself — so what is left '
+              'is the same three effects in the same order.');
+      expect(platform.savedDocumentIds, <int>[1, 2],
+          reason: 'intents.widget-receiver-dispatch#6: every widget is '
+              'refreshed, not just the ones bound to some habit');
+      expect(decode(platform.data[HomeWidgetBridge.indexKey])['today'],
+          '2015-01-28',
+          reason: 'intents.widget-receiver-dispatch#6: and the refresh happens '
+              'after setToday, so the published day is the new one');
+      expect(sync.nextStartOfDayUpdate, greaterThan(armedBefore),
+          reason: 'intents.widget-receiver-dispatch#6: then it re-arms');
+      expect(sync.nextStartOfDayUpdate,
+          DateTime.utc(2015, 1, 29).millisecondsSinceEpoch,
+          reason: 'intents.widget-receiver-dispatch#6: for the next logical '
+              'day');
+    });
+  });
+
+  // =======================================================================
+  // widgets.checkmark, the half that is not native
+  // =======================================================================
+
+  group('widgets.checkmark tap cycle', () {
+    test('#9 repeated taps on a boolean widget walk YES_MANUAL -> SKIP -> NO',
+        () {
+      final List<String> log = <String>[];
+      final TaskRunner taskRunner = CoroutineTaskRunner(
+        mainDispatcher: const UnconfinedTestDispatcher(),
+        ioDispatcher: const UnconfinedTestDispatcher(),
+      );
+      final RecordingCommandRunner commandRunner =
+          RecordingCommandRunner(taskRunner, log);
+      final SpyPreferences spyPreferences = SpyPreferences(storage);
+      final WidgetBehavior behavior = WidgetBehavior(
+        habitList: habitList,
+        commandRunner: commandRunner,
+        notificationTray: RecordingNotificationTray(
+          taskRunner,
+          commandRunner,
+          spyPreferences,
+          log,
+        ),
+        preferences: spyPreferences,
+      );
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+
+      // The Kotlin CheckmarkWidgetTest presses R.id.button three times with
+      // isSkipEnabled = true and reads the entry back after each press.
+      spyPreferences.isSkipEnabled = true;
+      spyPreferences.areQuestionMarksEnabled = false;
+      habit.originalEntries.add(Entry(today, Entry.yesManual));
+
+      final List<int> observed = <int>[];
+      for (var press = 0; press < 2; press++) {
+        behavior.onToggleRepetition(habit, today);
+        final int value =
+            (commandRunner.commands.last as CreateRepetitionCommand).value;
+        observed.add(value);
+        habit.originalEntries.add(Entry(today, value));
+      }
+
+      expect(
+        observed,
+        <int>[Entry.skip, Entry.no],
+        reason: 'widgets.checkmark#9 — Repeatedly tapping a boolean Checkmark '
+            'widget cycles the value through Entry.nextToggleValue; with skip '
+            'enabled and starting at YES_MANUAL the observed sequence is '
+            'YES_MANUAL -> SKIP -> NO.',
+      );
+
+      // With skip disabled the middle step disappears, which is what makes the
+      // sequence above a property of the preference and not of the widget.
+      spyPreferences.isSkipEnabled = false;
+      habit.originalEntries.add(Entry(today, Entry.yesManual));
+      behavior.onToggleRepetition(habit, today);
+      expect(
+        (commandRunner.commands.last as CreateRepetitionCommand).value,
+        Entry.no,
+        reason: 'widgets.checkmark#9: without skip, YES_MANUAL goes straight '
+            'to NO',
+      );
+    });
   });
 }
 
@@ -1386,6 +1832,28 @@ class RecordingNotificationTray extends NotificationTray {
   }
 }
 
+/// A [SystemTray] that records the ids it was asked to remove, so that a double
+/// cancel is visible.
+class RecordingSystemTray implements SystemTray {
+  final List<int> removals = <int>[];
+  final List<int> shown = <int>[];
+
+  @override
+  void log(String msg) {}
+
+  @override
+  void removeNotification(int notificationId) => removals.add(notificationId);
+
+  @override
+  void showNotification(
+    Habit habit,
+    int notificationId,
+    LocalDate date,
+    int reminderTime,
+  ) =>
+      shown.add(notificationId);
+}
+
 class _NullSystemTray implements SystemTray {
   @override
   void log(String msg) {}
@@ -1421,6 +1889,12 @@ class SpyPreferences extends Preferences {
 class FakeExecutor implements ScheduledExecutorService {
   final List<void Function()> commands = <void Function()>[];
 
+  /// The `initialDelay` of the most recent schedule.
+  int? delay;
+
+  /// The `period` of the most recent schedule.
+  int? period;
+
   void fire() {
     for (final void Function() c in List<void Function()>.of(commands)) {
       c();
@@ -1433,6 +1907,8 @@ class FakeExecutor implements ScheduledExecutorService {
     int initialDelayMillis,
     int periodMillis,
   ) {
+    delay = initialDelayMillis;
+    period = periodMillis;
     commands.add(command);
   }
 

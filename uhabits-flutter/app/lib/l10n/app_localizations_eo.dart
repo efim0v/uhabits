@@ -39,6 +39,9 @@ class L10nEo extends L10n {
   String get toastHabitCreated => 'Kutimo kreita';
 
   @override
+  String get overview => 'Generala vidado';
+
+  @override
   String get habitStrength => 'Kutimo forteco';
 
   @override

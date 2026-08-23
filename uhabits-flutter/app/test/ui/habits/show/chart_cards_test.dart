@@ -18,6 +18,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
+import 'package:uhabits/l10n/app_localizations_en.dart';
+import 'package:uhabits/l10n/app_localizations_es.dart';
 import 'package:uhabits/ui/core_view.dart';
 import 'package:uhabits/ui/habits/list/list_header.dart'
     show IntlLocalDateFormatter;
@@ -149,6 +151,36 @@ void main() {
         (tester) async {
       expect(ScoreCardPresenter.bucketSizes, <int>[1, 7, 31, 92, 365],
           reason: 'show-habit.score-card#1');
+    });
+
+    testWidgets(
+        'platform-glue.localized-arrays#4 — the two interval-name arrays, '
+        'with and without the day', (tester) async {
+      final L10n l10n = L10nEn();
+
+      expect(
+        bucketLabels(l10n),
+        <String>['Day', 'Week', 'Month', 'Quarter', 'Year'],
+        reason: 'platform-glue.localized-arrays#4 — strengthIntervalNames has 5 '
+            'entries: day, week, month, quarter, year; '
+            'strengthIntervalNamesWithoutDay has 4: week, month, quarter, '
+            'year. ARB has no array concept, so each becomes an explicit '
+            'ordered list of message ids.',
+      );
+      expect(
+        bucketLabelsWithoutDay(l10n),
+        <String>['Week', 'Month', 'Quarter', 'Year'],
+        reason: 'platform-glue.localized-arrays#4: the shorter array is the '
+            'longer one without its first entry',
+      );
+      expect(bucketLabelsWithoutDay(l10n), bucketLabels(l10n).skip(1).toList(),
+          reason: 'platform-glue.localized-arrays#4: which is what makes the '
+              'two index contracts compatible below index 0');
+
+      // Every entry really is a localized message, not a literal: the Spanish
+      // build says something else.
+      expect(bucketLabels(L10nEs()), isNot(bucketLabels(l10n)),
+          reason: 'platform-glue.localized-arrays#4: the array is localizable');
     });
   });
 

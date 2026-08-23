@@ -574,7 +574,10 @@ void main() {
       expect(
         HistoryEditorDialog.currentDialog,
         isNotNull,
-        reason: 'history-editor.dialog#10',
+        reason: 'history-editor.dialog#10 and dialogs.single-current-dialog#5 '
+            '— the entry popups are the dialogs Kotlin routes through the '
+            "app-wide dismissCurrentAndShow, and the editor's own static "
+            'currentDialog slot is what lets it survive underneath one',
       );
     });
 

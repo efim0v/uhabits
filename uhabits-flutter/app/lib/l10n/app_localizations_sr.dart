@@ -39,6 +39,9 @@ class L10nSr extends L10n {
   String get toastHabitCreated => 'Навика направљена';
 
   @override
+  String get overview => 'Преглед';
+
+  @override
   String get habitStrength => 'Моћ навике';
 
   @override
@@ -704,6 +707,9 @@ class L10nSrLatn extends L10nSr {
 
   @override
   String get toastHabitCreated => 'Navika napravljena';
+
+  @override
+  String get overview => 'Pregled';
 
   @override
   String get habitStrength => 'Moć navike';

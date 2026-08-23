@@ -37,6 +37,8 @@ import 'package:uhabits/ui/settings/settings_screen.dart';
 import 'package:uhabits_core/src/io/abstract_importer.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
+import 'package:uhabits_core/src/ui/screens/habits/list/list_habits_behavior.dart'
+    show ListHabitsBehaviorDirFinder;
 import 'package:uhabits_core/src/ui/screens/habits/show/show_habit_menu_presenter.dart'
     show ShowHabitMenuPresenterSystem;
 import 'package:uhabits_core/uhabits_core.dart';
@@ -508,6 +510,52 @@ void main() {
       copy.close();
     });
 
+    test(
+        'io.public-backup-folder-pref#5 — with the key unset the backup goes '
+        'to the app-private Backups folder', () async {
+      final scope = openScope();
+      final parent = makeDir('external-nofolder');
+      final sharer = FakeFileSharer();
+      final actions = DataActions(
+        scope: scope,
+        dirFinder: HabitsDirFinder(<String>[parent]),
+        cacheDir: makeDir('cache-nofolder'),
+        fileChooser: FakeFileChooser(),
+        fileSharer: sharer,
+        urlOpener: FakeUrlOpener(),
+        importTaskFactory: ImportDataTaskFactory(
+          GenericImporter(
+            RecordingImporter(),
+            RecordingImporter(),
+            RecordingImporter(),
+            RecordingImporter(),
+          ),
+          scope.modelFactory,
+        ),
+        showMessage: (_) {},
+        clock: () => DateTime.utc(2025, 8, 22, 14, 30, 12),
+      );
+
+      expect(scope.preferencesStorage.getString('publicBackupFolder', ''), '',
+          reason: 'io.public-backup-folder-pref#5: nothing writes the '
+              'preference in this build, so it is always unset');
+
+      await actions.exportDb();
+
+      final expected =
+          '$parent/Backups/Loop Habits Backup 2025-08-22 143012.db';
+      expect(File(expected).existsSync(), isTrue,
+          reason: 'io.public-backup-folder-pref#5: when the preference is '
+              'unset, the manual export falls back to the app-private '
+              "external 'Backups' folder");
+      expect(sharer.paths, <String>[expected],
+          reason: 'io.public-backup-folder-pref#5: and the absolute path in '
+              'that folder is what the export reports');
+      expect(Directory('$parent/Backups').listSync(), hasLength(1),
+          reason: 'io.public-backup-folder-pref#5: there is no second '
+              'destination to write to');
+    });
+
     test('#12 exporting twice writes two files, with no rotation', () async {
       final scope = openScope();
       final parent = makeDir('external3');
@@ -584,6 +632,95 @@ void main() {
         throwsA(isA<StateError>()),
         reason: 'io.export-db-backup#8 io.export-db-backup#15 '
             'IOException rethrown as a RuntimeException',
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // ListHabitsScreen.onSettingsResult
+  // -------------------------------------------------------------------
+
+  group('settings.screen.database-category', () {
+    test('#5 each result code is dispatched to its own action', () async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      final parent = makeDir('external-dispatch');
+      final chooser = FakeFileChooser();
+      final sharer = FakeFileSharer();
+      final messages = <DataActionMessage>[];
+      final actions = DataActions(
+        scope: scope,
+        dirFinder: HabitsDirFinder(<String>[parent]),
+        cacheDir: makeDir('cache-dispatch'),
+        fileChooser: chooser,
+        fileSharer: sharer,
+        urlOpener: FakeUrlOpener(),
+        importTaskFactory: ImportDataTaskFactory(
+          GenericImporter(
+            RecordingImporter(),
+            RecordingImporter(),
+            RecordingImporter(),
+            RecordingImporter(),
+          ),
+          scope.modelFactory,
+        ),
+        showMessage: messages.add,
+        clock: () => DateTime.utc(2025, 8, 22, 14, 30, 12),
+      );
+
+      // RESULT_IMPORT_DATA -> showImportScreen().
+      await actions.onSettingsResult(SettingsResult.importData);
+      expect(chooser.calls, 1,
+          reason: 'settings.screen.database-category#5: '
+              'ListHabitsScreen.onSettingsResult dispatches RESULT_IMPORT_DATA '
+              'to showImportScreen()');
+      expect(sharer.paths, isEmpty,
+          reason: 'settings.screen.database-category#5: a cancelled picker '
+              'ends the import there');
+
+      // RESULT_EXPORT_CSV -> behavior.onExportCSV().
+      await actions.onSettingsResult(SettingsResult.exportCsv);
+      expect(sharer.paths, hasLength(1),
+          reason: 'settings.screen.database-category#5: RESULT_EXPORT_CSV goes '
+              'to behavior.onExportCSV()');
+      expect(sharer.paths.single, startsWith('$parent/CSV/'),
+          reason: 'settings.screen.database-category#5: which writes into the '
+              'CSV output directory');
+
+      // RESULT_EXPORT_DB -> onExportDB().
+      await actions.onSettingsResult(SettingsResult.exportDb);
+      expect(
+        sharer.paths.last,
+        '$parent/Backups/Loop Habits Backup 2025-08-22 143012.db',
+        reason: 'settings.screen.database-category#5: RESULT_EXPORT_DB goes to '
+            'onExportDB()',
+      );
+
+      // RESULT_BUG_REPORT and RESULT_REPAIR_DB belong to onSendBugReport() and
+      // onRepairDB() on the list screen's presenter; neither is reachable from
+      // this object, and neither may do anything here.
+      final int sharesBefore = sharer.paths.length;
+      await actions.onSettingsResult(SettingsResult.bugReport);
+      await actions.onSettingsResult(SettingsResult.repairDb);
+      expect(sharer.paths, hasLength(sharesBefore),
+          reason: 'settings.screen.database-category#5: the settings screen '
+              'never performs the work itself — it closes and lets the list '
+              'screen do it');
+      expect(chooser.calls, 1,
+          reason: 'settings.screen.database-category#5: the settings screen '
+              'never performs the work itself');
+      expect(messages, isEmpty,
+          reason: 'settings.screen.database-category#5: and nothing is '
+              'reported for a code this object does not own');
+    });
+
+    test('#5 the five result codes are exactly the five settings actions', () {
+      expect(
+        SettingsResult.values.map((result) => result.code).toList(),
+        <int>[101, 102, 103, 104, 105],
+        reason: 'settings.screen.database-category#5: onSettingsResult '
+            'dispatches RESULT_IMPORT_DATA, RESULT_EXPORT_CSV, '
+            'RESULT_EXPORT_DB, RESULT_BUG_REPORT and RESULT_REPAIR_DB',
       );
     });
   });
@@ -698,6 +835,29 @@ void main() {
         ],
         reason: 'io.share-file-screen#1',
       );
+    });
+
+    test(
+        '#2 a non-content URI is reduced to a bare filesystem path before it '
+        'is handed to the platform', () async {
+      await actions.showSendFileScreen('file:///tmp/Backups/backup.db');
+      await actions.showSendFileScreen('/tmp/Backups/backup.db');
+      await actions.showSendFileScreen('content://org.isoron.uhabits/x.db');
+
+      expect(
+        sharer.paths.take(2),
+        <String>['/tmp/Backups/backup.db', '/tmp/Backups/backup.db'],
+        reason: 'io.share-file-screen#2: for non-content URIs a shareable URI '
+            "is produced with FileProvider.getUriForFile(context, "
+            "'org.isoron.uhabits', file) — so what reaches the platform is a "
+            'plain File, built from uri.path for a file: URI and from the '
+            'string itself otherwise. share_plus does the FileProvider wrap on '
+            'Android, which is why the port stops at the path',
+      );
+      expect(sharer.paths.last, 'content://org.isoron.uhabits/x.db',
+          reason: 'io.share-file-screen#2: a content URI never goes through '
+              'FileProvider — it is already shareable and is passed straight '
+              'through');
     });
 
     test('#3 #4 the MIME type is always application/zip', () async {
@@ -853,6 +1013,135 @@ void main() {
 
       expect(File(dest.pathString).readAsStringSync(),
           const LineSplitter().convert(migrationSql[9]!).join('\n'));
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // platform-glue.dir-finder
+  // -------------------------------------------------------------------
+
+  group('platform-glue.dir-finder', () {
+    test('#1 getFilesDir asks getDir with the external files dirs', () {
+      final String parent = makeDir('dirfinder-of');
+      final AppDirectories directories = AppDirectories(
+        filesDir: '${tempDir.path}/files',
+        cacheDir: '${tempDir.path}/cache',
+        externalFilesDirs: <String>[parent],
+      );
+
+      final HabitsDirFinder finder = HabitsDirFinder.of(directories);
+
+      expect(finder.potentialParentDirs, directories.externalFilesDirs,
+          reason: 'platform-glue.dir-finder#1 — '
+              'AndroidDirFinder.getFilesDir(relativePath) calls '
+              'FileUtils.getDir(ContextCompat.getExternalFilesDirs(context, '
+              'null), relativePath). path_provider\'s '
+              'getExternalStorageDirectories IS that call, and it is where '
+              'AppDirectories.resolve gets the candidate list.');
+      expect(finder.getFilesDir('CSV')!.pathString,
+          getDir(directories.externalFilesDirs, 'CSV'),
+          reason: 'platform-glue.dir-finder#1: and getFilesDir is getDir over '
+              'that list');
+    });
+
+    test('#2 the first writable parent wins, and none means null', () {
+      final String missing = '${tempDir.path}/dirfinder-missing';
+      final String first = makeDir('dirfinder-first');
+      final String second = makeDir('dirfinder-second');
+
+      expect(getDir(<String>[missing, first, second], 'CSV'), '$first/CSV',
+          reason: 'platform-glue.dir-finder#2 — FileUtils.getDir picks the '
+              'FIRST directory in the candidate array for which File.canWrite() '
+              'is true; if none is writable it logs Log.e("FileUtils", '
+              '"getDir: all potential parents are null or non-writable") and '
+              'returns null.');
+      expect(getDir(<String>[second, first], 'CSV'), '$second/CSV',
+          reason: 'platform-glue.dir-finder#2: order decides, not existence');
+      expect(getDir(<String>[missing], 'CSV'), isNull,
+          reason: 'platform-glue.dir-finder#2: a path that does not exist is '
+              'not writable');
+      expect(getDir(<String>[], 'CSV'), isNull,
+          reason: 'platform-glue.dir-finder#2: and an empty candidate array is '
+              'the same silent null');
+    });
+
+    test('#3 the subdirectory is created on demand, and null when it cannot be',
+        () {
+      final String parent = makeDir('dirfinder-create');
+
+      expect(Directory('$parent/Backups').existsSync(), isFalse);
+      expect(getDir(<String>[parent], 'Backups'), '$parent/Backups',
+          reason: 'platform-glue.dir-finder#3 — It then builds '
+              'File("<chosenDir.absolutePath>/<relativePath>/") and, if it does '
+              'not exist, attempts mkdirs(); if creation fails it logs "getDir: '
+              'chosen dir does not exist and cannot be created" and returns '
+              'null.');
+      expect(Directory('$parent/Backups').existsSync(), isTrue,
+          reason: 'platform-glue.dir-finder#3: mkdirs()');
+
+      // Java's File("$parent/$rel/") swallows the trailing separator.
+      expect(getDir(<String>[parent], 'Backups')!.endsWith('/'), isFalse,
+          reason: 'platform-glue.dir-finder#3: no trailing separator survives');
+
+      // A second call finds it already there and does not fail.
+      expect(getDir(<String>[parent], 'Backups'), '$parent/Backups',
+          reason: 'platform-glue.dir-finder#3: idempotent');
+
+      // Creation fails when a plain file already occupies the path.
+      final String blocked = makeDir('dirfinder-blocked');
+      File('$blocked/CSV').writeAsStringSync('not a directory');
+      expect(getDir(<String>[blocked], 'CSV'), isNull,
+          reason: 'platform-glue.dir-finder#3: and a failure is a silent null, '
+              'not an exception');
+    });
+
+    test('#5 the well-known relative paths', () {
+      final String parent = makeDir('dirfinder-names');
+      final HabitsDirFinder finder = HabitsDirFinder(<String>[parent]);
+
+      expect(HabitsDirFinder.csvDirName, 'CSV',
+          reason: 'platform-glue.dir-finder#5 — Three well-known relative paths '
+              'are used by the app: "Logs" (bug reports), "CSV" (CSV export), '
+              '"Backups" (automatic database backups). Two of the three are '
+              'here; "Logs" has no consumer in this build because the bug '
+              'report itself is not ported — the Settings row returns its '
+              'result code and nothing writes a log file.');
+      expect(HabitsDirFinder.backupsDirName, 'Backups',
+          reason: 'platform-glue.dir-finder#5');
+      expect(finder.getFilesDir(HabitsDirFinder.csvDirName)!.pathString,
+          '$parent/CSV',
+          reason: 'platform-glue.dir-finder#5: each is a sibling under the same '
+              'chosen parent');
+      expect(finder.getFilesDir(HabitsDirFinder.backupsDirName)!.pathString,
+          '$parent/Backups',
+          reason: 'platform-glue.dir-finder#5');
+    });
+
+    test('#6 one object answers both the list screen and the show screen', () {
+      final String parent = makeDir('dirfinder-interfaces');
+      final HabitsDirFinder finder = HabitsDirFinder(<String>[parent]);
+
+      expect(finder, isA<ListHabitsBehaviorDirFinder>(),
+          reason: 'platform-glue.dir-finder#6 — HabitsDirFinder implements both '
+              'ShowHabitMenuPresenter.System and '
+              'ListHabitsBehavior.DirFinder; getCSVOutputDir() returns '
+              'JavaUserFile(androidDirFinder.getFilesDir("CSV")!!.toPath()) and '
+              'will throw NPE if the CSV directory cannot be created.');
+      expect(finder, isA<ShowHabitMenuPresenterSystem>(),
+          reason: 'platform-glue.dir-finder#6: the same object, both '
+              'interfaces');
+      expect(finder.getCSVOutputDir().pathString, '$parent/CSV',
+          reason: 'platform-glue.dir-finder#6: getCSVOutputDir is getFilesDir'
+              '("CSV")');
+
+      final HabitsDirFinder doomed =
+          HabitsDirFinder(<String>['${tempDir.path}/dirfinder-nowhere']);
+      expect(doomed.getFilesDir('CSV'), isNull,
+          reason: 'platform-glue.dir-finder#6: the directory cannot be created');
+      expect(() => doomed.getCSVOutputDir(), throwsA(isA<TypeError>()),
+          reason: 'platform-glue.dir-finder#6: and the `!!` turns that into a '
+              'crash rather than a reported failure — Dart\'s `!` throws a '
+              'TypeError where Kotlin throws an NPE');
     });
   });
 }

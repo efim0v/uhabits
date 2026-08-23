@@ -15,10 +15,15 @@
 ///    instead, which is a smaller drawing (no SKIP or UNKNOWN glyph, no
 ///    hollow YES_AUTO, no notes indicator, no AT_MOST branch, no unit
 ///    trimming). Only the geometry and the gesture rules are cited.
-///  * three of the `list-habits.entry-panels` rules (the two about recreating
-///    or re-binding buttons, and the one about a Preferences listener on the
-///    panel) are RecyclerView child-recycling concerns; a Flutter panel is
-///    rebuilt from its arguments and has neither. They are left uncited.
+///  * `list-habits.entry-panels#2` and `#3` are phrased as RecyclerView
+///    child-recycling concerns. A Flutter panel is rebuilt from its arguments
+///    and recycles nothing, so what is cited here is the observable half of
+///    each rule: which buttons exist after a new `buttonCount`, and which
+///    dates and values they carry after a new `dataOffset`.
+///  * the entry-panels rule about the panel registering itself as a
+///    `Preferences` listener while attached has no counterpart here: the
+///    screen reads the preference and passes it down, so the panel subscribes
+///    to nothing. It is left uncited on purpose.
 library;
 
 // The core package does not export lib/src/preferences yet.
@@ -801,6 +806,168 @@ void main() {
   // The two core button views, as hosted by the panel. Only the geometry and
   // the gestures are this port's; the richer Android drawing is not.
   // -------------------------------------------------------------------------
+  group('entry panels, revisited', () {
+    testWidgets('#2 a new buttonCount changes the row, the same one does not',
+        (tester) async {
+      final habit = buildHabit();
+      await pumpCard(tester, habit: habit, buttonCount: 5);
+      expect(find.byType(EntryButton), findsNWidgets(5),
+          reason: 'list-habits.entry-panels#2');
+      final before = tester.element(find.byKey(EntryPanel.buttonKey(today)));
+
+      // Rebuilding with the same count leaves the row exactly as it was: the
+      // element behind today's cell is the very same one.
+      await pumpCard(tester, habit: habit, buttonCount: 5);
+      expect(find.byType(EntryButton), findsNWidgets(5),
+          reason: 'list-habits.entry-panels#2 — setting the same value again '
+              'is a no-op');
+      expect(tester.element(find.byKey(EntryPanel.buttonKey(today))),
+          same(before),
+          reason: 'list-habits.entry-panels#2');
+
+      await pumpCard(tester, habit: habit, buttonCount: 3);
+      expect(find.byType(EntryButton), findsNWidgets(3),
+          reason: 'list-habits.entry-panels#2 — a different value re-creates '
+              'the buttons');
+      expect(find.byKey(EntryPanel.buttonKey(today.minus(4))), findsNothing,
+          reason: 'list-habits.entry-panels#2');
+    });
+
+    testWidgets('#3 a new dataOffset re-binds the same number of buttons',
+        (tester) async {
+      final habit = buildHabit();
+      const List<int> values = <int>[2, 0, 2, 0, 2, 0, 2, 0];
+      await pumpCard(tester, habit: habit, values: values, dataOffset: 0);
+      expect(find.byType(EntryButton), findsNWidgets(5),
+          reason: 'list-habits.entry-panels#3');
+      final firstDates = <core.LocalDate>[
+        for (var i = 0; i < 5; i++) today.minus(i),
+      ];
+      for (final date in firstDates) {
+        expect(find.byKey(EntryPanel.buttonKey(date)), findsOneWidget,
+            reason: 'list-habits.entry-panels#3');
+      }
+
+      await pumpCard(tester, habit: habit, values: values, dataOffset: 3);
+
+      expect(find.byType(EntryButton), findsNWidgets(5),
+          reason: 'list-habits.entry-panels#3 — the count is unchanged: only '
+              'the binding moved');
+      for (var i = 0; i < 5; i++) {
+        expect(find.byKey(EntryPanel.buttonKey(today.minus(i + 3))),
+            findsOneWidget,
+            reason: 'list-habits.entry-panels#3 and #4 — button i now stands '
+                'for today.minus(i + dataOffset)');
+      }
+      expect(find.byKey(EntryPanel.buttonKey(today)), findsNothing,
+          reason: 'list-habits.entry-panels#3');
+
+      // Setting the same offset again changes nothing.
+      final before = tester.element(
+        find.byKey(EntryPanel.buttonKey(today.minus(3))),
+      );
+      await pumpCard(tester, habit: habit, values: values, dataOffset: 3);
+      expect(tester.element(find.byKey(EntryPanel.buttonKey(today.minus(3)))),
+          same(before),
+          reason: 'list-habits.entry-panels#3 — setting the same value again '
+              'is a no-op');
+    });
+
+    testWidgets('#10 the number panel carries threshold, unit and colour; the '
+        'checkmark panel carries the colour only', (tester) async {
+      await pumpCard(
+        tester,
+        habit: buildHabit(
+          type: core.HabitType.numerical,
+          unit: 'pages',
+          targetValue: 100,
+          color: const core.PaletteColor(11),
+          frequency: core.Frequency.daily,
+        ),
+        values: <int>[200000],
+      );
+
+      final number = viewAt(tester, today) as core_views.NumberButton;
+      expect(number.threshold, 100.0,
+          reason: 'list-habits.entry-panels#10 — the threshold reaches every '
+              'button');
+      expect(number.units, 'pages',
+          reason: 'list-habits.entry-panels#10 — and so does the unit');
+      expect(number.color, theme.colorOf(const core.PaletteColor(11)),
+          reason: 'list-habits.entry-panels#10 — and the colour');
+      expect(number.value, 200.0,
+          reason: 'list-habits.entry-panels#10 — values arrive divided by '
+              '1000');
+
+      // The checkmark panel propagates colour only: its core view takes a
+      // value, a colour and a theme, and nothing else.
+      await pumpCard(
+        tester,
+        habit: buildHabit(color: const core.PaletteColor(11)),
+        values: <int>[core.Entry.yesManual],
+      );
+      final glyph = drawButton(tester, today).opsNamed('drawText').single;
+      expect(glyph.color, theme.colorOf(const core.PaletteColor(11)),
+          reason: 'list-habits.entry-panels#10 — the checkmark panel '
+              'propagates the colour');
+      // `targetType` is accepted by the panel and forwarded nowhere, because
+      // the core NumberButton has no AT_MOST branch yet.
+      expect(
+        tester
+            .widgetList<EntryPanel>(find.byType(EntryPanel))
+            .single
+            .targetType,
+        core.NumericalHabitType.atLeast,
+        reason: 'list-habits.entry-panels#10',
+      );
+    });
+
+    testWidgets('checkmark-button-rendering#9 a cell is 48dp square whatever '
+        'the row is given', (tester) async {
+      final habit = buildHabit();
+      await pumpCard(tester, habit: habit, values: <int>[core.Entry.yesManual]);
+      expect(theme.checkmarkButtonSize, 48.0,
+          reason: 'list-habits.checkmark-button-rendering#9 — '
+              'R.dimen.checkmarkWidth / checkmarkHeight');
+      expect(tester.getSize(find.byKey(EntryPanel.buttonKey(today))),
+          const Size(48, 48),
+          reason: 'list-habits.checkmark-button-rendering#9');
+
+      // A row too narrow for five 48dp cells still measures each of them at
+      // exactly 48dp: onMeasure ignores the incoming spec.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 120,
+                child: HabitCard(
+                  habit: habit,
+                  score: 0.5,
+                  values: const <int>[core.Entry.yesManual],
+                  notes: const <String>[],
+                  theme: theme,
+                  preferences: preferences,
+                  buttonCount: 5,
+                  dataOffset: 0,
+                  isSelected: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      // The row overflows rather than shrinking its cells, exactly as the
+      // Android panel does.
+      tester.takeException();
+      expect(tester.getSize(find.byKey(EntryPanel.buttonKey(today))),
+          const Size(48, 48),
+          reason: 'list-habits.checkmark-button-rendering#9 — regardless of '
+              'the incoming measure spec');
+    });
+  });
+
   group('entry cells', () {
     test('#1 the entry value constants', () {
       expect(core.Entry.skip, 3, reason: 'list-habits.checkmark-button#1');

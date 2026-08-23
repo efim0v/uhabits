@@ -505,8 +505,39 @@ void main() {
       expect(
         tester.widget<ListHeader>(find.byType(ListHeader)).today ?? getToday(),
         today.plus(1),
-        reason: 'list-habits.startup-lifecycle#7',
+        reason: 'list-habits.startup-lifecycle#7 and '
+            'list-habits.header-dates#13 — the midnight listener forces the '
+            'strip to repaint',
       );
+    });
+
+    testWidgets('header-dates#13 the midnight listener is registered on '
+        'attach and removed on detach', (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+
+      // Android registers the listener from HeaderView.onAttachedToWindow and
+      // drops it in onDetachedFromWindow. Here the strip is a pure function of
+      // the `today` it is handed, so the subscription lives one level up, on
+      // the adapter the screen attaches — but the observable contract is the
+      // same: attached means subscribed, detached means not.
+      expect(scope.midnightTimer.removeListener(scope.adapter), isFalse,
+          reason: 'list-habits.header-dates#13 — nothing is registered before '
+              'the screen is attached');
+
+      await tester.pumpWidget(wrap(scope));
+      await tester.pumpAndSettle();
+
+      expect(scope.midnightTimer.removeListener(scope.adapter), isTrue,
+          reason: 'list-habits.header-dates#13 — registered on attach');
+      // …put it back, so detach has something to remove.
+      scope.midnightTimer.addListener(scope.adapter);
+
+      modelOf(tester).detach();
+      await tester.pumpAndSettle();
+
+      expect(scope.midnightTimer.removeListener(scope.adapter), isFalse,
+          reason: 'list-habits.header-dates#13 — and removed on detach');
     });
   });
 

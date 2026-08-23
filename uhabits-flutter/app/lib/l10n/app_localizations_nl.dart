@@ -39,6 +39,9 @@ class L10nNl extends L10n {
   String get toastHabitCreated => 'Gewoonte aangemaakt.';
 
   @override
+  String get overview => 'Overzicht';
+
+  @override
   String get habitStrength => 'Gewoonte-sterkte';
 
   @override

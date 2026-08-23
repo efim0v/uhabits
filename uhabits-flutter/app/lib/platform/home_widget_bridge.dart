@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:home_widget/home_widget.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
@@ -339,9 +340,11 @@ abstract interface class HomeWidgetPlatform {
 
 /// [HomeWidgetPlatform] over the `home_widget` plugin.
 ///
-/// Never exercised by a widget test — the plugin's method channel has no
-/// implementation there — so it holds nothing but the translation into plugin
-/// calls.
+/// Every call is guarded against [MissingPluginException], because a host with
+/// no home-screen widgets is a normal condition, not a failure: macOS has no
+/// widget host at all, and a widget test has no method channel. Letting the
+/// exception escape would abort startup and leave the app showing nothing —
+/// the same failure mode that a SQLite quoting bug already caused once.
 class HomeWidgetPlugin implements HomeWidgetPlatform {
   const HomeWidgetPlugin({this.appGroupId});
 
@@ -355,9 +358,18 @@ class HomeWidgetPlugin implements HomeWidgetPlatform {
     if (id != null) await setAppGroupId(id);
   }
 
+  /// Runs [call], swallowing the "this platform has no widget host" case.
+  static Future<void> _ignoringMissingHost(Future<void> Function() call) async {
+    try {
+      await call();
+    } on MissingPluginException {
+      // No widget host here. Nothing to publish to, nothing to report.
+    }
+  }
+
   @override
   Future<void> saveWidgetData(String id, String? value) =>
-      HomeWidget.saveWidgetData<String>(id, value);
+      _ignoringMissingHost(() => HomeWidget.saveWidgetData<String>(id, value));
 
   @override
   Future<void> updateWidget({
@@ -365,13 +377,13 @@ class HomeWidgetPlugin implements HomeWidgetPlatform {
     required String qualifiedAndroidName,
     required String iOSName,
   }) =>
-      HomeWidget.updateWidget(
-        name: name,
-        qualifiedAndroidName: qualifiedAndroidName,
-        iOSName: iOSName,
-      );
+      _ignoringMissingHost(() => HomeWidget.updateWidget(
+            name: name,
+            qualifiedAndroidName: qualifiedAndroidName,
+            iOSName: iOSName,
+          ));
 
   @override
   Future<void> setAppGroupId(String groupId) =>
-      HomeWidget.setAppGroupId(groupId);
+      _ignoringMissingHost(() => HomeWidget.setAppGroupId(groupId));
 }

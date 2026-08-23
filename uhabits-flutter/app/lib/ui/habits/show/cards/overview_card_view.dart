@@ -58,9 +58,8 @@ class OverviewCardView extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: titleBottomMargin),
           child: Text(
-            // There is no `overview` key in the ported ARB files; this is the
-            // closest one that exists. See the slice notes.
-            l10n.habitStrength,
+            // `@string/overview`, the title of show_habit_overview.xml.
+            l10n.overview,
             key: titleKey,
             style: TextStyle(
               color: _toFlutterColor(state.titleColor),

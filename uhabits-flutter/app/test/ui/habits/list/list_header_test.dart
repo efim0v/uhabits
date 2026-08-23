@@ -132,22 +132,90 @@ void main() {
         'SUN', '25', //
       ], reason: 'list-habits.header-dates#4');
 
-      // The same columns, mirrored: today is flush against the right edge and
-      // the dates walk backwards to the left.
+      // The same five columns, in the same right-aligned band, with the order
+      // inside it reversed: today is flush against the right edge and the dates
+      // walk backwards to the left.
       expect(canvas.columnCentres, {
-        'WED': 24.0,
-        'THU': 72.0,
-        'FRI': 120.0,
-        'SAT': 168.0,
-        'SUN': 216.0,
+        'WED': 384.0,
+        'THU': 432.0,
+        'FRI': 480.0,
+        'SAT': 528.0,
+        'SUN': 576.0,
       }, reason: 'list-habits.header-dates#4');
+      expect(canvas.xOf('25'), 576.0, reason: 'list-habits.header-dates#4');
 
-      // Mirroring does not disturb the background or the hairline: the same
-      // rect, and the same segment drawn right to left.
+      // Mirroring the strip does not disturb the background or the hairline:
+      // both span the whole header, whichever way the columns run.
       expect(canvas.ops.first.args, [0.0, 0.0, 600.0, 48.0],
           reason: 'list-habits.header-dates#4');
-      expect(canvas.opsNamed('drawLine').single.args, [600.0, 47.5, 0.0, 47.5],
+      expect(canvas.opsNamed('drawLine').single.args, [0.0, 47.5, 600.0, 47.5],
           reason: 'list-habits.header-dates#4');
+    });
+
+    testWidgets(
+        'settings.preferences.checkmark-reverse-order#7 — the two branches are '
+        'the same band, measured from the right edge', (tester) async {
+      const double w = 48.0; // R.dimen.checkmarkWidth
+      const double canvasWidth = 600.0;
+      const int buttonCount = 5;
+
+      // `HeaderView.Drawer.draw` starts every column at the right edge and
+      // offsets left: `(index - buttonCount) * width` in natural order,
+      // `-(index + 1) * width` when reversed. Index 0 is today.
+      double naturalLeftEdge(int index) =>
+          canvasWidth + (index - buttonCount) * w;
+      double reversedLeftEdge(int index) => canvasWidth - (index + 1) * w;
+
+      // Column i shows today.minus(i): SUN 25, SAT 24, FRI 23, THU 22, WED 21.
+      const List<String> byIndex = <String>['SUN', 'SAT', 'FRI', 'THU', 'WED'];
+
+      await _pumpHeader(tester, buttonCount: buttonCount);
+      final natural = _draw(tester).columnCentres;
+      for (var i = 0; i < buttonCount; i++) {
+        expect(
+          natural[byIndex[i]],
+          naturalLeftEdge(i) + w / 2,
+          reason: 'settings.preferences.checkmark-reverse-order#7 — with '
+              'reverse=false the rect for index $i is offset by '
+              '(i - buttonCount) * checkmarkWidth from the right edge',
+        );
+      }
+
+      await _pumpHeader(tester, buttonCount: buttonCount, reversed: true);
+      final reversed = _draw(tester).columnCentres;
+      for (var i = 0; i < buttonCount; i++) {
+        expect(
+          reversed[byIndex[i]],
+          reversedLeftEdge(i) + w / 2,
+          reason: 'settings.preferences.checkmark-reverse-order#7 — with '
+              'reverse=true the rect for index $i is offset by '
+              '-(i + 1) * checkmarkWidth from the right edge',
+        );
+      }
+
+      // Both branches measure from the same right edge, so the strip occupies
+      // the same band either way — the band the entry buttons of every habit
+      // row sit in.
+      expect(
+        <double?>[natural['SUN'], natural['WED']],
+        <double>[
+          canvasWidth - buttonCount * w + w / 2,
+          canvasWidth - w / 2,
+        ],
+        reason: 'settings.preferences.checkmark-reverse-order#7 — the natural '
+            'order runs from (i - buttonCount) * checkmarkWidth up to the '
+            'right edge',
+      );
+      expect(
+        <double?>[reversed['SUN'], reversed['WED']],
+        <double>[
+          canvasWidth - w / 2,
+          canvasWidth - buttonCount * w + w / 2,
+        ],
+        reason: 'settings.preferences.checkmark-reverse-order#7 — reversing '
+            'swaps the ends of that same band rather than moving it: index 0 '
+            'lands at -(0 + 1) * checkmarkWidth from the right edge',
+      );
     });
 
     testWidgets('#6 #12 two centred bold lines at smallTextSize',
@@ -545,6 +613,39 @@ void main() {
 
       expect(names,
           ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+    });
+
+    test('platform-glue.time-and-date-formatting#2 — the four names are '
+        'skeletons the locale resolves, not patterns', () {
+      // `String.toSimpleDataFormat()` hands its receiver to
+      // `DateFormat.getBestDateTimePattern(locale, skeleton)`; intl's named
+      // DateFormat constructors are the same ICU skeleton API, so 'E', 'EEEE',
+      // 'MMM' and 'MMMM' are resolved per locale rather than printed verbatim.
+      final en = IntlLocalDateFormatter('en_US');
+      final es = IntlLocalDateFormatter('es');
+      final date = LocalDate.ymd(2015, 1, 25);
+
+      expect(en.shortMonthName(date), 'Jan',
+          reason: 'platform-glue.time-and-date-formatting#2 — '
+              'String.toSimpleDataFormat() treats the receiver as a skeleton, '
+              'resolves it with DateFormat.getBestDateTimePattern('
+              'Locale.getDefault(), skeleton) and returns '
+              'DateFormats.fromSkeleton(pattern, locale).');
+      expect(es.shortMonthName(date), isNot('Jan'),
+          reason: 'platform-glue.time-and-date-formatting#2: the same skeleton '
+              'resolves differently per locale, which is the whole point of '
+              'resolving rather than formatting');
+      expect(es.longMonthName(date), 'enero',
+          reason: 'platform-glue.time-and-date-formatting#2: and the resolved '
+              'name is the locale\'s');
+      expect(es.longWeekdayNameOf(DayOfWeek.wednesday), 'miércoles',
+          reason: 'platform-glue.time-and-date-formatting#2');
+
+      // A locale with no data falls back rather than emitting the skeleton
+      // itself, the way getBestDateTimePattern falls back to the root locale.
+      expect(IntlLocalDateFormatter('xx_YY').shortMonthName(date), 'Jan',
+          reason: 'platform-glue.time-and-date-formatting#2: an unknown locale '
+              'still yields a resolved name, never the skeleton');
     });
   });
 }
