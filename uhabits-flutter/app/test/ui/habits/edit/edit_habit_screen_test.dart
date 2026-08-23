@@ -2137,7 +2137,7 @@ void main() {
   });
 
   group('edit-habit.color-control, revisited', () {
-    testWidgets('#4 the toolbar takes the habit colour in the dark theme too',
+    testWidgets('#4 the dark theme paints the toolbar with colorPrimary',
         (tester) async {
       final scope = openScope(dispatcher: const AsyncDispatcher());
       final habit = addHabit(scope, 'Meditate', color: const PaletteColor(4));
@@ -2145,14 +2145,11 @@ void main() {
       await pumpEditor(tester, scope, habitId: habit.id, dark: true);
       expect(
         tester.widget<AppBar>(find.byType(AppBar)).backgroundColor,
-        toFlutterColor(DarkTheme().color(4)),
-        reason: 'edit-habit.color-control#4 (deviation) — updateColors() '
-            'repaints the toolbar and the status bar only when the theme is '
-            'not night mode, because the Android dark themes set '
-            'useHabitColorAsPrimary=false and fall back to ?attr/colorPrimary. '
-            'The ported core Theme carries no colorPrimary, so — exactly as '
-            'ShowHabitScreen already does — the habit colour is used in both '
-            'themes',
+        toFlutterColor(DarkTheme().primaryColor),
+        reason: 'edit-habit.color-control#4 — updateColors() repaints the '
+            'toolbar with the habit colour only outside night mode; the dark '
+            'themes set useHabitColorAsPrimary=false and fall back to '
+            'colorPrimary, grey_950',
       );
     });
 

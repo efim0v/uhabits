@@ -113,7 +113,12 @@ class _HabitListViewState extends State<_HabitListView> {
     final theme = _coreThemeOf(context);
     // `rootView.setupToolbar(..., color = PaletteColor(17))`: the list screen
     // is the one toolbar that is not tinted by a habit's colour.
-    final toolbarColor = _toFlutterColor(theme.colorOf(const core.PaletteColor(17)));
+    // `setupToolbar`: the habit palette colour, unless the theme says
+    // otherwise — the dark themes paint the toolbar with colorPrimary instead
+    // (list-habits.screen-layout#2).
+    final toolbarColor = _toFlutterColor(
+      theme.toolbarColorFor(theme.colorOf(const core.PaletteColor(17))),
+    );
 
     return Scaffold(
       backgroundColor: _toFlutterColor(theme.appBackgroundColor),

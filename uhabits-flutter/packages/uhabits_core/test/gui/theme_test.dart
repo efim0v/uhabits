@@ -165,6 +165,7 @@ class ProbeDark extends DarkTheme {}
 class ProbeWidget extends WidgetTheme {}
 
 void main() {
+  mainToolbarPrimary();
   group('charts-canvas-theming.theme-tokens', () {
     test('#1 the abstract Theme base class defines 12 opaque colour tokens',
         () {
@@ -804,6 +805,38 @@ void main() {
           reason: '$rule: 255 * 0.50 rounds to 0x80, not 0x7F');
       expect(theme.lowContrastTextColor.toInt(), 0x1AFFFFFF,
           reason: '$rule: 255 * 0.10 rounds to 0x1A');
+    });
+  });
+}
+
+/// Added during macOS verification: the toolbar rendered light grey with white
+/// text in the dark theme, because the ported Theme carried no colorPrimary and
+/// every screen fell back to the habit palette colour.
+///
+/// Android decides this with the `useHabitColorAsPrimary` theme attribute:
+/// true in the light theme, false in both dark ones, where the toolbar takes
+/// `colorPrimary` instead.
+void mainToolbarPrimary() {
+  group('toolbar primary colour', () {
+    test('the light theme paints the toolbar with the habit colour', () {
+      expect(LightTheme().useHabitColorAsPrimary, isTrue,
+          reason: 'charts-canvas-theming.android-contrast-attrs#2');
+    });
+
+    test('the dark theme paints it with colorPrimary, grey_950', () {
+      final theme = DarkTheme();
+      expect(theme.useHabitColorAsPrimary, isFalse,
+          reason: 'charts-canvas-theming.android-contrast-attrs#3');
+      expect(theme.primaryColor, const Color.fromRgb(0x101010),
+          reason: 'list-habits.screen-layout#2 show-habit.screen-scaffold#9');
+    });
+
+    test('the pure black theme paints it black', () {
+      final theme = PureBlackTheme();
+      expect(theme.useHabitColorAsPrimary, isFalse,
+          reason: 'settings.theme.pure-black#5');
+      expect(theme.primaryColor, const Color.fromRgb(0x000000),
+          reason: 'settings.theme.pure-black#5');
     });
   });
 }

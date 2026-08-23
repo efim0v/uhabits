@@ -342,7 +342,11 @@ class _EditHabitViewState extends State<_EditHabitView> {
     final l10n = L10n.of(context);
     final model = context.watch<EditHabitModel>();
     final theme = coreThemeOf(context);
-    final habitColor = toFlutterColor(theme.colorOf(model.color));
+    // `updateColors()` paints the toolbar with the habit colour only outside
+    // night mode (edit-habit.color-control#4).
+    final toolbarColor =
+        toFlutterColor(theme.toolbarColorFor(theme.colorOf(model.color)));
+
 
     return Scaffold(
       // `android:background="?attr/contrast0"` on the root and on the
@@ -352,8 +356,8 @@ class _EditHabitViewState extends State<_EditHabitView> {
         // `edit-habit.entry-points#2`: the layout's `app:title` is
         // "Create habit"; EDIT mode replaces it with "Edit habit".
         title: Text(model.isEditing ? l10n.editHabit : l10n.createHabit),
-        // `updateColors()` (`edit-habit.color-control#3`).
-        backgroundColor: habitColor,
+        // `updateColors()` (`edit-habit.color-control#3`, `#4`).
+        backgroundColor: toolbarColor,
         foregroundColor: Colors.white,
         // `supportActionBar?.elevation = 10.0f`
         // (`edit-habit.window-insets-and-chrome#2`).

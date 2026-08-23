@@ -150,7 +150,10 @@ class _ShowHabitViewState extends State<_ShowHabitView> {
         // useHabitColorAsPrimary=false and fall back to ?colorPrimary, a value
         // the ported core Theme does not carry, so the habit colour is used in
         // both themes here.
-        backgroundColor: _toFlutterColor(theme.colorOf(state.color)),
+        // The habit's colour tints the toolbar only while the theme says so;
+        // the dark themes use colorPrimary (show-habit.screen-scaffold#9).
+        backgroundColor:
+            _toFlutterColor(theme.toolbarColorFor(theme.colorOf(state.color))),
         // `@style/Toolbar` applies ThemeOverlay.AppCompat.Dark.ActionBar.
         foregroundColor: Colors.white,
         // `toolbar.elevation = dpToPixels(context, 2f)`

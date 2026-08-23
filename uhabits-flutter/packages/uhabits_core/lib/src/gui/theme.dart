@@ -36,6 +36,21 @@ abstract class Theme {
 
   Color get toolbarColor => const Color.fromRgb(0xffffff);
 
+  /// `R.attr.useHabitColorAsPrimary`. True in the light theme, false in both
+  /// dark ones, where the toolbar takes [primaryColor] instead of the habit's
+  /// palette colour (`charts-canvas-theming.android-contrast-attrs#2`, `#3`).
+  bool get useHabitColorAsPrimary => true;
+
+  /// `R.attr.colorPrimary`. Only consulted when [useHabitColorAsPrimary] is
+  /// false; the light theme never reads it.
+  Color get primaryColor => const Color.fromRgb(0xffffff);
+
+  /// The toolbar background for a screen tinted by [habitColor], and the
+  /// window status bar colour alongside it. Port of the branch in
+  /// `ViewExtensions.setupToolbar` (`platform-glue.window-insets#6`).
+  Color toolbarColorFor(Color habitColor) =>
+      useHabitColorAsPrimary ? habitColor : primaryColor;
+
   /// Kotlin: the non-`open` overload `fun color(paletteColor: PaletteColor)`.
   /// Dart has no constructor/method overloading, hence the separate name; the
   /// delegation to the overridable [color] is the whole point of the helper.
@@ -110,6 +125,14 @@ class LightTheme extends Theme {}
 /// and toolbarColor). They are kept here rather than dropped, so the Kotlin
 /// source and this file stay line-for-line comparable.
 class DarkTheme extends Theme {
+  /// `AppBaseThemeDark` sets useHabitColorAsPrimary=false, so the toolbar is
+  /// grey_950 rather than the habit's colour.
+  @override
+  bool get useHabitColorAsPrimary => false;
+
+  @override
+  Color get primaryColor => const Color.fromRgb(0x101010);
+
   @override
   Color get appBackgroundColor => const Color.fromRgb(0x212121);
 
@@ -199,6 +222,11 @@ class DarkTheme extends Theme {
 /// Kotlin: `class PureBlackTheme : DarkTheme()` — final, and it touches only
 /// three tokens. The palette and every other token come from [DarkTheme].
 final class PureBlackTheme extends DarkTheme {
+  /// `AppBaseThemeDark.PureBlack` overrides colorPrimary to black
+  /// (`settings.theme.pure-black#5`).
+  @override
+  Color get primaryColor => const Color.fromRgb(0x000000);
+
   @override
   Color get appBackgroundColor => const Color.fromRgb(0x000000);
 
