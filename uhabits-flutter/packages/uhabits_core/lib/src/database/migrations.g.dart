@@ -102,7 +102,7 @@ delete from checkmarks;""",
   18: r"""
 alter table Habits add column target_type integer not null default 0;
 alter table Habits add column target_value real not null default 0;
-alter table Habits add column unit text not null default "";""",
+alter table Habits add column unit text not null default '';""",
   19: r"""
 create table Events (
     id integer primary key autoincrement,
@@ -158,7 +158,7 @@ alter table Habits add column question text;
 
 update Habits set question = description;
 
-update Habits set description = "";""",
+update Habits set description = '';""",
   24: r"""
 alter table habits add column uuid text;
 update habits set uuid = lower(hex(randomblob(16) || id));""",

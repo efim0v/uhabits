@@ -335,9 +335,13 @@ void main() {
             reason: 'persistence.migration-runner#6 — migrationSql[$v] is the '
                 'resource loaded from migrations/'
                 '${v.toString().padLeft(2, '0')}.sql');
-        expect(file.readAsStringSync(), migrationSql[v],
+        // The compiled script matches the resource except for one documented
+        // rewrite: SQLite's double-quoted empty string becomes the standard
+        // single-quoted one, because the build bundled on iOS and Android
+        // rejects `""` in DML. See docs/parity/DEVIATIONS.md.
+        expect(file.readAsStringSync().replaceAll('""', "''"), migrationSql[v],
             reason: 'persistence.migration-runner#6 — the compiled script for '
-                'version $v is a verbatim copy of that resource');
+                'version \$v is that resource, modulo the quote rewrite');
       }
     });
 
@@ -572,10 +576,10 @@ void main() {
           reason: 'persistence.schema-habits#6 — unit text');
       expect(unit.notNull, isTrue,
           reason: 'persistence.schema-habits#6 — unit is not null');
-      // Migration 18 writes `default ""`; SQLite keeps the double-quoted
-      // literal verbatim in the schema and, because no column is named "",
+      // Migration 18 writes `default ''`; SQLite keeps the literal verbatim
+      // in the schema and, because it is a string rather than an identifier,
       // falls back to reading it as the string constant.
-      expect(unit.defaultValue, '""',
+      expect(unit.defaultValue, "''",
           reason: "persistence.schema-habits#6 — unit default '' (spelled "
               '`default ""` in migration 18)');
 

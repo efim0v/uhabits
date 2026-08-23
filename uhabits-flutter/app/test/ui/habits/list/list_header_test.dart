@@ -1,0 +1,623 @@
+// The core drawing vocabulary wins over Flutter's: Canvas, Color, TextAlign
+// and Image below are the ones the ported views speak.
+import 'package:flutter/material.dart' hide Canvas, Color, Image, TextAlign;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:uhabits/l10n/app_localizations.dart';
+import 'package:uhabits/ui/core_view.dart';
+import 'package:uhabits/ui/habits/list/list_header.dart';
+import 'package:uhabits_core/uhabits_core.dart';
+
+/// Widget tests for the date strip above the habit list.
+///
+/// The strip is drawn by the core `HabitListHeader`, so what the golden images
+/// under uhabits-android/src/androidTest/assets/views/habits/list/HeaderView/
+/// show — one 48dp column per button, right-aligned, the weekday name above
+/// the day number — is asserted here by replaying the hosted core `View` onto
+/// [_RecordingCanvas] and reading the call trace back. Colour, font, size and
+/// alignment are sticky on a `Canvas`, so the state each call was made under
+/// is exactly what a golden would show.
+void main() {
+  // The date the Android goldens were captured on: Sunday, 25 January 2015.
+  final today = LocalDate.ymd(2015, 1, 25);
+
+  setUp(() => setToday(today));
+  tearDown(resetToday);
+
+  group('list-habits.header-dates', () {
+    testWidgets('#1 #10 a 48dp strip, as wide as the space it is given',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5);
+
+      expect(tester.getSize(find.byType(ListHeader)), const Size(600, 48),
+          reason: 'list-habits.header-dates#10');
+      expect(LightTheme().checkmarkButtonSize, 48.0,
+          reason: 'list-habits.header-dates#1');
+    });
+
+    testWidgets('#1 headerBackgroundColor behind, hairline along the bottom',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+      final theme = LightTheme();
+
+      final background = canvas.ops.first;
+      expect(background.name, 'fillRect',
+          reason: 'list-habits.header-dates#1');
+      expect(background.args, [0.0, 0.0, 600.0, 48.0],
+          reason: 'list-habits.header-dates#1');
+      expect(background.color, theme.headerBackgroundColor,
+          reason: 'list-habits.header-dates#1');
+
+      final line = canvas.opsNamed('drawLine').single;
+      expect(line.args, [0.0, 47.5, 600.0, 47.5],
+          reason: 'list-habits.header-dates#1');
+      expect(line.color, theme.headerBorderColor,
+          reason: 'list-habits.header-dates#1');
+    });
+
+    testWidgets('#1 the background follows the ambient brightness',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5, brightness: Brightness.dark);
+
+      expect(_draw(tester).ops.first.color, DarkTheme().headerBackgroundColor,
+          reason: 'list-habits.header-dates#1');
+      expect(DarkTheme().headerBackgroundColor,
+          isNot(LightTheme().headerBackgroundColor),
+          reason: 'list-habits.header-dates#1');
+    });
+
+    testWidgets('#2 #3 one column per button, today leftmost, dates going back',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+
+      expect(canvas.texts, [
+        'WED', '21', //
+        'THU', '22', //
+        'FRI', '23', //
+        'SAT', '24', //
+        'SUN', '25', //
+      ], reason: 'list-habits.header-dates#2');
+
+      // Five columns of 48dp flush against the right edge; today (SUN 25) is
+      // the leftmost of them and the dates walk backwards to the right.
+      expect(canvas.columnCentres, {
+        'SUN': 384.0,
+        'SAT': 432.0,
+        'FRI': 480.0,
+        'THU': 528.0,
+        'WED': 576.0,
+      }, reason: 'list-habits.header-dates#3');
+
+      // Both lines of a column share the column centre.
+      expect(canvas.xOf('25'), 384.0, reason: 'list-habits.header-dates#3');
+      expect(canvas.xOf('21'), 576.0, reason: 'list-habits.header-dates#3');
+    });
+
+    testWidgets('#2 buttonCount 0 draws no columns at all', (tester) async {
+      await _pumpHeader(tester, buttonCount: 0);
+
+      expect(_draw(tester).texts, isEmpty,
+          reason: 'list-habits.header-dates#2');
+    });
+
+    testWidgets('#2 dataOffset scrolls the columns into the past',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5, dataOffset: 2);
+      final canvas = _draw(tester);
+
+      // Column i shows today.minus(i + dataOffset): the newest column is now
+      // FRI 23, still leftmost.
+      expect(canvas.texts, [
+        'MON', '19', //
+        'TUE', '20', //
+        'WED', '21', //
+        'THU', '22', //
+        'FRI', '23', //
+      ], reason: 'list-habits.header-dates#2');
+      expect(canvas.xOf('FRI'), 384.0, reason: 'list-habits.header-dates#2');
+      expect(canvas.xOf('MON'), 576.0, reason: 'list-habits.header-dates#2');
+    });
+
+    testWidgets('#4 a reversed checkmark sequence puts today rightmost',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5, reversed: true);
+      final canvas = _draw(tester);
+
+      expect(canvas.texts, [
+        'WED', '21', //
+        'THU', '22', //
+        'FRI', '23', //
+        'SAT', '24', //
+        'SUN', '25', //
+      ], reason: 'list-habits.header-dates#4');
+
+      // The same columns, mirrored: today is flush against the right edge and
+      // the dates walk backwards to the left.
+      expect(canvas.columnCentres, {
+        'WED': 24.0,
+        'THU': 72.0,
+        'FRI': 120.0,
+        'SAT': 168.0,
+        'SUN': 216.0,
+      }, reason: 'list-habits.header-dates#4');
+
+      // Mirroring does not disturb the background or the hairline: the same
+      // rect, and the same segment drawn right to left.
+      expect(canvas.ops.first.args, [0.0, 0.0, 600.0, 48.0],
+          reason: 'list-habits.header-dates#4');
+      expect(canvas.opsNamed('drawLine').single.args, [600.0, 47.5, 0.0, 47.5],
+          reason: 'list-habits.header-dates#4');
+    });
+
+    testWidgets('#6 #12 two centred bold lines at smallTextSize',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+      final theme = LightTheme();
+
+      for (final op in canvas.opsNamed('drawText')) {
+        expect(op.font, Font.bold, reason: 'list-habits.header-dates#12');
+        expect(op.fontSize, theme.smallTextSize,
+            reason: 'list-habits.header-dates#12');
+        expect(op.fontSize, 10.0, reason: 'list-habits.header-dates#12');
+        expect(op.color, theme.headerTextColor,
+            reason: 'list-habits.header-dates#12');
+        expect(op.textAlign, TextAlign.center,
+            reason: 'list-habits.header-dates#12');
+      }
+
+      // Weekday name above, day number below.
+      final weekday = canvas.opsNamed('drawText')[8];
+      final number = canvas.opsNamed('drawText')[9];
+      expect([weekday.text, number.text], ['SUN', '25'],
+          reason: 'list-habits.header-dates#6');
+      expect(weekday.args[1], lessThan(24.0),
+          reason: 'list-habits.header-dates#6');
+      expect(number.args[1], greaterThan(24.0),
+          reason: 'list-habits.header-dates#6');
+    });
+
+    testWidgets('#6 the day of month carries no leading zero', (tester) async {
+      await _pumpHeader(
+        tester,
+        buttonCount: 1,
+        headerToday: LocalDate.ymd(2015, 1, 3),
+      );
+
+      expect(_draw(tester).texts, ['SAT', '3'],
+          reason: 'list-habits.header-dates#6');
+    });
+
+    testWidgets('#6 weekday names come from the ambient locale',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 1, locale: const Locale('fr'));
+
+      // French short weekday for Sunday, uppercased by the core view.
+      expect(_draw(tester).texts.first, startsWith('DIM'),
+          reason: 'list-habits.header-dates#6');
+    });
+
+    testWidgets('#8 today is a parameter, so a midnight tick repaints',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 1, headerToday: today);
+      expect(_draw(tester).texts, ['SUN', '25'],
+          reason: 'list-habits.header-dates#8');
+
+      await _pumpHeader(tester, buttonCount: 1, headerToday: today.plus(1));
+      expect(_draw(tester).texts, ['MON', '26'],
+          reason: 'list-habits.header-dates#8');
+    });
+
+    testWidgets('#8 without one it falls back to the global today',
+        (tester) async {
+      setToday(LocalDate.ymd(2015, 1, 26));
+      await _pumpHeader(tester, buttonCount: 1);
+
+      expect(_draw(tester).texts, ['MON', '26'],
+          reason: 'list-habits.header-dates#8');
+    });
+  });
+
+  group('list-habits.header-scrolling', () {
+    testWidgets('#1 #2 dragging reports whole columns, never pixels',
+        (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(tester, buttonCount: 5, reported: reported);
+
+      // Half a column: not yet a new offset.
+      await _dragBy(tester, -24);
+      expect(reported, isEmpty, reason: 'list-habits.header-scrolling#2');
+
+      // Crossing the 48dp bucket boundary reports exactly one column.
+      await _dragBy(tester, -24);
+      expect(reported, [1], reason: 'list-habits.header-scrolling#2');
+
+      await _dragBy(tester, -48);
+      await _dragBy(tester, -48);
+      expect(reported, [1, 2, 3], reason: 'list-habits.header-scrolling#2');
+    });
+
+    testWidgets('#1 #7 the strip does not move until the parent feeds it back',
+        (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        reported: reported,
+        applyOffset: false,
+      );
+
+      await _dragBy(tester, -60);
+      await tester.pump();
+
+      expect(reported, [1], reason: 'list-habits.header-scrolling#1');
+      expect(_draw(tester).texts.last, '25',
+          reason: 'list-habits.header-scrolling#1');
+    });
+
+    testWidgets('#1 fed back, the columns follow the offset', (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        reported: reported,
+        applyOffset: true,
+      );
+
+      await _dragBy(tester, -60);
+      await tester.pump();
+
+      expect(reported, [1], reason: 'list-habits.header-scrolling#1');
+      expect(_draw(tester).texts, [
+        'TUE', '20', //
+        'WED', '21', //
+        'THU', '22', //
+        'FRI', '23', //
+        'SAT', '24', //
+      ], reason: 'list-habits.header-scrolling#1');
+    });
+
+    testWidgets('#7 an offset is reported only when it actually changes',
+        (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(tester, buttonCount: 5, reported: reported);
+
+      await _dragBy(tester, -60);
+      await _dragBy(tester, -10);
+      await _dragBy(tester, 10);
+
+      expect(reported, [1], reason: 'list-habits.header-scrolling#7');
+    });
+
+    testWidgets('#2 the future is out of reach: the offset never goes below 0',
+        (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(tester, buttonCount: 5, reported: reported);
+
+      await _dragBy(tester, 480);
+      expect(reported, isEmpty, reason: 'list-habits.header-scrolling#2');
+
+      // And the scroller did not build up any debt on the way.
+      await _dragBy(tester, -48);
+      expect(reported, [1], reason: 'list-habits.header-scrolling#2');
+    });
+
+    testWidgets('#3 maxDataOffset defaults to max(60 - buttonCount, 0)',
+        (tester) async {
+      await _pumpHeader(tester, buttonCount: 5);
+      expect(
+        tester.widget<ListHeader>(find.byType(ListHeader)).effectiveMaxDataOffset,
+        55,
+        reason: 'list-habits.header-scrolling#3',
+      );
+
+      await _pumpHeader(tester, buttonCount: 70);
+      expect(
+        tester.widget<ListHeader>(find.byType(ListHeader)).effectiveMaxDataOffset,
+        0,
+        reason: 'list-habits.header-scrolling#3',
+      );
+    });
+
+    testWidgets('#3 the drag stops at maxDataOffset', (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        maxDataOffset: 2,
+        reported: reported,
+        applyOffset: true,
+      );
+
+      // Ten columns' worth of travel in one event stops at the second column.
+      await _dragBy(tester, -480);
+      expect(reported, [2], reason: 'list-habits.header-scrolling#3');
+
+      // Coming back is immediate: nothing accumulated past the limit.
+      await _dragBy(tester, -480);
+      await _dragBy(tester, 48);
+      expect(reported, [2, 1], reason: 'list-habits.header-scrolling#3');
+    });
+
+    testWidgets('#2 the bucket is one checkmark button wide', (tester) async {
+      expect(ListHeader.columnWidth, LightTheme().checkmarkButtonSize,
+          reason: 'list-habits.header-scrolling#2');
+      expect(ListHeader.columnWidth, 48.0,
+          reason: 'list-habits.header-scrolling#2');
+    });
+
+    testWidgets('#3 a smaller maxDataOffset clamps the offset and says so',
+        (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        dataOffset: 5,
+        maxDataOffset: 5,
+        reported: reported,
+        applyOffset: true,
+      );
+      expect(reported, isEmpty, reason: 'list-habits.header-scrolling#3');
+
+      // The screen got wider, fits more columns, and can no longer reach as
+      // far back: the header reports the clamped offset it now shows.
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        dataOffset: 5,
+        maxDataOffset: 2,
+        reported: reported,
+        applyOffset: true,
+      );
+
+      expect(reported, [2], reason: 'list-habits.header-scrolling#3');
+      expect(_draw(tester).texts.last, '23',
+          reason: 'list-habits.header-scrolling#3');
+    });
+
+    testWidgets('#4 a reversed sequence reverses the drag direction',
+        (tester) async {
+      final reported = <int>[];
+      await _pumpHeader(
+        tester,
+        buttonCount: 5,
+        reversed: true,
+        reported: reported,
+      );
+
+      await _dragBy(tester, -60);
+      expect(reported, isEmpty, reason: 'list-habits.header-scrolling#4');
+
+      await _dragBy(tester, 60);
+      expect(reported, [1], reason: 'list-habits.header-scrolling#4');
+    });
+  });
+
+  group('IntlLocalDateFormatter', () {
+    test('falls back to en_US when the locale has no data', () {
+      expect(IntlLocalDateFormatter('xx_YY').localeName, 'en_US');
+      expect(IntlLocalDateFormatter().localeName, 'en_US');
+    });
+
+    test('names the weekdays and months of a date', () {
+      final fmt = IntlLocalDateFormatter('en_US');
+
+      expect(fmt.shortWeekdayName(LocalDate.ymd(2015, 1, 25)), 'Sun');
+      expect(fmt.shortWeekdayNameOf(DayOfWeek.wednesday), 'Wed');
+      expect(fmt.longWeekdayNameOf(DayOfWeek.wednesday), 'Wednesday');
+      expect(fmt.shortMonthName(LocalDate.ymd(2015, 1, 25)), 'Jan');
+      expect(fmt.longMonthName(LocalDate.ymd(2015, 1, 25)), 'January');
+    });
+
+    test('every weekday maps to the day the core model says it is', () {
+      final fmt = IntlLocalDateFormatter('en_US');
+      final names = <String>[
+        for (final day in DayOfWeek.values) fmt.shortWeekdayNameOf(day),
+      ];
+
+      expect(names,
+          ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+    });
+  });
+}
+
+/// Pumps a [ListHeader] inside a 600dp-wide slot, the width the Android
+/// goldens were captured at.
+///
+/// [reported] collects every offset the header pushes out; [applyOffset] makes
+/// the host behave like the real screen and feed the value back in.
+Future<void> _pumpHeader(
+  WidgetTester tester, {
+  required int buttonCount,
+  int dataOffset = 0,
+  bool reversed = false,
+  int? maxDataOffset,
+  LocalDate? headerToday,
+  List<int>? reported,
+  bool applyOffset = false,
+  Brightness brightness = Brightness.light,
+  Locale locale = const Locale('en'),
+}) async {
+  var offset = dataOffset;
+  await tester.pumpWidget(
+    MaterialApp(
+      locale: locale,
+      localizationsDelegates: L10n.localizationsDelegates,
+      supportedLocales: L10n.supportedLocales,
+      theme: ThemeData(brightness: brightness),
+      home: Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: 600,
+          child: StatefulBuilder(
+            builder: (context, setState) => ListHeader(
+              buttonCount: buttonCount,
+              dataOffset: offset,
+              isCheckmarkSequenceReversed: reversed,
+              maxDataOffset: maxDataOffset,
+              today: headerToday,
+              onDataOffsetChanged: (value) {
+                reported?.add(value);
+                if (applyOffset) setState(() => offset = value);
+              },
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// Replays the hosted core view onto a recording canvas the size of the strip.
+_RecordingCanvas _draw(WidgetTester tester) {
+  final canvas = _RecordingCanvas(width: 600, height: 48);
+  tester.widget<CoreView>(find.byType(CoreView)).view.draw(canvas);
+  return canvas;
+}
+
+/// One horizontal drag of exactly [dx] logical pixels.
+///
+/// The first move only pays the touch slop: with the default
+/// DragStartBehavior.start the recogniser swallows whatever it took to win the
+/// arena, so the second move is the one the header sees.
+Future<void> _dragBy(WidgetTester tester, double dx) async {
+  final gesture =
+      await tester.startGesture(tester.getCenter(find.byType(ListHeader)));
+  await gesture.moveBy(Offset(dx.isNegative ? -20 : 20, 0));
+  await gesture.moveBy(Offset(dx, 0));
+  await gesture.up();
+  await tester.pump();
+}
+
+class _Op {
+  _Op(
+    this.name,
+    this.args, {
+    this.text,
+    required this.color,
+    required this.font,
+    required this.fontSize,
+    required this.strokeWidth,
+    required this.textAlign,
+  });
+
+  final String name;
+  final List<double> args;
+  final String? text;
+  final Color color;
+  final Font font;
+  final double fontSize;
+  final double strokeWidth;
+  final TextAlign textAlign;
+
+  @override
+  String toString() => '$name(${text == null ? '' : '"$text", '}$args)';
+}
+
+/// A [Canvas] that logs every call together with the sticky paint state it was
+/// made under.
+class _RecordingCanvas extends Canvas {
+  _RecordingCanvas({required this.width, required this.height});
+
+  final double width;
+  final double height;
+  final List<_Op> ops = <_Op>[];
+
+  Color _color = Color.BLACK;
+  Font _font = Font.regular;
+  double _fontSize = 12.0;
+  double _strokeWidth = 1.0;
+  TextAlign _textAlign = TextAlign.center;
+
+  List<_Op> opsNamed(String name) =>
+      ops.where((op) => op.name == name).toList();
+
+  /// The text of every drawText call, in the order it was drawn.
+  List<String> get texts =>
+      opsNamed('drawText').map((op) => op.text!).toList();
+
+  double xOf(String text) =>
+      opsNamed('drawText').firstWhere((op) => op.text == text).args[0];
+
+  /// Where each weekday label sits horizontally.
+  Map<String, double> get columnCentres => <String, double>{
+        for (final op in opsNamed('drawText'))
+          if (double.tryParse(op.text!) == null) op.text!: op.args[0],
+      };
+
+  void _record(String name, List<double> args, {String? text}) {
+    ops.add(_Op(
+      name,
+      args,
+      text: text,
+      color: _color,
+      font: _font,
+      fontSize: _fontSize,
+      strokeWidth: _strokeWidth,
+      textAlign: _textAlign,
+    ));
+  }
+
+  @override
+  double getWidth() => width;
+
+  @override
+  double getHeight() => height;
+
+  @override
+  void setColor(Color color) => _color = color;
+
+  @override
+  void setFont(Font font) => _font = font;
+
+  @override
+  void setFontSize(double size) => _fontSize = size;
+
+  @override
+  void setStrokeWidth(double size) => _strokeWidth = size;
+
+  @override
+  void setTextAlign(TextAlign align) => _textAlign = align;
+
+  @override
+  void drawLine(double x1, double y1, double x2, double y2) =>
+      _record('drawLine', [x1, y1, x2, y2]);
+
+  @override
+  void drawText(String text, double x, double y) =>
+      _record('drawText', [x, y], text: text);
+
+  @override
+  void fillRect(double x, double y, double w, double h) =>
+      _record('fillRect', [x, y, w, h]);
+
+  @override
+  void drawRect(double x, double y, double w, double h) =>
+      _record('drawRect', [x, y, w, h]);
+
+  @override
+  void fillRoundRect(double x, double y, double w, double h, double radius) =>
+      _record('fillRoundRect', [x, y, w, h, radius]);
+
+  @override
+  void fillCircle(double cx, double cy, double radius) =>
+      _record('fillCircle', [cx, cy, radius]);
+
+  @override
+  void fillArc(
+    double cx,
+    double cy,
+    double radius,
+    double startAngle,
+    double swipeAngle,
+  ) =>
+      _record('fillArc', [cx, cy, radius, startAngle, swipeAngle]);
+
+  @override
+  double measureText(String text) => text.length * _fontSize * 0.6;
+
+  @override
+  Image toImage() => throw UnsupportedError('not recorded');
+}

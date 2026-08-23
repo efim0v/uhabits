@@ -7,6 +7,29 @@
 // Usage: dart tool/generate_migrations.dart
 import 'dart:io';
 
+/// Rewrites SQLite's double-quoted empty string to the standard single-quoted
+/// one.
+///
+/// A double-quoted token is an identifier in SQL. SQLite has always accepted
+/// `""` as a string anyway, and the permissive libsqlite3 on macOS still does,
+/// which is why `dart test` never complained. The build bundled into the mobile
+/// apps compiles with SQLITE_DQS=1: tolerant in DDL, strict in DML. Migration
+/// 23's `update Habits set description = ""` therefore threw on the device and
+/// killed the app during startup.
+///
+/// The rewrite is exact — `""` and `''` are the same empty string — and is
+/// deliberately narrow: anything other than an empty literal is a real
+/// identifier and must be left alone, so this throws rather than guess.
+String _portableQuotes(String sql, String path) {
+  final rewritten = sql.replaceAll('""', "''");
+  if (rewritten.contains('"')) {
+    throw StateError(
+        'Unexpected double-quoted token in $path; only "" is rewritten. '
+        'Inspect it by hand: a double-quoted identifier must be preserved.');
+  }
+  return rewritten;
+}
+
 void main() {
   final repoRoot = Directory.current.parent.path;
   final source = Directory('$repoRoot/uhabits-core/assets/main/migrations');
@@ -35,7 +58,7 @@ void main() {
 
   for (final file in files) {
     final version = int.parse(file.uri.pathSegments.last.split('.').first);
-    final sql = file.readAsStringSync();
+    final sql = _portableQuotes(file.readAsStringSync(), file.path);
     buffer
       ..writeln('  $version: r"""')
       ..write(sql)

@@ -186,7 +186,7 @@ void main() {
         [
           'alter table Habits add column target_type integer not null default 0',
           'alter table Habits add column target_value real not null default 0',
-          'alter table Habits add column unit text not null default ""',
+          "alter table Habits add column unit text not null default ''",
         ],
         reason: 'persistence.migration-v18#1 — three ALTER TABLE statements on '
             'Habits, in the order target_type, target_value, unit',
@@ -239,20 +239,20 @@ void main() {
               "''");
     });
 
-    test('the "" default is the empty-string literal, not NULL and not quotes',
+    test("the '' default is the empty-string literal, not NULL and not quotes",
         () {
       final db = dbAt(17);
       db.run("insert into Habits(name) values ('Wake up')");
       migrateTo(db, 18);
 
       expect(queryTextOrNull(db, 'select typeof(unit) from Habits'), 'text',
-          reason: 'persistence.migration-v18#2 — SQLite reads "" as a string '
+          reason: 'persistence.migration-v18#2 — SQLite reads the empty literal as a string '
               'literal, so unit is text, not NULL');
       expect(queryTextOrNull(db, 'select unit from Habits'), isNotNull,
           reason: 'persistence.migration-v18#2 — unit is not NULL');
       expect(queryIntOrNull(db, 'select length(unit) from Habits'), 0,
           reason: 'persistence.migration-v18#2 — unit is the empty string');
-      expect(queryTextOrNull(db, 'select unit from Habits'), isNot('""'),
+      expect(queryTextOrNull(db, 'select unit from Habits'), isNot("''"),
           reason: 'persistence.migration-v18#2 — unit is not the literal two '
               'quote characters');
       expect(queryCount(db, "select count(*) from Habits where unit = ''"), 1,
@@ -987,7 +987,7 @@ void main() {
         [
           'alter table Habits add column question text',
           'update Habits set question = description',
-          'update Habits set description = ""',
+          "update Habits set description = ''",
         ],
         reason: 'persistence.migration-v23#1 — add question, copy description '
             'into it, then blank description, in that order',
@@ -1034,11 +1034,11 @@ void main() {
           reason: 'persistence.migration-v23#3 — every description becomes the '
               'empty string');
       expect(types, ['text', 'text'],
-          reason: 'persistence.migration-v23#3 — "" is parsed as an '
+          reason: 'persistence.migration-v23#3 — the empty literal is parsed as an '
               'empty-string literal, so the value is text and not NULL');
-      expect(descriptions, isNot(contains('""')),
+      expect(descriptions, isNot(contains("''")),
           reason: 'persistence.migration-v23#3 — the value is not the '
-              'two-character string ""');
+              'two-character quoted string');
     });
 
     test('the question column can be selected on every row', () {
@@ -1099,7 +1099,7 @@ void main() {
         migrateTo(db, 23);
         db.query('select description from Habits', const [], (stmt) {
           expect(stmt.getTextOrNull(0), '',
-              reason: 'persistence.migration-v23#3 — description is "" for '
+              reason: 'persistence.migration-v23#3 — description is empty for '
                   'every row');
         });
       });
