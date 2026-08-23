@@ -1769,7 +1769,7 @@ written from the rules below.
 
 #### io.export-csv-entry-points
 
-- [ ] `io.export-csv-entry-points` — CSV export entry points (all habits / single habit)
+- [x] `io.export-csv-entry-points` — CSV export entry points (all habits / single habit)
 - **Platform:** ui · **Port risk:** medium
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehavior.kt`, `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenter.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/HabitsDirFinder.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/AndroidDirFinder.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/FileUtils.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/ShowHabitMenu.kt`
 - **Kotlin tests:** `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/list/ListHabitsBehaviorTest.kt`, `uhabits-core/src/commonTest/kotlin/org/isoron/uhabits/core/ui/screens/habits/show/ShowHabitMenuPresenterTest.kt`
@@ -1947,7 +1947,7 @@ written from the rules below.
 
 #### io.import-file-picker
 
-- [ ] `io.import-file-picker` — Import data: file picking, temp copy and user messages
+- [x] `io.import-file-picker` — Import data: file picking, temp copy and user messages
 - **Platform:** android-only · **Port risk:** high
 - **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsScreen.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/intents/IntentFactory.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/activities/settings/SettingsFragment.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/utils/FileUtils.kt`, `uhabits-android/src/main/res/values/strings.xml`
 - **Kotlin tests:** `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/BackupTest.kt`, `uhabits-android/src/androidTest/java/org/isoron/uhabits/acceptance/steps/BackupSteps.kt`
@@ -4530,7 +4530,7 @@ written from the rules below.
 
 #### notifications.id-and-registry
 
-- [ ] `notifications.id-and-registry` — Notification ids, active registry, cancel and reshow
+- [x] `notifications.id-and-registry` — Notification ids, active registry, cancel and reshow
 - **Platform:** core · **Port risk:** low
 - **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt`, `uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt`
 - **Kotlin tests:** none — write Dart test from rules
