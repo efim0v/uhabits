@@ -22,41 +22,27 @@ void main(List<String> args) {
   final repoRoot = Directory.current.path.endsWith('uhabits-flutter')
       ? Directory.current.parent.path
       : Directory.current.path;
-  final ledgerFile = File('$repoRoot/docs/parity/FEATURES.md');
-  if (!ledgerFile.existsSync()) {
-    stderr.writeln('Parity ledger not found at ${ledgerFile.path}');
-    exit(2);
-  }
-
-  final rulesByFeature = <String, List<String>>{};
-  final notApplicableRules = <String>{};
-  final checkedFeatures = <String>{};
-  final supersededFeatures = <String>{};
-  String? currentFeature;
-
-  for (final line in ledgerFile.readAsLinesSync()) {
-    final featureMatch = _featureLine.firstMatch(line);
-    if (featureMatch != null) {
-      currentFeature = featureMatch.group(2)!;
-      rulesByFeature.putIfAbsent(currentFeature, () => <String>[]);
-      if (featureMatch.group(1) == 'x') checkedFeatures.add(currentFeature);
-      if (featureMatch.group(1) == '~') supersededFeatures.add(currentFeature);
-      continue;
-    }
-    final ruleMatch = _ruleLine.firstMatch(line);
-    if (ruleMatch != null && currentFeature != null) {
-      // A rule can be dispositioned on its own, without its whole feature: it
-      // may contradict the source it was extracted from, or describe a
-      // platform mechanism the port has no counterpart for. Such a rule is
-      // annotated in the ledger and carries its reason inline, and it must not
-      // hold an otherwise finished feature open for ever.
-      if (line.contains(_notApplicable)) {
-        notApplicableRules.add(ruleMatch.group(1)!);
-      } else {
-        rulesByFeature[currentFeature]!.add(ruleMatch.group(1)!);
-      }
+  // Two ledgers, one format. FEATURES.md records what the Kotlin original
+  // does and must never grow a rule without a counterpart there; SLEEP.md
+  // records extensions that have no original at all. Keeping them apart is
+  // what lets "matches Kotlin" stay a claim worth making. Ids cannot collide:
+  // extension rules all carry a `sleep.` prefix.
+  final ledgerFiles = <File>[
+    File('$repoRoot/docs/parity/FEATURES.md'),
+    File('$repoRoot/docs/extensions/SLEEP.md'),
+  ];
+  for (final file in ledgerFiles) {
+    if (!file.existsSync()) {
+      stderr.writeln('Ledger not found at ${file.path}');
+      exit(2);
     }
   }
+
+  final ledger = parseLedgers(ledgerFiles.map((f) => f.readAsLinesSync()));
+  final rulesByFeature = ledger.rulesByFeature;
+  final notApplicableRules = ledger.notApplicableRules;
+  final checkedFeatures = ledger.checkedFeatures;
+  final supersededFeatures = ledger.supersededFeatures;
 
   final cited = <String>{};
   for (final dir in ['packages/uhabits_core/test', 'app/test', 'app/integration_test']) {
@@ -146,4 +132,58 @@ void main(List<String> args) {
   } else if (args.contains('--verify')) {
     stdout.writeln('\nEvery checked feature is fully cited.');
   }
+}
+
+/// What a ledger says, independent of where it came from.
+class Ledger {
+  Ledger(this.rulesByFeature, this.notApplicableRules, this.checkedFeatures,
+      this.supersededFeatures);
+
+  final Map<String, List<String>> rulesByFeature;
+  final Set<String> notApplicableRules;
+  final Set<String> checkedFeatures;
+  final Set<String> supersededFeatures;
+}
+
+/// Reads one or more ledgers, each given as its own list of lines.
+///
+/// Taking the files pre-split rather than reading them here keeps the parsing
+/// rules — which are the interesting part — testable without a filesystem.
+Ledger parseLedgers(Iterable<List<String>> files) {
+  final rulesByFeature = <String, List<String>>{};
+  final notApplicableRules = <String>{};
+  final checkedFeatures = <String>{};
+  final supersededFeatures = <String>{};
+
+  for (final lines in files) {
+    // A ledger never continues across a file boundary. Without this reset a
+    // rule appearing before the first heading of the next file would silently
+    // attach to the last feature of the previous one.
+    String? currentFeature;
+    for (final line in lines) {
+      final featureMatch = _featureLine.firstMatch(line);
+      if (featureMatch != null) {
+        currentFeature = featureMatch.group(2)!;
+        rulesByFeature.putIfAbsent(currentFeature, () => <String>[]);
+        if (featureMatch.group(1) == 'x') checkedFeatures.add(currentFeature);
+        if (featureMatch.group(1) == '~') supersededFeatures.add(currentFeature);
+        continue;
+      }
+      final ruleMatch = _ruleLine.firstMatch(line);
+      if (ruleMatch != null && currentFeature != null) {
+        // A rule can be dispositioned on its own, without its whole feature: it
+        // may contradict the source it was extracted from, or describe a
+        // platform mechanism the port has no counterpart for. Such a rule is
+        // annotated in the ledger and carries its reason inline, and it must
+        // not hold an otherwise finished feature open for ever.
+        if (line.contains(_notApplicable)) {
+          notApplicableRules.add(ruleMatch.group(1)!);
+        } else {
+          rulesByFeature[currentFeature]!.add(ruleMatch.group(1)!);
+        }
+      }
+    }
+  }
+  return Ledger(
+      rulesByFeature, notApplicableRules, checkedFeatures, supersededFeatures);
 }
