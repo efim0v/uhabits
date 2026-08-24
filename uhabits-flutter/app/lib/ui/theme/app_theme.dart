@@ -306,6 +306,23 @@ ThemeData appThemeData(core.Theme theme) {
     dialogTheme: DialogThemeData(backgroundColor: card),
     dividerTheme: DividerThemeData(color: lowContrast),
     iconTheme: IconThemeData(color: mediumContrast),
+    // `View.showMessage` is `Snackbar.make(...)` followed by
+    // `tv?.setTextColor(Color.WHITE)` — white text, unconditionally, with no
+    // branch on the theme. Left unthemed, Material 3 paints a SnackBar with
+    // `ColorScheme.inverseSurface`, so it inverts with the app: a near-white
+    // slab with dark text in the dark themes, which is the opposite of the one
+    // colour the Kotlin states outright, and a bright rectangle in an app whose
+    // point in pure black is that nothing is
+    // (`feedback.toasts-must-be-dark-with-white-text#1`).
+    //
+    // #323232 is `design_snackbar_background_color`, the colour the platform
+    // toast has had since the design library.
+    snackBarTheme: const SnackBarThemeData(
+      backgroundColor: Color(0xFF323232),
+      contentTextStyle: TextStyle(color: Colors.white),
+      actionTextColor: Colors.white,
+      behavior: SnackBarBehavior.fixed,
+    ),
     listTileTheme: ListTileThemeData(
       textColor: highContrast,
       iconColor: mediumContrast,

@@ -22,6 +22,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+const String delegateRule =
+    'audit21.ios-must-own-the-notification-centre-delegate#1 — every iOS '
+    'notification interaction is dispatched from the notification centre\'s '
+    'delegate, and FlutterAppDelegate does not put itself in that seat.';
+
 const String rule =
     'audit20.ios-background-notification-actions-need-a-registrant#1 — a '
     'reminder that cannot be answered from the notification is a reminder the '
@@ -39,6 +44,29 @@ void main() {
         reason: '$rule …and it has to register the real plugins, or the '
             'background isolate comes up without the channels '
             'reminderBackgroundResponse needs.');
+  });
+
+  test('the app delegate takes the notification centre seat', () {
+    // The callback above is only ever reached from
+    // `-userNotificationCenter:didReceiveNotificationResponse:`, which iOS
+    // calls on the notification centre's delegate and nowhere else.
+    // FlutterAppDelegate implements that method and forwards it to the
+    // registered plugins, but it does not install itself as the delegate — the
+    // plugin's own setup instructions are this line
+    // (`audit21.ios-must-own-the-notification-centre-delegate#1`).
+    expect(source, contains('UNUserNotificationCenter.current().delegate'),
+        reason: '$delegateRule Without it every reminder on iOS is a dead end: '
+            'the body tap opens the plain list, Yes and No record nothing, '
+            'Enter and Later open nothing, and a reminder that fires with the '
+            'app open is never shown.');
+    expect(source, contains('import UserNotifications'), reason: delegateRule);
+
+    final int delegate = source.indexOf('UNUserNotificationCenter.current().delegate');
+    final int superCall =
+        source.indexOf('super.application(application, didFinishLaunchingWithOptions');
+    expect(superCall, greaterThan(delegate),
+        reason: '$delegateRule A launch caused by a notification tap reaches '
+            'the delegate during this call, so the seat has to be taken first.');
   });
 
   test('it is installed before the superclass finishes launching', () {

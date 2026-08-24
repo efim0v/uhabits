@@ -8111,3 +8111,32 @@ the reminder's two answer buttons, dead on one platform for the whole project.
 - **Severity:** critical
 
 1. `audit20.ios-background-notification-actions-need-a-registrant#1` — In the Kotlin app "Yes" and "No" are broadcasts: Android delivers them to the manifest-declared `WidgetReceiver`, which writes `Entry.YES_MANUAL` or `Entry.NO` for the alarm's day with no UI at all, running or not. That is the primary way a reminder is answered. The port keeps them as background actions on both platforms, which is right — but iOS answers a non-foreground action by starting a second Flutter engine, and `FlutterEngineManager` registers the app's plugins into that engine through the block `setPluginRegistrantCallback` installs. With no callback it calls a nil block, and the `NSAssert` that would name the problem is compiled out of a release build: the process dies and the tap records nothing, on every "Yes" and every "No", from the lock screen or a banner. iOS additionally requires this; Android has no equivalent, which is why fixing the Android half (`audit5`) did not fix this one.
+
+## Domain: Twenty-first audit pass and user feedback (2026-08-24)
+
+Four audit findings, none refuted, and one report from the user running the
+release build on a physical iPhone. The critical one is the second half of the
+iOS notification path: the twentieth pass installed the plugin registrant
+callback, and this pass found that the method which would have called it is
+never invoked, because the app never takes the notification centre's delegate
+seat.
+
+#### audit21.ios-must-own-the-notification-centre-delegate
+
+- [x] `audit21.ios-must-own-the-notification-centre-delegate` — The app never becomes the UNUserNotificationCenter delegate, so no notification interaction on iOS reaches the app at all
+- **Platform:** ios · **Port risk:** high
+- **Source:** `uhabits-android/src/main/AndroidManifest.xml and uhabits-android/src/main/java/org/isoron/uhabits/receivers/WidgetReceiver.kt — on Android every way a reminder can be answered is delivered by the OS to a manifest-declared component, and nothing has to hand the system a delegate object first`
+- **Where the port should do it:** `uhabits-flutter/app/ios/Runner/AppDelegate.swift — application(_:didFinishLaunchingWithOptions:)`
+- **Severity:** critical
+
+1. `audit21.ios-must-own-the-notification-centre-delegate#1` — In the Kotlin app declaring the receiver is the whole wiring: the content PendingIntent starts `ShowHabitActivity`, "Yes" and "No" are broadcasts to the manifest-declared `WidgetReceiver` that write the entry with no UI, "Enter" and "Later" start activities, and a reminder that fires in the foreground is still posted to the shade. iOS has no such thing: every one of those interactions is dispatched from a single method, `-userNotificationCenter:didReceiveNotificationResponse:`, which the system calls on the notification centre's delegate and nowhere else. `FlutterAppDelegate` implements that method and forwards it to the registered plugins, but it does not install itself as the delegate — the plugin's own setup instructions are that one line. Without it every reminder on iOS is a dead end: the body tap opens the plain list instead of the habit, both answer buttons record nothing (the registrant callback of `audit20` is never reached, because the code that would call it lives inside the method iOS never invokes), "Enter" and "Later" open nothing, and a reminder that fires with the app open is never shown. It must be installed before the superclass finishes launching, because a launch caused by a notification tap reaches the delegate during that call.
+
+#### feedback.toasts-must-be-dark-with-white-text
+
+- [x] `feedback.toasts-must-be-dark-with-white-text` — In the dark themes the toast is a near-white slab, the opposite of the one colour the Kotlin states outright
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt:105-115 — `View.showMessage` is `Snackbar.make(this, msg, LENGTH_SHORT)` followed by `tv?.setTextColor(Color.WHITE)``
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/theme/app_theme.dart — appThemeData's SnackBarThemeData`
+- **Severity:** major
+
+1. `feedback.toasts-must-be-dark-with-white-text#1` — In the Kotlin app the toast's text is set to `Color.WHITE` by hand, unconditionally, with no branch on the theme — and white text is only legible on a dark surface. Flutter's Material 3 has the opposite default: an unthemed `SnackBar` paints itself `ColorScheme.inverseSurface`, so it inverts with the app and comes out near-white with dark text in the dark and pure-black themes. Measured, the background's relative luminance is 0.91 there against 0.13 in the light theme. The port must therefore pin the surface rather than inherit it: a dark toast carrying white text in every theme, which is both what the Kotlin asks for and what the light theme already showed. Reported by the user from a release build on a physical device, which is also the only place the pure-black theme's bright rectangle is obvious.
