@@ -27,6 +27,7 @@ import 'package:uhabits/platform/flutter_alarm_scheduler.dart';
 import 'package:uhabits/platform/flutter_notification_tray.dart';
 import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/io/logging.dart';
+import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
@@ -193,6 +194,74 @@ void main() {
     habitList.add(habit);
     return habit;
   }
+
+  group('audit13.a-snooze-overtaken-by-completion-moves', () {
+    const String rule =
+        'audit13.a-snooze-overtaken-by-completion-moves#1 — a snoozed instant '
+        'belongs to the day it names. Any later day the alarm is pushed to has '
+        "to carry the habit's own reminder time, not the snoozed one.";
+
+    test('the day after an overtaken snooze keeps the habit\'s reminder time',
+        () async {
+      // 08:30 daily. The user snoozed at 08:30 for an hour, so the alarm is
+      // live at 09:30 today; then they actually did the habit and ticked it
+      // off. The tray cancels on the entry and re-arms behind it
+      // (`audit3.recording-a-non-completing-entry-silently#1`), which re-enters
+      // schedule() while the snooze is still in the future — and gate 1 now
+      // answers "already completed", so today is skipped.
+      final habit = habitWithReminder();
+      widgetPreferences.setSnoozeTime(habit.id!, unixTime(2015, 1, 26, 9, 30));
+      habit.originalEntries.add(Entry(monday, Entry.yesManual));
+      habit.recompute();
+
+      scheduler.scheduleAll();
+      await settleAll();
+
+      final int id = plugin.pending.keys.single;
+      expect(plugin.pending[id], unixTime(2015, 1, 27, 8, 30),
+          reason: '$rule Tuesday at 08:30, not Tuesday at 09:30.');
+    });
+
+    test('a snooze that lands on an uncovered weekday does not move the next',
+        () async {
+      // Mon-Fri at 20:00. On Friday the user snoozes four hours, to Saturday
+      // 00:00 — a day the reminder does not cover — so the alarm has to walk
+      // forward to Monday. Monday's reminder is 20:00.
+      final habit = fixtures.createEmptyHabit();
+      habit.id = 11;
+      // The scheduler indexes days from Saturday: (daysSinceSunday + 1) % 7,
+      // so Monday..Friday are bits 2..6.
+      habit.reminder = Reminder(20, 0, WeekdayList(0x7C));
+      habitList.add(habit);
+
+      final LocalDate friday = LocalDate.ymd(2015, 1, 30);
+      setToday(friday);
+      DateUtils.setFixedLocalTime(unixTime(2015, 1, 30, 23, 0));
+      widgetPreferences.setSnoozeTime(habit.id!, unixTime(2015, 1, 31, 0, 0));
+      habit.originalEntries.add(Entry(friday, Entry.yesManual));
+      habit.recompute();
+
+      scheduler.scheduleAll();
+      await settleAll();
+
+      final int id = plugin.pending.keys.single;
+      expect(plugin.pending[id], unixTime(2015, 2, 2, 20, 0),
+          reason: '$rule Monday at 20:00, not Monday at midnight.');
+    });
+
+    test('an un-overtaken snooze still fires at the snoozed instant', () async {
+      // The control: nothing was completed, so the snoozed day is the day the
+      // alarm belongs to and the snoozed time is exactly right.
+      final habit = habitWithReminder();
+      widgetPreferences.setSnoozeTime(habit.id!, unixTime(2015, 1, 26, 9, 30));
+
+      scheduler.scheduleAll();
+      await settleAll();
+
+      final int id = plugin.pending.keys.single;
+      expect(plugin.pending[id], unixTime(2015, 1, 26, 9, 30), reason: rule);
+    });
+  });
 
   group('snoozing until a custom wall-clock time', () {
     test('leaves the platform holding an alarm at the time that was picked',

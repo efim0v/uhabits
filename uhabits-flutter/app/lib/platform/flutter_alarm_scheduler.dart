@@ -313,6 +313,17 @@ class FlutterAlarmScheduler implements SystemScheduler {
     final reminder = habit.reminder;
     if (reminder == null) return null;
     final days = reminder.days.toArray();
+    // The instant the habit's own reminder names, which is what every day
+    // after the first has to use. It is the same as [reminderTime] on the
+    // ordinary path — `ReminderScheduler.schedule` passes exactly this — but
+    // not while a snooze is live: there it passes the *snoozed* instant, which
+    // belongs to the day it names and to no other. Adding whole days to that
+    // would carry the snoozed hour into every later reminder
+    // (`audit13.a-snooze-overtaken-by-completion-moves#1`).
+    final int ownTime =
+        DateUtils.getUpcomingTimeInMillis(reminder.hour, reminder.minute);
+    final int ownDay = LocalDate.fromUnixTime(ownTime).daysSince2000;
+
     var date = LocalDate.fromUnixTime(timestamp);
     var time = reminderTime;
     for (var i = 0; i < 8; i++) {
@@ -322,7 +333,7 @@ class FlutterAlarmScheduler implements SystemScheduler {
         return _ReminderTarget(time, date);
       }
       date = LocalDate(date.daysSince2000 + 1);
-      time += DateUtils.dayLength;
+      time = ownTime + (date.daysSince2000 - ownDay) * DateUtils.dayLength;
     }
     return null;
   }

@@ -7850,3 +7850,18 @@ survived is recorded here.
 - **Severity:** major
 
 1. `audit12.the-date-strip-and-subtitle-card-read#1` — In the Kotlin app: two surfaces take their background from the theme ATTRIBUTE `?attr/headerBackgroundColor` rather than from the KMP `Theme` object. `HeaderView.init` — the 48dp date strip above the habit list — runs `setBackgroundColor(sres.getColor(R.attr.headerBackgroundColor))`, and the Show-habit subtitle card is `@style/ShowHabit.Subtitle`, whose first item is `<item name="android:background">?headerBackgroundColor</item>`. `res/values/styles.xml` maps that attribute per theme: `@color/grey_200` in `AppBaseTheme`, `@color/grey_900` in `AppBaseThemeDark`, and `@color/black` in `AppBaseThemeDark.PureBlack`. So with "Use pure black background" on, both surfaces are #000000 like every other surface on screen. The identically named `Themes.kt` token is a different thing: `PureBlackTheme : DarkTheme()` overrides only `appBackgroundColor`, `cardBackgroundColor` and `lowContrastTextColor`, so its `headerBackgroundColor` stays grey_900 — and that token is read by the KMP `HabitListHeader`, which the Android list screen never uses. A port that points these two surfaces at the token instead of the attribute is right in the light and dark themes by coincidence and wrong under pure black, where the whole point of the setting is that black pixels stay off.
+
+## Domain: Thirteenth audit pass (2026-08-24)
+
+The same seven lenses over the code the twelfth pass fixed. One finding
+confirmed, two refuted — 16, then 11, then 6, then 1.
+
+#### audit13.a-snooze-overtaken-by-completion-moves
+
+- [x] `audit13.a-snooze-overtaken-by-completion-moves` — A snoozed reminder that the user completes before the snooze fires moves the next day's reminder to the snoozed hour
+- **Platform:** android · **Port risk:** medium
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt (schedule's snooze branch; onCommandFinished's `if (command is CreateRepetitionCommand) return`) with uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt (ShowNotificationTask.onPostExecute, gate 1) and uhabits-android/.../receivers/ReminderController.kt (onShowReminder)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart — FlutterAlarmScheduler._advanceToReminderDay`
+- **Severity:** major
+
+1. `audit13.a-snooze-overtaken-by-completion-moves#1` — In the Kotlin app: a snoozed instant is only ever an alarm time, never a template for later days. `ReminderScheduler.schedule` substitutes `snoozedUntil` for `getUpcomingTimeInMillis(hour, minute)` while it is still in the future, and nothing advances it: ticking the habit off runs `CreateRepetitionCommand`, which `onCommandFinished` explicitly returns on, so the alarm stays where it was. At the snoozed instant the alarm fires, gate 1 of `ShowNotificationTask` drops the notification because the habit is already complete, and `onShowReminder`'s trailing `scheduleAll()` — now seeing an expired snooze — clears it and re-arms from the habit's own reminder time. The next day's reminder is therefore at the hour the user configured. The port has no fire-time hook, so gate 1 lives in the scheduler and a rejected day is skipped before the alarm is filed; the day-stepping must therefore rebase each later day on the habit's own reminder time rather than adding whole days to the instant it was handed, which while a snooze is live is the snoozed one.
