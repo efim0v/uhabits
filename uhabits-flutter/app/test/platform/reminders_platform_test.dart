@@ -459,10 +459,7 @@ void main() {
 
       expect(
         receiver,
-        contains(
-          'com.dexterous.flutterlocalnotifications.'
-          'ScheduledNotificationBootReceiver',
-        ),
+        contains('org.isoron.uhabits.ReminderBootReceiver'),
         reason: 'reminders.boot-reschedule#2 and '
             'intents.reminder-receiver-dispatch#8 — Intent.ACTION_BOOT_'
             'COMPLETED: the receiver calls '
@@ -472,8 +469,21 @@ void main() {
             'the OS by zonedSchedule — so the "re-arm everything that was '
             'armed" pass is '
             'ScheduledNotificationBootReceiver.rescheduleNotifications, which '
-            'flutter_local_notifications does NOT declare in its own manifest.',
+            'flutter_local_notifications does NOT declare in its own manifest. '
+            'The app declares its own receiver in front of it, because that '
+            'pass re-arms every cached alarm with its ORIGINAL instant and '
+            'AlarmManager fires an elapsed one at once, where upstream drops '
+            'it (audit12.boot-redelivers-an-elapsed-reminder#1); '
+            'ReminderBootReceiver applies IntentScheduler.schedule\'s '
+            'past-time refusal to the cache and then delegates.',
       );
+
+      final String source = androidSource(
+          'kotlin/org/isoron/uhabits/ReminderBootReceiver.kt');
+      expect(source, contains('ScheduledNotificationBootReceiver()'),
+          reason: 'reminders.boot-reschedule#2: everything that has NOT '
+              'elapsed is still re-armed, by the plugin\'s own pass, so a '
+              'reboot restores every reminder that is still due.');
       expect(receiver.contains('android:name="android.intent.action.'
           'BOOT_COMPLETED"'), isTrue,
           reason: 'intents.reminder-receiver-dispatch#8: the boot branch is '

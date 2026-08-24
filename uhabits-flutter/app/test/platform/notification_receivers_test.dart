@@ -130,6 +130,10 @@ const String scheduledReceiver = '$pluginPackage.ScheduledNotificationReceiver';
 const String bootReceiver = '$pluginPackage.ScheduledNotificationBootReceiver';
 const String actionReceiver = '$pluginPackage.ActionBroadcastReceiver';
 
+/// The app's own boot receiver — see the
+/// `audit12.boot-redelivers-an-elapsed-reminder` group.
+const String appBootReceiver = 'org.isoron.uhabits.ReminderBootReceiver';
+
 /// Runs [check] over the source manifest and over every fresh merged manifest,
 /// naming which one failed.
 void forEachManifest(void Function(String xml, String label) check) {
@@ -184,13 +188,17 @@ void main() {
       });
     });
 
-    test('#1 the boot receiver is still declared beside it', () {
+    test('#1 a boot receiver is still declared beside it', () {
       forEachManifest((String xml, String label) {
-        expect(receiverNamed(xml, bootReceiver), isNotNull,
+        expect(receiverNamed(xml, appBootReceiver), isNotNull,
             reason: '$rule Re-arming after a reboot and delivering at the '
                 'scheduled instant are two different components; declaring '
                 'only the boot one — which is what this manifest did — '
-                're-arms alarms that can never be delivered. In $label.');
+                're-arms alarms that can never be delivered. The boot one is '
+                'the app\'s own ReminderBootReceiver, which filters the '
+                'elapsed alarms out of the plugin\'s cache and then delegates '
+                'to ScheduledNotificationBootReceiver by name '
+                '(audit12.boot-redelivers-an-elapsed-reminder#1). In $label.');
       });
     });
 
@@ -261,10 +269,95 @@ void main() {
   });
 
   // =======================================================================
+  // audit12.boot-redelivers-an-elapsed-reminder
+  // =======================================================================
+
+  group('audit12.boot-redelivers-an-elapsed-reminder', () {
+    const String rule =
+        'audit12.boot-redelivers-an-elapsed-reminder#1 — In the Kotlin app: '
+        'Android discards every AlarmManager alarm across a reboot, and '
+        "ReminderReceiver's BOOT_COMPLETED branch calls "
+        'ReminderController.onBootCompleted() = reminderScheduler.'
+        'scheduleAll(), which recomputes each alarm with DateUtils.'
+        'getUpcomingTimeInMillis(hour, minute) — an instant that is in the '
+        'future by construction — and IntentScheduler.schedule refuses '
+        'anything with timestamp < now ("Ignoring attempt to schedule intent '
+        'in the past"). A reminder whose instant passed while the phone was '
+        'off is therefore never shown at all.';
+
+    test("#1 the app's own receiver is what claims the boot broadcast", () {
+      forEachManifest((String xml, String label) {
+        // Only this app's own components and the notification plugin's: a
+        // merged manifest also carries androidx.work's RescheduleReceiver,
+        // which re-arms WorkManager's jobs and has nothing to do with alarms.
+        final List<String> claimants = xmlBlocks(withoutXmlComments(xml), 'receiver')
+            .where((String r) =>
+                r.contains('android.intent.action.BOOT_COMPLETED'))
+            .map((String r) => xmlAttributes(r)['android:name']!)
+            .where((String n) =>
+                n.startsWith(pluginPackage) || n.startsWith('org.isoron.uhabits'))
+            .toList();
+        expect(receiverNamed(xml, bootReceiver), isNull,
+            reason: '$rule The plugin\'s own boot receiver is reached by '
+                'name from ReminderBootReceiver and must not be declared: a '
+                'declaration would hand it the boot broadcast directly, '
+                'unfiltered, beside the app\'s. In $label.');
+        expect(claimants, <String>[appBootReceiver],
+            reason: '$rule The plugin\'s own '
+                'ScheduledNotificationBootReceiver hands the whole cache '
+                'straight back to AlarmManager: rescheduleNotifications() '
+                'loops over every entry still stored (an entry leaves the '
+                'cache only when it fires) and re-arms it with its ORIGINAL '
+                'epochMilli through setupAlarm — no past-time filter exists '
+                'anywhere on that path, and AlarmManager delivers an alarm '
+                'whose time has passed immediately. The port therefore has to '
+                'own the boot broadcast itself and drop the elapsed entries '
+                'before delegating. In $label.');
+        expect(xmlAttributes(receiverNamed(xml, appBootReceiver)!)['android:exported'],
+            'true',
+            reason: '$rule A receiver the system broadcasts to must be '
+                'exported. In $label.');
+      });
+    });
+
+    test('#1 and it drops the entries whose instant has already passed', () {
+      final String source = appSource(
+          'android/app/src/main/kotlin/org/isoron/uhabits/'
+          'ReminderBootReceiver.kt');
+
+      expect(source, contains('ScheduledNotificationBootReceiver()'),
+          reason: '$rule Re-arming the alarms that have NOT elapsed is still '
+              "the plugin's own pass; the app receiver filters the cache and "
+              'then delegates to it, so a reboot still restores every '
+              'reminder that is still due.');
+      expect(source, contains('fireTime < now'),
+          reason: '$rule The refusal is IntentScheduler.schedule\'s, '
+              'strictly less-than: an alarm due exactly now is still armed. '
+              'FlutterAlarmScheduler._schedule already spells the same rule, '
+              'but it runs in Dart and no Dart runs at boot.');
+      expect(source, contains('System.currentTimeMillis()'),
+          reason: '$rule Compared against the wall clock the alarm was '
+              'expressed in.');
+
+      // The cache the filter reads has to be the one the plugin writes:
+      // getSharedPreferences("scheduled_notifications").getString(
+      // "scheduled_notifications", null).
+      expect(
+        RegExp(r'"scheduled_notifications"').allMatches(source).length,
+        greaterThanOrEqualTo(1),
+        reason: '$rule flutter_local_notifications stores the pending alarms '
+            'as one JSON array under the SharedPreferences file and key '
+            '"scheduled_notifications"; that is the only place a boot '
+            'receiver can see what is about to be re-armed.',
+      );
+    });
+  });
+
+  // =======================================================================
   // Everything the app relies on the plugin for is declared exactly once
   // =======================================================================
 
-  test('all three plugin receivers are declared, once each', () {
+  test('every plugin component the app relies on is declared, once each', () {
     const String rule =
         'audit5.android-reminders-never-fire-flutter-local#1 + '
         'audit5.reminder-yes-no-buttons-are-dead#1 — the plugin ships an '
@@ -273,16 +366,23 @@ void main() {
         'declares ActionBroadcastReceiver, ScheduledNotificationReceiver and '
         'ScheduledNotificationBootReceiver; this app schedules notifications, '
         'restores them after a reboot and uses notification actions, so it '
-        'needs the same three.';
+        'needs all three roles. Two of them are the plugin\'s classes named in '
+        'the manifest; the boot one is the app\'s own ReminderBootReceiver, '
+        'which reaches the plugin\'s by name after filtering the elapsed '
+        'alarms out of its cache '
+        '(audit12.boot-redelivers-an-elapsed-reminder#1) — a class called '
+        'directly needs no declaration, and declaring it would give the '
+        'unfiltered pass the boot broadcast back.';
 
     forEachManifest((String xml, String label) {
       final List<String> declared = xmlBlocks(withoutXmlComments(xml), 'receiver')
           .map((String r) => xmlAttributes(r)['android:name']!)
-          .where((String n) => n.startsWith(pluginPackage))
+          .where((String n) =>
+              n.startsWith(pluginPackage) || n == appBootReceiver)
           .toList();
       expect(
         declared..sort(),
-        <String>[actionReceiver, bootReceiver, scheduledReceiver]..sort(),
+        <String>[actionReceiver, appBootReceiver, scheduledReceiver]..sort(),
         reason: '$rule In $label.',
       );
     });

@@ -642,3 +642,24 @@ Store у порта нет, поэтому честная замена — та 
 **Почему:** Extends the already-recorded feedback.checkmark-haptics-are-the-ios-alert-buzz#1 deviation to the new call site — a typeless vibrate reaches iOS as kSystemSoundID_Vibrate, a third of a second of whole-device alert buzz, for what upstream means as a tick.
 
 **Дата:** 2026-08-24
+
+## Пропущенное за время выключения напоминание
+
+**Что в оригинале:** ReminderReceiver's BOOT_COMPLETED branch calls ReminderController.onBootCompleted() = reminderScheduler.scheduleAll(), which recomputes every habit's alarm from DateUtils.getUpcomingTimeInMillis(hour, minute). The missed occurrence is silently lost AND the next upcoming occurrence is armed, all without the app being opened.
+
+**Что делаем:** ReminderBootReceiver drops the elapsed cache entries and re-arms only the entries that are still in the future; the chain for a habit whose alarm elapsed resumes at the next scheduleAll(), which AppScope.boot() runs at every app start and ReminderScheduler.onCommandFinished after every command. So a user who reboots across a reminder and then never opens the app misses the following day's reminder too.
+
+**Почему:** In this port the alarm IS the finished notification (no fire-time hook), so 'recompute the next occurrence' cannot be done from a boot receiver without re-running the whole ReminderNotificationBuilder — including the show-gates and the payload's checkmark day — in Kotlin. Advancing the stale entry instead of dropping it would deliver a notification whose `when` line and payload still name the old day, i.e. it would write entries to a past day. Dropping is the same outcome the user sees upstream for the missed reminder itself, and it removes the data-losing half of the defect; the residual gap only costs a later reminder for a user who reboots and then never opens the app.
+
+**Дата:** 2026-08-24
+
+
+## Минимум одна колонка в графике счёта виджета
+
+**Что в оригинале:** `nColumns = (width / columnWidth).toInt()` with no lower bound, followed by `columnWidth = width.toFloat() / nColumns`. On a widget narrower than one column that is 0, and the division that follows yields Infinity/NaN.
+
+**Что делаем:** `val nColumns = max(1, (width / columnWidth).toInt())`, the same guard the port's iOS Score widget already uses (`let nColumns = max(1, Int(width / columnWidth))`).
+
+**Почему:** A home-screen widget is resized by the user and no launcher guarantees a minimum width; an Infinity column width would blank the chart. The guard changes nothing at any reachable size — the default 300x300 px square still yields the same column count as upstream.
+
+**Дата:** 2026-08-24

@@ -3169,6 +3169,81 @@ void main() {
           reason: 'widgets.score#7 — Tapping the Score widget opens '
               'ShowHabitActivity for that habit.');
     });
+
+    test('the footer draws a year row, and drops the month row once the '
+        'buckets are annual', () {
+      // `ScoreChart.drawFooter` is two rows: the year at `rect.bottom + em *
+      // 2.2f`, printed when `date.year` changes, debounced by `skipYear = 1`
+      // and, once `bucketSize >= 365`, suppressed for odd years; and the
+      // month-or-day line at `rect.bottom + em * 1.2f`, wrapped in
+      // `if (bucketSize < 365)`. With the detail screen's spinner on "Year"
+      // the second row is never drawn and the axis reads 2026, 2024, 2022 —
+      // where a footer with no year branch at all reads "Aug 24 24 25 25 26".
+      final String chart = widgetViewKotlin('ScoreChartView.kt');
+
+      expect(chart, contains('em * 2.2f'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — the year '
+              'row baseline');
+      expect(chart, contains('em * 1.2f'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — the '
+              'month/day row baseline');
+      expect(chart, contains('bucketSize >= 365'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — a year is '
+              'printed only every other year once the buckets are annual');
+      expect(chart, contains('bucketSize < 365'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — and the '
+              'month/day row is not printed at all');
+      expect(chart, contains('skipYear'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — the '
+              'one-column debounce after a year is printed');
+      expect(chart, contains('previousYearText'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — a year is '
+              'printed only when it changes');
+      expect(chart, contains('date.year.toString()'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — the label '
+              'is the bucket date\'s year');
+      // The footer band ScoreChart reserves is 3 em, not two base sizes: the
+      // year row hangs 2.2 em below the plot.
+      expect(chart, contains('3 * em'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — '
+              '`footerHeight = (3 * em).toInt()`');
+    });
+
+    test('the column count comes from the widget width, not a fixed six', () {
+      // `columnWidth = max(baseSize, maxDayWidth * 1.5f, maxMonthWidth * 1.2f)`
+      // then `nColumns = (width / columnWidth).toInt()` and `columnWidth =
+      // width / nColumns`: a Score widget the user has made wider shows more
+      // history, which is what upstream and the port's own iOS widget both do.
+      // The published series carries 60 buckets, well above any reachable
+      // column count.
+      final String chart = widgetViewKotlin('ScoreChartView.kt');
+
+      expect(chart, isNot(contains('width / 6f')),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — six columns '
+              'is upstream\'s answer at the default 300x300 square, not its '
+              'rule');
+      expect(chart, contains('maxMonthWidth'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — the widest '
+              'short month name is what sets the column width');
+      expect(chart, contains('val nColumns = max(1, (width / columnWidth).toInt())'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1');
+      expect(chart, contains('columnWidth = width.toFloat() / nColumns'),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — the columns '
+              'are then stretched to fill the width exactly');
+    });
+
+    test('the class doc no longer claims the series is never published', () {
+      // The stale header on ScoreChartView is why eleven passes read a live
+      // file as a deliberate stub.
+      final String chart = widgetViewKotlin('ScoreChartView.kt');
+
+      expect(chart, isNot(contains('shows an empty grid')),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1');
+      expect(chart, isNot(contains(r'`widgets.score#1`..`#6` stay unmet')),
+          reason: 'audit12.the-score-widget-s-date-axis-never#1 — the bridge '
+              'has published the score series since '
+              'audit4.score-widget-draws-an-empty-chart');
+    });
   });
 
   // =======================================================================

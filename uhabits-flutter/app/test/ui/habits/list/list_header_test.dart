@@ -6,6 +6,9 @@ import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/ui/core_view.dart';
 import 'package:uhabits/ui/habits/list/list_header.dart';
 import 'package:uhabits_core/uhabits_core.dart';
+// `Theme` is the one name both packages export; the prefix is only ever used
+// for that type.
+import 'package:uhabits_core/uhabits_core.dart' as core;
 
 /// Widget tests for the date strip above the habit list.
 ///
@@ -45,7 +48,10 @@ void main() {
           reason: 'list-habits.header-dates#1');
       expect(background.args, [0.0, 0.0, 600.0, 48.0],
           reason: 'list-habits.header-dates#1');
-      expect(background.color, theme.headerBackgroundColor,
+      // `HeaderView.init` reads the Android *attribute*
+      // `sres.getColor(R.attr.headerBackgroundColor)`, not the Themes.kt token
+      // of the same name (`audit12.the-date-strip-and-subtitle-card-read#1`).
+      expect(background.color, theme.attrHeaderBackgroundColor,
           reason: 'list-habits.header-dates#1');
 
       final line = canvas.opsNamed('drawLine').single;
@@ -59,11 +65,35 @@ void main() {
         (tester) async {
       await _pumpHeader(tester, buttonCount: 5, brightness: Brightness.dark);
 
-      expect(_draw(tester).ops.first.color, DarkTheme().headerBackgroundColor,
+      expect(
+          _draw(tester).ops.first.color, DarkTheme().attrHeaderBackgroundColor,
           reason: 'list-habits.header-dates#1');
-      expect(DarkTheme().headerBackgroundColor,
-          isNot(LightTheme().headerBackgroundColor),
+      expect(DarkTheme().attrHeaderBackgroundColor,
+          isNot(LightTheme().attrHeaderBackgroundColor),
           reason: 'list-habits.header-dates#1');
+    });
+
+    testWidgets(
+        'the pure-black strip is ?attr/headerBackgroundColor black, not the '
+        'Themes.kt grey_900', (tester) async {
+      // `AppBaseThemeDark.PureBlack` declares
+      // `<item name="headerBackgroundColor">@color/black</item>`
+      // (res/values/styles.xml:125) while `PureBlackTheme : DarkTheme()` in
+      // Themes.kt overrides only appBackgroundColor, cardBackgroundColor and
+      // lowContrastTextColor, so its KMP `headerBackgroundColor` token stays
+      // grey_900. `HeaderView` reads the attribute.
+      await _pumpHeader(tester, buttonCount: 5, theme: PureBlackTheme());
+
+      expect(_draw(tester).ops.first.color, const Color.fromRgb(0x000000),
+          reason: 'audit12.the-date-strip-and-subtitle-card-read#1');
+      // Guard: the two members really are different here, so a future reader
+      // cannot conflate them again.
+      expect(PureBlackTheme().headerBackgroundColor,
+          const Color.fromRgb(0x212121),
+          reason: 'audit12.the-date-strip-and-subtitle-card-read#1');
+      expect(PureBlackTheme().attrHeaderBackgroundColor,
+          isNot(PureBlackTheme().headerBackgroundColor),
+          reason: 'audit12.the-date-strip-and-subtitle-card-read#1');
     });
 
     testWidgets('#2 #3 one column per button, today leftmost, dates going back',
@@ -547,7 +577,8 @@ void main() {
           reason: 'list-habits.header-dates#9');
       expect(ListHeader.columnWidth, 48.0,
           reason: 'list-habits.header-dates#9');
-      expect(_draw(tester).ops.first.color, LightTheme().headerBackgroundColor,
+      expect(_draw(tester).ops.first.color,
+          LightTheme().attrHeaderBackgroundColor,
           reason: 'list-habits.header-dates#9');
 
       final reported = <int>[];
@@ -901,6 +932,7 @@ Future<void> _pumpHeader(
   List<int>? reported,
   bool applyOffset = false,
   Brightness brightness = Brightness.light,
+  core.Theme? theme,
   Locale locale = const Locale('en'),
   TextDirection textDirection = TextDirection.ltr,
   String? restorationId,
@@ -930,6 +962,7 @@ Future<void> _pumpHeader(
             child: StatefulBuilder(
               builder: (context, setState) => ListHeader(
                 restorationId: restorationId,
+                theme: theme,
                 buttonCount: buttonCount,
                 dataOffset: offset,
                 isCheckmarkSequenceReversed: reversed,

@@ -829,6 +829,14 @@ class _HabitListViewState extends State<_HabitListView>
   }
 
   /// `ListHabitsRootView.updateEmptyView()`.
+  ///
+  /// The three-way choice is recomputed on every build, where Android runs it
+  /// only from `onModelChange()`. The two agree because nothing but the
+  /// adapter's observable can change `itemCount` — except before the first
+  /// notification, which is why both flags are latched on the model
+  /// (`audit12.the-habit-list-flashes-the-empty-state#1`); until then this
+  /// falls through to [EmptyListMode.hidden], the `visibility = View.GONE` an
+  /// `EmptyListView` is constructed with.
   Widget _buildEmptyView(
     BuildContext context, {
     required HabitListModel model,

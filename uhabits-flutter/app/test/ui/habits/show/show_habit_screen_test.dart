@@ -1111,8 +1111,12 @@ void main() {
       final material = tester.widget<Material>(
         find.descendant(of: subtitle, matching: find.byType(Material)).first,
       );
+      // `?headerBackgroundColor` is the Android theme ATTRIBUTE
+      // (styles_show_habit.xml:25), not the Themes.kt token of the same name;
+      // the two agree in the light theme and part company under pure black
+      // (`audit12.the-date-strip-and-subtitle-card-read#1`).
       expect(material.color,
-          _toFlutterColor(LightTheme().headerBackgroundColor),
+          _toFlutterColor(LightTheme().attrHeaderBackgroundColor),
           reason: 'show-habit.card-order-and-visibility#6 — '
               'headerBackgroundColor, not cardBgColor');
       expect(material.elevation, 2.0,
@@ -1145,6 +1149,44 @@ void main() {
               'takes cardBgColor and 1dp');
       expect(notesMaterial.elevation, 1.0,
           reason: 'show-habit.card-order-and-visibility#6');
+    });
+
+    testWidgets('the pure-black subtitle card is black, not grey_900',
+        (tester) async {
+      // `AppBaseThemeDark.PureBlack` sets
+      // `<item name="headerBackgroundColor">@color/black</item>`, so on an
+      // AMOLED screen the subtitle card disappears into the background exactly
+      // like every other surface. The Themes.kt token PureBlackTheme inherits
+      // from DarkTheme is still grey_900, and reading it leaves a grey slab at
+      // the top of every Show-habit screen.
+      final scope = openScope();
+      final habit = addHabit(scope, 'Meditate', description: 'notes');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appThemeData(PureBlackTheme()),
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Provider<AppScope>.value(
+            value: scope,
+            child: ShowHabitScreen(
+              key: ValueKey<String?>(habit.uuid),
+              habit: habit,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final subtitle = find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.subtitle));
+      final material = tester.widget<Material>(
+        find.descendant(of: subtitle, matching: find.byType(Material)).first,
+      );
+      expect(material.color, const Color(0xFF000000),
+          reason: 'audit12.the-date-strip-and-subtitle-card-read#1');
+      expect(PureBlackTheme().attrHeaderBackgroundColor,
+          isNot(PureBlackTheme().headerBackgroundColor),
+          reason: 'audit12.the-date-strip-and-subtitle-card-read#1');
     });
 
     testWidgets('show-habit.notes-card#3 #4: the description is plain text, '

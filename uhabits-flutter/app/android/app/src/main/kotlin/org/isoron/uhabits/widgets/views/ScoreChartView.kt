@@ -30,22 +30,20 @@ import org.isoron.uhabits.widgets.spToPixels
 import kotlin.math.max
 
 /**
- * Stand-in for `uhabits-android/.../activities/common/views/ScoreChart.kt`.
+ * Port of `uhabits-android/.../activities/common/views/ScoreChart.kt`.
  *
- * ## What the contract cannot supply
+ * The bridge publishes the series the detail screen's Score card plots, at the
+ * bucket the `scoreCardSpinnerPosition` preference holds
+ * (`widgets.score#3`..`#6`, `audit4.score-widget-draws-an-empty-chart#1`), so
+ * this draws a real chart: the percentage grid, the poly-line with its markers,
+ * and the two-row date footer.
  *
- * This widget needs a score series, and the published document has none.
- * `widgets.score#3` builds it with
- * `ScoreCardPresenter.buildState(habit, firstWeekday, spinnerPosition, WidgetTheme())`,
- * and `widgets.score#6` averages the scores into buckets from the oldest known
- * entry to today. A score is not a function of the last 60 entries — the
- * algorithm walks the habit's whole history and needs its frequency — so there
- * is nothing here to compute it from, and no approximation worth drawing.
- *
- * So this renders the chart's furniture — the axis, the percentage grid and the
- * date labels — and plots the series only if the optional `scores` field ever
- * appears (`HabitData.scores`). Until it does, the Score widget shows an empty
- * grid, and `widgets.score#1`..`#6` stay unmet.
+ * What the document cannot supply is a *date* per bucket — it carries values
+ * only — so the labels are stepped back `offset * bucketSize` days from today
+ * rather than read off `scores[offset].date`. Upstream truncates each bucket to
+ * its calendar start (week, month, quarter), so a Month or Quarter column can
+ * be captioned a few days off. The port's iOS Score widget derives its dates
+ * the same way, and changing it means publishing bucket dates on the wire.
  */
 class ScoreChartView(context: Context) : View(context) {
 
@@ -74,7 +72,10 @@ class ScoreChartView(context: Context) : View(context) {
         super.onDraw(canvas)
         if (width <= 0 || height <= 0) return
 
-        val footerHeight = 2 * baseSize.toFloat()
+        // `footerHeight = (3 * em).toInt()`. Two rows hang below the plot — the
+        // month-or-day line at 1.2 em and the year line at 2.2 em — so a band
+        // any shallower clips the years off the bottom of the widget.
+        val footerHeight = 3 * em
         val plotBottom = height - footerHeight
         val plotTop = baseSize * 0.5f
         val plotHeight = plotBottom - plotTop
@@ -100,44 +101,107 @@ class ScoreChartView(context: Context) : View(context) {
 
         if (scores.isEmpty()) return
 
-        // The series is newest-first; the newest bucket sits on the right edge.
-        val columnWidth = max(1f, width / 6f)
-        val nVisible = ((width / columnWidth).toInt()).coerceAtMost(scores.size)
+        // `ScoreChart.onSizeChanged`: the column is at least one baseSize wide,
+        // at least 1.5x `maxDayWidth` and at least 1.2x `maxMonthWidth` — and
+        // upstream's `maxDayWidth` measures the twelve short month names too,
+        // so the 1.5x factor is the one that ever wins. The chart then fills
+        // the width with however many of those columns fit, which is what makes
+        // a widget the user has widened show more history instead of a fixed
+        // six points.
+        var columnWidth = max(baseSize.toFloat(), maxMonthWidth * 1.5f)
+        columnWidth = max(columnWidth, maxMonthWidth * 1.2f)
+        val nColumns = max(1, (width / columnWidth).toInt())
+        columnWidth = width.toFloat() / nColumns
+
         val radius = dpToPixels(context, 3.5f)
         paint.color = color
         paint.strokeWidth = dpToPixels(context, 2f)
 
+        // The series is newest-first and the newest bucket sits on the right
+        // edge, so column k carries `scores[nColumns - k - 1]`; a column with
+        // no datum behind it draws nothing at all, as upstream's
+        // `if (offset >= scores.size) continue` does.
         var previousX = 0f
         var previousY = 0f
-        for (k in 0 until nVisible) {
-            val x = width - columnWidth * (k + 0.5f)
-            val y = plotBottom - plotHeight * scores[k].toFloat().coerceIn(0f, 1f)
-            if (k > 0) {
+        var hasPrevious = false
+        for (k in 0 until nColumns) {
+            val offset = nColumns - k - 1
+            if (offset >= scores.size) continue
+            val x = k * columnWidth + columnWidth / 2
+            val y = plotBottom - plotHeight * scores[offset].toFloat().coerceIn(0f, 1f)
+            if (hasPrevious) {
                 paint.style = Paint.Style.STROKE
                 canvas.drawLine(previousX, previousY, x, y, paint)
             }
             previousX = x
             previousY = y
+            hasPrevious = true
         }
-        for (k in 0 until nVisible) {
-            val x = width - columnWidth * (k + 0.5f)
-            val y = plotBottom - plotHeight * scores[k].toFloat().coerceIn(0f, 1f)
+        for (k in 0 until nColumns) {
+            val offset = nColumns - k - 1
+            if (offset >= scores.size) continue
+            val x = k * columnWidth + columnWidth / 2
+            val y = plotBottom - plotHeight * scores[offset].toFloat().coerceIn(0f, 1f)
             paint.style = Paint.Style.FILL
             canvas.drawCircle(x, y, radius, paint)
         }
 
-        // Footer: one date label per plotted bucket.
+        // `ScoreChart.drawFooter`, both rows.
         paint.color = WidgetTheme.CONTRAST_60
         paint.textAlign = Paint.Align.CENTER
         paint.style = Paint.Style.FILL
-        var lastMonth = ""
-        for (k in nVisible - 1 downTo 0) {
-            val date = today.minus(k * bucketSize)
-            val x = width - columnWidth * (k + 0.5f)
-            val month = WidgetDateFormatter.shortMonthName(date.month)
-            val label = if (month != lastMonth) month else date.day.toString()
-            lastMonth = month
-            canvas.drawText(label, x, plotBottom + em, paint)
+        var previousMonthText = ""
+        var previousYearText = ""
+        var skipYear = 0
+        for (k in 0 until nColumns) {
+            val offset = nColumns - k - 1
+            if (offset >= scores.size) continue
+            val date = today.minus(offset * bucketSize)
+            val x = k * columnWidth + columnWidth / 2
+            val yearText = date.year.toString()
+            val monthText = WidgetDateFormatter.shortMonthName(date.month)
+            val dayText = date.day.toString()
+
+            var shouldPrintYear = true
+            if (yearText == previousYearText) shouldPrintYear = false
+            // Annual buckets would otherwise print a year under every column.
+            if (bucketSize >= 365 && date.year % 2 != 0) shouldPrintYear = false
+            if (skipYear > 0) {
+                skipYear--
+                shouldPrintYear = false
+            }
+            if (shouldPrintYear) {
+                previousYearText = yearText
+                previousMonthText = ""
+                canvas.drawText(yearText, x, plotBottom + em * 2.2f, paint)
+                skipYear = 1
+            }
+            // With the spinner on "Year" this row is dropped entirely, so the
+            // axis reads 2022, 2024, 2026 instead of a run of month
+            // abbreviations and repeated day numbers.
+            if (bucketSize < 365) {
+                val text: String
+                if (monthText != previousMonthText) {
+                    previousMonthText = monthText
+                    text = monthText
+                } else {
+                    text = dayText
+                }
+                canvas.drawText(text, x, plotBottom + em * 1.2f, paint)
+            }
         }
     }
+
+    /**
+     * `ScoreChart.maxMonthWidth` — and `maxDayWidth`, which measures the same
+     * twelve strings.
+     */
+    private val maxMonthWidth: Float
+        get() {
+            var maxWidth = 0f
+            for (i in 1..12) {
+                maxWidth = max(maxWidth, paint.measureText(WidgetDateFormatter.shortMonthName(i)))
+            }
+            return maxWidth
+        }
 }

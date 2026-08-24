@@ -25,6 +25,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 /// | colorOf(defaultPalette)   | colorScheme.secondary                    |
 /// | color(0)                  | colorScheme.error — the palette red      |
 /// | aboutScreenColor          | colorAccent — switch/radio/checkbox tint |
+/// |                           | and the text caret and selection handles |
 ///
 /// `statusBarBackgroundColor` (0x333333) and `toolbarColor` (0xffffff) are the
 /// two tokens `Themes.kt` names after the toolbar, and together they reproduce
@@ -275,6 +276,26 @@ ThemeData appThemeData(core.Theme theme) {
     ),
     radioTheme: RadioThemeData(fillColor: _whenSelected(colorAccent)),
     checkboxTheme: CheckboxThemeData(fillColor: _whenSelected(colorAccent)),
+    // The same attribute, one widget family over. The platform text cursor is
+    // `textCursorDrawable` -> `text_cursor_material`, whose
+    // `android:tint="?attr/colorControlActivated"` AppCompat resolves from
+    // `colorAccent`; `abc_text_select_handle_left/right/middle` are tinted from
+    // it too. `@style/FormInput` overrides only `android:background`, so every
+    // field in the app — the habit editor, the number and check-mark popups,
+    // the Settings text dialogs, the toolbar search — keeps the theme's caret
+    // and handles.
+    //
+    // Left undeclared, Flutter derives both from `colorScheme.primary`, which
+    // here is deliberately the toolbar grey #333333: a caret at contrast 1.27
+    // on the dark editor and 1.00 on the toolbar the search field draws over
+    // (`audit12.coloraccent-never-reaches-the-text-input#1`). The selection
+    // *highlight* is a different attribute upstream — `android:
+    // textColorHighlight`, which no style in this app restates — so it is
+    // deliberately left on Flutter's own default.
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: colorAccent,
+      selectionHandleColor: colorAccent,
+    ),
     // The dialog buttons. Upstream the override is on
     // `buttonBarPositiveButtonStyle` / `buttonBarNegativeButtonStyle` rather
     // than on every borderless button, but every `TextButton` this app builds

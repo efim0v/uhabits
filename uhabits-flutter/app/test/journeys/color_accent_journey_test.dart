@@ -148,6 +148,72 @@ void main() {
   });
 
   // -----------------------------------------------------------------------
+  // The same attribute, one widget family over: the text caret
+  // -----------------------------------------------------------------------
+
+  group('the accent reaches the text-input colours', () {
+    test('the caret and the selection handles are colorAccent', () {
+      for (final core.Theme theme in <core.Theme>[
+        core.LightTheme(),
+        core.DarkTheme(),
+        core.PureBlackTheme(),
+      ]) {
+        final ThemeData data = appThemeData(theme);
+        final Color accent = toFlutterColor(theme.aboutScreenColor);
+        final String which = theme.runtimeType.toString();
+
+        expect(data.textSelectionTheme.cursorColor, accent,
+            reason: 'audit12.coloraccent-never-reaches-the-text-input#1 '
+                '($which: text_cursor_material carries '
+                'android:tint="?attr/colorControlActivated", which AppCompat '
+                'resolves from colorAccent)');
+        expect(data.textSelectionTheme.selectionHandleColor, accent,
+            reason: 'audit12.coloraccent-never-reaches-the-text-input#1 '
+                '($which: abc_text_select_handle_* is tinted from the same '
+                'attribute)');
+      }
+    });
+
+    testWidgets('a field on a dark screen resolves a blue_300 caret, not the '
+        'toolbar grey', (tester) async {
+      // The number popup autofocuses its value field, so in the dark themes
+      // the very first thing a measurable-habit tap shows is a caret. Assert
+      // the colour EditableText actually resolves: the whole gap was that
+      // Flutter DERIVES it from colorScheme.primary when nothing declares it.
+      Future<Color> caretUnder(core.Theme theme) async {
+        await tester.pumpWidget(MaterialApp(
+          theme: appThemeData(theme),
+          home: const Scaffold(body: TextField(autofocus: true)),
+        ));
+        await tester.pumpAndSettle();
+        return tester.widget<EditableText>(find.byType(EditableText)).cursorColor;
+      }
+
+      expect(await caretUnder(core.LightTheme()), blue800,
+          reason: 'audit12.coloraccent-never-reaches-the-text-input#1');
+      expect(await caretUnder(core.DarkTheme()), blue300,
+          reason: 'audit12.coloraccent-never-reaches-the-text-input#1');
+      expect(await caretUnder(core.PureBlackTheme()), blue300,
+          reason: 'audit12.coloraccent-never-reaches-the-text-input#1 — '
+              'AppBaseThemeDark.PureBlack restates no aboutScreenColor');
+
+      // And it is not the toolbar grey the ColorScheme still carries: that is
+      // #333333 in all three themes, invisible on #212121 and on #000000, and
+      // exactly equal to the AppBar the search field draws its caret on.
+      for (final core.Theme theme in <core.Theme>[
+        core.LightTheme(),
+        core.DarkTheme(),
+        core.PureBlackTheme(),
+      ]) {
+        expect(appThemeData(theme).textSelectionTheme.cursorColor,
+            isNot(appThemeData(theme).colorScheme.primary),
+            reason: 'audit12.coloraccent-never-reaches-the-text-input#1 — '
+                '(${theme.runtimeType})');
+      }
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // …and reaches the screens that draw those controls
   // -----------------------------------------------------------------------
 

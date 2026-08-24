@@ -829,7 +829,11 @@ class _SubtitleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       elevation: elevation,
-      color: _toFlutterColor(theme.headerBackgroundColor),
+      // `?headerBackgroundColor` is the Android theme ATTRIBUTE, which
+      // `AppBaseThemeDark.PureBlack` declares as `@color/black`; the Themes.kt
+      // token of the same name is inherited unchanged from DarkTheme and stays
+      // grey_900 (`audit12.the-date-strip-and-subtitle-card-read#1`).
+      color: _toFlutterColor(theme.attrHeaderBackgroundColor),
       child: Padding(padding: padding, child: child),
     );
   }

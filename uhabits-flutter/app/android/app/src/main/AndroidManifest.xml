@@ -146,17 +146,28 @@
         <!-- reminderScheduler.scheduleAll() (reminders.boot-reschedule#2,  -->
         <!-- #3). This port has no fire-time hook: an alarm IS the finished -->
         <!-- notification, handed to the OS by zonedSchedule. Android drops -->
-        <!-- every such alarm on reboot, and                                -->
-        <!-- ScheduledNotificationBootReceiver is what puts them all back — -->
-        <!-- the same "re-arm everything that was armed" pass, run by the   -->
-        <!-- plugin instead of by the core scheduler.                       -->
+        <!-- every such alarm on reboot, and the plugin's                   -->
+        <!-- ScheduledNotificationBootReceiver.rescheduleNotifications is   -->
+        <!-- what puts them all back — the same "re-arm everything that was -->
+        <!-- armed" pass, run by the plugin instead of by the core          -->
+        <!-- scheduler. flutter_local_notifications does NOT declare any    -->
+        <!-- receiver in its own manifest; without a boot receiver here,    -->
+        <!-- reminders simply stop after the first reboot.                  -->
         <!--                                                                -->
-        <!-- flutter_local_notifications does NOT declare this receiver in  -->
-        <!-- its own manifest; without the block below, reminders simply    -->
-        <!-- stop after the first reboot.                                   -->
+        <!-- audit12.boot-redelivers-an-elapsed-reminder#1: that pass       -->
+        <!-- re-arms every cached entry with its ORIGINAL epochMilli, and   -->
+        <!-- AlarmManager delivers an alarm whose time has already passed   -->
+        <!-- immediately — so a reminder missed while the phone was off was -->
+        <!-- posted at boot, stale `when` and stale checkmark day and all,  -->
+        <!-- where upstream drops it (IntentScheduler.schedule: "Ignoring   -->
+        <!-- attempt to schedule intent in the past"). The app therefore    -->
+        <!-- owns the boot broadcast: ReminderBootReceiver drops the        -->
+        <!-- elapsed entries and then delegates to the plugin's receiver,   -->
+        <!-- which is reached by name and so needs no declaration of its    -->
+        <!-- own.                                                           -->
         <!-- ============================================================== -->
         <receiver
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:name="org.isoron.uhabits.ReminderBootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

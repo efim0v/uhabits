@@ -82,7 +82,7 @@ class HabitListModel extends ChangeNotifier
       _behavior,
       () => this,
     );
-    _observableListener = ModelObservableListener(notifyListeners);
+    _observableListener = ModelObservableListener(_onModelChange);
     _preferencesListener = _ListHabitsPreferencesListener(
       onQuestionMarksChanged: _onQuestionMarksChanged,
     );
@@ -172,6 +172,29 @@ class HabitListModel extends ChangeNotifier
   }
 
   late final ModelObservableListener _observableListener;
+
+  /// Whether the adapter's `ModelObservable` has fired at least once.
+  ///
+  /// `ListHabitsRootView.onModelChange()` is the *only* call site of
+  /// `updateEmptyView()`, and it is the `ModelObservable.Listener` callback on
+  /// `listAdapter.observable`, which `HabitCardListAdapter` notifies only from
+  /// `onItemInserted`/`onItemChanged`/`onItemMoved`/`onItemRemoved`/
+  /// `onRefreshFinished`/`clearSelection` — i.e. once the first
+  /// `HabitCardListCache` refresh has reported. Until then `EmptyListView` is
+  /// still at the `visibility = View.GONE` its constructor gave it and the
+  /// Android user sees a blank area under the header
+  /// (`audit12.the-habit-list-flashes-the-empty-state#1`).
+  ///
+  /// It is a one-way latch on purpose: a later detach/re-attach leaves the
+  /// Android view at whatever the previous `onModelChange` decided, and
+  /// `refreshAllHabits` never clears the cache's data.
+  bool _hasModelChanged = false;
+
+  /// `ListHabitsRootView.onModelChange()`.
+  void _onModelChange() {
+    _hasModelChanged = true;
+    notifyListeners();
+  }
 
   /// `ListHabitsActivity` as a `Preferences.Listener` — `prefs.addListener(
   /// this)` in `onCreate`.
@@ -338,10 +361,20 @@ class HabitListModel extends ChangeNotifier
   bool get hasNoHabit => scope.adapter.hasNoHabit();
 
   /// `EmptyListView.showEmpty()`: nothing to show and nothing to hide.
-  bool get showEmptyState => itemCount == 0 && hasNoHabit;
+  ///
+  /// Gated on [_hasModelChanged] because `updateEmptyView()` runs off
+  /// `onModelChange()` and nothing else: before the adapter's first
+  /// notification the view is simply GONE upstream, whichever branch the cache
+  /// is about to land on (`audit12.the-habit-list-flashes-the-empty-state#1`).
+  bool get showEmptyState => _hasModelChanged && itemCount == 0 && hasNoHabit;
 
   /// `EmptyListView.showDone()`: habits exist, but the filter hides them all.
-  bool get showDoneState => itemCount == 0 && !hasNoHabit;
+  ///
+  /// Same gate as [showEmptyState], and the branch that made the gate
+  /// necessary: `hasNoHabit` reads the unfiltered SQLite-backed list, so it is
+  /// already false on the frame before the first refresh lands, and an
+  /// ungated screen greeted every cold start with "You're all done for today!"
+  bool get showDoneState => _hasModelChanged && itemCount == 0 && !hasNoHabit;
 
   /// How many checkmark columns fit on screen. Port of
   /// `ListHabitsRootView.getCheckmarkCount()`, which the widget layer feeds

@@ -421,8 +421,12 @@ class _HeaderPreferencesListener extends core.PreferencesListener {
 /// the pair is not symmetric about the centre — the weekday name sits a
 /// quarter of an em above it and the day number a full em and a quarter below.
 ///
-/// Everything else is [HabitListHeader] verbatim, the hairline along the bottom
-/// edge included. `HeaderView` has no hairline of its own — it separates itself
+/// Everything else is [HabitListHeader] verbatim except the background, which
+/// is `HeaderView`'s own `?attr/headerBackgroundColor` rather than the KMP
+/// class's `theme.headerBackgroundColor` token — the two agree in the light and
+/// dark themes and differ under pure black
+/// (`audit12.the-date-strip-and-subtitle-card-read#1`) — the hairline along the
+/// bottom edge included. `HeaderView` has no hairline of its own — it separates itself
 /// from the list with `elevation = dp(2f)` instead — and the port keeps the
 /// drawn line because a Flutter header casts no shadow onto the list.
 class HeaderDatesView extends core.View {
@@ -455,7 +459,14 @@ class HeaderDatesView extends core.View {
     final width = canvas.getWidth();
     final height = canvas.getHeight();
     final buttonSize = _theme.checkmarkButtonSize;
-    canvas.setColor(_theme.headerBackgroundColor);
+    // `HeaderView.init` runs `setBackgroundColor(sres.getColor(R.attr.
+    // headerBackgroundColor))`, i.e. the Android theme ATTRIBUTE, which
+    // `AppBaseThemeDark.PureBlack` declares as `@color/black`. The identically
+    // named Themes.kt token is a different member — `PureBlackTheme` never
+    // overrides it, so it stays DarkTheme's grey_900 — and reading it left a
+    // #212121 band across the top of an otherwise black list
+    // (`audit12.the-date-strip-and-subtitle-card-read#1`).
+    canvas.setColor(_theme.attrHeaderBackgroundColor);
     canvas.fillRect(0.0, 0.0, width, height);
 
     canvas.setColor(_theme.headerBorderColor);

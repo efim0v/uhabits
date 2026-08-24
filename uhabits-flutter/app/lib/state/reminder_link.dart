@@ -219,18 +219,33 @@ class ReminderResponseRouter {
   // -----------------------------------------------------------------------
 
   /// `onDidReceiveNotificationResponse`.
+  ///
+  /// Every response is acted on, with no de-duplication of any kind, because
+  /// upstream has none: each interaction is its own `PendingIntent` that
+  /// Android delivers exactly once and delivers every time, so two taps on
+  /// the same notification start two `ShowHabitActivity`s and two "Later"
+  /// taps start two `SnoozeDelayPickerActivity`s.
+  ///
+  /// Nor does the plugin ever deliver one response twice — the launching one
+  /// included, which is the case a guard here would have been for
+  /// (`audit12.launch-response-guard-swallows-the-next-tap#1`).
+  /// `flutter_local_notifications` 18.0.1:
+  ///
+  ///  * Android — `FlutterLocalNotificationsPlugin.onAttachedToActivity`
+  ///    inspects the launch intent only to honour the plugin's own cancel
+  ///    flag (`processForegroundNotificationAction`) and never invokes
+  ///    `didReceiveNotificationResponse`; the channel call comes from
+  ///    `onNewIntent` alone, i.e. from a *later* tap.
+  ///  * iOS — `userNotificationCenter:didReceiveNotificationResponse:` sets
+  ///    `_launchingAppFromNotification` / `_launchNotificationResponseDict`
+  ///    only in its `!_initialized` branches, the very branches in which it
+  ///    did *not* invoke the channel. So
+  ///    `getNotificationAppLaunchDetails()` reports a response precisely when
+  ///    the callback never saw it.
+  ///
+  /// A guard would therefore never catch a duplicate and would only ever
+  /// discard a real second tap, which is a dead button.
   void handleResponse(NotificationResponse response) {
-    // iOS reports the response that launched the app both in the launch
-    // details and on the callback; acting on it twice would write the entry
-    // twice. Only the *first* response after a launch can be that duplicate,
-    // so the guard is spent whether it matched or not — a later tap on a
-    // re-posted reminder must never be swallowed.
-    final String? replayed = _replayedLaunchSignature;
-    _replayedLaunchSignature = null;
-    if (replayed != null &&
-        replayed == _signatureOf(response.actionId, response.payload)) {
-      return;
-    }
     handle(actionId: response.actionId, payload: response.payload);
   }
 
@@ -339,11 +354,6 @@ class ReminderResponseRouter {
   // The two deliveries the callback does not carry
   // -----------------------------------------------------------------------
 
-  String? _replayedLaunchSignature;
-
-  static String _signatureOf(String? actionId, String? payload) =>
-      '${actionId ?? ''}|${payload ?? ''}';
-
   /// The tap that started the process.
   ///
   /// `initialize`'s callback is registered too late for it: the notification
@@ -363,8 +373,6 @@ class ReminderResponseRouter {
     if (details == null || !details.didNotificationLaunchApp) return;
     final NotificationResponse? response = details.notificationResponse;
     if (response == null) return;
-    _replayedLaunchSignature =
-        _signatureOf(response.actionId, response.payload);
     _logger.info('Launched by a notification: action=${response.actionId}');
     handle(actionId: response.actionId, payload: response.payload);
   }

@@ -296,10 +296,12 @@ class HomeWidgetBridge {
 
   /// How many score buckets travel with a habit, newest first.
   ///
-  /// The Android chart plots six columns (`ScoreChartView`: `columnWidth =
-  /// width / 6`) and the iOS one as many as its width admits; sixty is more
-  /// than any launcher cell can show and bounds a document whose habit may have
-  /// years of daily buckets behind it.
+  /// Both native charts now plot as many columns as their width admits —
+  /// `ScoreChart.onSizeChanged`'s `nColumns = width / columnWidth`, reproduced
+  /// on Android by `ScoreChartView` and on iOS by `ScoreWidget.swift`
+  /// (`audit12.the-score-widget-s-date-axis-never#1`). Sixty is more than any
+  /// launcher cell can show and bounds a document whose habit may have years of
+  /// daily buckets behind it.
   static const int scoreBucketCount = 60;
 
   /// How many streaks travel with a habit — `habit.streaks.getBest(n)`.

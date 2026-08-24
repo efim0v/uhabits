@@ -499,6 +499,52 @@ void main() {
               'has to open the habit, exactly as it does when the app was '
               'already running.');
     });
+
+    testWidgets(
+        '#2 and the identical tap that follows it is acted on too',
+        (tester) async {
+      final AppScope scope = openScope();
+      final Habit habit = addHabit(scope);
+      final String payload = payloadFor(habit);
+      plugin.launchDetails = <Object?, Object?>{
+        'notificationLaunchedApp': true,
+        'notificationResponse': <Object?, Object?>{
+          'notificationId': reminderNotificationId(habit),
+          'actionId': null,
+          'input': null,
+          'payload': payload,
+          'notificationResponseType': 0,
+        },
+      };
+
+      await scope.startPlatformServices();
+      await tester.pumpWidget(UhabitsApp(scope: scope));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShowHabitScreen, skipOffstage: false), findsOneWidget,
+          reason: 'audit12.launch-response-guard-swallows-the-next-tap#1: the '
+              'precondition — the launching tap opened the habit.');
+
+      // The reminder is posted with autoCancel false and cancelNotification
+      // false, so the body tap left it in the shade; the user touches the
+      // very same notification again, and it arrives on the callback.
+      await plugin.deliverResponse(
+        notificationId: reminderNotificationId(habit),
+        payload: payload,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ShowHabitScreen, skipOffstage: false),
+          findsNWidgets(2),
+          reason: 'audit12.launch-response-guard-swallows-the-next-tap#1: '
+              'upstream the content intent is a PendingIntent Android '
+              'delivers once per tap and every time, so a second tap starts a '
+              'second ShowHabitActivity on top of the first. The port must '
+              'not swallow it: neither platform of '
+              'flutter_local_notifications 18.0.1 ever re-delivers the '
+              'launching response, so a de-duplication guard can only ever '
+              'discard a real tap.');
+    });
   });
 
   // -----------------------------------------------------------------------

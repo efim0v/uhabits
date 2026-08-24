@@ -213,6 +213,67 @@ void main() {
           reason: 'list-habits.empty-state#3');
     });
 
+    testWidgets('the first frame shows no empty view at all, whichever branch '
+        'the cache is going to land on', (tester) async {
+      // `EmptyListView` is constructed `visibility = View.GONE`, and the only
+      // thing that ever changes that is `updateEmptyView()`, called from
+      // `onModelChange()` — the adapter's ModelObservable, which fires only
+      // once the first HabitCardListCache refresh has reported. Between
+      // `setContentView` and that first notification an Android user sees a
+      // blank area under the header, never a message.
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+
+      // Deliberately no pumpAndSettle: the refresh `attach()` kicks off runs
+      // on the AsyncDispatcher, so this is exactly that window.
+      await tester.pumpWidget(wrap(scope));
+
+      expect(modelOf(tester).itemCount, 0,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1 — the '
+              'cache has not reported yet');
+      expect(modelOf(tester).hasNoHabit, isFalse,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1 — while '
+              'the unfiltered list already knows about the habit');
+      expect(tester.widget<EmptyListView>(find.byType(EmptyListView)).mode,
+          EmptyListMode.hidden,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1');
+      expect(find.text("You're all done for today!"), findsNothing,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1');
+      expect(find.text(FontAwesome.umbrellaBeach), findsNothing,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1');
+
+      // The gate lifts as soon as the cache reports, and the habit is there.
+      await tester.pumpAndSettle();
+      expect(find.text('Meditate'), findsOneWidget,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1');
+      expect(tester.widget<EmptyListView>(find.byType(EmptyListView)).mode,
+          EmptyListMode.hidden,
+          reason: 'list-habits.empty-state#4');
+    });
+
+    testWidgets('an empty database is silent on the first frame too, and says '
+        'so once the cache has reported', (tester) async {
+      // Same gate, other branch: upstream shows blank here as well, and the
+      // message the port used to paint on frame one was right only by
+      // coincidence.
+      final scope = openScope();
+
+      await tester.pumpWidget(wrap(scope));
+
+      expect(tester.widget<EmptyListView>(find.byType(EmptyListView)).mode,
+          EmptyListMode.hidden,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1');
+      expect(find.text('You have no active habits'), findsNothing,
+          reason: 'audit12.the-habit-list-flashes-the-empty-state#1');
+
+      await tester.pumpAndSettle();
+      expect(tester.widget<EmptyListView>(find.byType(EmptyListView)).mode,
+          EmptyListMode.empty,
+          reason: 'list-habits.empty-state#2');
+      expect(find.text('You have no active habits'), findsOneWidget,
+          reason: 'list-habits.empty-state#2');
+    });
+
     testWidgets('#4 #1 a habit hides the empty view, and removing it brings '
         'it back', (tester) async {
       final scope = openScope();

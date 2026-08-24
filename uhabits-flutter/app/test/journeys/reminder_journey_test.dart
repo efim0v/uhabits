@@ -227,6 +227,62 @@ void main() {
             'the hook.');
   });
 
+  /// The reminder comes due while the app is not running, and the user's
+  /// touch is what starts it.
+  ///
+  /// This is the delivery `onDidReceiveNotificationResponse` never carries:
+  /// the plugin keeps the launching response in
+  /// `getNotificationAppLaunchDetails()` and hands it over there instead
+  /// (`FlutterLocalNotificationsPlugin.onAttachedToActivity`, which does not
+  /// invoke the response channel at all).
+  Future<void> reminderLaunchesTheApp(Alarm alarm, {String? actionId}) async {
+    travelTo(alarm.dueAt);
+    await app.quit();
+    device.notifications.launchDetails = <Object?, Object?>{
+      'notificationLaunchedApp': true,
+      'notificationResponse': <Object?, Object?>{
+        'notificationId': alarm.id,
+        'actionId': actionId,
+        'input': null,
+        'payload': alarm.payload,
+        'notificationResponseType': actionId == null ? 0 : 1,
+      },
+    };
+    await app.launch();
+  }
+
+  testWidgets('a second tap on the reminder that started the app opens it '
+      'again', (WidgetTester tester) async {
+    final Alarm alarm = await launchAndSetReminder(tester, 'Wake up early');
+    await reminderLaunchesTheApp(alarm);
+
+    expect(find.byType(ShowHabitScreen), findsOneWidget,
+        reason: 'audit12.launch-response-guard-swallows-the-next-tap#1: the '
+            'precondition — the cold start opened the habit');
+
+    await pressBack(tester);
+    expect(find.byType(ShowHabitScreen), findsNothing,
+        reason: 'audit12.launch-response-guard-swallows-the-next-tap#1: back '
+            'to the list, with the reminder still in the shade — the port '
+            'posts it with autoCancel false and cancelNotification false, so '
+            'a body tap leaves it there');
+
+    // The identical response: the same notification, the same payload, the
+    // same (absent) action id.
+    await device.notifications.deliverResponse(
+      notificationId: alarm.id,
+      payload: alarm.payload,
+    );
+    await settleIo(tester);
+
+    expect(find.byType(ShowHabitScreen), findsOneWidget,
+        reason: 'audit12.launch-response-guard-swallows-the-next-tap#1: '
+            'upstream the content intent is a PendingIntent Android delivers '
+            'once per tap and every time, so touching the same notification '
+            'again starts ShowHabitActivity again. Nothing may swallow the '
+            'second tap.');
+  });
+
   testWidgets('the answer given to a notification survives a restart',
       (WidgetTester tester) async {
     final Alarm alarm = await launchAndSetReminder(tester, 'Wake up early');

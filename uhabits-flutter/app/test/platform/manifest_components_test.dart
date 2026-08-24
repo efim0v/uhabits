@@ -398,29 +398,33 @@ void main() {
       expect(
         plain.map((String r) => xmlAttributes(r)['android:name']).toList(),
         <String>[
-          'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+          'org.isoron.uhabits.ReminderBootReceiver',
           'com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver',
           'com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver',
         ],
         reason: '$rule ReminderReceiver splits in two here — the plugin\'s '
-            'ScheduledNotificationReceiver delivers the alarm, its '
-            'ScheduledNotificationBootReceiver re-arms them after a reboot — '
-            'and WidgetReceiver\'s role as the target of the notification '
+            'ScheduledNotificationReceiver delivers the alarm, and the app\'s '
+            'own ReminderBootReceiver re-arms them after a reboot — and '
+            'WidgetReceiver\'s role as the target of the notification '
             'action buttons is the plugin\'s ActionBroadcastReceiver, which is '
             'the one piece of it that could not become a deep link because a '
-            'notification action must not open the app.',
+            'notification action must not open the app. The boot one was the '
+            'plugin\'s ScheduledNotificationBootReceiver until '
+            'audit12.boot-redelivers-an-elapsed-reminder#1: its '
+            'rescheduleNotifications pass re-arms every cached alarm with its '
+            'original instant, so a reminder missed while the phone was off '
+            'was delivered at boot instead of dropped. The app\'s receiver '
+            'filters those out and then calls the plugin\'s by name.',
       );
 
       final Map<String, String> boot = xmlAttributes(receiverNamed(
-        'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+        'org.isoron.uhabits.ReminderBootReceiver',
       ));
       expect(boot['android:exported'], 'true',
           reason: '$rule A receiver the system broadcasts to must be '
               'exported.');
       expect(
-        actionsOf(receiverNamed(
-          'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
-        )),
+        actionsOf(receiverNamed('org.isoron.uhabits.ReminderBootReceiver')),
         contains('android.intent.action.BOOT_COMPLETED'),
         reason: rule,
       );
@@ -495,13 +499,14 @@ void main() {
   group('intents.actions-and-extras', () {
     test('#15 the boot receiver is exported and answers BOOT_COMPLETED', () {
       // Was `plainReceivers().single` — see #9 for why there are three.
-      final String boot = receiverNamed(
-        'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
-      );
+      final String boot = receiverNamed('org.isoron.uhabits.ReminderBootReceiver');
       const String rule = 'intents.actions-and-extras#15 — The manifest '
           'exports ReminderReceiver with an intent-filter for '
           'android.intent.action.BOOT_COMPLETED only. The port\'s boot '
-          'receiver is the notification plugin\'s, and it answers three more '
+          'receiver is ReminderBootReceiver — the app\'s own, since '
+          'audit12.boot-redelivers-an-elapsed-reminder#1; it drops the alarms '
+          'whose instant has already passed and hands the rest to the '
+          'plugin\'s rescheduleNotifications pass — and it answers three more '
           'actions than upstream did — MY_PACKAGE_REPLACED and the two '
           'QUICKBOOT_POWERON variants — because the alarms it re-arms are lost '
           'on an app update as well as on a reboot. BOOT_COMPLETED is still '
@@ -593,7 +598,7 @@ void main() {
             .map((String r) => xmlAttributes(r)['android:name'])
             .toList(),
         <String>[
-          'com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver',
+          'org.isoron.uhabits.ReminderBootReceiver',
         ],
         reason: '$rule The boot receiver is the only exported non-widget '
             'receiver: ActionBroadcastReceiver — which is what actually took '
