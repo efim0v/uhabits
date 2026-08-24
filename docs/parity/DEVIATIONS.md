@@ -228,7 +228,11 @@ broadcast-receiver больше не может запустить активи�
 
 **Чем заменено:** Dart has no printf, so the port ships its own formatter in packages/uhabits_core/lib/src/io/printf.dart instead of delegating to java.lang.String.format or the npm sprintf-js package that the one remaining rule (#4) describes; there is no Kotlin/JS target to port.
 
-**Что меняется для пользователя:** none — the pattern behaviours (#1, #2, #5) are ported and cited, and the port is deliberately locale-independent where the JVM actual was not.
+**Что меняется для пользователя:** the pattern behaviours (#1, #2, #5) are ported and cited, and the port is deliberately locale-independent where the JVM actual was not — which is a real, visible difference and not "none", as this entry used to claim.
+
+Kotlin renders a habit's numeric label through `String.format(Locale.getDefault(), …)` and `DecimalFormat`, so on a German or French device the habit-list cell, the Show-habit subtitle, the target card and the Checkmark widget all read "2,5". The port's Dart hosts read "2.5" everywhere, by this decision. Its two *native* widget hosts do not follow the decision: `NumberFormat.kt` on Android is locale-aware, and `CheckmarkWidget.swift` on iOS is split down the middle — `String(format:)` with a nil locale prints "1.5k" while a default `NumberFormatter` prints "2,5" in the same view. So on a comma device the same value can read "2.5" in the app and "2,5" on the home screen beside it.
+
+Entering and saving are unaffected: `audit9.number-popup-follows-the-device-locale#1` put the entry popup's formatting, its keypad and its parser on the device locale, so a comma typed on a comma device is read correctly. What differs is the label only. Recorded here rather than fixed because choosing a side would either reverse this deviation or push two faithfully-ported native hosts away from Kotlin; found by the twenty-fifth audit pass, whose skeptic refuted the finding on the merits and named this inaccuracy instead.
 
 ### `notifications.actions`
 
