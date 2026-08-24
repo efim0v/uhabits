@@ -266,16 +266,17 @@ sleep.habit-type#1"
 
 ---
 
-### Task 2: Тип привычки и границы значения записи
+### Task 2: Признак привычки со сном и границы значения записи
 
 **Files:**
-- Modify: `uhabits-flutter/packages/uhabits_core/lib/src/models/habit_type.dart`
 - Create: `uhabits-flutter/packages/uhabits_core/lib/src/sleep/stored_value.dart`
 - Test: `uhabits-flutter/packages/uhabits_core/test/sleep/stored_value_test.dart`
 
+`habit_type.dart` **не меняется**. Третий элемент перечисления противоречил бы паритетному правилу `models.habit-type-enums#1` («ровно два элемента»), закрытому тестами: пришлось бы переписать паритетные тесты так, чтобы они утверждали не то, что написано в реестре. Привычка со сном — числовая привычка, у которой есть цель сна.
+
 **Interfaces:**
 - Consumes: ничего
-- Produces: `HabitType.sleep`; `int storedValueOf(double score)` — переводит долю 0…1 в значение записи дня
+- Produces: `int storedValueOf(double score)`, `maxStoredValue`, `minStoredValue`, `sleepHabitType`
 
 - [ ] **Step 1: Написать падающие тесты**
 
