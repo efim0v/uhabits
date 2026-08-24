@@ -37,6 +37,22 @@ const String rule = 'audit3.toggling-a-check-mark-on-the#1 — In the Kotlin '
     'LONG_PRESS haptic constant, which is the app\'s confirmation that a press '
     'landed on the right cell.';
 
+const String longPressRule =
+    'audit11.long-pressing-a-check-mark-or-number#1 — In the Kotlin app: '
+    'CheckmarkButtonView.onLongClick and NumberButtonView.onLongClick both '
+    'return true unconditionally, and View.performLongClickInternal answers a '
+    'consumed long press with performHapticFeedback(HapticFeedbackConstants.'
+    'LONG_PRESS) — onLongClickUseDefaultHapticFeedback defaults to true and '
+    'neither view overrides it. So every long press inside the check-mark '
+    'grid buzzes, whatever the listener did with it.';
+
+const String tapRule =
+    'audit11.long-pressing-a-check-mark-or-number#1 — In the Kotlin app: a '
+    'short click is not haptic. View.performClick plays '
+    'SoundEffectConstants.CLICK, a sound effect gated by the system '
+    'touch-sounds setting, and NumberButtonView.onClick only calls onEdit(), '
+    'so a numerical tap answers with no vibration at all.';
+
 const String iosRule =
     'feedback.checkmark-haptics-are-the-ios-alert-buzz#1 — the toggle is the '
     'most frequent interaction in the app, so its confirmation has to be a '
@@ -168,8 +184,9 @@ void main() {
               'stay in the order Android puts them in.');
     });
 
-    testWidgets('#1 the buzz follows the toggle, not the gesture',
-        (tester) async {
+    testWidgets(
+        '#1 the toggle buzz follows the toggle — and the long press has its '
+        'own', (tester) async {
       final scope = openScope();
       scope.preferences.isShortToggleEnabled = true;
       addHabit(scope, 'Meditate');
@@ -186,12 +203,47 @@ void main() {
       platformCalls.clear();
       await tester.longPress(cellOf('Meditate', today));
       await tester.pumpAndSettle();
-      expect(vibrations(), isEmpty,
-          reason: '$rule performHapticFeedback lives in performToggle, so the '
-              'gesture that only opens the editor does not buzz.');
+      expect(vibrations(), hasLength(1),
+          reason: '$longPressRule performToggle is not the only source: '
+              'onLongClick returned true, so View buzzes for the long press '
+              'that only opened the notes editor.');
     });
 
-    testWidgets('#1 a numerical cell does not buzz — it has no performToggle',
+    testWidgets(
+        '#1 a numerical cell has no performToggle, but its long press still '
+        'buzzes', (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Steps', type: HabitType.numerical);
+      await pumpList(tester, scope);
+      final today = getToday();
+
+      platformCalls.clear();
+      await tester.longPress(cellOf('Steps', today));
+      await tester.pumpAndSettle();
+      expect(vibrations(), hasLength(1),
+          reason: '$longPressRule NumberButtonView answers both gestures with '
+              'onEdit and calls performHapticFeedback for neither — the buzz '
+              'comes from the View superclass, which the listener arms by '
+              'returning true.');
+    });
+  });
+
+  group('audit11.long-pressing-a-check-mark-or-number', () {
+    testWidgets('#1 a tap is a sound effect, not a haptic — nothing buzzes',
+        (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Steps', type: HabitType.numerical);
+      await pumpList(tester, scope);
+      final today = getToday();
+
+      platformCalls.clear();
+      await tester.tap(cellOf('Steps', today));
+      await tester.pumpAndSettle();
+
+      expect(vibrations(), isEmpty, reason: tapRule);
+    });
+
+    testWidgets('#1 the long-press editor buzz is the LONG_PRESS constant',
         (tester) async {
       final scope = openScope();
       addHabit(scope, 'Steps', type: HabitType.numerical);
@@ -202,9 +254,53 @@ void main() {
       await tester.longPress(cellOf('Steps', today));
       await tester.pumpAndSettle();
 
-      expect(vibrations(), isEmpty,
-          reason: '$rule NumberButtonView answers both gestures with onEdit '
-              'and never calls performHapticFeedback.');
+      expect(vibrations().single.arguments, isNull,
+          reason: '$longPressRule The argument-less form of the message is '
+              'HapticFeedbackType.STANDARD, which the Android embedder answers '
+              'with HapticFeedbackConstants.LONG_PRESS — the same constant '
+              'performLongClickInternal uses.');
+    });
+
+    testWidgets('#1 on iOS it taps rather than firing the alert buzz',
+        (tester) async {
+      // Same reasoning as the toggle: a typeless HapticFeedback.vibrate()
+      // reaches iOS as kSystemSoundID_Vibrate, a third of a second of alert
+      // vibration. The long press follows performToggleFeedback's shape.
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final scope = openScope();
+      addHabit(scope, 'Steps', type: HabitType.numerical);
+      await pumpList(tester, scope);
+      final today = getToday();
+
+      platformCalls.clear();
+      await tester.longPress(cellOf('Steps', today));
+      await tester.pumpAndSettle();
+      debugDefaultTargetPlatformOverride = null;
+
+      expect(vibrations().single.arguments, 'HapticFeedbackType.mediumImpact',
+          reason: '$longPressRule $iosRule');
+    });
+
+    testWidgets('#1 the default boolean long press still buzzes exactly once',
+        (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await pumpList(tester, scope);
+      final today = getToday();
+
+      // pref_short_toggle off: the long press IS the toggle, and Android fires
+      // LONG_PRESS twice there — once from performToggle and once from
+      // performLongClickInternal. Two identical ticks back to back are one
+      // buzz perceptually, so the port keeps the single one it already had.
+      expect(scope.preferences.isShortToggleEnabled, isFalse);
+      platformCalls.clear();
+      await tester.longPress(cellOf('Meditate', today));
+      await tester.pumpAndSettle();
+
+      expect(vibrations(), hasLength(1),
+          reason: '$longPressRule The toggle path already carries '
+              "performToggle's own LONG_PRESS; arming the long press must not "
+              'stack a second message on top of it.');
     });
   });
 }

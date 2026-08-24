@@ -90,7 +90,37 @@ typedef EntryPressedCallback = void Function(
 /// `UIImpactFeedbackStyleMedium` on iOS — and stays firmer than the
 /// `lightImpact` the port uses for `VIRTUAL_KEY`, which keeps the two in the
 /// order Android puts them in.
-void performToggleFeedback() {
+void performToggleFeedback() => performLongPressFeedback();
+
+/// `performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)` as fired by
+/// `View.performLongClickInternal`, not by either button view.
+///
+/// ```java
+/// handled = listener.onLongClick(View.this);
+/// if (handled) {
+///     shouldPerformHapticFeedback =
+///             listener.onLongClickUseDefaultHapticFeedback(View.this);
+/// }
+/// …
+/// if (handled && shouldPerformHapticFeedback) {
+///     performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+/// }
+/// ```
+///
+/// `CheckmarkButtonView.onLongClick` and `NumberButtonView.onLongClick` both
+/// `return true` unconditionally and neither overrides
+/// `onLongClickUseDefaultHapticFeedback` (whose default is `true`), so on
+/// Android *every* long press inside the check-mark grid buzzes — including
+/// the ones whose listener only calls `onEdit()`
+/// (`audit11.long-pressing-a-check-mark-or-number#1`). A short click is not
+/// haptic: `View.performClick` plays `SoundEffectConstants.CLICK`, a sound
+/// effect, and nothing else.
+///
+/// It is the same constant `performToggle` fires, so the two share the same
+/// platform-aware body: [HapticFeedback.vibrate] is `LONG_PRESS` on Android
+/// but the whole-device alert buzz on iOS, where `mediumImpact` is the
+/// tap-sized analogue.
+void performLongPressFeedback() {
   switch (defaultTargetPlatform) {
     case TargetPlatform.iOS:
     case TargetPlatform.macOS:
@@ -266,6 +296,15 @@ class _EntryPanelState extends State<EntryPanel> {
         widget.onEdit?.call(date);
       }
 
+      // `onLongClick` returns true, so `View.performLongClickInternal` buzzes
+      // after the listener has run, even though NumberButtonView itself never
+      // calls performHapticFeedback
+      // (`audit11.long-pressing-a-check-mark-or-number#1`).
+      void editFromLongPress() {
+        edit();
+        performLongPressFeedback();
+      }
+
       return EntryButton(
         key: key,
         size: size,
@@ -286,7 +325,7 @@ class _EntryPanelState extends State<EntryPanel> {
           textScaler: MediaQuery.textScalerOf(context),
         ),
         onTap: edit,
-        onLongPress: edit,
+        onLongPress: editFromLongPress,
       );
     }
 
@@ -317,6 +356,16 @@ class _EntryPanelState extends State<EntryPanel> {
       widget.onEdit?.call(date);
     }
 
+    // Same superclass buzz as on a number cell. It is only wired to the
+    // *editor* branch: when the long press is the toggle, `toggle()` already
+    // fires the identical constant from `performToggle`, and Android's two
+    // coincident LONG_PRESS ticks there are one buzz perceptually
+    // (`audit11.long-pressing-a-check-mark-or-number#1`).
+    void editFromLongPress() {
+      edit();
+      performLongPressFeedback();
+    }
+
     // CheckmarkButtonView.onClick / onLongClick: the preference decides which
     // gesture toggles and which one opens the editor.
     final shortToggle = widget.preferences.isShortToggleEnabled;
@@ -337,7 +386,7 @@ class _EntryPanelState extends State<EntryPanel> {
         textScaler: MediaQuery.textScalerOf(context),
       ),
       onTap: shortToggle ? toggle : edit,
-      onLongPress: shortToggle ? edit : toggle,
+      onLongPress: shortToggle ? editFromLongPress : toggle,
     );
   }
 }

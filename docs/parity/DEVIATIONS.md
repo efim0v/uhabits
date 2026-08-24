@@ -588,3 +588,57 @@ Store у порта нет, поэтому честная замена — та 
 **Почему:** Kotlin has no failure-path release to copy the ordering from, so the port has to choose one. Keeping the whole `withContext` resumption on a single queue is what makes the success ordering correct in the first place; splitting the two outcomes across a microtask and an event task would reintroduce the same class of inversion for `onTaskFinished` and would make `awaitAll()` complete with the error before the progress callbacks it queued had run. The pre-existing `feedback.the-task-progress-bar-never-hides-again#1` guarantees (counter released, listeners told, exception still loud) are unchanged and still asserted by task_runner_failure_test.dart.
 
 **Дата:** 2026-08-24
+
+## Отложенное напоминание на своё время запоминается
+
+**Что в оригинале:** ReminderController.onSnoozeTimePicked calls reminderScheduler.scheduleAtTime(habit, time), which writes nothing, then notificationTray.cancel(habit). On Android the cancel is NotificationManagerCompat.cancel(id) and cannot reach the AlarmManager alarm, so the one-off alarm survives un-recorded; only a later scheduleAll() -- after a command, an app start or a reboot -- silently replaces it with the habit's regular reminder (reminders.snooze-custom-time#2).
+
+**Что делаем:** onSnoozeTimePicked calls ReminderSchedulerApi.snoozeUntil(habit, time), which writes the instant with WidgetPreferences.setSnoozeTime and then schedule(habit). Every later scheduleAll() re-arms that instant until it is in the past, at which point ReminderScheduler.schedule discards it exactly as it discards an expired delayed snooze.
+
+**Почему:** This port has no fire-time hook: FlutterAlarmScheduler files the finished notification as the alarm under reminderNotificationId(habit), the same id the core tray cancels, and flutter_local_notifications' cancel drops the pending scheduled notification as well as the posted one. FlutterNotificationTray.removeNotification therefore re-arms with scheduleAll() to make up for that (audit3.recording-a-non-completing-entry-silently#1) -- and onSnoozeTimePicked's own cancel runs that re-arm inside the same user action. An un-recorded instant cannot survive its own snooze, so reproducing Kotlin exactly leaves the entire 'Later -> Custom...' branch inert and silently drops the user's choice. Deleting the re-arm instead would be worse: the cancel would still disarm the custom alarm and nothing would replace it. Persisting is the only repair that is robust to the ordering of the tray's and the scheduler's independent call queues.
+
+**Дата:** 2026-08-24
+
+
+## Подсветка фокуса строки привычки
+
+**Что в оригинале:** HabitCardListView.bindCardView binds the card with setOnTouchListener + GestureDetector and never setOnClickListener, so HabitCardView's FOCUSABLE_AUTO resolves to not-focusable: the row is never a Tab/D-pad stop and can never draw a focus highlight under any circumstances.
+
+**Что делаем:** Keeps the row-level InkWell focusable (the deviation already recorded under audit10.the-check-mark-grid-cannot-be-reached-or#1, so Enter on a row opens the detail screen) and gives it a Theme.focusColor tint while `_rowFocusNode.hasPrimaryFocus` is true. The descendant-driven flood is gone; the row-own highlight remains.
+
+**Почему:** Deleting the row's highlight along with the flood would leave a keyboard stop with no visible indicator, i.e. an access path the user cannot see. The recorded deviation is that the row is reachable; an unlabelled, unpainted stop would be worse than either side.
+
+**Дата:** 2026-08-24
+
+
+## Выбранный пункт в списковых диалогах настроек
+
+**Что в оригинале:** setSingleChoiceItems inflates select_dialog_singlechoice_material — a CheckedTextView whose radio indicator is tinted with ?colorControlActivated while the label keeps its ordinary text colour.
+
+**Что делаем:** `ListTile(selected: true)` resolves both the title text and the trailing check Icon to ColorScheme.primary, so the label is tinted too.
+
+**Почему:** ListTile has no way to publish SemanticsFlag.isSelected without also entering its selected visual state, and wrapping it in an outer Semantics leaves the ListTile's own node still saying `selected: false` — which is the defect. The tint is the idiomatic Flutter rendering of the same 'this one is checked' state upstream renders with a tinted radio; no rule or screenshot pins the label colour.
+
+**Дата:** 2026-08-24
+
+
+## Одно сообщение LONG_PRESS вместо двух
+
+**Что в оригинале:** CheckmarkButtonView.performToggle calls performHapticFeedback(LONG_PRESS) explicitly at CheckmarkButtonView.kt:98, and then View.performLongClickInternal fires the same constant again because onLongClick returned true — two coincident LONG_PRESS ticks.
+
+**Что делаем:** Fires exactly one. `performLongPressFeedback()` is wired only to the editor branch of the long press; the toggle branch keeps the single `performToggleFeedback()` it already had.
+
+**Почему:** Two identical LONG_PRESS ticks back to back are one buzz perceptually, and audit3's assertion at checkmark_haptics_test.dart:135 already pins hasLength(1). Stacking a second platform message would change nothing a user can feel while breaking that pin for the wrong reason. Guarded by a new test ('the default boolean long press still buzzes exactly once').
+
+**Дата:** 2026-08-24
+
+
+## Отдача при долгом нажатии на iOS и macOS
+
+**Что в оригинале:** performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) — Android only.
+
+**Что делаем:** performLongPressFeedback() switches on defaultTargetPlatform exactly as performToggleFeedback() already did: HapticFeedback.vibrate() on Android/fuchsia/linux/windows, HapticFeedback.mediumImpact() on iOS/macOS.
+
+**Почему:** Extends the already-recorded feedback.checkmark-haptics-are-the-ios-alert-buzz#1 deviation to the new call site — a typeless vibrate reaches iOS as kSystemSoundID_Vibrate, a third of a second of whole-device alert buzz, for what upstream means as a tick.
+
+**Дата:** 2026-08-24

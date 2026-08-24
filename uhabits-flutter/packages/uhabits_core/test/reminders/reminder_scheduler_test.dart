@@ -1145,6 +1145,79 @@ void main() {
   });
 
   // -----------------------------------------------------------------------
+  // audit11.custom-time-snooze-is-erased-by-the-cancel-rearm
+  //
+  // The port's own entry point for the picker's custom-time branch. It has no
+  // upstream counterpart: Kotlin's onSnoozeTimePicked calls scheduleAtTime
+  // above and records nothing, which works there because
+  // NotificationManagerCompat.cancel(id) cannot reach an AlarmManager alarm.
+  // -----------------------------------------------------------------------
+
+  group('snoozeUntil', () {
+    test('stores the instant and reschedules there', () {
+      DateUtils.setFixedLocalTime(
+          DateUtils.removeTimezone(unixTime(2015, 1, 26, 13, 0)));
+      habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habitList.add(habit);
+      final int at = unixTime(2015, 1, 26, 15, 0);
+
+      reminderScheduler.snoozeUntil(habit, at);
+
+      expect(widgetPreferences.getSnoozeTime(habitId), at,
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'snoozeUntil writes the picked instant into the same slot '
+              'snoozeReminder writes a delay into, which is what carries it '
+              'across the cancel that follows it in onSnoozeTimePicked');
+      expect(sys.scheduled.single.reminderTime, at,
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'and then calls schedule(habit), which picks the stored instant '
+              'up — the alarm still lands at the time the user chose');
+      expect(sys.scheduled.single.timestamp, unixTime(2015, 1, 26, 0, 0),
+          reason: 'reminders.snooze-custom-time#1: the checkmark timestamp is '
+              'still local midnight of the reminder instant, derived with '
+              'hard-coded zero offsets');
+    });
+
+    test('an instant already in the past is not armed', () {
+      DateUtils.setFixedLocalTime(
+          DateUtils.removeTimezone(unixTime(2015, 1, 26, 13, 0)));
+      habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habitList.add(habit);
+
+      reminderScheduler.snoozeUntil(habit, unixTime(2015, 1, 26, 12, 0));
+
+      expect(sys.scheduled.single.reminderTime, unixTime(2015, 1, 27, 12, 30),
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'schedule() discards a snoozed-until instant that is already in '
+              'the past, so a stale write cannot pin the habit to a time that '
+              'can never fire');
+      expect(widgetPreferences.getSnoozeTime(habitId), 0,
+          reason: 'reminders.snooze-by-delay#2: and the expired value is '
+              'cleared, exactly as a delayed snooze is');
+    });
+
+    test('a habit with no id falls back to the un-recorded arm', () {
+      DateUtils.setFixedLocalTime(
+          DateUtils.removeTimezone(unixTime(2015, 1, 26, 13, 0)));
+      habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
+      habit.id = null;
+      storage.writtenKeys.clear();
+      final int at = unixTime(2015, 1, 26, 15, 0);
+
+      reminderScheduler.snoozeUntil(habit, at);
+
+      expect(storage.writtenKeys, isEmpty,
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'the snooze key is built from the habit id, so a habit without '
+              'one cannot be recorded');
+      expect(sys.scheduled.single.reminderTime, at,
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'and it falls back to the upstream call, which still arms the '
+              'alarm rather than throwing');
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // reminders.dependency-wiring / reminders.app-start-and-permission
   // -----------------------------------------------------------------------
 

@@ -56,6 +56,19 @@ struct HabitTimelineEntry: TimelineEntry {
     /// lapse, which is the defect this field closes.
     let areQuestionMarksEnabled: Bool
 
+    /// `Preferences.firstWeekday`, as `daysSinceSunday` — the weekday the
+    /// History grid's rows and the Frequency grid's rows start on
+    /// (`audit4.history-and-frequency-home-screen-widgets#1`).
+    ///
+    /// It rides here for the same reason [today] and [areQuestionMarksEnabled]
+    /// do: it is a user preference, an extension has no `Preferences`, and
+    /// upstream both grids are handed `prefs.firstWeekday` — `HistoryWidget.kt`
+    /// at construction and on every refresh, `FrequencyWidgetProvider.kt`
+    /// through `setFirstWeekday`. Read once, through
+    /// `WidgetStore.firstWeekday()`, so the two grids cannot disagree about the
+    /// same preference.
+    let firstWeekday: Int
+
     var habit: WidgetHabit? {
         if case .habit(let habit) = state { return habit }
         return nil
@@ -134,7 +147,8 @@ struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
                 state: .habit(habit),
                 today: today,
                 todayText: todayText,
-                areQuestionMarksEnabled: store.areQuestionMarksEnabled()
+                areQuestionMarksEnabled: store.areQuestionMarksEnabled(),
+                firstWeekday: store.firstWeekday()
             )
         }
         // A habit that was picked and then deleted is a different failure from
@@ -146,7 +160,8 @@ struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
             state: state,
             today: today,
             todayText: todayText,
-            areQuestionMarksEnabled: store.areQuestionMarksEnabled()
+            areQuestionMarksEnabled: store.areQuestionMarksEnabled(),
+            firstWeekday: store.firstWeekday()
         )
     }
 

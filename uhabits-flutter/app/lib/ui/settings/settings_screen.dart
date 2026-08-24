@@ -704,6 +704,19 @@ class _OptionsDialog<T> extends StatelessWidget {
               for (var i = 0; i < labels.length; i++)
                 ListTile(
                   key: ValueKey<Object?>('option-${values[i]}'),
+                  // `ListPreferenceDialogFragmentCompat.onPrepareDialogBuilder`
+                  // builds this list with
+                  // `AlertDialog.Builder.setSingleChoiceItems(entries,
+                  // clickedIndex, listener)`, i.e. a ListView in
+                  // CHOICE_MODE_SINGLE of `CheckedTextView`s: every row reports
+                  // `setCheckable(true)` / `setChecked(...)`, so TalkBack
+                  // speaks the entry that is in force instead of leaving it to
+                  // the check mark alone
+                  // (`audit11.the-two-settings-list-dialogs-never#1`). An
+                  // `Icon` with no `semanticLabel` emits no semantics node at
+                  // all, and `ListTile` publishes `selected: false` on every
+                  // row unless it is told otherwise.
+                  selected: values[i] == selected,
                   title: Text(labels[i]),
                   trailing:
                       values[i] == selected ? const Icon(Icons.check) : null,

@@ -70,12 +70,16 @@ enum DateNames {
         calendar.component(.weekday, from: date) - 1
     }
 
-    /// `Preferences.firstWeekday`, as `daysSinceSunday`.
+    /// The device REGION setting's first weekday, as `daysSinceSunday`.
     ///
-    /// The preference itself is not part of the published contract, so the
-    /// device's locale decides instead. For a user who set a first weekday in
-    /// the app that differs from their locale's, the widget's calendar starts
-    /// on a different row than the app's.
+    /// **Not** `Preferences.firstWeekday`, which is what both grids lay
+    /// themselves out from: that is a user preference, it is published on both
+    /// documents, and it is read through `WidgetStore.firstWeekday()`. This is
+    /// only that accessor's last resort, for a document written before the
+    /// field existed — and it is the value both grids used unconditionally
+    /// before, which put every square one row off from the same date in the app
+    /// for anyone whose Loop setting differed from their iPhone's region
+    /// (`audit4.history-and-frequency-home-screen-widgets#1`).
     static func firstWeekdayDaysSinceSunday() -> Int {
         calendar.firstWeekday - 1
     }

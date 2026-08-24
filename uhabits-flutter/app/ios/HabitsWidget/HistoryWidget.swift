@@ -55,7 +55,11 @@ struct HistoryWidgetView: View {
         case .habit(let habit):
             // `widgets.history#3`: the title is the habit name.
             GraphWidgetView(title: habit.name) {
-                HistoryChartView(habit: habit, today: entry.today)
+                HistoryChartView(
+                    habit: habit,
+                    today: entry.today,
+                    firstWeekday: entry.firstWeekday
+                )
             }
             .widgetCard()
             // `widgets.history#5`: the card opens ShowHabitActivity for this
@@ -79,6 +83,19 @@ struct HistoryChartView: View {
     let habit: WidgetHabit
     let today: Date
 
+    /// `HistoryChart.firstWeekday`, as `daysSinceSunday` — the weekday the
+    /// seven rows start on.
+    ///
+    /// Upstream `HistoryWidget` assigns it `prefs.firstWeekday` both at
+    /// construction (HistoryWidget.kt:75) and on every refresh through
+    /// `HistoryCardPresenter.buildState(habit, firstWeekday =
+    /// prefs.firstWeekday, ...)`, so the widget's grid starts on the same
+    /// weekday the habit-list header and the detail screen do. It arrives on
+    /// the entry rather than being asked of `Calendar.current`, whose
+    /// `firstWeekday` is the device REGION setting and has nothing to do with
+    /// the preference (`audit4.history-and-frequency-home-screen-widgets#1`).
+    let firstWeekday: Int
+
     /// `habit.historySeries` decoded once rather than once per square: the grid
     /// draws up to `7 * nColumns` of them and `String` has no random access, so
     /// indexing it per square would be quadratic in the widget's width
@@ -88,9 +105,10 @@ struct HistoryChartView: View {
     /// `habit.historyNotes` as a set, for the same reason.
     private let publishedNotes: Set<Int>?
 
-    init(habit: WidgetHabit, today: Date) {
+    init(habit: WidgetHabit, today: Date, firstWeekday: Int) {
         self.habit = habit
         self.today = today
+        self.firstWeekday = firstWeekday
         self.publishedSeries = habit.historySeries.map { series in
             series.map { HistorySquare.of(ordinal: $0.wholeNumberValue ?? 1) }
         }
@@ -127,7 +145,7 @@ struct HistoryChartView: View {
         guard nColumns > 0 else { return }
 
         let firstWeekdayOffset =
-            (DateNames.daysSinceSunday(today) - DateNames.firstWeekdayDaysSinceSunday() + 7) % 7
+            (DateNames.daysSinceSunday(today) - firstWeekday + 7) % 7
         let topLeftOffset = (nColumns - 1) * 7 + firstWeekdayOffset
 
         var headerOverflow: CGFloat = 0
@@ -359,15 +377,51 @@ enum HistorySquare {
         }
     }
 
+    /// The inverse of [of(ordinal:)] — the digit `historySeries` spells this
+    /// square with, which is what `WidgetStore.stageToggle` writes back into
+    /// the series when a Checkmark tap moves today's value.
+    var ordinal: Int {
+        switch self {
+        case .on: return 0
+        case .off: return 1
+        case .grey: return 2
+        case .dimmed: return 3
+        case .hatched: return 4
+        }
+    }
+
     /// `HistoryCardPresenter.buildState`, evaluated one entry at a time — the
     /// fallback for a document written before `historySeries` existed.
     static func of(value: Int, habit: WidgetHabit) -> HistorySquare {
-        if habit.isNumerical {
+        of(
+            value: value,
+            isNumerical: habit.isNumerical,
+            isAtMost: habit.isAtMost,
+            target: habit.target
+        )
+    }
+
+    /// The same mapping over the three habit fields it actually needs, so that
+    /// `WidgetStore.stageToggle` — which works on the raw JSON dictionary,
+    /// never on a decoded [WidgetHabit] — can reach it instead of carrying a
+    /// second copy of the table.
+    ///
+    /// The order of the numerical branches is the contract: UNKNOWN wins over
+    /// everything, then SKIP, and only then is the target consulted — a SKIP is
+    /// stored as 3, i.e. 0.003, which would otherwise satisfy every AT_MOST
+    /// target.
+    static func of(
+        value: Int,
+        isNumerical: Bool,
+        isAtMost: Bool,
+        target: Double
+    ) -> HistorySquare {
+        if isNumerical {
             if value == EntryValue.unknown { return .off }
             if value == EntryValue.skip { return .hatched }
             let amount = Double(value) / 1000.0
-            if habit.isAtMost && amount <= habit.target { return .on }
-            if !habit.isAtMost && amount >= habit.target { return .on }
+            if isAtMost && amount <= target { return .on }
+            if !isAtMost && amount >= target { return .on }
             return .grey
         }
         switch value {

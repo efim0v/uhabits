@@ -85,13 +85,15 @@ struct StreakWidgetView: View {
 /// tall, with the streak length inside the bar and the start and end dates
 /// flanking it when there is room.
 ///
-/// **The streaks are recomputed here, from the published entries.** The
-/// document carries `HomeWidgetBridge.entryCount` (60) daily values and no
-/// streak list, so a streak that began before that window starts on the oldest
-/// published day instead of on its real first day, and streaks older than the
-/// window do not exist at all. Upstream `StreakList` is recomputed over the
-/// habit's whole history. Nothing here can close that gap: it needs a field
-/// the schema does not have.
+/// **The streaks are the published ones.** `StreakList` is recomputed by
+/// `Habit.recompute()` over the habit's entire record, so the bars upstream are
+/// the genuinely longest runs with their real start dates; the document carries
+/// `habit.streaks` for that reason. Rebuilding them from `habit.entries` —
+/// `HomeWidgetBridge.entryCount`, sixty days — capped every bar at 60 and
+/// dropped every run that ended before the window, which is the widget's whole
+/// content. The rebuild survives only as the fallback for a document written
+/// before the field existed, exactly as
+/// `app/android/.../widgets/StreakWidget.kt` keeps `streaksFrom`.
 struct StreakChartView: View {
 
     let habit: WidgetHabit
@@ -121,7 +123,8 @@ struct StreakChartView: View {
         // Canvas is the size handed to this closure.
         let streaks = StreakState.best(
             of: habit,
-            limit: Int(size.height / baseSize)
+            limit: Int(size.height / baseSize),
+            today: today
         )
         // `if (streaks!!.isEmpty()) return` — an empty card body.
         guard !streaks.isEmpty else { return }
@@ -303,9 +306,47 @@ struct WidgetStreak: Equatable {
     var length: Int { startOffset - endOffset + 1 }
 }
 
-/// The pure half of `StreakWidget.refreshData`: `StreakList.recompute` and
-/// `StreakList.getBest`, run over the published entries.
+/// The pure half of `StreakWidget.refreshData`: `habit.streaks.getBest(n)`,
+/// with `StreakList.recompute` kept as the pre-schema fallback.
 enum StreakState {
+
+    /// `habit.streaks` as this chart measures them — offsets back from the
+    /// published `today` — or nil when the document predates the field.
+    ///
+    /// The bridge publishes `habit.streaks.getBest(HomeWidgetBridge
+    /// .streakCount)` — the best thirty, a superset of any count a card this
+    /// size can show — so [best] running `getBest` again over it gives the same
+    /// answer for any limit. That is `StreakChartView.bestOf` on the Android
+    /// side.
+    ///
+    /// Nothing here is clipped to the entry window: a run that ran for two
+    /// hundred days simply has a `startOffset` of two hundred, and a run that
+    /// ended a year ago is still in the list. A streak whose dates do not parse
+    /// is dropped rather than guessed at — an extension that traps is killed
+    /// and the user sees a blank card.
+    static func published(_ habit: WidgetHabit, today: Date) -> [WidgetStreak]? {
+        guard let streaks = habit.streaks else { return nil }
+        return streaks.compactMap { streak in
+            guard
+                let start = WidgetStore.parseDate(streak.start),
+                let end = WidgetStore.parseDate(streak.end),
+                let startOffset = offset(of: start, from: today),
+                let endOffset = offset(of: end, from: today)
+            else { return nil }
+            return WidgetStreak(startOffset: startOffset, endOffset: endOffset)
+        }
+    }
+
+    /// Whole days from [date] to [today], which is how far back a bar's label
+    /// has to count. Negative for a date in the future, which no streak has.
+    private static func offset(of date: Date, from today: Date) -> Int? {
+        let calendar = Calendar.current
+        return calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: date),
+            to: calendar.startOfDay(for: today)
+        ).day
+    }
 
     /// `StreakList.recompute`'s predicate. A boolean day counts when its value
     /// is greater than zero — which includes SKIP, upstream behaviour — and a
@@ -324,7 +365,8 @@ enum StreakState {
         return Double(value) / 1000.0 >= habit.target
     }
 
-    /// `StreakList.recompute`, over the published window.
+    /// `StreakList.recompute`, over the published sixty-day window — the
+    /// fallback for a document that predates [published].
     ///
     /// The entries arrive newest-first, which is the order `getByInterval`
     /// hands `recompute` upstream, so the loop below is the Kotlin one with
@@ -356,9 +398,14 @@ enum StreakState {
     ///
     /// `compareLonger` breaks a tie on length with `compareNewer`, so the
     /// ordering is total and the two sorts below are the Kotlin's two sorts.
-    static func best(of habit: WidgetHabit, limit: Int) -> [WidgetStreak] {
+    static func best(
+        of habit: WidgetHabit,
+        limit: Int,
+        today: Date
+    ) -> [WidgetStreak] {
         guard limit > 0 else { return [] }
-        let longest = recompute(habit).sorted { a, b in
+        let all = published(habit, today: today) ?? recompute(habit)
+        let longest = all.sorted { a, b in
             if a.length != b.length { return a.length > b.length }
             // A newer streak ends closer to today, i.e. at a smaller offset.
             return a.endOffset < b.endOffset

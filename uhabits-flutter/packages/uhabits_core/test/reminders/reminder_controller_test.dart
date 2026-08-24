@@ -45,6 +45,8 @@ class _MockScheduler implements ReminderSchedulerApi {
       <({Habit habit, int minutes})>[];
   final List<({Habit habit, int time})> scheduledAtTime =
       <({Habit habit, int time})>[];
+  final List<({Habit habit, int time})> snoozedUntil =
+      <({Habit habit, int time})>[];
 
   @override
   void scheduleAll() {
@@ -62,6 +64,12 @@ class _MockScheduler implements ReminderSchedulerApi {
   void scheduleAtTime(Habit habit, int reminderTime) {
     scheduledAtTime.add((habit: habit, time: reminderTime));
     order.add('scheduleAtTime');
+  }
+
+  @override
+  void snoozeUntil(Habit habit, int reminderTime) {
+    snoozedUntil.add((habit: habit, time: reminderTime));
+    order.add('snoozeUntil');
   }
 }
 
@@ -328,20 +336,27 @@ void main() {
   // -----------------------------------------------------------------------
 
   group('onSnoozeTimePicked', () {
-    test('schedules the upcoming wall-clock time and then cancels', () {
+    test('snoozes until the upcoming wall-clock time and then cancels', () {
       final habit = habitWithReminder();
       DateUtils.setFixedLocalTime(unixTime(2015, 1, 26, 6, 0));
 
       controller.onSnoozeTimePicked(habit, 9, 45);
 
-      expect(scheduler.scheduledAtTime.single.time, unixTime(2015, 1, 26, 9, 45),
+      expect(scheduler.snoozedUntil.single.time, unixTime(2015, 1, 26, 9, 45),
           reason: 'reminders.snooze-custom-time#1: onSnoozeTimePicked(habit, '
               'hour, minute) computes time = '
-              'DateUtils.getUpcomingTimeInMillis(hour, minute) and calls '
-              'reminderScheduler.scheduleAtTime(habit, time)');
-      expect(order, <String>['scheduleAtTime', 'cancel'],
-          reason: 'reminders.snooze-custom-time#1: then '
-              'notificationTray.cancel(habit)');
+              'DateUtils.getUpcomingTimeInMillis(hour, minute) and arms the '
+              "habit's alarm there. "
+              'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'Kotlin arms it with scheduleAtTime, which records nothing; this '
+              'port has to record it, because the cancel on the next line '
+              'destroys an unrecorded one-off alarm.');
+      expect(order, <String>['snoozeUntil', 'cancel'],
+          reason: 'reminders.snooze-custom-time#1: the alarm is armed first '
+              'and notificationTray.cancel(habit) second, exactly as upstream');
+      expect(scheduler.scheduledAtTime, isEmpty,
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'the un-recorded path is no longer reachable from the picker');
     });
 
     test('a time already past today lands tomorrow', () {
@@ -350,13 +365,14 @@ void main() {
 
       controller.onSnoozeTimePicked(habit, 9, 45);
 
-      expect(scheduler.scheduledAtTime.single.time, unixTime(2015, 1, 27, 9, 45),
+      expect(scheduler.snoozedUntil.single.time, unixTime(2015, 1, 27, 9, 45),
           reason: 'reminders.snooze-custom-time#3: if the chosen hour:minute '
               'is still ahead today the alarm lands today; otherwise it lands '
               'tomorrow');
     });
 
-    test('nothing is persisted, so the next scheduleAll overwrites it', () {
+    test('the picked instant is recorded, so a re-arm cannot overwrite it',
+        () {
       final widgetPreferences = WidgetPreferences(storage);
       final sys = _NullSystemScheduler();
       final real = ReminderScheduler(
@@ -371,19 +387,62 @@ void main() {
       ReminderController(real, tray, preferences)
           .onSnoozeTimePicked(habit, 9, 45);
 
-      expect(widgetPreferences.getSnoozeTime(habit.id!), 0,
-          reason: 'reminders.snooze-custom-time#2: custom-time snooze does NOT '
-              'write anything to WidgetPreferences');
+      expect(widgetPreferences.getSnoozeTime(habit.id!),
+          unixTime(2015, 1, 26, 9, 45),
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'upstream nothing is written (reminders.snooze-custom-time#2) '
+              'because AndroidNotificationTray.removeNotification is '
+              'NotificationManagerCompat.cancel(id) and cannot reach an '
+              'AlarmManager alarm. This port files the alarm and the '
+              'notification under one id and re-arms every habit on every '
+              'notification cancel '
+              '(audit3.recording-a-non-completing-entry-silently#1), so the '
+              'cancel that closes onSnoozeTimePicked would wipe an unrecorded '
+              'instant within the same user action.');
       expect(sys.reminderTimes, <int>[unixTime(2015, 1, 26, 9, 45)],
           reason: 'reminders.snooze-custom-time#1: the one-off alarm is armed');
 
       sys.reminderTimes.clear();
       real.scheduleAll();
 
-      expect(sys.reminderTimes, <int>[unixTime(2015, 1, 26, 8, 30)],
-          reason: 'reminders.snooze-custom-time#2: therefore any later '
-              "scheduleAll() overwrites the one-off alarm with the habit's "
-              'regular reminder time');
+      expect(sys.reminderTimes, <int>[unixTime(2015, 1, 26, 9, 45)],
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'and it is what every later scheduleAll() re-arms, the way a '
+              'snooze by delay already is. This is the deliberate deviation: '
+              "upstream the alarm would be replaced by the habit's regular "
+              '08:30 reminder here.');
+    });
+
+    test('the recorded instant expires the way a delayed snooze does', () {
+      final widgetPreferences = WidgetPreferences(storage);
+      final sys = _NullSystemScheduler();
+      final real = ReminderScheduler(
+        commandRunner,
+        habitList,
+        sys,
+        widgetPreferences,
+      );
+      final habit = habitWithReminder();
+      DateUtils.setFixedLocalTime(unixTime(2015, 1, 26, 6, 0));
+
+      ReminderController(real, tray, preferences)
+          .onSnoozeTimePicked(habit, 9, 45);
+
+      // The picked instant has now passed: this is the moment the reminder
+      // has just fired and ReminderController.onShowReminder re-arms.
+      DateUtils.setFixedLocalTime(unixTime(2015, 1, 26, 10, 0));
+      sys.reminderTimes.clear();
+      real.scheduleAll();
+
+      expect(sys.reminderTimes, <int>[unixTime(2015, 1, 27, 8, 30)],
+          reason: 'audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1: '
+              'the instant is stored in the same WidgetPreferences slot a '
+              'delayed snooze uses, so ReminderScheduler.schedule discards it '
+              'once it is in the past and the habit falls back to its regular '
+              'reminder. Nothing accumulates.');
+      expect(widgetPreferences.getSnoozeTime(habit.id!), 0,
+          reason: 'reminders.snooze-by-delay#1: an expired snooze is removed, '
+              'not merely ignored');
     });
   });
 }

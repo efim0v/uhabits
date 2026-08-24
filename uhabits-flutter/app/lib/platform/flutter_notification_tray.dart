@@ -670,6 +670,14 @@ class FlutterNotificationTray implements SystemTray {
   ///  * `ReminderController.onSnoozeDelayPicked` snoozes first and cancels
   ///    second, on purpose. `scheduleAll` re-reads the snooze from
   ///    `WidgetPreferences`, so the alarm that comes back is the snoozed one.
+  ///
+  /// That second point is also the whole reason `onSnoozeTimePicked` goes
+  /// through `ReminderSchedulerApi.snoozeUntil` rather than upstream's
+  /// `scheduleAtTime`: a one-off instant that is written nowhere cannot survive
+  /// this re-arm, and the "Later -> Custom..." branch was silently inert until
+  /// it was (`audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1`).
+  /// Anything else this tray is ever asked to preserve across a cancel has to
+  /// be readable by `scheduleAll` for the same reason.
   @override
   void removeNotification(int notificationId) {
     _enqueue(() async {
@@ -900,6 +908,43 @@ class LocalNotificationsPresenter
   /// is not a compile error, it is a reminder that never appears.
   static const String androidSmallIcon = 'ic_notification';
 
+  /// The REMINDERS channel, exactly as
+  /// `AndroidNotificationTray.createAndroidNotificationChannel` builds it.
+  ///
+  /// Upstream is one constructor call and nothing else:
+  ///
+  /// ```kotlin
+  /// NotificationChannel(
+  ///     REMINDERS_CHANNEL_ID,
+  ///     context.resources.getString(R.string.reminder),
+  ///     NotificationManager.IMPORTANCE_DEFAULT
+  /// )
+  /// ```
+  ///
+  /// `audit11.reminders-channel-is-created-with-vibration#1`: in AOSP that
+  /// three-argument constructor assigns id, name and importance and leaves
+  /// every other field at its declared default — `mSound` is
+  /// `DEFAULT_NOTIFICATION_URI`, `mShowBadge` is true, `mLights` is false, and
+  /// `mVibrationEnabled` has no initialiser and is therefore **false**. A Loop
+  /// reminder chimes; it does not buzz. `flutter_local_notifications` defaults
+  /// `enableVibration` to true, so that one field has to be spelled out; the
+  /// rest of this object's defaults already match AOSP's.
+  ///
+  /// A channel's sound and vibration are immutable once Android has seen it —
+  /// and deleting a channel does not forget them, since re-creating a deleted
+  /// id restores the old settings. So this is a one-shot decision made on first
+  /// launch, and every site that can create the channel has to agree; see
+  /// [LocalNotificationsChannelCreator] and the `enableVibration` in
+  /// [LocalNotificationsPresenter.detailsFor], which the plugin would otherwise
+  /// use to create the channel itself.
+  static AndroidNotificationChannel remindersChannel(String channelName) =>
+      AndroidNotificationChannel(
+        NotificationTray.remindersChannelId,
+        channelName,
+        importance: Importance.defaultImportance,
+        enableVibration: false,
+      );
+
   /// Initialises the plugin, declares the iOS categories and creates the
   /// Android channel.
   ///
@@ -910,6 +955,9 @@ class LocalNotificationsPresenter
   /// every post (`notifications.channel#2`); once is enough, since creating a
   /// channel that exists is a no-op and the name is the only thing that could
   /// change.
+  ///
+  /// [remindersChannel] is what those three arguments really amount to; see it
+  /// for why one plugin default has to be spelled out.
   static Future<LocalNotificationsPresenter> initialize({
     required ReminderNotificationBuilder builder,
     FlutterLocalNotificationsPlugin? plugin,
@@ -946,11 +994,7 @@ class LocalNotificationsPresenter
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(
-          AndroidNotificationChannel(
-            NotificationTray.remindersChannelId,
-            builder.strings.channelName,
-            importance: Importance.defaultImportance,
-          ),
+          remindersChannel(builder.strings.channelName),
         );
     return presenter;
   }
@@ -1019,6 +1063,19 @@ class LocalNotificationsPresenter
           // plugin defaults this to true, which would defeat `ongoing` with a
           // single tap and leave the core tray's `active` map out of step.
           autoCancel: false,
+          // `audit11.reminders-channel-is-created-with-vibration#1`: these
+          // details carry `channelAction: createIfNotExists`, so the plugin
+          // builds a channel out of them whenever REMINDERS does not exist yet
+          // — an install where the user deleted it, or one where a posted
+          // reminder beats `initialize()`. The answer has to be the one
+          // [LocalNotificationsPresenter.remindersChannel] gives.
+          //
+          // On API 24-25, where there is no channel, this makes the plugin
+          // call `setVibrate(new long[]{0})` instead of leaving the builder
+          // alone — a zero-length pattern, which is the same silence
+          // `buildNotification()` produces by never calling `setVibrate` or
+          // `setDefaults(DEFAULT_VIBRATE)` at all.
+          enableVibration: false,
           when: spec.whenMillis,
           showWhen: spec.showWhen,
           ongoing: spec.ongoing,
@@ -1139,11 +1196,7 @@ class LocalNotificationsChannelCreator implements NotificationChannelCreator {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(
-          AndroidNotificationChannel(
-            NotificationTray.remindersChannelId,
-            channelName,
-            importance: Importance.defaultImportance,
-          ),
+          LocalNotificationsPresenter.remindersChannel(channelName),
         );
   }
 }

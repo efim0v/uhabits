@@ -185,6 +185,19 @@ struct WidgetIndex: Decodable {
     /// `Preferences.areQuestionMarksEnabled`.
     let areQuestionMarksEnabled: Bool?
 
+    /// `Preferences.firstWeekday`, as `daysSinceSunday` (0 = Sunday …
+    /// 6 = Saturday) — the weekday the History grid's rows and the Frequency
+    /// grid's rows start on (`audit4.history-and-frequency-home-screen-widgets`).
+    ///
+    /// It rides on the catalogue as well as on the per-widget document because
+    /// the catalogue is what an iOS widget resolved through `HabitEntityQuery`
+    /// reads; see [WidgetStore.firstWeekday].
+    ///
+    /// Optional, like the two preferences above: a document written before the
+    /// field existed falls back to the device calendar's own first weekday,
+    /// which is what both grids used unconditionally before.
+    let firstWeekday: Int?
+
     struct WidgetBinding: Decodable {
         let id: Int
         let key: String
@@ -207,6 +220,12 @@ struct WidgetDocument: Decodable {
     /// cannot throw across the process boundary, so it names the ids and this
     /// side draws that same state.
     let missingHabitIds: [Int]
+
+    /// `Preferences.firstWeekday`, as `daysSinceSunday`; see
+    /// [WidgetIndex.firstWeekday]. A widget an Android install bound reads its
+    /// origin from here, exactly as `HistoryWidgetProvider.kt` and
+    /// `FrequencyWidgetProvider.kt` read `document.firstWeekday`.
+    let firstWeekday: Int?
 }
 
 /// One habit inside a widget document.
@@ -285,6 +304,51 @@ struct WidgetHabit: Decodable, Identifiable {
     /// Without it the Score widget draws its grid and footer and no line.
     let scores: [Double]?
 
+    /// The bucket [scores] was built at, in days — `ScoreCardState.bucketSize`,
+    /// i.e. `BUCKET_SIZES[Preferences.scoreCardSpinnerPosition]`
+    /// (`widgets.score#3`, `#4`).
+    ///
+    /// It is what turns a column index back into a date: `ScoreChart` labels
+    /// its footer with `today - offset * bucketSize`. A chart that assumed the
+    /// weekly default plotted a correct yearly line against dates spaced one
+    /// week apart.
+    ///
+    /// Optional only for a document that predates the field, which is then read
+    /// as the preference's own default of 7.
+    let bucketSize: Int?
+
+    /// `habit.streaks.getBest(n)` over the habit's WHOLE record
+    /// (`widgets.streak#3`), each with its real first and last day.
+    ///
+    /// Not derivable from [entries]: that array is sixty days long, so a
+    /// rebuild here reports a 200-day run as 60 and loses every streak that
+    /// ended before the window — which is the entire content of the widget.
+    ///
+    /// Optional, like [score] and [scores]: a document written before the field
+    /// existed falls back to the rebuild, exactly as
+    /// `app/android/.../widgets/StreakWidget.kt` does.
+    let streaks: [WidgetStreakData]?
+
+    /// `habit.originalEntries.computeWeekdayFrequency(isNumerical)`
+    /// (`widgets.frequency#3`, `#4`, `#5`): one 7-slot bucket per calendar
+    /// month for every month the habit has existed, keyed by that month's first
+    /// day in `HomeWidgetBridge.formatDate`'s format and indexed
+    /// `(daysSinceSunday + 1) % 7`.
+    ///
+    /// The ORIGINAL entries, so the YES_AUTO days a non-daily frequency
+    /// generates never appear — and every month, so a habit two years old does
+    /// not read as if it started two months ago.
+    let weekdayFrequency: [String: [Int]]?
+
+    /// `TargetCardPresenter.buildState`'s three parallel lists, zipped
+    /// (`widgets.target#5`, `#6`, `#7`).
+    ///
+    /// Which rows exist and what each target is are both decided by
+    /// `frequency.denominator`, and the sums are calendar-truncated over the
+    /// habit's whole record — none of which a widget process can see. So the
+    /// bridge runs the presenter and this draws its answer.
+    let targetRows: [WidgetTargetRow]?
+
     var isNumerical: Bool { type == "NUMERICAL" }
 
     var isAtMost: Bool { targetType == "AT_MOST" }
@@ -297,6 +361,30 @@ struct WidgetHabit: Decodable, Identifiable {
         if isAtMost { return false }
         return Double(value) / 1000.0 >= target
     }
+}
+
+/// One entry of [WidgetHabit.streaks] — `org.isoron.uhabits.core.models.Streak`
+/// as the bridge writes it.
+///
+/// The dates are `HomeWidgetBridge.formatDate` strings rather than offsets: a
+/// streak the app found may begin years before the published `today`, which is
+/// the whole reason the field exists.
+struct WidgetStreakData: Decodable {
+    let start: String
+    let end: String
+    /// `Streak.length` = `start.daysUntil(end) + 1`.
+    let length: Int
+}
+
+/// One row of [WidgetHabit.targetRows] (`widgets.target#4`, `#6`, `#7`).
+///
+/// [interval] is the row's key rather than its length in days: 1 is Today, 7 is
+/// Week, 30 is Month, 91 is Quarter and anything else is Year — the same table
+/// `TargetCardState.labels` reads.
+struct WidgetTargetRow: Decodable {
+    let interval: Int
+    let value: Double
+    let target: Double
 }
 
 /// `Entry`'s reserved values (`models.entry-values#2`).
@@ -392,6 +480,22 @@ struct WidgetStore {
     /// default.
     func areQuestionMarksEnabled() -> Bool {
         index()?.areQuestionMarksEnabled ?? false
+    }
+
+    /// `Preferences.firstWeekday`, as `daysSinceSunday`
+    /// (`audit4.history-and-frequency-home-screen-widgets#1`).
+    ///
+    /// Upstream `HistoryWidget.refreshData` and `FrequencyWidgetProvider` both
+    /// read `prefs.firstWeekday`, so the two grids and the habit-list header
+    /// can never disagree about where a week starts. An extension has no
+    /// `Preferences`, so the value arrives on the document — read here through
+    /// one accessor for the same reason.
+    ///
+    /// The device calendar's own first weekday is the fallback, and only that:
+    /// it is what a document written before the field was published leaves
+    /// this side with, and it is what both grids used unconditionally before.
+    func firstWeekday() -> Int {
+        index()?.firstWeekday ?? DateNames.firstWeekdayDaysSinceSunday()
     }
 
     func habit(id: Int) -> WidgetHabit? {
@@ -499,6 +603,17 @@ extension WidgetStore {
 
     /// Records one tap and repaints the habit, atomically enough.
     ///
+    /// "Repaints the habit" is every card the tap can move, not only the one
+    /// under the finger: `ToggleHabitIntent.perform` ends in
+    /// `reloadAllTimelines`, and upstream `WidgetUpdater.onCommandFinished`
+    /// broadcasts `ACTION_APPWIDGET_UPDATE` to every widget bound to the habit,
+    /// so a History widget on the same habit flips today's square at the same
+    /// moment the tick does. Today's square is the one digit this side can
+    /// move — `historySeries[0]` is decided by today's value alone — while
+    /// `score`, `scores`, `streaks`, `weekdayFrequency` and `targetRows` are
+    /// reductions over the whole record that only the app can recompute, and
+    /// legitimately ride along stale until it republishes.
+    ///
     /// The index is rewritten rather than re-encoded from `WidgetIndex`: the
     /// document belongs to the app, this side understands only part of it, and
     /// anything it does not understand has to survive the round trip untouched.
@@ -532,6 +647,29 @@ extension WidgetStore {
                    !entries.isEmpty {
                     entries[0] = next
                     habits[position]["entries"] = entries
+                }
+                // …and the History grid, which reads `historySeries` in
+                // preference to `entries`
+                // (`audit10.history-home-screen-widget-draws-more#1`). Offset 0
+                // is today, and `HistorySquare.of(value:...)` is the same
+                // mapping `HistoryCardPresenter` applies per entry, so the
+                // digit written here is the digit the app will publish.
+                if var series = habits[position]["historySeries"] as? String,
+                   !series.isEmpty {
+                    let square = HistorySquare.of(
+                        value: next,
+                        isNumerical: habits[position]["type"] as? String == "NUMERICAL",
+                        isAtMost: habits[position]["targetType"] as? String == "AT_MOST",
+                        // Through `NSNumber` so that a target the encoder
+                        // wrote without a fraction still reads as a Double.
+                        target: (habits[position]["target"] as? NSNumber)?
+                            .doubleValue ?? 0
+                    )
+                    series.replaceSubrange(
+                        series.startIndex...series.startIndex,
+                        with: String(square.ordinal)
+                    )
+                    habits[position]["historySeries"] = series
                 }
             }
             index["habits"] = habits

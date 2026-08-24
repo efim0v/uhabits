@@ -166,6 +166,46 @@ class _HabitCardState extends State<HabitCard> {
   final GlobalKey<HabitCardRippleState> _innerFrameKey =
       GlobalKey<HabitCardRippleState>();
 
+  /// The focus node of the row's own [InkWell].
+  ///
+  /// The port keeps the row focusable on purpose — upstream
+  /// `HabitCardListView.bindCardView` binds the card with `setOnTouchListener`
+  /// only, so `HabitCardView` is never a D-pad stop and there is no keyboard
+  /// path to the detail screen; the port adds one (recorded deviation). What
+  /// does *not* follow from that deviation is the highlight: Android draws the
+  /// default focus highlight in `View.onDrawForeground` on `isFocused()` — the
+  /// view's own primary focus — never on `hasFocus()`, so a focused child
+  /// never tints its parent, and walking a habit row tints exactly one 48dp
+  /// cell at a time (`audit11.focusing-one-check-mark-cell-paints#1`).
+  ///
+  /// `InkResponse` does the opposite: its highlight is driven from the Focus
+  /// node's `hasFocus`, which is true while any descendant holds primary
+  /// focus, so every check-mark cell of the row would flood the whole 794px
+  /// card. The stock highlight is therefore switched off
+  /// ([InkWell.focusColor] transparent) and the row paints its own from
+  /// [FocusNode.hasPrimaryFocus].
+  final FocusNode _rowFocusNode = FocusNode(debugLabel: 'HabitCard');
+
+  bool _rowHasPrimaryFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rowFocusNode.addListener(_onRowFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    _rowFocusNode.removeListener(_onRowFocusChanged);
+    _rowFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onRowFocusChanged() {
+    if (_rowHasPrimaryFocus == _rowFocusNode.hasPrimaryFocus) return;
+    setState(() => _rowHasPrimaryFocus = _rowFocusNode.hasPrimaryFocus);
+  }
+
   /// `HabitCardView.triggerRipple(x, y)`: place the hotspot, drive the
   /// background into the pressed+enabled state, and drop back out of it 25 ms
   /// later (`list-habits.habit-card#9`).
@@ -217,14 +257,28 @@ class _HabitCardState extends State<HabitCard> {
           child: InkWell(
             onTap: widget.onTap,
             onLongPress: widget.onLongPress,
-            child: Row(
-              // gravity = Gravity.CENTER_VERTICAL
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: <Widget>[
-                _buildRing(color),
-                Expanded(child: _buildLabel(flutterColor)),
-                _buildPanel(color),
-              ],
+            focusNode: _rowFocusNode,
+            // `InkResponse` lights this highlight from `hasFocus`, which is
+            // true for any focused descendant — one focused check-mark cell
+            // would tint the whole row. Android tints only the cell, so the
+            // stock highlight is off and the row paints its own below, from
+            // primary focus (`audit11.focusing-one-check-mark-cell-paints#1`).
+            focusColor: Colors.transparent,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _rowHasPrimaryFocus
+                    ? Theme.of(context).focusColor
+                    : null,
+              ),
+              child: Row(
+                // gravity = Gravity.CENTER_VERTICAL
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  _buildRing(color),
+                  Expanded(child: _buildLabel(flutterColor)),
+                  _buildPanel(color),
+                ],
+              ),
             ),
           ),
         ),

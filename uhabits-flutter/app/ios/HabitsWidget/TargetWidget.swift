@@ -310,25 +310,42 @@ enum TargetState {
         }
     }
 
-    /// `TargetCardPresenter.buildState`.
+    /// `TargetCardPresenter.buildState`, as the bridge ran it.
     ///
-    /// Two deliberate departures, both forced by the published contract and
-    /// neither fixable on this side:
+    /// Which rows exist and what each target is are both decided by
+    /// `frequency.denominator` — `widgets.target#5` emits the "Today" row only
+    /// when it is `<= 1` and the "Week" row only when it is `<= 7`, and `#7`
+    /// scales every target by it — and the values are calendar-truncated sums
+    /// over the habit's whole record. None of the three is visible from here,
+    /// which is why the presenter runs in the app and its rows travel on
+    /// `habit.targetRows`.
     ///
-    ///  - **the window.** `buildState` aggregates the habit's whole history;
-    ///    the document carries `HomeWidgetBridge.entryCount` (60) days, so the
-    ///    quarter and year rows only ever count the days inside that window.
-    ///    They read low on a habit older than two months.
-    ///  - **the frequency denominator.** `widgets.target#5` includes the
-    ///    "Today" row only when `frequency.denominator <= 1` and the "Week" row
-    ///    only when it is `<= 7`, and `#7` divides the target by the same
-    ///    number. The denominator is not published, so this assumes the daily
-    ///    frequency every numerical habit is created with: five bars, and a
-    ///    daily target equal to the habit's target. A weekly numerical habit
-    ///    shows five bars here and four upstream.
+    /// [rebuild] below is what this used to do, and is now only the fallback
+    /// for a document written before the field existed — the same arrangement
+    /// `app/android/.../widgets/TargetWidget.kt` keeps `windowSum` and
+    /// `windowTarget` for.
     static func buildState(_ habit: WidgetHabit, today: Date) -> TargetCardState {
+        if let rows = habit.targetRows {
+            return TargetCardState(
+                values: rows.map { $0.value },
+                targets: rows.map { $0.target },
+                intervals: rows.map { $0.interval }
+            )
+        }
+        return rebuild(habit, today: today)
+    }
+
+    /// The pre-schema rebuild, with two departures it cannot avoid:
+    ///
+    ///  - **the window.** The document carries `HomeWidgetBridge.entryCount`
+    ///    (60) days, so the quarter and year rows only ever count the days
+    ///    inside that window. They read low on a habit older than two months.
+    ///  - **the frequency denominator**, which is assumed to be 1: five bars,
+    ///    and a daily target equal to the habit's target. A weekly numerical
+    ///    habit shows five bars here and four upstream.
+    static func rebuild(_ habit: WidgetHabit, today: Date) -> TargetCardState {
         // `dailyTarget = habit.targetValue / habit.frequency.denominator`,
-        // with the denominator assumed to be 1 — see above.
+        // with the denominator assumed to be 1 — see the note above.
         let dailyTarget = habit.target
 
         var values: [Double] = []

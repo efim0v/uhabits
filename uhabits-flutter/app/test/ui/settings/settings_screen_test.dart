@@ -540,6 +540,90 @@ void main() {
     });
 
     testWidgets(
+        'audit11.the-two-settings-list-dialogs-never#1 — the checked entry of '
+        'a ListPreference dialog is announced, not only drawn', (tester) async {
+      const String rule = 'audit11.the-two-settings-list-dialogs-never#1 — In '
+          'the Kotlin app: pref_widget_opacity and pref_first_weekday are '
+          '<ListPreference>s, so ListPreferenceDialogFragmentCompat.'
+          'onPrepareDialogBuilder builds them with AlertDialog.Builder.'
+          'setSingleChoiceItems(entries, clickedIndex, listener) — a ListView '
+          'in CHOICE_MODE_SINGLE of CheckedTextViews, so every row reports a '
+          'checked state to the accessibility tree and TalkBack speaks the '
+          'entry that is in force.';
+
+      final harness = await open(tester);
+      final SemanticsHandle semantics = tester.ensureSemantics();
+
+      await tester.tap(rowNamed('pref_widget_opacity'));
+      await tester.pumpAndSettle();
+
+      expect(harness.scope.preferences.widgetOpacity, 255,
+          reason: '$rule android:defaultValue "255" is the entry in force.');
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey<Object?>('option-255'))),
+        isSemantics(label: '100%', isSelected: true),
+        reason: '$rule The check mark is an Icon with no semanticLabel, so '
+            'unless the row itself carries the state the value is announced '
+            "nowhere — the row's summary is the static description string.",
+      );
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey<Object?>('option-204'))),
+        isSemantics(label: '80%', isSelected: false),
+        reason: '$rule Exactly one entry is checked.',
+      );
+
+      await tester.tap(find.text('60%'));
+      await tester.pumpAndSettle();
+      await tester.tap(rowNamed('pref_widget_opacity'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey<Object?>('option-153'))),
+        isSemantics(label: '60%', isSelected: true),
+        reason: '$rule setSingleChoiceItems is handed the current index every '
+            'time the dialog is built, so the state follows the preference.',
+      );
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey<Object?>('option-255'))),
+        isSemantics(label: '100%', isSelected: false),
+        reason: '$rule …and the entry that was in force before is not.',
+      );
+      semantics.dispose();
+    });
+
+    testWidgets(
+        'audit11.the-two-settings-list-dialogs-never#1 — the weekday dialog '
+        'marks its day too', (tester) async {
+      const String rule = 'audit11.the-two-settings-list-dialogs-never#1 — In '
+          'the Kotlin app: pref_first_weekday is a <ListPreference> as well, '
+          'so its dialog is the same setSingleChoiceItems list and TalkBack '
+          'speaks the day that is in force.';
+
+      final harness = await open(tester);
+      final SemanticsHandle semantics = tester.ensureSemantics();
+
+      await tester.tap(rowNamed('pref_first_weekday'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Monday'));
+      await tester.pumpAndSettle();
+      expect(harness.scope.preferences.firstWeekday, core.DayOfWeek.monday,
+          reason: rule);
+
+      await tester.tap(rowNamed('pref_first_weekday'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey<Object?>('option-2'))),
+        isSemantics(label: 'Monday', isSelected: true),
+        reason: '$rule "Monday" is entryValue "2".',
+      );
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey<Object?>('option-7'))),
+        isSemantics(label: 'Saturday', isSelected: false),
+        reason: rule,
+      );
+      semantics.dispose();
+    });
+
+    testWidgets(
         'settings.preferences.first-weekday#8,#9,#10 — list row titled "First '
         'day of the week", summarised with dayNames[firstWeekday % 7]',
         (tester) async {

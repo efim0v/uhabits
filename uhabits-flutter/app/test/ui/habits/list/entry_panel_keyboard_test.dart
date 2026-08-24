@@ -18,6 +18,8 @@ library;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+// `Theme` and `Color` are both names uhabits_core exports too.
+import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +30,15 @@ import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits_core/uhabits_core.dart';
+
+const String focusRule =
+    'audit11.focusing-one-check-mark-cell-paints#1 — In the Kotlin app: the '
+    'default focus highlight is drawn by View.onDrawForeground on the view\'s '
+    'OWN primary focus (isFocused()), never on hasFocus(), and HabitCardView '
+    'is not focusable at all — HabitCardListView.bindCardView binds the row '
+    'with setOnTouchListener and never setOnClickListener. So walking a habit '
+    'row with a keyboard or D-pad tints exactly one 48dp cell at a time and '
+    'never the row behind it.';
 
 const String rule = 'audit10.the-check-mark-grid-cannot-be-reached-or#1 — In '
     'the Kotlin app: each cell of the check-mark grid registers '
@@ -186,6 +197,114 @@ void main() {
       expect(find.byType(Dialog), findsOneWidget,
           reason: '$rule NumberButtonView answers onClick with onEdit, so the '
               'confirm key opens the number popup.');
+    });
+  });
+
+  group('audit11.focusing-one-check-mark-cell-paints', () {
+    /// The `_RenderInkFeatures` layer of the card's own `Material` — the one
+    /// `Material.of` hands the row's `InkWell`.
+    ///
+    /// It paints its ink features first and then its whole subtree, so one
+    /// walk over its recording sees both the row-wide `InkHighlight` and the
+    /// focused cell's own `DecoratedBox`. Counting the rects tinted with
+    /// `Theme.focusColor` is therefore exactly the question Android answers
+    /// with "one".
+    RenderObject inkLayerOf(WidgetTester tester, Finder card) {
+      RenderObject? found;
+      void visit(RenderObject node) {
+        if (found != null) return;
+        if (node.runtimeType.toString() == '_RenderInkFeatures') {
+          found = node;
+          return;
+        }
+        node.visitChildren(visit);
+      }
+
+      visit(tester.renderObject(card));
+      return found ?? (throw StateError('no ink layer inside the habit card'));
+    }
+
+    int focusTints(RenderObject ink, material.Color color) {
+      var count = 0;
+      expect(ink, paints..everything((Symbol method, List<dynamic> arguments) {
+        if (method == #drawRect && arguments.length > 1) {
+          final Object? paint = arguments[1];
+          // `Paint.color` round-trips through a 32-bit int, so its channels
+          // come back a few float ULPs away from the theme's own Color and
+          // `==` says no; the packed value is what both agree on.
+          if (paint is Paint && paint.color.toARGB32() == color.toARGB32()) {
+            count++;
+          }
+        }
+        return true;
+      }));
+      return count;
+    }
+
+    /// Widget tests run with `FocusHighlightMode.touch`, under which
+    /// `InkResponse.updateFocusHighlights` paints nothing at all — which is
+    /// why no existing test could see this. A hardware keyboard flips the mode
+    /// on its first key; the strategy does it up front.
+    void useTraditionalFocusHighlights() {
+      final FocusHighlightStrategy previous =
+          FocusManager.instance.highlightStrategy;
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.alwaysTraditional;
+      addTearDown(() => FocusManager.instance.highlightStrategy = previous);
+    }
+
+    Finder cardOf(String habit) => find.ancestor(
+          of: find.text(habit),
+          matching: find.byType(HabitCard),
+        );
+
+    testWidgets('#1 a focused cell tints only itself, never the row',
+        (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await pumpList(tester, scope);
+      useTraditionalFocusHighlights();
+      final today = getToday();
+
+      final material.Color focusColor =
+          material.Theme.of(tester.element(cardOf('Meditate'))).focusColor;
+
+      focusOver(tester, cellOf('Meditate', today))!.requestFocus();
+      await tester.pumpAndSettle();
+
+      expect(focusTints(inkLayerOf(tester, cardOf('Meditate')), focusColor),
+          1,
+          reason: '$focusRule One tint, and it is the cell\'s own — a second '
+              'rect of the same colour is the row\'s InkWell reacting to '
+              'hasFocus, which is true for any descendant.');
+    });
+
+    testWidgets('#1 the row still shows its own highlight when it holds focus',
+        (tester) async {
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await pumpList(tester, scope);
+      useTraditionalFocusHighlights();
+
+      final material.Color focusColor =
+          material.Theme.of(tester.element(cardOf('Meditate'))).focusColor;
+      expect(focusTints(inkLayerOf(tester, cardOf('Meditate')), focusColor),
+          0,
+          reason: '$focusRule Nothing is focused yet.');
+
+      focusOver(
+        tester,
+        find.descendant(of: cardOf('Meditate'), matching: find.byType(InkWell)),
+      )!
+          .requestFocus();
+      await tester.pumpAndSettle();
+
+      expect(focusTints(inkLayerOf(tester, cardOf('Meditate')), focusColor),
+          1,
+          reason: '$focusRule The port keeps the row focusable on purpose so '
+              'that Enter opens the detail screen (a recorded deviation); '
+              'suppressing the descendant flood must not take the row\'s own '
+              'indicator with it.');
     });
   });
 }

@@ -59,7 +59,11 @@ struct FrequencyWidgetView: View {
         case .habit(let habit):
             // `widgets.frequency#2`: the title is the habit name.
             GraphWidgetView(title: habit.name) {
-                FrequencyChartView(habit: habit, today: entry.today)
+                FrequencyChartView(
+                    habit: habit,
+                    today: entry.today,
+                    firstWeekday: entry.firstWeekday
+                )
             }
             .widgetCard()
             // `widgets.frequency#6`: the card opens ShowHabitActivity for this
@@ -88,26 +92,35 @@ struct FrequencyWidgetView: View {
 ///    column rather than on the column, because `drawColumn` hands `drawFooter`
 ///    the same `baseSize`-wide cell rectangle its loop left behind.
 ///
-/// Two things the published contract cannot give this chart:
+/// Both of the chart's inputs are published rather than rebuilt here, exactly
+/// as `FrequencyWidget.refreshData` takes both from outside upstream:
 ///
-///  - **the window.** `computeWeekdayFrequency` runs over the habit's whole
-///    history upstream; the document carries `HomeWidgetBridge.entryCount`
-///    (60) days, so at most three columns are ever populated and the rest are
-///    drawn empty.
-///  - **the first weekday.** `widgets.frequency#3` reads
-///    `Preferences.firstWeekday`; it is not published, so the device locale
-///    decides which row the calendar starts on — see
-///    `DateNames.firstWeekdayDaysSinceSunday`.
+///  - **the buckets.** `setFrequency(habit.originalEntries
+///    .computeWeekdayFrequency(habit.isNumerical))` runs over the habit's whole
+///    history and over the user's own marks. The document carries
+///    `habit.weekdayFrequency` for exactly that reason: rebuilding from the
+///    sixty published `entries` populated at most three columns and drew every
+///    older month empty, so the calendar read as if the habit had started two
+///    months ago — and it counted `computedEntries`, where a non-daily
+///    frequency has already filled YES_AUTO days in.
+///  - **the first weekday.** `widgets.frequency#3` is
+///    `setFirstWeekday(firstWeekday)`, handed `preferences.firstWeekday` by
+///    `FrequencyWidgetProvider`. It arrives on the entry
+///    (`audit4.history-and-frequency-home-screen-widgets#1`); asking
+///    `Calendar.current` instead read the device REGION setting, so a US-region
+///    iPhone drew a Sunday-first grid for a user who chose Monday in Loop.
 ///
-/// `widgets.frequency#5` survives intact: the widget must not count
-/// auto-satisfied days, and a YES_AUTO day is published as its own value (1),
-/// which the boolean branch below does not count because it counts only
-/// YES_MANUAL.
+/// `widgets.frequency#5` is what the published buckets guarantee: the widget
+/// must not count auto-satisfied days, and `computeWeekdayFrequency` is fed the
+/// ORIGINAL entries, so a YES_AUTO day was never counted in the first place.
 struct FrequencyChartView: View {
 
     let habit: WidgetHabit
 
     let today: Date
+
+    /// `FrequencyChart.setFirstWeekday`, as `daysSinceSunday`.
+    let firstWeekday: Int
 
     var body: some View {
         Canvas { context, size in
@@ -131,10 +144,16 @@ struct FrequencyChartView: View {
         let nColumns = Int(width / columnWidth)
         guard nColumns > 0 else { return }
 
-        let frequency = FrequencyState.weekdayFrequency(habit, today: today)
+        // `habit.weekdayFrequency`: every month the habit has existed, counted
+        // from the user's own marks. The rebuild below it is the fallback for a
+        // document written before the field existed, exactly as
+        // `app/android/.../widgets/FrequencyWidget.kt` keeps
+        // `FrequencyChartView.computeWeekdayFrequency` for the same case.
+        let frequency = FrequencyState.published(habit)
+            ?? FrequencyState.weekdayFrequency(habit, today: today)
         let maxFreq = FrequencyState.maxFreq(frequency)
         let ramp = FrequencyState.colorRamp(paletteIndex: habit.color)
-        let weekdays = FrequencyState.weekdaySequence()
+        let weekdays = FrequencyState.weekdaySequence(firstWeekday: firstWeekday)
 
         drawGrid(
             context,
@@ -394,8 +413,29 @@ struct MonthKey: Hashable {
 /// The pure half of `FrequencyWidget.refreshData`.
 enum FrequencyState {
 
+    /// `habit.weekdayFrequency` as the chart indexes it — one 7-slot array per
+    /// [MonthKey] — or nil when the document predates the field.
+    ///
+    /// The wire keys are `HomeWidgetBridge.formatDate` strings for each month's
+    /// first day (`LocalDate.startOfMonth`), which is the key
+    /// `computeWeekdayFrequency` buckets by; only the year and the month are
+    /// read back, because that is all [MonthKey] is. A malformed key is
+    /// dropped rather than guessed at: an extension that traps is killed and
+    /// the user sees a blank card.
+    static func published(_ habit: WidgetHabit) -> [MonthKey: [Int]]? {
+        guard let buckets = habit.weekdayFrequency else { return nil }
+        var frequency: [MonthKey: [Int]] = [:]
+        for (key, values) in buckets {
+            let parts = key.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 3, values.count == 7 else { continue }
+            frequency[MonthKey(year: parts[0], month: parts[1])] = values
+        }
+        return frequency
+    }
+
     /// `EntryList.computeWeekdayFrequency(isNumerical)`, over the published
-    /// window.
+    /// sixty-day window — the fallback for a document that predates
+    /// [published].
     ///
     /// `widgets.frequency#4`: every KNOWN entry is bucketed by its month
     /// start; within a month it accumulates into a 7-slot array indexed
@@ -432,11 +472,10 @@ enum FrequencyState {
         return maxValue
     }
 
-    /// `Preferences.firstWeekday` decides which row the calendar starts on;
-    /// it is not published, so the device locale answers instead.
-    static func weekdaySequence() -> [Int] {
-        let first = DateNames.firstWeekdayDaysSinceSunday()
-        return (0..<7).map { (first + $0) % 7 }
+    /// The seven rows, top to bottom, starting on the weekday the user chose
+    /// — `chart.setFirstWeekday(firstWeekday)` (`widgets.frequency#3`).
+    static func weekdaySequence(firstWeekday: Int) -> [Int] {
+        (0..<7).map { (firstWeekday + $0) % 7 }
     }
 
     /// `initColors`: `[contrast20, mix(contrast20, habit, 0.66),

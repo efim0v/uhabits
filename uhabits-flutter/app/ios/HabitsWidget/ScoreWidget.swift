@@ -77,12 +77,17 @@ struct ScoreChartView: View {
 
     /// `BUCKET_SIZES[scoreCardSpinnerPosition]` (`widgets.score#4`).
     ///
-    /// The widget is supposed to honour whatever bucket the user last chose on
-    /// the habit detail screen (`widgets.score#3`), but the spinner position is
-    /// not part of the published contract, so the default — 7, weekly — is used
-    /// unconditionally. It only affects the footer labels: the year is printed
-    /// for `bucketSize >= 365` and the month/day for anything smaller.
-    private let bucketSize = 7
+    /// `widgets.score#3`: the widget plots the bucket the user last chose on
+    /// the habit detail screen, which is what `habit.scores` was built at, so
+    /// it has to be read from the document rather than assumed. It is what
+    /// turns a column index back into a date — `today - offset * bucketSize` —
+    /// and it decides the footer: the year is printed for `bucketSize >= 365`
+    /// and the month/day for anything smaller. Hardcoding the weekly default
+    /// plotted a correct yearly line against dates one week apart.
+    ///
+    /// 7 only for a document written before the field existed, which is the
+    /// preference's own default.
+    private var bucketSize: Int { habit.bucketSize ?? 7 }
 
     var body: some View {
         Canvas { context, size in
@@ -131,9 +136,8 @@ struct ScoreChartView: View {
 
         // `ScoreChart.onDraw` bails out before anything is plotted when it has
         // no scores. The grid and the axis labels above are drawn first, so an
-        // empty chart still looks like a chart — which is exactly what this
-        // widget shows today, because the published contract carries no score
-        // series (see `WidgetHabit.scores`).
+        // empty chart still looks like a chart, which is what a document
+        // written before `scores` existed leaves this side with.
         guard let scores = habit.scores, !scores.isEmpty else { return }
 
         let primary = WidgetTheme.color(paletteIndex: habit.color)

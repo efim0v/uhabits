@@ -114,6 +114,9 @@ class _RecordingScheduler implements ReminderSchedulerApi {
 
   @override
   void scheduleAtTime(Habit habit, int reminderTime) {}
+
+  @override
+  void snoozeUntil(Habit habit, int reminderTime) {}
 }
 
 void main() {

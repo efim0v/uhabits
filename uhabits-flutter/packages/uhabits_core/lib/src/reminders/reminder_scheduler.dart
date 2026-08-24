@@ -151,6 +151,42 @@ class ReminderScheduler
     _widgetPreferences.setSnoozeTime(habit.id!, snoozedUntil);
     schedule(habit);
   }
+
+  /// Snoozes [habit] until the given instant, persisting it exactly as
+  /// [snoozeReminder] persists a delay.
+  ///
+  /// **Deliberate deviation.** Upstream there is no such method: the
+  /// custom-time branch of the picker is
+  /// `reminderScheduler.scheduleAtTime(habit, time)` and writes nothing
+  /// (`reminders.snooze-custom-time#2`), because on Android the
+  /// `notificationTray.cancel(habit)` that follows it is
+  /// `NotificationManagerCompat.cancel(id)` and cannot reach an `AlarmManager`
+  /// alarm. A one-off alarm can therefore survive un-recorded until some later
+  /// `scheduleAll()` happens to replace it.
+  ///
+  /// This port has no fire-time hook, so the alarm *is* the notification, filed
+  /// under the same id; cancelling the notification disarms it, and
+  /// `FlutterNotificationTray.removeNotification` re-arms every habit to make
+  /// up for that (`audit3.recording-a-non-completing-entry-silently#1`). An
+  /// un-recorded instant therefore cannot survive its own snooze — the re-arm
+  /// runs inside the same user action and re-files the habit's ordinary
+  /// reminder. Writing the instant to the same `WidgetPreferences` slot the
+  /// delay branch uses is what carries it across the cancel; the cost is that
+  /// a later `scheduleAll()` re-honours it instead of overwriting it.
+  /// See `audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1`.
+  ///
+  /// A habit with no id cannot be recorded — the snooze key is built from it —
+  /// so it falls back to the upstream call, which logs and arms the alarm.
+  @override
+  void snoozeUntil(Habit habit, int reminderTime) {
+    final id = habit.id;
+    if (id == null) {
+      scheduleAtTime(habit, reminderTime);
+      return;
+    }
+    _widgetPreferences.setSnoozeTime(id, reminderTime);
+    schedule(habit);
+  }
 }
 
 /// Port of `ReminderScheduler.SystemScheduler`. Dart has no nested classes, so

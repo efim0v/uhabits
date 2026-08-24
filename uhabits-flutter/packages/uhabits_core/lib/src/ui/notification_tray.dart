@@ -311,10 +311,17 @@ abstract interface class ReminderSchedulerApi {
   /// every later [scheduleAll] re-honours it until it expires.
   void snoozeReminder(Habit habit, int minutes);
 
-  /// Arms [habit]'s alarm at an arbitrary instant, writing nothing. This is
-  /// the "snooze until a custom time" path, and the reason a custom-time
-  /// snooze is overwritten by the next [scheduleAll].
+  /// Arms [habit]'s alarm at an arbitrary instant, writing nothing. Upstream
+  /// this is the "snooze until a custom time" path, and the reason a
+  /// custom-time snooze is overwritten by the next [scheduleAll].
   void scheduleAtTime(Habit habit, int reminderTime);
+
+  /// Persists a snooze of [habit] until [reminderTime] and re-arms its alarm
+  /// there, exactly as [snoozeReminder] does for a delay.
+  ///
+  /// A deliberate deviation with no upstream counterpart; see
+  /// [ReminderController.onSnoozeTimePicked] for why the port needs one.
+  void snoozeUntil(Habit habit, int reminderTime);
 }
 
 /// Port of
@@ -368,17 +375,29 @@ class ReminderController {
 
   /// The user picked a custom wall-clock time.
   ///
-  /// Nothing is persisted, so the next `scheduleAll()` — after a command, an
-  /// app start or a reboot — silently replaces this one-off alarm with the
-  /// habit's regular reminder. The asymmetry against [onSnoozeDelayPicked] is
-  /// upstream behaviour and is kept.
+  /// Kotlin's body is `reminderScheduler.scheduleAtTime(habit!!, time)`
+  /// followed by `notificationTray.cancel(habit)`, and nothing is persisted:
+  /// on Android the cancel is `NotificationManagerCompat.cancel(id)` and the
+  /// alarm is a separate object under an `AlarmManager` `PendingIntent`, so the
+  /// one-off alarm outlives the cancel and only a *later* `scheduleAll()`
+  /// replaces it (`reminders.snooze-custom-time#2`).
+  ///
+  /// **Deliberate deviation:** [ReminderSchedulerApi.snoozeUntil] instead of
+  /// [ReminderSchedulerApi.scheduleAtTime], so that the picked instant is
+  /// recorded. This port files the alarm and the notification under one id and
+  /// re-arms every habit whenever a notification is cancelled
+  /// (`audit3.recording-a-non-completing-entry-silently#1`), so the cancel
+  /// below destroys the alarm the line above just armed and the re-arm behind
+  /// it re-files the habit's *ordinary* reminder — a custom-time snooze never
+  /// fires at all. Recording it is what survives both.
+  /// See `audit11.custom-time-snooze-is-erased-by-the-cancel-rearm#1`.
   ///
   /// Kotlin's parameter is `Habit?` and its body dereferences it with `!!`, so
   /// a null habit throws rather than being ignored; Dart's non-nullable
   /// parameter is the same contract stated in the type.
   void onSnoozeTimePicked(Habit habit, int hour, int minute) {
     final time = DateUtils.getUpcomingTimeInMillis(hour, minute);
-    _reminderScheduler.scheduleAtTime(habit, time);
+    _reminderScheduler.snoozeUntil(habit, time);
     _notificationTray.cancel(habit);
   }
 

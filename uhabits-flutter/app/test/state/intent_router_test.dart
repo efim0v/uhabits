@@ -1221,4 +1221,7 @@ class RecordingScheduler implements ReminderSchedulerApi {
 
   @override
   void snoozeReminder(Habit habit, int minutes) => calls.add('snoozeReminder');
+
+  @override
+  void snoozeUntil(Habit habit, int reminderTime) => calls.add('snoozeUntil');
 }

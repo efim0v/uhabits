@@ -112,6 +112,18 @@ const String collapseRule =
     'UNKNOWN -> YES_MANUAL -> NO by default, UNKNOWN -> YES_MANUAL -> SKIP -> '
     'NO with skip enabled.';
 
+const String historyRule =
+    'audit11.an-ios-checkmark-widget-tap-no#1 — In the Kotlin app: a tap on '
+    'the Checkmark widget is an `ACTION_TOGGLE_REPETITION` broadcast; '
+    '`WidgetBehavior.onToggleRepetition` writes a `CreateRepetitionCommand` '
+    'and `WidgetUpdater.onCommandFinished` then broadcasts '
+    '`ACTION_APPWIDGET_UPDATE` to every widget bound to that habit id. A '
+    'History widget on the same habit re-runs '
+    '`HistoryCardPresenter.buildState(habit, firstWeekday = '
+    'prefs.firstWeekday, theme = WidgetTheme())` against the model the command '
+    'just wrote, so today\'s square flips colour at the same moment the check '
+    'mark does.';
+
 void main() {
   // -----------------------------------------------------------------------
   // Fixtures
@@ -363,6 +375,76 @@ void main() {
       expect(body, contains('EntryValue.yesAuto'), reason: rule);
       expect(body, contains('EntryValue.skip'), reason: rule);
       expect(body, contains('EntryValue.unknown'), reason: rule);
+    });
+  });
+
+  // =======================================================================
+  // …and the other card for the same habit
+  // =======================================================================
+
+  group('audit11.an-ios-checkmark-widget-tap-no', () {
+    /// The catalogue's first habit — the copy `WidgetStore.allHabits` hands
+    /// every widget, and the copy `stageToggle` rewrites in place.
+    Map<String, Object?> publishedHabit() =>
+        ((jsonDecode(platform.data[HomeWidgetBridge.indexKey]!)
+                as Map<String, Object?>)['habits']! as List<Object?>)
+            .first as Map<String, Object?>;
+
+    test("#1 the first digit of the published History series is today's "
+        'square', () async {
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+
+      // `Square { on, off, grey, dimmed, hatched }` as
+      // `HistoryCardPresenter.buildState` assigns it for a boolean habit,
+      // published one `Square.index` digit per day.
+      const Map<int, String> squareOf = <int, String>{
+        Entry.yesManual: '0',
+        Entry.no: '1',
+        Entry.skip: '4',
+        Entry.unknown: '1',
+      };
+      for (final MapEntry<int, String> expected in squareOf.entries) {
+        habit.originalEntries.add(Entry(today, expected.key));
+        habit.recompute();
+        await sync.updateWidgets();
+        await sync.settle();
+
+        expect(
+          (publishedHabit()['historySeries']! as String)[0],
+          expected.value,
+          reason: '$historyRule `historySeries` is newest-first, so offset 0 '
+              'is today and its digit is decided by today\'s value alone — '
+              'which is the one square a widget process can move for itself.',
+        );
+      }
+    });
+
+    test('#1 a staged tap moves the History series, not only the entry', () {
+      final String source = swift('WidgetData.swift');
+      final int start = source.indexOf('func stageToggle');
+      expect(start, isNonNegative, reason: historyRule);
+      final int end = source.indexOf('    private func object', start);
+      final String body = source.substring(start, end < 0 ? source.length : end);
+
+      expect(body, contains('entries[0] = next'),
+          reason: '$historyRule The optimistic patch already advances the '
+              'Checkmark card, which is what makes the tick flip under the '
+              'finger.');
+      expect(body, contains('historySeries'),
+          reason: '$historyRule …and since `HistoryChartView` prefers '
+              '`habit.historySeries` over `habit.entries` '
+              '(`audit10.history-home-screen-widget-draws-more#1`), the same '
+              'patch has to move today\'s square too. Left behind, a tap on '
+              'the Checkmark widget flips the tick and leaves the History '
+              'widget for the same habit drawing today in the low-contrast '
+              '"missed" colour until the app next republishes — two cards for '
+              'one habit contradicting each other on the home screen.');
+      expect(body, contains('HistorySquare'),
+          reason: '$historyRule …through the same mapping the published '
+              'series is built with, not a second copy of the digit table: '
+              'YES_MANUAL is `on`, SKIP is `hatched`, NO and UNKNOWN are '
+              '`off`.');
     });
   });
 
