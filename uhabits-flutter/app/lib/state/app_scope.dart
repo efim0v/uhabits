@@ -283,16 +283,21 @@ class AppScope {
     // (`audit3.recording-a-non-completing-entry-silently#1`). Upstream the two
     // are independent and `AndroidNotificationTray` knows nothing of the
     // scheduler.
-    final scheduler = ReminderScheduler(
-      commandRunner,
-      habitList,
-      FlutterAlarmScheduler(
-        plugin:
-            LocalNotificationsAlarmPlugin(plugin: plugin, presenter: presenter),
-        builder: builder,
-        logging: logging,
-      ),
-      WidgetPreferences(preferencesStorage),
+    final alarms = FlutterAlarmScheduler(
+      plugin:
+          LocalNotificationsAlarmPlugin(plugin: plugin, presenter: presenter),
+      builder: builder,
+      logging: logging,
+    );
+    // FlutterReminderScheduler, not the core one: with no fire-time hook, the
+    // two gates the core reproduces by skipping a habit have to withdraw its
+    // alarm instead, or a reminder switched off at 22:00 still goes off at
+    // 08:00 (`audit9.obsolete-reminder-alarm-withdrawn#1`).
+    final scheduler = FlutterReminderScheduler(
+      commandRunner: commandRunner,
+      habitList: habitList,
+      alarms: alarms,
+      widgetPreferences: WidgetPreferences(preferencesStorage),
     );
 
     final flutterTray = FlutterNotificationTray(
@@ -370,9 +375,13 @@ class AppScope {
         scheduleStartDayWidgetUpdate: sync.scheduleStartDayWidgetUpdate,
         logging: logging,
       ),
-      // The delete intent this plugin does not have.
+      // The delete intent this plugin does not have — and the fire-time hook
+      // it does not have either, which is what puts a reminder the OS posted
+      // on its own into the two registries the dismissal is read against.
       dismissals: DismissedReminderDetector(
         tray: flutterTray,
+        registry: tray,
+        habits: habitList,
         platform: presenter,
         onDismiss: controller.onDismiss,
         logging: logging,

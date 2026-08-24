@@ -8,23 +8,35 @@
 /// JVM/Android source of the number), #13 (the JS one, including its CLDR
 /// conversion and its fallback) and the wiring that makes either of them reach
 /// the model at all.
+///
+/// The locale in #4 is `Locale.getDefault()`, the DEVICE locale — see
+/// test/platform/device_locale_test.dart and
+/// `audit9.first-weekday-follows-the-device-locale#1`. These tests therefore
+/// drive `platformDispatcher.localesTestValue` and never `MaterialApp.locale`:
+/// the app sets no `locale:`, and the locale its widget tree resolves is the
+/// one that has already dropped the region.
 // The preferences layer is not re-exported from uhabits_core.dart.
 // ignore_for_file: implementation_imports
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/platform/locale_first_weekday.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
 void main() {
+  final TestWidgetsFlutterBinding binding =
+      TestWidgetsFlutterBinding.ensureInitialized();
   late int Function() saved;
 
   setUp(() => saved = getFirstWeekdayNumberAccordingToLocale);
-  tearDown(() => getFirstWeekdayNumberAccordingToLocale = saved);
+  tearDown(() {
+    getFirstWeekdayNumberAccordingToLocale = saved;
+    binding.platformDispatcher.clearLocalesTestValue();
+  });
 
   group('settings.preferences.first-weekday', () {
     const String rule4 =
@@ -32,28 +44,60 @@ void main() {
         'getFirstWeekdayNumberAccordingToLocale() on JVM/Android returns '
         'GregorianCalendar(Locale.getDefault()).firstDayOfWeek, i.e. 1 for '
         'Sunday through 7 for Saturday. Flutter has no GregorianCalendar; the '
-        'same CLDR table reaches it as MaterialLocalizations'
-        '.firstDayOfWeekIndex, which counts 0 for Sunday through 6 for '
-        'Saturday, so firstWeekdayNumberOf is that index plus one.';
+        'same CLDR table reaches it as intl\'s DateSymbols.FIRSTDAYOFWEEK, '
+        'which counts 0 for Monday through 6 for Sunday, so the conversion is '
+        '(firstDayOfWeek + 1) % 7 + 1.';
 
     test('#4 the index is converted into the 1 = Sunday Calendar convention',
         () {
-      expect(firstWeekdayNumberOf(const _Localizations(0)), 1, reason: rule4);
-      expect(firstWeekdayNumberOf(const _Localizations(1)), 2, reason: rule4);
-      expect(firstWeekdayNumberOf(const _Localizations(6)), 7, reason: rule4);
+      // Monday through Saturday shift up by two; Sunday wraps round to 1.
+      expect(calendarWeekdayFromIntlFirstDay(0), 2,
+          reason: '$rule4 intl Monday is 0; Calendar Monday is 2.');
+      expect(calendarWeekdayFromIntlFirstDay(5), 7,
+          reason: '$rule4 intl Saturday is 5; Calendar Saturday is 7.');
+      expect(calendarWeekdayFromIntlFirstDay(6), 1,
+          reason: '$rule4 intl Sunday is 6 and Calendar Sunday is 1 — the one '
+              'value the modulo exists for.');
+
+      // Every answer is a legal Calendar weekday, whatever the table says.
+      for (int intlFirstDay = 0; intlFirstDay <= 6; intlFirstDay++) {
+        final int number = calendarWeekdayFromIntlFirstDay(intlFirstDay);
+        expect(number, inInclusiveRange(1, 7), reason: rule4);
+      }
     });
 
-    testWidgets('#4 the ambient locale reaches the core hook', (tester) async {
-      // en_US starts the week on Sunday; en_GB and de_DE start it on Monday.
-      // Both numbers come out of the same table Android reads.
-      await tester.pumpWidget(_app(const Locale('en', 'US')));
+    testWidgets('#4 the number is looked up per locale', (tester) async {
+      // A MaterialApp is pumped first only because that is what installs
+      // intl's per-locale CLDR table; the lookup itself takes a locale name.
+      await tester.pumpWidget(_shippedApp());
+      await tester.pumpAndSettle();
+
+      expect(firstWeekdayNumberOf('en_US'), 1, reason: '$rule4 Sunday.');
+      expect(firstWeekdayNumberOf('de_DE'), 2, reason: '$rule4 Monday.');
+      expect(firstWeekdayNumberOf('xx_YY'), 1,
+          reason: '$rule4 A locale intl has no data for degrades the way Java '
+              'degrades to the root locale, rather than throwing.');
+    });
+
+    testWidgets('#4 the device locale reaches the core hook', (tester) async {
+      // en_US starts the week on Sunday; de_DE starts it on Monday. Both
+      // numbers come out of the same table Android reads — and both are read
+      // off `Locale.getDefault()`, which is the platform locale list, not
+      // `MaterialApp.locale`.
+      Future<void> device(Locale locale) async {
+        tester.platformDispatcher.localesTestValue = <Locale>[locale];
+        await tester.pumpWidget(_shippedApp());
+        await tester.pumpAndSettle();
+      }
+
+      await device(const Locale('en', 'US'));
       expect(getFirstWeekdayNumberAccordingToLocale(), 1,
           reason: '$rule4 en_US: Sunday, which is 1.');
       expect(Preferences(MemoryStorage()).firstWeekday, DayOfWeek.sunday,
           reason: '$rule4 …and that is what an unset pref_first_weekday '
               'resolves to, which is the only reason the number exists.');
 
-      await tester.pumpWidget(_app(const Locale('de', 'DE')));
+      await device(const Locale('de', 'DE'));
       expect(getFirstWeekdayNumberAccordingToLocale(), 2,
           reason: '$rule4 de_DE: Monday, which is 2.');
       expect(Preferences(MemoryStorage()).firstWeekday, DayOfWeek.monday,
@@ -61,8 +105,56 @@ void main() {
 
       // A relaunch is not needed: the installer runs on every build, so the
       // Android 13 per-app language picker is honoured in place.
-      await tester.pumpWidget(_app(const Locale('en', 'US')));
+      await device(const Locale('en', 'US'));
       expect(getFirstWeekdayNumberAccordingToLocale(), 1, reason: rule4);
+    });
+
+    const String rule9 =
+        'audit9.first-weekday-follows-the-device-locale#1 — In the Kotlin '
+        'app: getFirstWeekdayNumberAccordingToLocale() returns '
+        'GregorianCalendar(Locale.getDefault()).firstDayOfWeek, i.e. the '
+        'first weekday of the DEVICE locale including its region — Monday on '
+        'an English (United Kingdom) device, Sunday on an Español (México) '
+        'one — never the locale the app resolved its translations against.';
+
+    testWidgets('#4 the region of the device locale reaches the core hook',
+        (tester) async {
+      // The shipped shell: L10n's delegates and L10n's supported locales,
+      // which list bare languages for everything but pt/zh/sr. en_GB and
+      // es_MX therefore resolve to `en` and `es` — and the number must not
+      // follow them there.
+      Future<void> device(Locale locale) async {
+        tester.platformDispatcher.localesTestValue = <Locale>[locale];
+        await tester.pumpWidget(_shippedApp());
+        await tester.pumpAndSettle();
+      }
+
+      await device(const Locale('en', 'GB'));
+      expect(getFirstWeekdayNumberAccordingToLocale(), 2,
+          reason: '$rule9 en_GB: Monday, which is 2.');
+      expect(Preferences(MemoryStorage()).firstWeekday, DayOfWeek.monday,
+          reason: '$rule9 …and that is the week every chart is bucketed by.');
+
+      await device(const Locale('en', 'IE'));
+      expect(getFirstWeekdayNumberAccordingToLocale(), 2,
+          reason: '$rule9 en_IE: Monday, which is 2.');
+
+      await device(const Locale('es', 'MX'));
+      expect(getFirstWeekdayNumberAccordingToLocale(), 1,
+          reason: '$rule9 es_MX: Sunday, which is 1 — the mirror image, since '
+              'bare `es` is Monday.');
+
+      await device(const Locale('fr', 'CA'));
+      expect(getFirstWeekdayNumberAccordingToLocale(), 1,
+          reason: '$rule9 fr_CA: Sunday, which is 1.');
+
+      await device(const Locale('en', 'US'));
+      expect(getFirstWeekdayNumberAccordingToLocale(), 1,
+          reason: '$rule9 en_US: Sunday, which is 1.');
+
+      await device(const Locale('de', 'DE'));
+      expect(getFirstWeekdayNumberAccordingToLocale(), 2,
+          reason: '$rule9 de_DE: Monday, which is 2.');
     });
 
     const String rule13 =
@@ -119,31 +211,16 @@ void main() {
   });
 }
 
-Widget _app(Locale locale) {
+/// The shell `main.dart` builds: the app's real delegates and supported
+/// locales, with no `locale:` override, so the only locale in play is the
+/// device's.
+Widget _shippedApp() {
   return MaterialApp(
-    locale: locale,
-    localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-      GlobalMaterialLocalizations.delegate,
-      GlobalWidgetsLocalizations.delegate,
-      GlobalCupertinoLocalizations.delegate,
-    ],
-    supportedLocales: const <Locale>[
-      Locale('en', 'US'),
-      Locale('de', 'DE'),
-    ],
+    localizationsDelegates: L10n.localizationsDelegates,
+    supportedLocales: L10n.supportedLocales,
     builder: (context, child) =>
         FirstWeekdayFromLocale(child: child ?? const SizedBox.shrink()),
     home: const SizedBox.shrink(),
   );
 }
 
-/// A [MaterialLocalizations] that answers one question, so the conversion can
-/// be checked at every index without inventing seven locales.
-class _Localizations extends DefaultMaterialLocalizations {
-  const _Localizations(this._index);
-
-  final int _index;
-
-  @override
-  int get firstDayOfWeekIndex => _index;
-}

@@ -7434,3 +7434,83 @@ report came from.
 - **Severity:** cosmetic
 
 1. `feedback.toolbar-titles-centre-themselves-on-ios#1` — In the Kotlin app: every screen shares one toolbar layout, and an AppCompat toolbar title is start-aligned on all of them, next to the up arrow. Flutter decides per screen instead: with no `centerTitle`, `AppBar._getEffectiveCenterTitle` falls through to the platform default, which on iOS and macOS is `actions == null || actions.length < 2`. Settings and About pass no actions and the habit editor passes exactly one, so those three titles centre themselves there, while the habit list and the habit detail — two or more actions — stay on the left. The theme must pin the alignment so the answer cannot depend on the platform or on how many actions a bar happens to carry.
+
+## Domain: Ninth audit pass (2026-08-24)
+
+Six lenses over the port, every finding adjudicated by two independent
+skeptics. Three of the seven share one root cause: the port read the locale
+MaterialApp *resolved* against its supported list — language-only for all but
+five locales — where Kotlin reads `Locale.getDefault()`, the device locale with
+its region. The app's UI language still follows the resolved locale; only the
+locale-derived data conventions follow the device.
+
+
+#### audit9.first-weekday-follows-the-device-locale
+
+- [x] `audit9.first-weekday-follows-the-device-locale` — The first day of the week is taken from the app's resolved UI locale instead of the device locale, so en-GB/en-IE weeks start on Sunday and es-MX/fr-CA weeks start on Monday
+- **Platform:** core · **Port risk:** medium
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt:50-52 (`return GregorianCalendar(Locale.getDefault()).firstDayOfWeek`), consumed at uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/preferences/Preferences.kt:231 and :236`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/locale_first_weekday.dart:49 and :98 (`firstWeekdayNumberOf`, installed by `FirstWeekdayFromLocale`), with the device locale supplied by uhabits-flutter/app/lib/platform/device_locale.dart:43 (`deviceLocale`) and mounted at uhabits-flutter/app/lib/main.dart:400`
+- **Severity:** major
+
+1. `audit9.first-weekday-follows-the-device-locale#1` — In the Kotlin app: `getFirstWeekdayNumberAccordingToLocale()` returns `GregorianCalendar(Locale.getDefault()).firstDayOfWeek` — the first weekday of the DEVICE locale, region included, in the `java.util.Calendar` convention 1 = Sunday … 7 = Saturday. On a device set to English (United Kingdom) or English (Ireland) that is `Calendar.MONDAY` = 2; on Español (México) or français (Canada) it is `Calendar.SUNDAY` = 1. `Locale.getDefault()` is not the locale the app's strings came from: Android resolves resources separately and falls back to `values/` when it ships no translation for the region, so an en_GB phone shows the plain English strings and still reports en_GB here. `Preferences.firstWeekday` / `firstWeekdayInt` fall back to this number whenever `pref_first_weekday` is unset, and it bucketed every week boundary in HistoryChart, FrequencyChart, ScoreCard, BarCard and TargetCard.
+
+#### audit9.number-popup-follows-the-device-locale
+
+- [x] `audit9.number-popup-follows-the-device-locale` — The numeric entry popup formats and parses the amount with the app-resolved locale's number symbols, so an es-MX/es-US device gets a comma decimal separator, cannot type '.', and saves "1.5" as 15
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/dialogs/NumberDialog.kt:60 (`DecimalFormat("#.##").format(originalValue)`), :110-111 (`DecimalFormatSymbols.getInstance().decimalSeparator` → `DigitsKeyListener.getInstance("0123456789$separator")`), :127 (`NumberFormat.getInstance()`)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/common/dialogs/number_dialog.dart:273 (`_localeName = NumberDialog.resolveLocale(DeviceLocale.nameOf(context))`), feeding `formatValue` at :274, `_parser` at :292 and the field's accepted `separator` at :327`
+- **Severity:** major
+
+1. `audit9.number-popup-follows-the-device-locale#1` — In the Kotlin app: `NumberDialog` prefills the value field with `DecimalFormat("#.##").format(originalValue)`, builds the field's `DigitsKeyListener` alphabet from `DecimalFormatSymbols.getInstance().decimalSeparator`, and parses on save with `NumberFormat.getInstance()`. All three key off `Locale.getDefault()`, the DEVICE locale including its region — not the locale the app's strings resolved to. On Español (México) or Español (Estados Unidos) the decimal separator is `.` and the group separator is `,`, so 1.5 prefills as "1.5", the `.` key is accepted, and "1.5" parses back to 1.5. Reading a region-stripped `es` instead flips both symbols: the field opens on "1,5", the `.` key is filtered out, and any "1.5" that reaches the parser is read as a grouped fifteen and stored ten-fold.
+
+#### audit9.chart-dates-follow-the-device-locale
+
+- [x] `audit9.chart-dates-follow-the-device-locale` — Chart date labels use the app-resolved locale, so an en-GB device shows the US date order on the Best Streaks card
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/StreakChart.kt:194 (`dateFormatter = JavaLocalDateFormatter(Locale.getDefault())`) with uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt:86-89 (`DateFormat.getDateInstance(DateFormat.MEDIUM, locale)`)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/list_header.dart:635-636 (`IntlLocalDateFormatter.of(BuildContext context) => IntlLocalDateFormatter(DeviceLocale.nameOf(context))`), used by the streak, frequency, score, bar and history cards, the list header, the weekday picker and the history editor`
+- **Severity:** cosmetic
+
+1. `audit9.chart-dates-follow-the-device-locale#1` — In the Kotlin app: every date formatter in the app is `JavaLocalDateFormatter(Locale.getDefault())` — StreakChart, ScoreChart, BarChart, FrequencyChart, HistoryChart, HeaderView, HistoryEditorDialog, WeekdayPickerDialog and HistoryWidget all construct it that way. `StreakChart` labels each streak with `longFormat`, which is `DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault())` with the time zone forced to UTC. The pattern is therefore the DEVICE locale's, region included: `d MMM y` → "25 Jan 2015" on an English (United Kingdom) or English (Ireland) device, where the language-only `en` gives the American `MMM d, y` → "Jan 25, 2015". The app's strings still come from the resolved resource locale; only the date order follows the device.
+
+#### audit9.fired-reminder-enters-the-registry
+
+- [x] `audit9.fired-reminder-enters-the-registry` — A fired reminder is in both notification registries from the instant it appears
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderReceiver.kt:68 (reminderController.onShowReminder(...)); uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderController.kt:45-52 and :69-77; uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt:64-68 (active[habit] = data), :85-89 (reshowAll) and :91-95 (reshow); uhabits-android/src/main/java/org/isoron/uhabits/notifications/AndroidNotificationTray.kt:90 (active.add(notificationId))`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core/lib/src/ui/notification_tray.dart (NotificationTray.adopt); /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/flutter_notification_tray.dart (FlutterNotificationTray.adoptNotification, DismissedReminderDetector.reconcile/_adopt); /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/state/app_scope.dart`
+- **Severity:** major
+
+1. `audit9.fired-reminder-enters-the-registry#1` — In the Kotlin app: an alarm is only a trigger. It fires a PendingIntent into ReminderReceiver, which runs in the app process and calls ReminderController.onShowReminder(habit, date, reminderTime). NotificationTray.show's very first statement is `active[habit] = data`, and AndroidNotificationTray.showNotification ends with `active.add(notificationId)` — so both registries hold every reminder the user ever sees, from the instant it appears on screen. reshow(habit), which onDismiss calls when shouldMakeNotificationsSticky() is on, and reshowAll(), which onNotificationsChanged() calls when the sticky preference is flipped, both read that map and can only re-post what is in it.
+
+#### audit9.obsolete-reminder-alarm-withdrawn
+
+- [x] `audit9.obsolete-reminder-alarm-withdrawn` — A stale alarm for a switched-off reminder or an archived habit produces no notification
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt:126-133 (gates 2 and 3 of ShowNotificationTask.onPostExecute)`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart (FlutterAlarmScheduler.withdrawObsoleteAlarms, PendingAlarmQuery, FlutterReminderScheduler); /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/state/app_scope.dart`
+- **Severity:** major
+
+1. `audit9.obsolete-reminder-alarm-withdrawn#1` — In the Kotlin app: NotificationTray.ShowNotificationTask.onPostExecute re-reads the habit when the alarm fires and returns without posting anything if `!habit.hasReminder()` ("Habit <id> does not have a reminder. Skipping.") or if `habit.isArchived` ("Habit <id> is archived. Skipping."). An AlarmManager alarm left standing from a reminder the user has since switched off, or from a habit they have since archived, therefore produces no notification at all — it fires and is dropped in silence, and the user is never disturbed by it.
+
+#### audit9.settings-return-does-not-republish-widgets
+
+- [x] `audit9.settings-return-does-not-republish-widgets` — Returning to the habit list from any screen started over it republishes the home-screen widget data
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `/Users/artemefimov/Desktop/uhabits/uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt:139-146`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart:421-466 (`_HabitListViewState.didPopNext` -> `_republishWidgets`)`
+- **Severity:** major
+
+1. `audit9.settings-return-does-not-republish-widgets#1` — In the Kotlin app: `SettingsActivity`, `EditHabitActivity` and `ShowHabitActivity` are separate activities, so finishing any of them resumes `ListHabitsActivity`, whose `onResume` ends with `taskRunner.run { AutoBackup(this).run(); appComponent.widgetUpdater.updateWidgets() }` (ListHabitsActivity.kt:139-146). That republish is unconditional — it does not depend on which activity was on top, and no command need have run — and it is the only path by which a preference the settings screen wrote reaches the launcher's process, because `SettingsFragment.onSharedPreferenceChanged` special-cases `pref_widget_opacity` and no other key (`settings.preferences.widget-opacity#4`). So changing "First day of the week" and pressing Back repaints the History and Frequency home-screen widgets — which render their week grids from `HistoryChartView.firstWeekday` / `FrequencyChartView.firstWeekday` — with the new weekday origin, before the user can press Home and look at them.
+
+#### audit9.search-bar-survives-selection-mode
+
+- [x] `audit9.search-bar-survives-selection-mode` — Selecting a habit from a set of search results leaves the search bar, and its query, on the toolbar
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsMenu.kt:38-48 (`@Inject @ActivityScope class ListHabitsMenu`, `private var isSearchActive = false`) and :73-95 (`createSearchBar`: `searchContainer.isVisible = isSearchActive`, `menu.setGroupVisible(R.id.actionItems, !isSearchActive)`, `setQuery(behavior.searchQuery, false)`); uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsSelectionMenu.kt:67-71 (`onCreateActionMode` inflates R.menu.list_habits_selection into the ActionMode's own Menu) and :88-90 (`onDestroyActionMode` calls only `listController.value.onSelectionFinished()`)`
+- **Where the port should do it:** `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/state/habit_list_model.dart:99-121 (`isSearchActive` on the activity-scoped HabitListModel) and /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/list_habits_menu.dart:88-101 (`ListHabitsMenuState.isSearchActive` getter/setter over the model); the AppBar swap that disposes the toolbar is /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart:689-699`
+- **Severity:** major
+
+1. `audit9.search-bar-survives-selection-mode#1` — In the Kotlin app: `ListHabitsMenu` is `@ActivityScope` — one instance for the whole activity — so its `isSearchActive` field and the expanded `SearchView` in `actionSearchContainer` belong to the activity's options menu, which the contextual action bar only overlays. `ListHabitsSelectionMenu` is an `ActionMode.Callback`: `onCreateActionMode` inflates `R.menu.list_habits_selection` into the ActionMode's own `Menu`, and `onDestroyActionMode` calls nothing but `listController.onSelectionFinished()` — it never calls `invalidateOptionsMenu()`. Long-pressing a habit found by a search therefore leaves the search bar untouched: when the contextual bar goes away (its close button, the system Back key, or an archive/colour/delete action) the toolbar comes back with the search field still open and still holding `behavior.searchQuery`, and the `actionItems` group still hidden. Even a rebuilt options menu restores it, because `createSearchBar` reads the same `isSearchActive` field and calls `setQuery(behavior.searchQuery, false)`. A habit list narrowed by a search query is therefore never shown without the search bar that holds that query — which is what makes the two-stage X button of `audit7.the-search-bar-s-x-button#1` the user's way out of a filtered list.

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'l10n/app_localizations.dart';
 import 'platform/auto_backup.dart';
 import 'platform/crash_handler.dart';
+import 'platform/device_locale.dart';
 import 'platform/flutter_files.dart';
 import 'platform/locale_first_weekday.dart';
 import 'state/app_scope.dart';
@@ -274,10 +275,12 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
   Future<void> _onResume() async {
     if (!mounted) return;
     final scope = context.read<AppScope>();
-    // The swipe upstream delivers through the notification's delete intent.
-    // `flutter_local_notifications` has no such callback, so a dismissal is
-    // discovered here instead — this is the first moment after a swipe at
-    // which Dart is running again.
+    // Everything the shade did while no Dart was running: the reminder the OS
+    // posted from a pre-built alarm — upstream `ReminderReceiver` runs in the
+    // app process and hands it to `onShowReminder` — and the swipe upstream
+    // delivers through the notification's delete intent.
+    // `flutter_local_notifications` reports neither, so both are discovered
+    // here, at the first moment after them at which Dart is running again.
     await scope.reminderResponses?.onResumed();
     if (!mounted) return;
     // `ListHabitsActivity.onResume` arms the timer as its fourth statement,
@@ -380,17 +383,25 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
       // that — see lib/ui/common/screen_route_observer.dart.
       navigatorObservers: <NavigatorObserver>[screenRouteObserver],
       theme: appThemeData(theme),
-      // `getFirstWeekdayNumberAccordingToLocale()`, which on Android is
-      // `GregorianCalendar(Locale.getDefault()).firstDayOfWeek`. It has to be
-      // installed below the localizations delegates, which is what
-      // `MaterialApp.builder` is.
+      // `Locale.getDefault()`, which the first weekday, the entry popup's
+      // number symbols and every chart's date formatter read
+      // (`audit9.first-weekday-follows-the-device-locale#1`). No `locale:` is
+      // set on this MaterialApp, so the tree's own locale stays the resolved
+      // one and only the data conventions follow the device. Both widgets have
+      // to sit below the localizations delegates, which is what
+      // `MaterialApp.builder` is: that is where `intl`'s per-locale CLDR table
+      // is installed.
       //
       // `rootView.applyRootViewInsets()`, which upstream every full-window
       // activity calls on its own root, lives here for the same reason: this
       // is the one root a Flutter app has (`platform-glue.window-insets#1`,
       // `#5`).
       builder: (context, child) => RootViewInsets(
-        child: FirstWeekdayFromLocale(child: child ?? const SizedBox.shrink()),
+        child: DeviceLocale(
+          child: FirstWeekdayFromLocale(
+            child: child ?? const SizedBox.shrink(),
+          ),
+        ),
       ),
       home: HabitListScreen(widgetLinks: _widgetLinks),
     );

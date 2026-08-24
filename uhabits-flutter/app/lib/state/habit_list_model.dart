@@ -97,6 +97,29 @@ class HabitListModel extends ChangeNotifier
   /// `ListHabitsMenu.behavior` — the presenter behind the toolbar menu.
   ListHabitsMenuBehavior get menu => _menuBehavior;
 
+  /// `ListHabitsMenu.isSearchActive` — whether the toolbar is currently showing
+  /// the `SearchView` instead of the `actionItems` group.
+  ///
+  /// It is held here, and not in `ListHabitsMenuState`, because the Kotlin
+  /// class that owns it is `@ActivityScope`: one `ListHabitsMenu` for the whole
+  /// activity, whose options menu the contextual action bar overlays without
+  /// destroying. `ListHabitsSelectionMenu` inflates its items into the
+  /// `ActionMode`'s own `Menu` and `onDestroyActionMode` invalidates nothing,
+  /// so a long press, a colour change or a Back out of the contextual bar
+  /// leaves the search bar expanded and still holding `behavior.searchQuery`.
+  ///
+  /// The port has no action mode: the screen swaps the whole `AppBar` widget
+  /// for `ListHabitsSelectionMenu` while a selection is active, which disposes
+  /// the toolbar's `State`. A flag living there would reset to false, and the
+  /// user would come back to an ordinary-looking toolbar over a list still
+  /// filtered by an invisible query — the very state the two-stage X button of
+  /// `audit7.the-search-bar-s-x-button#1` exists to prevent
+  /// (`audit9.search-bar-survives-selection-mode#1`).
+  ///
+  /// Not a notifying property: `invalidateOptionsMenu()` is what redraws the
+  /// menu upstream, and the toolbar's `setState` is its port.
+  bool isSearchActive = false;
+
   late final ListHabitsSelectionMenuBehavior _selectionMenuBehavior;
 
   /// `ListHabitsSelectionMenu.behavior`.

@@ -148,6 +148,30 @@ class NotificationTray extends PreferencesListener
     _taskRunner.execute(_ShowNotificationTask(this, habit, data));
   }
 
+  /// Records a notification the platform posted by itself, writing the
+  /// registry and posting nothing.
+  ///
+  /// Port-only, and the missing fire-time hook is its whole justification.
+  /// Upstream an alarm is only a trigger: it fires a `PendingIntent`,
+  /// `ReminderReceiver` runs in the app process and calls
+  /// `ReminderController.onShowReminder`, and [show] writes `active[habit]`
+  /// before it posts anything — so on Android the registry is populated for
+  /// every reminder the user ever sees, at the instant it appears.
+  ///
+  /// A Flutter port has no such hook. `zonedSchedule` hands the OS a finished
+  /// notification and the OS posts it with no Dart running, so [show] is never
+  /// reached and the registry stays empty for exactly the notifications it is
+  /// supposed to hold. The app package catches up at the next foreground and
+  /// calls this; going through [show] instead would re-post a notification
+  /// that is already on screen, which on Android re-alerts.
+  ///
+  /// [date] and [reminderTime] are the two values the show-reminder intent
+  /// carries upstream, and every later [reshow] replays them.
+  void adopt(Habit habit, LocalDate date, int reminderTime) {
+    _active[_keyOf(habit)] =
+        _ActiveNotification(habit, NotificationData(date, reminderTime));
+  }
+
   void startListening() {
     _commandRunner.addListener(this);
     _preferences.addListener(this);

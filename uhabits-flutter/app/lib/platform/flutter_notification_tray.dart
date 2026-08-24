@@ -30,7 +30,10 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:uhabits_core/src/io/logging.dart';
+import 'package:uhabits_core/src/models/habit_list.dart';
+import 'package:uhabits_core/src/models/reminder.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/src/ui/notification_tray.dart';
 import 'package:uhabits_core/uhabits_core.dart' show Habit, LocalDate;
 
@@ -616,6 +619,18 @@ class FlutterNotificationTray implements SystemTray {
     _active.remove(notificationId);
   }
 
+  /// Records a notification the OS posted from a pre-built alarm, without
+  /// touching the platform.
+  ///
+  /// The counterpart of `AndroidNotificationTray.showNotification`'s closing
+  /// `active.add(notificationId)` for the notifications this port never posts
+  /// itself. See [DismissedReminderDetector], the one caller, and
+  /// `NotificationTray.adopt`, which does the same for the core's own
+  /// registry.
+  void adoptNotification(int notificationId, Habit habit) {
+    _active[notificationId] = habit;
+  }
+
   /// Awaits every platform call issued so far. For tests and for shutdown.
   Future<void> settle() => _pending;
 
@@ -722,18 +737,55 @@ abstract interface class ActiveNotificationQuery {
 /// reminder comes back (`notifications.sticky-and-dismiss#5`), and the core
 /// tray's `active` registry stops claiming a notification that is no longer on
 /// screen (`#6`).
+///
+/// ## Why it also adopts
+///
+/// Comparing the registry against the shade only says anything if the registry
+/// was ever written, and for a scheduled reminder it is not: upstream the
+/// alarm fires into `ReminderReceiver`, which calls
+/// `ReminderController.onShowReminder` in the app process, and both
+/// `NotificationTray.show` and `AndroidNotificationTray.showNotification`
+/// record the notification on the way to posting it. Here the OS posts an
+/// alarm built days earlier with no Dart running, so nothing records anything
+/// and this class used to return at its second statement, on an
+/// always-empty map (`audit9.fired-reminder-enters-the-registry#1`).
+///
+/// So [reconcile] reads the shade in both directions. An id the platform shows
+/// that the registry does not know about is a reminder that fired while the
+/// app was away: it is adopted into both registries — the tray's, so its
+/// eventual swipe is noticed, and the core's, so `reshow` can put it back.
+/// An id the registry holds that the platform no longer shows is the swipe
+/// itself.
+///
+/// A reminder that fired *and* was swiped away with no foreground in between
+/// leaves no trace anywhere and cannot be recovered; that is the same
+/// "delayed to the next foreground" limitation the ledger already records,
+/// taken to its extreme.
 class DismissedReminderDetector {
   DismissedReminderDetector({
     required FlutterNotificationTray tray,
+    required NotificationTray registry,
+    required HabitList habits,
     required ActiveNotificationQuery platform,
     required void Function(Habit habit) onDismiss,
     Logging? logging,
   })  : _tray = tray,
+        _registry = registry,
+        _habits = habits,
         _platform = platform,
         _onDismiss = onDismiss,
         _logger = (logging ?? StandardLogging()).getLogger('ReminderReceiver');
 
   final FlutterNotificationTray _tray;
+
+  /// The core's own registry, the one `reshow` and `reshowAll` read.
+  final NotificationTray _registry;
+
+  /// The habit a notification id belongs to has to be looked up, because
+  /// `getActiveNotifications()` reports an id and no payload: the plugin's
+  /// Android side fills in id, channel, tag, group, title and body, and
+  /// nothing else.
+  final HabitList _habits;
 
   final ActiveNotificationQuery _platform;
 
@@ -746,8 +798,6 @@ class DismissedReminderDetector {
     // Everything already queued has to reach the platform first, or a
     // notification posted a moment ago would be read back as missing.
     await _tray.settle();
-    final Map<int, Habit> believed = _tray.activeReminders;
-    if (believed.isEmpty) return;
     final Set<int>? live;
     try {
       live = await _platform.activeNotificationIds();
@@ -756,6 +806,11 @@ class DismissedReminderDetector {
       return;
     }
     if (live == null) return;
+    final Map<int, Habit> believed = _tray.activeReminders;
+    for (final int id in live) {
+      if (believed.containsKey(id)) continue;
+      _adopt(id);
+    }
     for (final MapEntry<int, Habit> entry in believed.entries) {
       if (live.contains(entry.key)) continue;
       // The registry lets go first: onDismiss either re-posts the
@@ -765,6 +820,54 @@ class DismissedReminderDetector {
       _logger.debug('onDismiss habit=${entry.value.id}');
       _onDismiss(entry.value);
     }
+  }
+
+  /// `ReminderController.onShowReminder(habit, date, reminderTime)`, minus the
+  /// posting the OS has already done.
+  ///
+  /// The two values the show-reminder intent carries upstream have to be
+  /// recomputed, because the notification's payload does not come back with
+  /// the query: [reminderTime] is the most recent instant at which the local
+  /// clock read the habit's reminder time, and the day is that instant floored
+  /// to local midnight — exactly the `timestamp` arithmetic of
+  /// `ReminderScheduler.scheduleAtTime`. For the reminder that has just fired
+  /// and is still on screen those are its own two values; a reminder that was
+  /// snoozed into a different hour, or one left unread for more than a day,
+  /// is reconstructed to the nearest regular occurrence instead.
+  void _adopt(int notificationId) {
+    final Habit? habit = _habitFor(notificationId);
+    if (habit == null) return;
+    final Reminder? reminder = habit.reminder;
+    // Nothing to reconstruct the instant from, and every gate would drop the
+    // notification on any later reshow anyway.
+    if (reminder == null) return;
+    final int reminderTime =
+        DateUtils.getUpcomingTimeInMillis(reminder.hour, reminder.minute) -
+            DateUtils.dayLength;
+    final LocalDate date = LocalDate.fromUnixTime(
+      DateUtils.getStartOfDayWithOffset(
+        DateUtils.removeTimezone(reminderTime),
+        0,
+        0,
+      ),
+    );
+    _logger.debug('onShowReminder habit=${habit.id} '
+        'timestamp=${date.unixTime} reminderTime=$reminderTime');
+    _tray.adoptNotification(notificationId, habit);
+    _registry.adopt(habit, date, reminderTime);
+  }
+
+  /// The habit whose [reminderNotificationId] is [notificationId].
+  ///
+  /// A scan rather than `getById`, because the id a notification is filed
+  /// under is `habit.id % Int.MAX_VALUE` and only equals the habit id while
+  /// the ids stay below that bound.
+  Habit? _habitFor(int notificationId) {
+    for (final Habit habit in _habits) {
+      if (habit.id == null) continue;
+      if (reminderNotificationId(habit) == notificationId) return habit;
+    }
+    return null;
   }
 }
 

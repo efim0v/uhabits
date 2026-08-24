@@ -51,6 +51,7 @@ import 'package:uhabits_core/src/preferences/preferences.dart' as core;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../l10n/app_localizations.dart';
+import '../../../platform/device_locale.dart';
 import '../../theme/app_theme.dart';
 import 'checkmark_dialog.dart' show EntryPopupMetrics, NotesDraft;
 
@@ -239,7 +240,7 @@ class _NumberDialogState extends State<NumberDialog> {
 
   final FocusNode _valueNode = FocusNode();
 
-  /// Resolved in [didChangeDependencies], where the ambient locale is known,
+  /// Resolved in [didChangeDependencies], where the device locale is known,
   /// and put through [NumberDialog.resolveLocale] so it is a locale `intl`
   /// really has number symbols for.
   String? _localeName;
@@ -264,9 +265,12 @@ class _NumberDialogState extends State<NumberDialog> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
-    _localeName = NumberDialog.resolveLocale(
-      Localizations.maybeLocaleOf(context)?.toString(),
-    );
+    // `DecimalFormatSymbols.getInstance()` and `NumberFormat.getInstance()`
+    // read `Locale.getDefault()`, the DEVICE locale including its region —
+    // not the locale the tree resolved its strings against, which for a
+    // Mexican phone is the bare `es` whose decimal separator is the comma
+    // (`audit9.number-popup-follows-the-device-locale#1`).
+    _localeName = NumberDialog.resolveLocale(DeviceLocale.nameOf(context));
     _value.text = NumberDialog.formatValue(widget.value, _localeName);
   }
 

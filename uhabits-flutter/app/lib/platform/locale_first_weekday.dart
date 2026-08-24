@@ -18,27 +18,48 @@
 ///    is CLDR's 1 = Monday … 7 = Sunday, and converts it with
 ///    `firstDay % 7 + 1` (`settings.preferences.first-weekday#13`).
 ///
-/// Flutter's per-locale table is [MaterialLocalizations.firstDayOfWeekIndex],
-/// 0 = Sunday … 6 = Saturday — the same data CLDR feeds both of the above, in a
-/// third convention. [firstWeekdayNumberOf] converts it, and
+/// Both read the DEVICE locale, region included
+/// (`audit9.first-weekday-follows-the-device-locale#1`), so the locale here is
+/// [DeviceLocale] and never the one the widget tree resolved: the app ships no
+/// en_GB translation, and an en_GB phone must still start its week on Monday.
+///
+/// Flutter's per-locale copy of the same CLDR table is `intl`'s
+/// `DateSymbols.FIRSTDAYOFWEEK`, 0 = Monday … 6 = Sunday — a third
+/// convention, and the one [MaterialLocalizations.firstDayOfWeekIndex] is built
+/// out of. [calendarWeekdayFromIntlFirstDay] converts it,
+/// [firstWeekdayNumberOf] looks it up for a locale, and
 /// [FirstWeekdayFromLocale] installs the result on the core hook.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' as intl;
 // The preferences layer is not re-exported from uhabits_core.dart; like
 // lib/state/app_scope.dart, this file reaches it by its `src` path.
 // ignore: implementation_imports
 import 'package:uhabits_core/src/preferences/preferences.dart';
 
-/// `GregorianCalendar(locale).firstDayOfWeek`, from Flutter's copy of the same
+import 'device_locale.dart';
+
+/// `GregorianCalendar(locale).firstDayOfWeek`, from `intl`'s copy of the same
 /// CLDR table.
 ///
-/// [MaterialLocalizations.firstDayOfWeekIndex] is 0 for Sunday through 6 for
-/// Saturday; the model everywhere else counts 1 for Sunday through 7 for
-/// Saturday (`settings.preferences.first-weekday#12`), so the conversion is a
-/// single increment.
-int firstWeekdayNumberOf(MaterialLocalizations localizations) =>
-    localizations.firstDayOfWeekIndex + 1;
+/// [localeName] is an `intl` locale name — `en_GB`, `es_MX`, `pt_BR`. A locale
+/// `intl` has no data for degrades through [resolveDateLocaleName], the way
+/// Java degrades to the root locale.
+int firstWeekdayNumberOf(String? localeName) => calendarWeekdayFromIntlFirstDay(
+  intl.DateFormat.yMMMMEEEEd(
+    resolveDateLocaleName(localeName),
+  ).dateSymbols.FIRSTDAYOFWEEK,
+);
+
+/// `intl` numbers `FIRSTDAYOFWEEK` Monday 0 … Sunday 6; the model everywhere
+/// else counts 1 for Sunday through 7 for Saturday
+/// (`settings.preferences.first-weekday#12`).
+///
+/// The `+ 1` is the step `MaterialLocalizations.firstDayOfWeekIndex` already
+/// takes to reach its own 0 = Sunday index; the second one is this port's.
+int calendarWeekdayFromIntlFirstDay(int firstDayOfWeek) =>
+    (firstDayOfWeek + 1) % 7 + 1;
 
 /// The JS conversion of `settings.preferences.first-weekday#13`, kept as its
 /// own function because it is the one piece of arithmetic in that rule:
@@ -50,14 +71,20 @@ int calendarWeekdayFromCldr(int cldrFirstDay) => cldrFirstDay % 7 + 1;
 /// value the core hook carries until this file replaces it.
 const int fallbackFirstWeekdayNumber = 1;
 
-/// Installs [firstWeekdayNumberOf] on the core hook for the ambient locale.
+/// Installs [firstWeekdayNumberOf] on the core hook for the device locale.
 ///
-/// Mount it inside `MaterialApp.builder`, below the localizations delegates:
-/// `Locale.getDefault()` is process-global on Android, and the closest thing a
-/// Flutter app has to it is the locale the widget tree is currently built with.
-/// The assignment is repeated on every rebuild so that a locale change — the
-/// Android 13 per-app language picker, which is what
-/// `platform-glue.locale-config` is about — is picked up without a restart.
+/// Mount it inside `MaterialApp.builder`, below the localizations delegates and
+/// below a [DeviceLocale]: the locale comes from the device, but the CLDR table
+/// it is looked up in is the one `GlobalMaterialLocalizations` installs into
+/// `intl` when its delegate loads. With no [MaterialLocalizations] above, that
+/// table holds only en_US and there is nothing locale-specific to read — the
+/// port's version of the JS "Intl is unavailable" branch — so the hook is left
+/// alone rather than overwritten with a fallback.
+///
+/// The assignment is repeated on every rebuild, and [DeviceLocale] rebuilds
+/// this on every `didChangeLocales`, so a locale change — the Android 13
+/// per-app language picker, which is what `platform-glue.locale-config` is
+/// about — is picked up without a restart.
 class FirstWeekdayFromLocale extends StatelessWidget {
   const FirstWeekdayFromLocale({super.key, required this.child});
 
@@ -68,7 +95,7 @@ class FirstWeekdayFromLocale extends StatelessWidget {
     final MaterialLocalizations? localizations =
         Localizations.of<MaterialLocalizations>(context, MaterialLocalizations);
     if (localizations != null) {
-      final int number = firstWeekdayNumberOf(localizations);
+      final int number = firstWeekdayNumberOf(DeviceLocale.nameOf(context));
       getFirstWeekdayNumberAccordingToLocale = () => number;
     }
     return child;

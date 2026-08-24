@@ -8,7 +8,11 @@ import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/io/logging.dart';
+import 'package:uhabits_core/src/models/habit_list.dart';
+import 'package:uhabits_core/src/models/habit_matcher.dart';
+import 'package:uhabits_core/src/preferences/widget_preferences.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/uhabits_core.dart'
@@ -49,14 +53,27 @@ import 'flutter_notification_tray.dart';
 ///  3. **Nothing re-arms itself.** `reminders.on-show-reminder#2` — every
 ///     firing schedules the next one — has no counterpart. `scheduleAll()` at
 ///     app start and after every command is what keeps the chain alive.
+///  4. **Nothing withdraws an obsolete alarm.** Gates 2 and 3 (`if (!habit
+///     .hasReminder()) return` and `if (habit.isArchived) return`) also live
+///     at fire time upstream, and the core scheduler reproduces them by
+///     *skipping* the habit. Skipping is enough upstream: the stale
+///     `AlarmManager` alarm the habit still owns fires into a task that
+///     re-reads it and posts nothing. Here the alarm IS the notification, so
+///     skipping leaves a phantom reminder armed and the skip has to become a
+///     cancel — [withdrawObsoleteAlarms], which [FlutterReminderScheduler]
+///     runs after every `scheduleAll()`.
 class FlutterAlarmScheduler implements SystemScheduler {
   FlutterAlarmScheduler({
     required AlarmPlugin plugin,
     required ReminderNotificationBuilder builder,
+    PendingAlarmQuery? pendingAlarms,
     Logging? logging,
     int Function()? nowMillis,
   })  : _plugin = plugin,
         _builder = builder,
+        // The real plugin answers both, so the common case needs no argument.
+        _pendingAlarms = pendingAlarms ??
+            (plugin is PendingAlarmQuery ? plugin as PendingAlarmQuery : null),
         _logging = logging ?? StandardLogging(),
         _now = nowMillis ??
             (() => DateUtils.applyTimezone(DateUtils.getLocalTime()));
@@ -70,6 +87,10 @@ class FlutterAlarmScheduler implements SystemScheduler {
   final AlarmPlugin _plugin;
 
   final ReminderNotificationBuilder _builder;
+
+  /// The alarms the platform still holds, or null on a host that cannot say.
+  /// See [withdrawObsoleteAlarms].
+  final PendingAlarmQuery? _pendingAlarms;
 
   final Logging _logging;
 
@@ -154,6 +175,53 @@ class FlutterAlarmScheduler implements SystemScheduler {
       target.reminderTime,
     );
     return _schedule(target.reminderTime, spec);
+  }
+
+  /// Cancels every alarm the platform still holds whose notification id is not
+  /// in [stillWanted].
+  ///
+  /// Gates 2 and 3 of `NotificationTray.ShowNotificationTask.onPostExecute`,
+  /// moved from fire time to schedule time for the reason given in the class
+  /// comment:
+  ///
+  /// ```kotlin
+  /// if (!habit.hasReminder()) { log("does not have a reminder. Skipping."); return }
+  /// if (habit.isArchived)     { log("is archived. Skipping."); return }
+  /// ```
+  ///
+  /// Upstream both gates run against a *re-read* habit when the alarm fires,
+  /// so an alarm armed at 22:00 for a reminder the user switches off at 22:05
+  /// still goes off at 08:00 and is dropped in silence. The port's core
+  /// scheduler reproduces the gates one level up, by returning early — which
+  /// means [scheduleShowReminder] is never reached for those habits, and the
+  /// finished notification the OS is already holding is never taken back.
+  ///
+  /// The pending set is read from the platform rather than remembered, so a
+  /// stale alarm armed by a previous run of the process is withdrawn too: an
+  /// app that was killed overnight re-arms only future alarms at startup and
+  /// would otherwise never see the leftover one. Reading it also bounds the
+  /// work to the alarms that really are armed, instead of cancelling an id per
+  /// reminderless habit on every command. Every one of them is a reminder —
+  /// [scheduleShowReminder] is the only caller of `scheduleExact` in the app.
+  void withdrawObsoleteAlarms(Set<int> stillWanted) {
+    final PendingAlarmQuery? query = _pendingAlarms;
+    if (query == null) return;
+    _enqueue(() async {
+      final Set<int>? pending;
+      try {
+        pending = await query.pendingAlarmIds();
+      } on Object catch (error) {
+        log(_loggerName, 'Could not read the pending alarms: $error');
+        return;
+      }
+      if (pending == null) return;
+      for (final int notificationId in pending) {
+        if (stillWanted.contains(notificationId)) continue;
+        log(_loggerName,
+            'Alarm $notificationId has no habit to show. Cancelling.');
+        await _plugin.cancel(notificationId);
+      }
+    });
   }
 
   /// `reminders.exact-alarm-scheduling#6`: widget updates use the non-waking
@@ -331,11 +399,73 @@ abstract interface class AlarmPlugin {
   Future<bool> requestExactAlarmsPermission();
 }
 
+/// The alarms the platform is still holding.
+///
+/// `AlarmManager` has no such query, and upstream has no use for one: an
+/// Android alarm carries a `PendingIntent` and decides nothing, so a stale one
+/// is harmless. Here an alarm carries the finished notification, so the port
+/// needs to know which ones are still armed in order to take the obsolete ones
+/// back. `flutter_local_notifications` answers with
+/// `pendingNotificationRequests()`.
+///
+/// Kept apart from [AlarmPlugin] the way [ActiveNotificationQuery] is kept
+/// apart from [NotificationPresenter]: it is a question about the platform,
+/// not one of the calls the scheduler makes.
+abstract interface class PendingAlarmQuery {
+  /// The notification ids of the alarms still pending, or null when this host
+  /// cannot say — which withdraws nothing, the same way [ActiveNotificationQuery]
+  /// dismisses nothing when it cannot see the shade.
+  Future<Set<int>?> pendingAlarmIds();
+}
+
+/// The app's `ReminderScheduler`: the core one, plus the withdrawal pass that
+/// replaces the fire-time gates this port cannot run.
+///
+/// `scheduleAll()` is the one place every path goes through — app start, boot,
+/// every command that is not a checkmark or a recolour, and the tray's re-arm
+/// after a cancel — so it is also the place to notice that an alarm has
+/// outlived the habit it was armed for. The core's own `scheduleAll` skips
+/// exactly the two kinds of habit whose alarms have to go: one whose reminder
+/// was removed is not in `HabitMatcher.WITH_ALARM` at all, and an archived one
+/// is dropped inside `scheduleAtTime`.
+///
+/// See [FlutterAlarmScheduler.withdrawObsoleteAlarms] for what upstream does
+/// instead, and why the port cannot.
+class FlutterReminderScheduler extends ReminderScheduler {
+  FlutterReminderScheduler({
+    required CommandRunner commandRunner,
+    required HabitList habitList,
+    required FlutterAlarmScheduler alarms,
+    required WidgetPreferences widgetPreferences,
+  })  : _habitList = habitList,
+        _alarms = alarms,
+        super(commandRunner, habitList, alarms, widgetPreferences);
+
+  final HabitList _habitList;
+
+  final FlutterAlarmScheduler _alarms;
+
+  @override
+  void scheduleAll() {
+    super.scheduleAll();
+    // Enqueued behind everything the pass above just armed, on the scheduler's
+    // own queue, so the pending set is read after the platform has taken them.
+    _alarms.withdrawObsoleteAlarms(<int>{
+      for (final Habit habit in _habitList.getFiltered(HabitMatcher.withAlarm))
+        // The two gates, in the positive: a habit is still wanted when it has
+        // a reminder, is not archived, and has an id to file the alarm under
+        // (`schedule()` returns early on a null id).
+        if (habit.id != null && !habit.isArchived)
+          reminderNotificationId(habit),
+    });
+  }
+}
+
 /// [AlarmPlugin] over `flutter_local_notifications`.
 ///
 /// Never exercised by a widget test — the plugin's method channel has no
 /// implementation there.
-class LocalNotificationsAlarmPlugin implements AlarmPlugin {
+class LocalNotificationsAlarmPlugin implements AlarmPlugin, PendingAlarmQuery {
   LocalNotificationsAlarmPlugin({
     required this.plugin,
     required LocalNotificationsPresenter presenter,
@@ -404,6 +534,14 @@ class LocalNotificationsAlarmPlugin implements AlarmPlugin {
 
   @override
   Future<void> cancel(int id) => plugin.cancel(id);
+
+  /// `pendingNotificationRequests()`, which every platform this app runs on
+  /// answers — the plugin keeps the scheduled requests itself.
+  @override
+  Future<Set<int>?> pendingAlarmIds() async {
+    final pending = await plugin.pendingNotificationRequests();
+    return <int>{for (final request in pending) request.id};
+  }
 
   @override
   Future<bool> canScheduleExactAlarms() async {

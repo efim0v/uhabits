@@ -29,12 +29,19 @@ void main() {
   tearDown(core.resetToday);
 
   /// Builds the Score card the way the detail screen does — with no
-  /// `dateFormatter`, so the card resolves one from the ambient locale — and
+  /// `dateFormatter`, so the card resolves one from the device locale — and
   /// returns the formatter the chart it built is actually printing with.
+  ///
+  /// [locale] is the DEVICE locale, which is what
+  /// `JavaLocalDateFormatter(Locale.getDefault())` reads
+  /// (`audit9.chart-dates-follow-the-device-locale#1`); `MaterialApp.locale`
+  /// is set alongside it because on Android the two are one setting.
   Future<core.LocalDateFormatter> formatterOf(
     WidgetTester tester,
     String locale,
   ) async {
+    tester.platformDispatcher.localesTestValue = <Locale>[Locale(locale)];
+    addTearDown(tester.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(
       MaterialApp(
         locale: Locale(locale),

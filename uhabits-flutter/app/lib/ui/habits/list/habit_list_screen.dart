@@ -414,10 +414,55 @@ class _HabitListViewState extends State<_HabitListView>
   /// This is the *only* thing that re-registers it after a screen was pushed
   /// over the list, background round trip or no background round trip
   /// (`audit7.after-a-background-round-trip-the#1`).
+  ///
+  /// It is also the *only* moment the home-screen widgets hear about anything
+  /// the covering screen wrote — see [_republishWidgets].
   @override
   void didPopNext() {
     _isCovered = false;
     _toasts.onAttached();
+    _republishWidgets();
+  }
+
+  /// `appComponent.widgetUpdater.updateWidgets()`, the second statement of the
+  /// task-runner block `ListHabitsActivity.onResume` ends with:
+  ///
+  /// ```kotlin
+  /// taskRunner.run {
+  ///     AutoBackup(this@ListHabitsActivity).run()
+  ///     appComponent.widgetUpdater.updateWidgets()
+  /// }
+  /// ```
+  ///
+  /// Upstream `SettingsActivity`, `EditHabitActivity` and `ShowHabitActivity`
+  /// are all separate activities, so finishing any of them resumes the list
+  /// activity and runs that block. It is what carries a preference the
+  /// settings screen wrote across the process boundary to the launcher:
+  /// `SettingsFragment.onSharedPreferenceChanged` special-cases
+  /// `pref_widget_opacity` and no other key (`settings.preferences
+  /// .widget-opacity#4`), so `pref_first_weekday` — which
+  /// `HistoryChartView.firstWeekday` and `FrequencyChartView.firstWeekday`
+  /// render their grids from — reaches the widgets here or nowhere
+  /// (`audit9.settings-return-does-not-republish-widgets#1`).
+  ///
+  /// A Flutter app has one activity for the whole process and Settings is a
+  /// route pushed over this screen, so popping it fires no
+  /// `AppLifecycleState` change and the copy of this block in `main.dart` —
+  /// which is bound to a real background/foreground round trip — never runs.
+  /// [didPopNext] is the port's "the list activity is resuming", which is why
+  /// the republish lives here rather than in `_openSettings`: upstream the
+  /// block is not conditional on *which* activity was on top.
+  ///
+  /// The `AutoBackup` half stays with the app-level resume. It rotates one
+  /// copy of the database per day and refuses to write a second, so a route
+  /// pop cannot make one due; the republish is the half that has an observer
+  /// in another process waiting for it.
+  ///
+  /// `widgetSync` is null on a host with no home-screen widgets — and in every
+  /// widget test — which is upstream's `widgetUpdater != null`.
+  void _republishWidgets() {
+    final Future<void>? republished = _model.scope.widgetSync?.updateWidgets();
+    if (republished != null) unawaited(republished);
   }
 
   /// The route this screen sits on was itself pushed or popped; the mount and

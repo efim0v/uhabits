@@ -87,7 +87,17 @@ class ListHabitsMenu extends StatefulWidget implements PreferredSizeWidget {
 
 class ListHabitsMenuState extends State<ListHabitsMenu> {
   /// `private var isSearchActive = false`.
-  bool isSearchActive = false;
+  ///
+  /// Kept on the activity-scoped [HabitListModel] rather than in this `State`:
+  /// upstream `ListHabitsMenu` is `@ActivityScope` and the contextual action
+  /// bar only *overlays* its options menu, so the search bar outlives a
+  /// selection. Here the screen swaps this whole widget out while a selection
+  /// is active, which would otherwise reset the flag and leave the list
+  /// filtered by an invisible query
+  /// (`audit9.search-bar-survives-selection-mode#1`).
+  bool get isSearchActive => widget.model.isSearchActive;
+
+  set isSearchActive(bool value) => widget.model.isSearchActive = value;
 
   /// The `SearchView`'s own text. `setQuery(behavior.searchQuery, false)` is
   /// what keeps it in step with the presenter across a menu invalidation

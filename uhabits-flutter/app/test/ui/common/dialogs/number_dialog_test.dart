@@ -142,6 +142,96 @@ void main() {
     });
   });
 
+  group('audit9.number-popup-follows-the-device-locale', () {
+    const String rule =
+        'audit9.number-popup-follows-the-device-locale#1 — In the Kotlin app: '
+        'NumberDialog prefills with DecimalFormat("#.##"), builds the field\'s '
+        'DigitsKeyListener alphabet from '
+        'DecimalFormatSymbols.getInstance().decimalSeparator and parses on save '
+        'with NumberFormat.getInstance(). All three read Locale.getDefault(), '
+        'the DEVICE locale including its region, so on Español (México) — '
+        'where the decimal separator is "." and the group separator "," — the '
+        'popup opens on "1.5", accepts the "." key and saves 1.5.';
+
+    testWidgets('#1 a Mexican device gets the Mexican separators', (
+      tester,
+    ) async {
+      // The app ships no es_MX translation, so the tree resolves to bare `es`,
+      // whose separator is the comma. The popup must not follow it there.
+      final result = await _openNumber(
+        tester,
+        value: 1.5,
+        locale: const Locale('es', 'MX'),
+      );
+
+      expect(
+        _fieldText(tester),
+        '1.5',
+        reason: '$rule The prefill uses the device separator, not `es`\'s '
+            'comma.',
+      );
+
+      await _type(tester, '1.5');
+      expect(
+        _fieldText(tester),
+        '1.5',
+        reason:
+            '$rule …and the key listener accepts it, rather than dropping '
+            'the period the user always types.',
+      );
+
+      await _tapSave(tester);
+      expect(
+        result.value!.value,
+        closeTo(1.5, 1e-9),
+        reason:
+            '$rule NumberFormat.getInstance() on es_MX reads "1.5" as one and '
+            'a half; on bare `es` the period is a GROUP separator and the '
+            'same text silently saves fifteen.',
+      );
+      expect(
+        _stored(result.value!.value),
+        1500,
+        reason: '$rule …which is 1500 in storage, not 15000.',
+      );
+    });
+
+    testWidgets('#1 a British device keeps the English separators', (
+      tester,
+    ) async {
+      final result = await _openNumber(
+        tester,
+        value: 1.5,
+        locale: const Locale('en', 'GB'),
+      );
+
+      expect(_fieldText(tester), '1.5', reason: rule);
+      await _tapSave(tester);
+      expect(
+        _stored(result.value!.value),
+        1500,
+        reason: rule,
+      );
+    });
+
+    testWidgets('#1 the UI language still comes from the resolved locale', (
+      tester,
+    ) async {
+      // The half that must NOT move: es_MX has no translation of its own, so
+      // the buttons keep speaking the `es` the delegates resolved.
+      await _openNumber(tester, value: 1.5, locale: const Locale('es', 'MX'));
+
+      final BuildContext context = tester.element(find.byType(NumberDialog));
+      expect(
+        Localizations.localeOf(context),
+        const Locale('es'),
+        reason:
+            '$rule Android resolves resources separately from '
+            'Locale.getDefault() and falls back to the language it ships.',
+      );
+    });
+  });
+
   group('number-dialog.popup — every locale the app ships', () {
     test('#4 #5 #9 #10 no shipped locale can throw out of the popup', () {
       // `DecimalFormatSymbols.getInstance()` and `NumberFormat.getInstance()`
@@ -741,6 +831,12 @@ Future<_Result> _openNumber(
   List<LocalizationsDelegate<dynamic>>? delegates,
 }) async {
   final result = _Result();
+  // `locale` is the DEVICE locale: on Android the two are one setting, and
+  // `DecimalFormatSymbols.getInstance()` reads `Locale.getDefault()` while the
+  // strings come from resource resolution
+  // (`audit9.number-popup-follows-the-device-locale#1`).
+  tester.platformDispatcher.localesTestValue = <Locale>[locale];
+  addTearDown(tester.platformDispatcher.clearLocalesTestValue);
   await tester.pumpWidget(
     MaterialApp(
       locale: locale,

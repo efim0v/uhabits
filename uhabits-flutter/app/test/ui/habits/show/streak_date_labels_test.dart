@@ -73,11 +73,17 @@ void main() {
         theme: theme,
       );
 
-  /// The chart the card built for itself under [locale].
-  Future<StreakChartView> chartFor(WidgetTester tester, String locale) async {
+  /// The chart the card built for itself on a device set to [locale].
+  ///
+  /// The device locale is what `JavaLocalDateFormatter(Locale.getDefault())`
+  /// reads (`audit9.chart-dates-follow-the-device-locale#1`); `MaterialApp
+  /// .locale` is set alongside it because on Android the two are one setting.
+  Future<StreakChartView> chartFor(WidgetTester tester, Locale locale) async {
+    tester.platformDispatcher.localesTestValue = <Locale>[locale];
+    addTearDown(tester.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(
       MaterialApp(
-        locale: Locale(locale),
+        locale: locale,
         localizationsDelegates: L10n.localizationsDelegates,
         supportedLocales: L10n.supportedLocales,
         home: Scaffold(
@@ -96,7 +102,7 @@ void main() {
   group('audit3.streak-chart-date-labels-are-hard', () {
     testWidgets('#1 the chart the card built prints the locale\'s medium date',
         (tester) async {
-      final chart = await chartFor(tester, 'de');
+      final chart = await chartFor(tester, const Locale('de'));
 
       expect(chart.labelFor(today), '25.01.2015',
           reason: '$rule A German device prints the German medium date, not '
@@ -105,7 +111,7 @@ void main() {
 
     testWidgets('#1 nine locales, nine medium date patterns', (tester) async {
       for (final MapEntry<String, String> e in measured.entries) {
-        final chart = await chartFor(tester, e.key);
+        final chart = await chartFor(tester, Locale(e.key));
         expect(chart.labelFor(today), e.value,
             reason: '$rule Measured on a JDK for ${e.key}.');
       }
@@ -115,12 +121,37 @@ void main() {
         'shift it', (tester) async {
       // `df.timeZone = TimeZone.getTimeZone("UTC")` is what keeps a LocalDate
       // from being read as a local instant and printed as the day before.
-      final chart = await chartFor(tester, 'en');
+      final chart = await chartFor(tester, const Locale('en'));
 
       expect(chart.labelFor(core.LocalDate.ymd(2015, 1, 1)), 'Jan 1, 2015',
           reason: rule);
       expect(chart.labelFor(core.LocalDate.ymd(2014, 12, 31)), 'Dec 31, 2014',
           reason: rule);
+    });
+
+    const String rule9 =
+        'audit9.chart-dates-follow-the-device-locale#1 — In the Kotlin app: '
+        'StreakChart builds JavaLocalDateFormatter(Locale.getDefault()) and '
+        'labels each streak with longFormat, i.e. '
+        'DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault()). '
+        'The pattern is the DEVICE locale\'s, region included — "d MMM y" on '
+        'an English (United Kingdom) device — never the language the app '
+        'resolved its translations against.';
+
+    testWidgets('#1 a British device gets the British date order',
+        (tester) async {
+      // The app ships no en_GB translation, so the tree resolves to bare `en`,
+      // whose medium pattern is the American "MMM d, y".
+      final chart = await chartFor(tester, const Locale('en', 'GB'));
+
+      expect(chart.labelFor(today), '25 Jan 2015',
+          reason: '$rule9 en_GB reads "25 Jan 2015"; bare `en` reads '
+              '"Jan 25, 2015".');
+
+      final BuildContext context = tester.element(find.byType(StreakCardView));
+      expect(Localizations.localeOf(context), const Locale('en'),
+          reason: '$rule9 …while the UI language stays on the resolved '
+              'locale, which is the half that must not move.');
     });
 
     testWidgets('#1 the habit detail screen builds the card with it',
@@ -139,6 +170,8 @@ void main() {
       scope.habitList.add(habit);
       habit.recompute();
 
+      tester.platformDispatcher.localesTestValue = const <Locale>[Locale('de')];
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
       await tester.pumpWidget(
         MaterialApp(
           locale: const Locale('de'),

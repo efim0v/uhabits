@@ -12,6 +12,7 @@ import 'package:uhabits_core/src/preferences/preferences.dart' as core;
 import 'package:uhabits_core/src/ui/views/habit_list_header.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
+import '../../../platform/device_locale.dart';
 import '../../common/scrollable_chart.dart';
 import '../../core_view.dart';
 
@@ -619,33 +620,24 @@ class _MirrorCanvas extends core.Canvas {
 /// into lib/platform/ once a second screen does.
 class IntlLocalDateFormatter implements core.LocalDateFormatter {
   IntlLocalDateFormatter([String? localeName])
-      : localeName = _resolve(localeName);
+      : localeName = resolveDateLocaleName(localeName);
 
-  /// The formatter for the locale the widget tree resolved. Locale data for it
-  /// is loaded by GlobalMaterialLocalizations, which every app in this package
-  /// installs through `L10n.localizationsDelegates`.
+  /// The formatter every upstream caller builds:
+  /// `JavaLocalDateFormatter(Locale.getDefault())`, i.e. one for the DEVICE
+  /// locale, region included
+  /// (`audit9.chart-dates-follow-the-device-locale#1`). It is not the locale
+  /// the widget tree resolved: the app ships no en_GB translation, so an en_GB
+  /// phone resolves to bare `en` and would print the American "Jan 25, 2015"
+  /// where Android prints "25 Jan 2015".
+  ///
+  /// Locale data for it is loaded by GlobalMaterialLocalizations, which every
+  /// app in this package installs through `L10n.localizationsDelegates`.
   factory IntlLocalDateFormatter.of(BuildContext context) =>
-      IntlLocalDateFormatter(Localizations.maybeLocaleOf(context)?.toString());
+      IntlLocalDateFormatter(DeviceLocale.nameOf(context));
 
-  /// The locale whose data is actually installed; [_fallbackLocale] when the
-  /// requested one has none, since package:intl ships en_US only.
+  /// The locale whose data is actually installed; [fallbackDateLocaleName]
+  /// when the requested one has none, since package:intl ships en_US only.
   final String localeName;
-
-  static const String _fallbackLocale = 'en_US';
-
-  static String _resolve(String? requested) {
-    if (requested == null || requested.isEmpty) return _fallbackLocale;
-    final canonical = intl.Intl.canonicalizedLocale(requested);
-    try {
-      if (intl.DateFormat.localeExists(canonical)) return canonical;
-      final language = canonical.split('_').first;
-      if (intl.DateFormat.localeExists(language)) return language;
-    } on Exception {
-      // localeExists throws, rather than returning false, while no locale data
-      // at all has been initialized.
-    }
-    return _fallbackLocale;
-  }
 
   late final intl.DateFormat _shortWeekday = intl.DateFormat.E(localeName);
   late final intl.DateFormat _longWeekday = intl.DateFormat.EEEE(localeName);

@@ -2547,6 +2547,12 @@ Future<_Result<T>> _open<T>(
   bool settle = true,
 }) async {
   final result = _Result<T>();
+  // `locale` is the DEVICE locale as well: the number popup's separators come
+  // from `DecimalFormatSymbols.getInstance()`, which reads
+  // `Locale.getDefault()` (`audit9.number-popup-follows-the-device-locale#1`),
+  // and on Android the two are one setting.
+  tester.platformDispatcher.localesTestValue = <Locale>[locale];
+  addTearDown(tester.platformDispatcher.clearLocalesTestValue);
   await tester.pumpWidget(
     MaterialApp(
       locale: locale,
@@ -2587,6 +2593,8 @@ Future<void> _pumpHosted(
   Locale locale = const Locale('en'),
   ThemeData? theme,
 }) async {
+  tester.platformDispatcher.localesTestValue = <Locale>[locale];
+  addTearDown(tester.platformDispatcher.clearLocalesTestValue);
   await tester.pumpWidget(
     MaterialApp(
       locale: locale,

@@ -522,11 +522,17 @@ L10n stringsOf(WidgetTester tester) =>
     L10n.of(tester.element(find.byType(Navigator).first));
 
 /// `IntroActivity`'s Skip button, on the first launch only.
+///
+/// [settleIo] rather than `pumpAndSettle`, for the reason [launch] needs it:
+/// finishing an activity started from the list resumes `ListHabitsActivity`,
+/// whose `onResume` republishes the home-screen widget data
+/// (`audit9.settings-return-does-not-republish-widgets#1`). That is a task, and
+/// the progress bar over it animates for as long as the task is running.
 Future<void> skipIntro(WidgetTester tester) async {
   expect(find.byType(IntroScreen), findsOneWidget,
       reason: 'the intro is what a first launch opens');
   await tester.tap(find.byKey(IntroScreen.skipButtonKey));
-  await tester.pumpAndSettle();
+  await settleIo(tester);
 }
 
 /// The habit-list toolbar's overflow button.
@@ -697,11 +703,16 @@ Future<void> tapSettingsRow(WidgetTester tester, String key) async {
 /// `flutter/navigation`. Calling `Navigator.pop` instead would prove only that
 /// `Navigator` works; what a journey needs to know is whether the app answers
 /// the *system* gesture.
+///
+/// [settleIo] for the same reason [skipIntro] needs it: a Back that finishes a
+/// screen started from the list resumes `ListHabitsActivity`, and its
+/// `onResume` starts the widget republish task
+/// (`audit9.settings-return-does-not-republish-widgets#1`).
 Future<void> pressBack(WidgetTester tester) async {
   await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
     'flutter/navigation',
     const JSONMethodCodec().encodeMethodCall(const MethodCall('popRoute')),
     (ByteData? _) {},
   );
-  await tester.pumpAndSettle();
+  await settleIo(tester);
 }

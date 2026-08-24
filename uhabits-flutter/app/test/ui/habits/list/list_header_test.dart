@@ -304,7 +304,7 @@ void main() {
           reason: 'list-habits.header-dates#6');
     });
 
-    testWidgets('#6 weekday names come from the ambient locale',
+    testWidgets('#6 weekday names come from the device locale',
         (tester) async {
       await _pumpHeader(tester, buttonCount: 1, locale: const Locale('fr'));
 
@@ -861,6 +861,13 @@ Future<void> _pumpHeader(
   String? restorationScopeId,
 }) async {
   var offset = dataOffset;
+  // `locale` is the DEVICE locale: `HeaderView` builds
+  // `JavaLocalDateFormatter(Locale.getDefault())`, so the weekday names follow
+  // the device rather than the locale the tree resolved
+  // (`audit9.chart-dates-follow-the-device-locale#1`). `MaterialApp.locale` is
+  // set alongside it because on Android the two are one setting.
+  tester.platformDispatcher.localesTestValue = <Locale>[locale];
+  addTearDown(tester.platformDispatcher.clearLocalesTestValue);
   await tester.pumpWidget(
     MaterialApp(
       locale: locale,

@@ -369,7 +369,12 @@ class ReminderResponseRouter {
     handle(actionId: response.actionId, payload: response.payload);
   }
 
-  /// The swipe, which no callback reports. See [DismissedReminderDetector].
+  /// The two deliveries the shade never announces: a reminder the OS posted
+  /// from a pre-built alarm, which upstream would have arrived as
+  /// `ReminderController.onShowReminder`, and a swipe, which upstream would
+  /// have arrived through the notification's delete intent. See
+  /// [DismissedReminderDetector], which answers both by comparing the
+  /// registry against what is actually on screen.
   Future<void> onResumed() async {
     await _dismissals?.reconcile();
   }

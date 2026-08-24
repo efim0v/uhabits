@@ -23,10 +23,12 @@ library;
 // lib/state/app_scope.dart reaches them.
 // ignore_for_file: implementation_imports
 
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart' hide DateUtils;
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/main.dart';
 import 'package:uhabits/platform/app_database.dart';
@@ -34,6 +36,8 @@ import 'package:uhabits/platform/home_widget_bridge.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/widget_sync.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
+import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
+import 'package:uhabits/ui/habits/list/list_habits_menu.dart';
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
 import 'package:uhabits_core/src/preferences/widget_preferences.dart';
@@ -87,8 +91,17 @@ class _SilentScheduler implements SystemScheduler {
 class _CountingWidgetPlatform implements HomeWidgetPlatform {
   int publishes = 0;
 
+  /// The last `uhabits.index` document written, decoded. It is the payload the
+  /// launcher's process reads, so it is where "the widgets know about this
+  /// preference" is observable.
+  Map<String, Object?>? lastIndex;
+
   @override
-  Future<void> saveWidgetData(String id, String? value) async {}
+  Future<void> saveWidgetData(String id, String? value) async {
+    if (id == HomeWidgetBridge.indexKey && value != null) {
+      lastIndex = jsonDecode(value) as Map<String, Object?>;
+    }
+  }
 
   @override
   Future<void> setAppGroupId(String groupId) async {}
@@ -147,6 +160,39 @@ void main() {
     scope.habitList.add(habit);
     habit.recompute();
     return habit;
+  }
+
+  /// Steps (7) to (10) of `HabitsApplication.onCreate`, over seams a test can
+  /// watch. This is what publishes `scope.widgetSync`.
+  _CountingWidgetPlatform startServices(AppScope scope) {
+    final _CountingWidgetPlatform widgets = _CountingWidgetPlatform();
+    scope.startServices(
+      tray: NotificationTray(
+        scope.taskRunner,
+        scope.commandRunner,
+        scope.preferences,
+        _SilentTray(),
+      ),
+      scheduler: ReminderScheduler(
+        scope.commandRunner,
+        scope.habitList,
+        _SilentScheduler(),
+        WidgetPreferences(scope.preferencesStorage),
+      ),
+      sync: WidgetSync(
+        bridge: HomeWidgetBridge(
+          habitList: scope.habitList,
+          registry: WidgetRegistry(scope.preferencesStorage),
+          platform: widgets,
+          preferences: scope.preferences,
+        ),
+        commandRunner: scope.commandRunner,
+        taskRunner: scope.taskRunner,
+        midnightTimer: scope.midnightTimer,
+        preferences: scope.preferences,
+      ),
+    );
+    return widgets;
   }
 
   /// The `flutter/lifecycle` message the engine sends on every foreground and
@@ -295,36 +341,7 @@ void main() {
         (tester) async {
       final AppScope scope = openScope();
       addHabit(scope, 'Meditate');
-      final _CountingWidgetPlatform widgets = _CountingWidgetPlatform();
-
-      // Steps (7) to (10) of `HabitsApplication.onCreate`, over seams a test
-      // can watch. This is what publishes `scope.widgetSync`.
-      scope.startServices(
-        tray: NotificationTray(
-          scope.taskRunner,
-          scope.commandRunner,
-          scope.preferences,
-          _SilentTray(),
-        ),
-        scheduler: ReminderScheduler(
-          scope.commandRunner,
-          scope.habitList,
-          _SilentScheduler(),
-          WidgetPreferences(scope.preferencesStorage),
-        ),
-        sync: WidgetSync(
-          bridge: HomeWidgetBridge(
-            habitList: scope.habitList,
-            registry: WidgetRegistry(scope.preferencesStorage),
-            platform: widgets,
-            preferences: scope.preferences,
-          ),
-          commandRunner: scope.commandRunner,
-          taskRunner: scope.taskRunner,
-          midnightTimer: scope.midnightTimer,
-          preferences: scope.preferences,
-        ),
-      );
+      final _CountingWidgetPlatform widgets = startServices(scope);
 
       await tester.pumpWidget(UhabitsApp(scope: scope));
       await tester.pumpAndSettle();
@@ -345,6 +362,115 @@ void main() {
               'widgets even when nothing in this process ran a command. #2: '
               '`_runAutoBackup` builds and executes an `AutoBackupTask` and '
               'stops there.');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // audit9.settings-return-does-not-republish-widgets
+  // -----------------------------------------------------------------------
+
+  group('audit9.settings-return-does-not-republish-widgets', () {
+    const String rule =
+        'audit9.settings-return-does-not-republish-widgets#1 — '
+        '`SettingsActivity` is a separate activity, so backing out of it '
+        'resumes `ListHabitsActivity`, whose `onResume` ends with '
+        '`taskRunner.run { AutoBackup(this).run(); '
+        'appComponent.widgetUpdater.updateWidgets() }`. Every preference the '
+        'settings screen wrote — `pref_first_weekday` among them — is '
+        'therefore republished to the six widget providers the moment the '
+        'user returns to the habit list, before they can press Home and look '
+        'at a widget.';
+
+    testWidgets(
+        '#1 changing the first weekday in Settings and backing out '
+        'republishes the widget data with the new weekday', (tester) async {
+      // The whole preference screen is one scroll view; a tall surface keeps
+      // the row hit-testable, as test/ui/settings/settings_screen_test.dart
+      // does.
+      tester.view.physicalSize = const Size(1000, 4000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final AppScope scope = openScope();
+      addHabit(scope, 'Meditate');
+      final _CountingWidgetPlatform widgets = startServices(scope);
+
+      await tester.pumpWidget(UhabitsApp(scope: scope));
+      await tester.pumpAndSettle();
+      await scope.widgetSync!.settle();
+      expect(widgets.lastIndex!['firstWeekday'], DayOfWeek.sunday.daysSinceSunday,
+          reason: '$rule The home screen starts on the default weekday.');
+      final int beforeSettings = widgets.publishes;
+
+      // `res/menu/list_habits.xml` -> `SettingsActivity`.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('listHabits.overflowMenu')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ListHabitsMenuItems.keyOf(ListHabitsMenuItems.settings)),
+      );
+      await tester.pumpAndSettle();
+
+      // The "First day of the week" `ListPreference`, set to Monday.
+      await tester.tap(find.byKey(const ValueKey<String>('pref_first_weekday')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Monday'));
+      await tester.pumpAndSettle();
+      await scope.widgetSync!.settle();
+
+      expect(scope.preferences.firstWeekday, DayOfWeek.monday,
+          reason: '$rule The preference really was written.');
+      expect(widgets.publishes, beforeSettings,
+          reason: '$rule `SettingsFragment.onSharedPreferenceChanged` '
+              'special-cases `pref_widget_opacity` and nothing else, so the '
+              'write itself refreshes no widget '
+              '(`settings.preferences.widget-opacity#4`) — the republish is '
+              "the returning activity's job.");
+
+      // The Back button, which is `SettingsActivity` finishing.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await scope.widgetSync!.settle();
+
+      expect(widgets.publishes, greaterThan(beforeSettings), reason: rule);
+      expect(widgets.lastIndex!['firstWeekday'],
+          DayOfWeek.monday.daysSinceSunday,
+          reason: '$rule Otherwise the History and Frequency widgets keep '
+              'drawing their week grids from the old weekday, with every '
+              'column shifted, until the next command, the next day rollover '
+              'or the next background/foreground round trip.');
+    });
+
+    testWidgets('#1 returning from any screen pushed over the list '
+        'republishes, exactly as `onResume` does', (tester) async {
+      final AppScope scope = openScope();
+      addHabit(scope, 'Meditate');
+      final _CountingWidgetPlatform widgets = startServices(scope);
+
+      await tester.pumpWidget(UhabitsApp(scope: scope));
+      await tester.pumpAndSettle();
+      await scope.widgetSync!.settle();
+      final int afterStartup = widgets.publishes;
+
+      // `startActivity(...)`: any activity over the list, not just settings.
+      final NavigatorState navigator =
+          Navigator.of(tester.element(find.byType(HabitListScreen)));
+      unawaited(navigator.push<void>(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: SizedBox.shrink()),
+      )));
+      await tester.pumpAndSettle();
+      await scope.widgetSync!.settle();
+      expect(widgets.publishes, afterStartup,
+          reason: '$rule Nothing is published on the way *out* of the list: '
+              '`onPause` has no such block.');
+
+      navigator.pop();
+      await tester.pumpAndSettle();
+      await scope.widgetSync!.settle();
+      expect(widgets.publishes, greaterThan(afterStartup),
+          reason: '$rule The block is `onResume`\'s, and `onResume` runs '
+              'whichever activity was on top.');
     });
   });
 }
