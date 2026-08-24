@@ -56,6 +56,7 @@ import '../../platform/external_links.dart';
 import '../../platform/flutter_files.dart';
 import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
+import '../common/show_message.dart';
 
 /// Everything [DataActions] asks the screen to show, and the string resource
 /// each one stands for.
@@ -596,13 +597,10 @@ String dataActionMessageText(L10n l10n, DataActionMessage message) {
 /// `Activity.showMessage(msg)`, which shows a snackbar over the list screen.
 ///
 /// The whole widget half of this file: the screen passes this as
-/// [DataActions.showMessage].
+/// [DataActions.showMessage]. The snackbar itself is the app's one
+/// [showMessage] helper — upstream every one of these results reaches the same
+/// `ViewExtensions.showMessage`, so they cannot have their own lifetime
+/// (`audit24.one-show-message-helper-one-lifetime#1`).
 void showDataActionMessage(BuildContext context, DataActionMessage message) {
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) return;
-  messenger
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(content: Text(dataActionMessageText(L10n.of(context), message))),
-    );
+  showMessage(context, dataActionMessageText(L10n.of(context), message));
 }

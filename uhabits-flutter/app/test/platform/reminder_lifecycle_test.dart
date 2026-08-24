@@ -170,7 +170,7 @@ void main() {
 
   ReminderNotificationBuilder buildBuilder() => ReminderNotificationBuilder(
         preferences: preferences,
-        strings: strings,
+        strings: () => strings,
       );
 
   Habit habitWithReminder({int id = 10}) {

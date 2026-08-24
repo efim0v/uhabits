@@ -144,7 +144,7 @@ void main() {
     final commandRunner = CommandRunner(taskRunner);
     final builder = ReminderNotificationBuilder(
       preferences: preferences,
-      strings: strings,
+      strings: () => strings,
     );
     plugin = _FakePlugin();
     alarms = FlutterAlarmScheduler(

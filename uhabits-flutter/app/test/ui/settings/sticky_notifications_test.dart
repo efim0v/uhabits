@@ -149,7 +149,7 @@ void main() {
     final plugin = _FakeAlarmPlugin();
     final builder = ReminderNotificationBuilder(
       preferences: scope.preferences,
-      strings: NotificationStrings.from(L10nEn()),
+      strings: () => NotificationStrings.from(L10nEn()),
     );
     scope.startServices(
       tray: NotificationTray(

@@ -35,6 +35,7 @@ import '../../state/app_scope.dart';
 import '../common/window_insets.dart';
 import '../intro/intro_screen.dart';
 import '../theme/app_theme.dart' show coreThemeOf;
+import '../common/show_message.dart';
 import '../common/store_listing.dart';
 
 /// `Context.startActivitySafely(intent)`: true when something handled the
@@ -424,14 +425,8 @@ class _AboutScreenState extends State<AboutScreen> {
     _developerCountdown--;
     if (_developerCountdown == 0) {
       _preferences.isDeveloper = true;
-      _showMessage(L10n.of(context).youAreNowADeveloper);
+      showMessage(context, L10n.of(context).youAreNowADeveloper);
     }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..removeCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// `Context.startActivitySafely(intent)`.
@@ -439,7 +434,7 @@ class _AboutScreenState extends State<AboutScreen> {
     final onOpenLink = widget.onOpenLink;
     final handled = onOpenLink == null ? false : await onOpenLink(uri);
     if (!handled && mounted) {
-      _showMessage(L10n.of(context).activityNotFound);
+      showMessage(context, L10n.of(context).activityNotFound);
     }
   }
 

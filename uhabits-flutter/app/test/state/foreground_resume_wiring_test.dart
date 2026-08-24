@@ -32,6 +32,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/main.dart';
 import 'package:uhabits/platform/app_database.dart';
+import 'package:uhabits/platform/flutter_notification_tray.dart';
 import 'package:uhabits/platform/home_widget_bridge.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/reminder_permission_gate.dart';
@@ -132,6 +133,19 @@ class _ScriptedPermissions implements NotificationPermissions {
   }
 }
 
+/// The two registrations the OS keeps its own copy of: the Android REMINDERS
+/// channel name and the Darwin category action titles. Upstream the channel is
+/// re-created before every `notify()`, so its name follows the language with
+/// nothing to re-arm; here it is made once at `initialize`, which is why a
+/// language change has to re-issue it
+/// (`audit24.reminder-strings-are-resolved-at-build-time#1`).
+class _RecordingRegistrations implements LocalizedNotificationRegistrations {
+  int refreshes = 0;
+
+  @override
+  Future<void> refreshLocalizedRegistrations() async => refreshes++;
+}
+
 /// The `home_widget` plugin, counting publishes the way
 /// test/ui/settings/widget_opacity_refresh_test.dart does: one note per
 /// `updateWidgets()`, not one per provider.
@@ -216,10 +230,12 @@ void main() {
     AppScope scope, {
     NotificationPermissions? permissions,
     _SilentScheduler? alarms,
+    LocalizedNotificationRegistrations? registrations,
   }) {
     final _CountingWidgetPlatform widgets = _CountingWidgetPlatform();
     scope.startServices(
       permissions: permissions,
+      registrations: registrations,
       tray: NotificationTray(
         scope.taskRunner,
         scope.commandRunner,
@@ -705,6 +721,59 @@ void main() {
               '`reminderScheduler.hasHabitsWithReminders()`, so a user with no '
               'reminders is never shown the system dialog — on a pop no more '
               'than on a launch (`reminders.app-start-and-permission#6`).');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // audit24.reminder-strings-are-resolved-at-build-time
+  // -----------------------------------------------------------------------
+
+  group('audit24.reminder-strings-are-resolved-at-build-time', () {
+    const String rule =
+        'audit24.reminder-strings-are-resolved-at-build-time#1';
+
+    testWidgets('#1 a language change re-issues the OS registrations and '
+        're-arms every alarm', (tester) async {
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+      tester.platformDispatcher.localesTestValue = const <Locale>[Locale('de')];
+
+      final AppScope scope = openScope();
+      addHabit(scope, 'Meditate',
+          reminder: Reminder(8, 30, WeekdayList.everyDay));
+      final _SilentScheduler alarms = _SilentScheduler();
+      final _RecordingRegistrations registrations = _RecordingRegistrations();
+      startServices(scope, alarms: alarms, registrations: registrations);
+
+      await tester.pumpWidget(UhabitsApp(scope: scope));
+      await tester.pumpAndSettle();
+      await scope.taskRunner.awaitAll();
+      await tester.pumpAndSettle();
+      expect(alarms.armed, isNotEmpty,
+          reason: '$rule the launch arms the habit, in German');
+      alarms.armed.clear();
+      registrations.refreshes = 0;
+
+      // The user switches the phone — or Loop itself, through the Android 13
+      // per-app language picker — to English. The engine delivers this as a
+      // locale change to every WidgetsBindingObserver.
+      tester.platformDispatcher.localesTestValue = const <Locale>[Locale('en')];
+      await tester.pumpAndSettle();
+      await scope.taskRunner.awaitAll();
+      await tester.pumpAndSettle();
+
+      expect(registrations.refreshes, greaterThan(0),
+          reason: '$rule `createAndroidNotificationChannel` runs before every '
+              'notify() upstream and Android renames an existing channel, so '
+              'the REMINDERS name in system settings follows the language. '
+              'This port creates it once at initialize(), and registers the '
+              'Darwin category titles once as well, so both have to be '
+              're-issued here — re-resolving the builder strings alone reaches '
+              'neither.');
+      expect(alarms.armed, isNotEmpty,
+          reason: '$rule this port has no fire-time hook: the alarm IS the '
+              'finished notification, so the copy is baked in at schedule '
+              'time and every armed alarm has to be re-issued for the next '
+              'reminder to be in the new language.');
     });
   });
 }

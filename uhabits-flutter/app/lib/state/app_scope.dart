@@ -23,7 +23,6 @@ import 'package:uhabits_core/src/preferences/widget_preferences.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/ui/notification_tray.dart';
 
-import '../l10n/locale_resolution.dart';
 import '../platform/app_database.dart';
 import '../platform/bug_reporter.dart';
 import '../platform/file_preferences_storage.dart';
@@ -289,11 +288,13 @@ class AppScope {
     // scheduler and the widget publisher null for the whole session behind one
     // swallowed log line (`audit10.platform-services-start-on-every-device-
     // language#1`).
-    final l10n = platformL10n();
-    final builder = ReminderNotificationBuilder(
-      preferences: preferences,
-      strings: NotificationStrings.from(l10n),
-    );
+    //
+    // Nothing is resolved here: the builder's default is
+    // `platformNotificationStrings`, called afresh for every notification the
+    // way `buildNotification` reads the Context at build time. Resolving once
+    // and holding the answer froze every reminder in the language the process
+    // started in (`audit24.reminder-strings-are-resolved-at-build-time#1`).
+    final builder = ReminderNotificationBuilder(preferences: preferences);
     final plugin = FlutterLocalNotificationsPlugin();
 
     // `AndroidNotificationTray` sets `R.drawable.ic_notification` on every
@@ -431,7 +432,15 @@ class AppScope {
     );
     _reminderResponses = responses;
 
-    startServices(tray: tray, scheduler: scheduler, sync: sync);
+    startServices(
+      tray: tray,
+      scheduler: scheduler,
+      sync: sync,
+      // The two registrations the OS keeps a copy of — the Android channel
+      // name and the Darwin category titles — which [onLocalesChanged] has to
+      // re-issue (`audit24.reminder-strings-are-resolved-at-build-time#1`).
+      registrations: presenter,
+    );
 
     // Last, because it can act immediately: the notification that started the
     // app is not replayed through the callback, and everything else has to be
@@ -461,6 +470,7 @@ class AppScope {
     required ReminderScheduler scheduler,
     required WidgetSync sync,
     NotificationPermissions? permissions,
+    LocalizedNotificationRegistrations? registrations,
   }) {
     // `checkSelfPermission` / `requestPermissionLauncher`, which only a test
     // ever replaces: off a device there is no permission to ask for.
@@ -479,7 +489,12 @@ class AppScope {
     scheduler.startListening();
     tray.startListening();
 
-    _started = _Started(tray: tray, scheduler: scheduler, sync: sync);
+    _started = _Started(
+      tray: tray,
+      scheduler: scheduler,
+      sync: sync,
+      registrations: registrations,
+    );
 
     // (10) the only asynchronous step. Nothing runs when an alarm fires (see
     // DEVIATIONS.md), so this scheduleAll at startup, plus the one after every
@@ -488,6 +503,37 @@ class AppScope {
   }
 
   _Started? _started;
+
+  /// The device — or Loop's own, through the Android 13 per-app language
+  /// picker — changed language while the app was running.
+  ///
+  /// Upstream there is nothing to do: `AndroidNotificationTray` reads all six
+  /// strings out of the application `Context` when it builds a notification and
+  /// re-creates the REMINDERS channel before every notify, so the next reminder
+  /// is already translated. This port has no fire-time hook — its alarm IS the
+  /// finished notification, see docs/parity/DEVIATIONS.md — so the copy is
+  /// baked in at *schedule* time, and the two registrations the OS keeps its
+  /// own copy of are made once. Both have to be redone here
+  /// (`audit24.reminder-strings-are-resolved-at-build-time#1`):
+  ///
+  ///  * the Android channel name and the Darwin category action titles, which
+  ///    no rebuild of a notification can reach;
+  ///  * every armed alarm, through the same `scheduleAll()` that
+  ///    `ReminderScheduler.onCommandFinished` and `ReminderPermissionGate`
+  ///    already run — `FlutterAlarmScheduler` re-issues each alarm, and the
+  ///    spec it rebuilds now resolves the strings afresh.
+  Future<void> onLocalesChanged() async {
+    final started = _started;
+    if (started == null) return;
+    try {
+      await started.registrations?.refreshLocalizedRegistrations();
+    } on Object catch (error) {
+      logging
+          .getLogger('HabitsApplication')
+          .error('Could not refresh notification registrations: $error');
+    }
+    started.scheduler.scheduleAll();
+  }
 
   /// Posts and cancels reminder notifications. Null until
   /// [startPlatformServices] has run, which widget tests never do.
@@ -668,9 +714,18 @@ class _StartupRefreshTask extends Task {
 
 /// The platform singletons, once [AppScope.startPlatformServices] has run.
 class _Started {
-  _Started({required this.tray, required this.scheduler, required this.sync});
+  _Started({
+    required this.tray,
+    required this.scheduler,
+    required this.sync,
+    this.registrations,
+  });
 
   final NotificationTray tray;
   final ReminderScheduler scheduler;
   final WidgetSync sync;
+
+  /// Null on a host with no plugin, and in every test that starts the services
+  /// over fakes.
+  final LocalizedNotificationRegistrations? registrations;
 }

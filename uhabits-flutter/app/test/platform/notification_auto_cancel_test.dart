@@ -43,7 +43,7 @@ void main() {
       plugin: FlutterLocalNotificationsPlugin(),
       builder: ReminderNotificationBuilder(
         preferences: preferences,
-        strings: strings,
+        strings: () => strings,
       ),
     );
   });
@@ -110,7 +110,7 @@ void main() {
         ..question = 'Did you meditate this morning?';
       final built = ReminderNotificationBuilder(
         preferences: preferences,
-        strings: strings,
+        strings: () => strings,
       ).build(habit, 7, LocalDate.ymd(2020, 5, 20), 1590000000000);
 
       final details = presenter.detailsFor(built);

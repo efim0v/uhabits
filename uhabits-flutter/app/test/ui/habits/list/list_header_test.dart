@@ -276,9 +276,10 @@ void main() {
           reason: 'list-habits.header-dates#6');
     });
 
-    testWidgets('#7 the two baselines are -0.25 em and +1.25 em from the '
-        'column centre', (tester) async {
+    testWidgets('#7 the two lines are ±0.75 em from the column centre, the '
+        "Kotlin baselines' 0.5 em nudge dropped", (tester) async {
       const rule = 'list-habits.header-dates#7';
+      const audit = 'audit24.header-weekday-and-day-rows-baseline#1';
       await _pumpHeader(tester, buttonCount: 5);
       final canvas = _draw(tester);
 
@@ -299,21 +300,29 @@ void main() {
       for (var column = 0; column < 5; column++) {
         final weekday = texts[column * 2];
         final number = texts[column * 2 + 1];
-        expect(weekday.args[1], closeTo(centerY - 0.25 * em, 1e-9),
-            reason: '$rule — the weekday baseline is rectCenterY - 0.25 * em');
-        expect(number.args[1], closeTo(centerY + 1.25 * em, 1e-9),
-            reason: '$rule — the day number baseline is rectCenterY + '
-                '1.25 * em');
+        // `y1 = rectCenterY - 0.25 * em` and `y2 = rectCenterY + 1.25 * em`
+        // are android.graphics baselines, i.e. `(centerY + 0.5 * em) ∓ 0.75 *
+        // em`. The `+0.5 * em` is the same centre-to-baseline nudge
+        // `NumberButtonView.Drawer` writes as `rect.offset(0f, 0.5f * em)`,
+        // and this canvas performs it already, so only the ±0.75 em survives
+        // the crossing ($audit).
+        expect(weekday.args[1], closeTo(centerY - 0.75 * em, 1e-9),
+            reason: '$audit — the weekday sits 0.75 em above the centre: the '
+                'Kotlin baseline rectCenterY - 0.25 * em with the 0.5 em '
+                'centre-to-baseline nudge removed');
+        expect(number.args[1], closeTo(centerY + 0.75 * em, 1e-9),
+            reason: '$audit — and the day number 0.75 em below it, from the '
+                'Kotlin baseline rectCenterY + 1.25 * em');
       }
 
-      // The pair is deliberately asymmetric: 1.5 em apart, and their midpoint
-      // sits half an em *below* the centre rather than on it.
+      // The relative spacing is Kotlin's, verbatim: 1.5 em apart, straddling
+      // the centre once the nudge is gone.
       expect(texts[1].args[1] - texts[0].args[1], closeTo(1.5 * em, 1e-9),
           reason: '$rule — 1.25 em - (-0.25 em) = 1.5 em between the two '
               'baselines');
-      expect((texts[0].args[1] + texts[1].args[1]) / 2,
-          closeTo(centerY + 0.5 * em, 1e-9),
-          reason: '$rule — which is not centred on rectCenterY');
+      expect((texts[0].args[1] + texts[1].args[1]) / 2, closeTo(centerY, 1e-9),
+          reason: '$audit — which leaves the pair centred on rectCenterY, the '
+              'same shape the KMP HabitListHeader draws on this canvas');
 
       // And they track the em, not the nominal text size: a header drawn under
       // a wider font pushes both lines out proportionally.
@@ -361,6 +370,53 @@ void main() {
 
       expect(_draw(tester).texts, ['MON', '26'],
           reason: 'list-habits.header-dates#8');
+    });
+  });
+
+  group('audit24.header-weekday-and-day-rows-baseline', () {
+    const rule = 'audit24.header-weekday-and-day-rows-baseline#1';
+
+    testWidgets('#1 the weekday/day pair is balanced in the 48 dp strip',
+        (tester) async {
+      // HeaderView/render.png is 1200x96 px = 600x48 dp at density 2. Its ink
+      // rows are 29-44 and 54-69, i.e. dp 14.5-22.0 for the uppercase weekday
+      // and 27.0-34.5 for the day number — neither line has a descender, so
+      // those lower edges are the baselines `y1 = rectCenterY - 0.25 * em` and
+      // `y2 = rectCenterY + 1.25 * em` land on, which pins Android's em at
+      // 8.0 dp. The block runs 14.5-34.5 dp: 14.5 dp of clearance above and
+      // 13.5 below. It is centred, and the port must be too.
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+      final texts = canvas.opsNamed('drawText');
+      const centerY = 48.0 / 2;
+
+      final above = centerY - texts[0].args[1];
+      final below = texts[1].args[1] - centerY;
+      expect(above, greaterThan(0.0),
+          reason: '$rule — the weekday is above the strip centre');
+      expect(below, greaterThan(0.0),
+          reason: '$rule — the day number below it');
+      expect(above, closeTo(below, 1e-9),
+          reason: '$rule — and the two clearances match: the Kotlin pair is '
+              '(centerY + 0.5 * em) ∓ 0.75 * em, and the 0.5 em is the '
+              'centre-to-baseline nudge core.Canvas already applies');
+    });
+
+    testWidgets('#1 neither line is placed where a raw Android baseline goes',
+        (tester) async {
+      // The guard against copying `y1`/`y2` across unconverted, which is what
+      // dropped both rows ~3.5 dp and crowded them onto the bottom hairline.
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+      final em = canvas.measureText('m');
+      final texts = canvas.opsNamed('drawText');
+      const centerY = 48.0 / 2;
+
+      expect(texts[0].args[1], isNot(closeTo(centerY - 0.25 * em, 1e-9)),
+          reason: '$rule — core.Canvas.drawText anchors the visual centre, so '
+              'the Kotlin baseline is not the y to pass');
+      expect(texts[1].args[1], isNot(closeTo(centerY + 1.25 * em, 1e-9)),
+          reason: '$rule — same for the day number');
     });
   });
 
@@ -895,7 +951,7 @@ void main() {
       }
     });
 
-    testWidgets('#1 the em the two baselines hang off is measured under the '
+    testWidgets('#1 the em the two lines hang off is measured under the '
         'scaled paint', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 1.5;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -904,14 +960,17 @@ void main() {
       final canvas = _draw(tester);
 
       // `val em = paint.measureText("m")` is taken after the textSize
-      // assignment, so `centerY - 0.25 * em` / `+ 1.25 * em` open up with the
-      // glyphs instead of leaving them overlapping.
+      // assignment, so the two lines open up with the glyphs instead of
+      // leaving them overlapping. The offsets are Kotlin's `centerY - 0.25 *
+      // em` / `+ 1.25 * em` minus the 0.5 em centre-to-baseline nudge this
+      // canvas performs itself
+      // (`audit24.header-weekday-and-day-rows-baseline#1`).
       final em = 0.6 * (10.0 * 1.5);
       const centerY = 48.0 / 2;
       final texts = canvas.opsNamed('drawText');
-      expect(texts[0].args[1], closeTo(centerY - 0.25 * em, 1e-9),
+      expect(texts[0].args[1], closeTo(centerY - 0.75 * em, 1e-9),
           reason: rule);
-      expect(texts[1].args[1], closeTo(centerY + 1.25 * em, 1e-9),
+      expect(texts[1].args[1], closeTo(centerY + 0.75 * em, 1e-9),
           reason: rule);
     });
   });

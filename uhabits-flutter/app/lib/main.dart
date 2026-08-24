@@ -271,6 +271,22 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     }
   }
 
+  /// The device language changed under a running process — the Android 13
+  /// per-app language picker `android:localeConfig` exists to expose, or the
+  /// system setting itself.
+  ///
+  /// The widget tree follows it by itself (`MaterialApp` +
+  /// `resolveAppLocale`), and so does the first-weekday hook, through
+  /// [DeviceLocale] and [FirstWeekdayFromLocale]. The notification half cannot:
+  /// its copy is written into armed alarms and into two registrations the OS
+  /// holds, none of which a rebuild reaches
+  /// (`audit24.reminder-strings-are-resolved-at-build-time#1`).
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (!mounted) return;
+    unawaited(context.read<AppScope>().onLocalesChanged());
+  }
+
   /// The POST_NOTIFICATIONS half of `ListHabitsActivity.onResume`, preceded by
   /// `midnightTimer.onResume()`.
   ///

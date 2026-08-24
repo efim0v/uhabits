@@ -694,3 +694,13 @@ Store у порта нет, поэтому честная замена — та 
 **Почему:** Driving the substitute dialog's header would mean wrapping showTimePicker in a Localizations.override for the device locale, which would also swap the dialog's OK/Cancel strings and semantics labels out of the app's UI language — a bigger divergence than the one it removes. The row is the surface edit-habit.reminder-time#8 names (populateReminder's label) and the one that has to agree with the Show-habit subtitle card. Recorded in the _formatTime doc comment as a known divergence.
 
 **Дата:** 2026-08-24
+
+## Пересчёт текстов уведомлений при смене языка
+
+**Что в оригинале:** Nothing. AndroidNotificationTray.buildNotification reads all six strings out of the application Context at fire time (getString(R.string.yes/.no/.enter/.snooze/.default_reminder_question)) and showNotification calls createAndroidNotificationChannel(context) — which reads R.string.reminder — before every notify(). Resources.getString resolves against the process's current configuration, so the very next reminder is already translated with nothing to re-arm. There is no iOS half.
+
+**Что делаем:** _ThemedAppState.didChangeLocales calls AppScope.onLocalesChanged(), which (1) re-creates the Android REMINDERS channel from the freshly-resolved name, (2) re-registers the Darwin notification categories by calling the plugin's platform-specific initialize() again with the same settings and callbacks (every request*Permission is false, so nothing is prompted), and (3) calls scheduler.scheduleAll() to re-arm every alarm.
+
+**Почему:** Two port-only facts force it. The port has no fire-time hook — the alarm IS the finished notification (already recorded in DEVIATIONS.md) — so the copy is written in at schedule time and only a re-arm can replace it. And flutter_local_notifications takes the channel name and the Darwin category titles once, at initialize(), where Android's own API is called before every post; re-resolving the builder's strings alone would leave the channel name in system settings and the iOS action buttons frozen until reinstall. The net user-visible behaviour is upstream's: the next reminder after a language change is in the new language.
+
+**Дата:** 2026-08-24

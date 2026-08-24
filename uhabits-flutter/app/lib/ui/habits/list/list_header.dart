@@ -417,9 +417,19 @@ class _HeaderPreferencesListener extends core.PreferencesListener {
 /// paint (`list-habits.header-dates#7`, `#12`).
 ///
 /// That is not a rescaling of the same layout: `em` is an advance *width*, so
-/// the offsets track the font's proportions rather than its nominal size, and
-/// the pair is not symmetric about the centre — the weekday name sits a
-/// quarter of an em above it and the day number a full em and a quarter below.
+/// the offsets track the font's proportions rather than its nominal size.
+///
+/// The asymmetry in those two numbers, though, is not a layout choice — it is
+/// a coordinate space. `HeaderView.Drawer` hands them to raw
+/// `android.graphics.Canvas.drawText`, where y is the glyph *baseline*, and
+/// `(-0.25, +1.25)` is `+0.5 ∓ 0.75`: the `+0.5 * em` is the centre-to-
+/// baseline nudge, the same constant `NumberButtonView.Drawer` spells out as
+/// `rect.offset(0f, 0.5f * em)` before an unitless number. `core.Canvas`
+/// anchors on the visual centre and performs that conversion itself, so the
+/// port drops the nudge and keeps only the relative `∓0.75 * em`, leaving the
+/// pair balanced in the 48 dp strip — which is where the goldens show
+/// Android's ink, 14.5 dp of clearance above the weekday and 13.5 below the
+/// day number (`audit24.header-weekday-and-day-rows-baseline#1`).
 ///
 /// Everything else is [HabitListHeader] verbatim except the background, which
 /// is `HeaderView`'s own `?attr/headerBackgroundColor` rather than the KMP
@@ -493,8 +503,18 @@ class HeaderDatesView extends core.View {
       final centerY = height / 2;
       // `val y1 = rect.centerY() - 0.25 * em`
       // `val y2 = rect.centerY() + 1.25 * em`
-      canvas.drawText(name, x, centerY - 0.25 * em);
-      canvas.drawText(number, x, centerY + 1.25 * em);
+      //
+      // Those two go to raw `android.graphics.Canvas.drawText`, where y is the
+      // *baseline*, and they factor as `(centerY + 0.5 * em) ∓ 0.75 * em`. The
+      // `+0.5 * em` is the centre-to-baseline nudge — the same one
+      // `NumberButtonView.Drawer` writes out as `rect.offset(0f, 0.5f * em)` —
+      // and `core.Canvas.drawText` performs it already, so repeating it drops
+      // both rows onto the bottom hairline
+      // (`audit24.header-weekday-and-day-rows-baseline#1`). The relative
+      // `∓0.75 * em` is kept exactly, which leaves the pair straddling the
+      // centre the way the KMP [HabitListHeader] draws it.
+      canvas.drawText(name, x, centerY - 0.75 * em);
+      canvas.drawText(number, x, centerY + 0.75 * em);
     }
   }
 }

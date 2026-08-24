@@ -38,6 +38,7 @@ import 'package:uhabits_core/src/ui/notification_tray.dart';
 import 'package:uhabits_core/uhabits_core.dart' show Habit, LocalDate;
 
 import '../l10n/app_localizations.dart';
+import '../l10n/locale_resolution.dart';
 
 // ---------------------------------------------------------------------------
 // Strings
@@ -47,9 +48,10 @@ import '../l10n/app_localizations.dart';
 ///
 /// `AndroidNotificationTray` reads them from the application `Context`, which
 /// has no Flutter counterpart outside the widget tree: notifications are posted
-/// from a background alarm, where there is no `BuildContext`. The integrator
-/// resolves them once — `NotificationStrings.from(await L10n.delegate.load(locale))`
-/// — and hands them over.
+/// from a background alarm, where there is no `BuildContext`. So they are
+/// resolved by locale instead, through [platformNotificationStrings] — and
+/// resolved *afresh every time one is needed*, because that is what
+/// `context.getString(...)` does. See [ReminderNotificationBuilder].
 class NotificationStrings {
   const NotificationStrings({
     required this.yes,
@@ -87,6 +89,24 @@ class NotificationStrings {
         channelName: l10n.reminder,
       );
 }
+
+/// `context.getString(R.string.…)` for a caller with no `BuildContext`.
+///
+/// `Resources.getString` resolves against the process's *current*
+/// configuration, so upstream a device- or per-app language change is picked up
+/// by the very next reminder with nothing to re-arm and no restart.
+/// [platformL10n] is the same lookup for this port — it reads
+/// `WidgetsBinding.instance.platformDispatcher.locales` on every call, and it
+/// cannot throw, so it is safe on the paths that must not take the notification
+/// subsystem down with them
+/// (`audit10.platform-services-start-on-every-device-language#1`).
+///
+/// Resolving this once and holding the answer is the whole defect
+/// `audit24.reminder-strings-are-resolved-at-build-time#1` names: it froze the
+/// action labels, the default question and the REMINDERS channel name in
+/// whatever language the process started in.
+NotificationStrings platformNotificationStrings() =>
+    NotificationStrings.from(platformL10n());
 
 // ---------------------------------------------------------------------------
 // Actions and payloads
@@ -428,7 +448,7 @@ int reminderNotificationId(Habit habit) {
 class ReminderNotificationBuilder {
   ReminderNotificationBuilder({
     required Preferences preferences,
-    required NotificationStrings strings,
+    NotificationStrings Function() strings = platformNotificationStrings,
     bool snoozeActionEnabled = true,
   })  : _preferences = preferences,
         _strings = strings,
@@ -436,7 +456,16 @@ class ReminderNotificationBuilder {
 
   final Preferences _preferences;
 
-  final NotificationStrings _strings;
+  /// `context.getString(...)`, called anew for every notification.
+  ///
+  /// A function and not a value: `buildNotification` reads all six strings out
+  /// of the application `Context` at the moment it builds, so they follow the
+  /// device language — or Loop's own, through the Android 13 per-app picker
+  /// `android:localeConfig` exists to expose — without a restart. Capturing
+  /// them once at process start left every reminder for the rest of the session
+  /// in the previous language, re-arming included
+  /// (`audit24.reminder-strings-are-resolved-at-build-time#1`).
+  final NotificationStrings Function() _strings;
 
   /// `reminders.snooze-android12-gate#1` hides the "Later" action on Android
   /// 12+, because a broadcast receiver may no longer trampoline into the snooze
@@ -445,7 +474,8 @@ class ReminderNotificationBuilder {
   /// to false to reproduce the Android 12+ behaviour exactly.
   final bool _snoozeActionEnabled;
 
-  NotificationStrings get strings => _strings;
+  /// The six strings as they read *now*.
+  NotificationStrings get strings => _strings();
 
   NotificationSpec build(
     Habit habit,
@@ -454,15 +484,19 @@ class ReminderNotificationBuilder {
     int reminderTime, {
     bool disableSound = false,
   }) {
+    // Resolved here, not in the constructor: `buildNotification` reads the
+    // Context at build time (`audit24.reminder-strings-are-resolved-at-build-
+    // time#1`).
+    final NotificationStrings strings = _strings();
     // notifications.content#4: the question, unless it is blank.
     final body = habit.question.trim().isEmpty
-        ? _strings.defaultReminderQuestion
+        ? strings.defaultReminderQuestion
         : habit.question;
     return NotificationSpec(
       id: notificationId,
       // notifications.content#1 / notifications.channel#1.
       channelId: NotificationTray.remindersChannelId,
-      channelName: _strings.channelName,
+      channelName: strings.channelName,
       categoryId: habit.isNumerical
           ? ReminderCategories.numerical
           : ReminderCategories.yesNo,
@@ -472,7 +506,7 @@ class ReminderNotificationBuilder {
       showWhen: true,
       ongoing: _preferences.shouldMakeNotificationsSticky(),
       playSound: !disableSound,
-      actions: _actionsFor(habit.isNumerical),
+      actions: _actionsFor(strings, habit.isNumerical),
       payload: ReminderPayload(
         habitId: habit.id ?? 0,
         timestamp: date.unixTime,
@@ -484,14 +518,17 @@ class ReminderNotificationBuilder {
     );
   }
 
-  List<ReminderNotificationAction> _actionsFor(bool isNumerical) {
+  List<ReminderNotificationAction> _actionsFor(
+    NotificationStrings strings,
+    bool isNumerical,
+  ) {
     final actions = <ReminderNotificationAction>[
       // notifications.actions#1: a numerical habit gets exactly one action,
       // carrying the same check icon "Yes" does.
       if (isNumerical)
         ReminderNotificationAction(
           ReminderActions.edit,
-          _strings.enter,
+          strings.enter,
           icon: ReminderActionIcons.check,
         )
       else ...[
@@ -499,12 +536,12 @@ class ReminderNotificationBuilder {
         // check and a cross.
         ReminderNotificationAction(
           ReminderActions.addRepetition,
-          _strings.yes,
+          strings.yes,
           icon: ReminderActionIcons.check,
         ),
         ReminderNotificationAction(
           ReminderActions.removeRepetition,
-          _strings.no,
+          strings.no,
           icon: ReminderActionIcons.cancel,
         ),
       ],
@@ -515,7 +552,7 @@ class ReminderNotificationBuilder {
       actions.add(
         ReminderNotificationAction(
           ReminderActions.snoozeReminder,
-          _strings.snooze,
+          strings.snooze,
           icon: ReminderActionIcons.snooze,
         ),
       );
@@ -526,16 +563,19 @@ class ReminderNotificationBuilder {
   /// The `UNNotificationCategory` list iOS needs at initialisation, built from
   /// the same action lists a notification will name. Declaring them anywhere
   /// else is how the two drift apart.
-  List<ReminderNotificationCategory> categories() => [
-        ReminderNotificationCategory(
-          ReminderCategories.yesNo,
-          _actionsFor(false),
-        ),
-        ReminderNotificationCategory(
-          ReminderCategories.numerical,
-          _actionsFor(true),
-        ),
-      ];
+  List<ReminderNotificationCategory> categories() {
+    final NotificationStrings strings = _strings();
+    return [
+      ReminderNotificationCategory(
+        ReminderCategories.yesNo,
+        _actionsFor(strings, false),
+      ),
+      ReminderNotificationCategory(
+        ReminderCategories.numerical,
+        _actionsFor(strings, true),
+      ),
+    ];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -553,6 +593,28 @@ abstract interface class NotificationPresenter {
 
   /// `NotificationManagerCompat.cancel(id)`.
   Future<void> cancel(int id);
+}
+
+/// The user-visible copy this app hands to the *operating system* rather than
+/// to a notification: the Android REMINDERS channel name, which shows up in
+/// system settings, and the Darwin category action titles, which iOS keeps in
+/// its own registry.
+///
+/// Upstream neither is ever stale. `AndroidNotificationTray.showNotification`
+/// calls `createAndroidNotificationChannel(context)` before *every* notify, and
+/// Android renames an existing channel when it is re-created, so the channel
+/// name follows `R.string.reminder` in the current configuration. iOS has no
+/// counterpart in the Kotlin app at all — but the plugin registers the
+/// categories once, at `initialize`, which makes it a second place a captured
+/// string can freeze.
+///
+/// So re-resolving [ReminderNotificationBuilder.strings] is not enough on its
+/// own: these two registrations have to be re-issued as well
+/// (`audit24.reminder-strings-are-resolved-at-build-time#1`).
+abstract interface class LocalizedNotificationRegistrations {
+  /// Re-creates the Android channel and re-registers the Darwin categories
+  /// from the builder's strings as they read now.
+  Future<void> refreshLocalizedRegistrations();
 }
 
 /// Port of `AndroidNotificationTray`, the `NotificationTray.SystemTray` half of
@@ -889,7 +951,10 @@ class DismissedReminderDetector {
 /// implementation there. Everything worth asserting was pushed up into
 /// [ReminderNotificationBuilder] and [FlutterNotificationTray].
 class LocalNotificationsPresenter
-    implements NotificationPresenter, ActiveNotificationQuery {
+    implements
+        NotificationPresenter,
+        ActiveNotificationQuery,
+        LocalizedNotificationRegistrations {
   LocalNotificationsPresenter({
     required this.plugin,
     required ReminderNotificationBuilder builder,
@@ -898,6 +963,13 @@ class LocalNotificationsPresenter
   final FlutterLocalNotificationsPlugin plugin;
 
   final ReminderNotificationBuilder _builder;
+
+  /// The two callbacks [initialize] was given, kept so that
+  /// [refreshLocalizedRegistrations] can re-issue the Darwin registration with
+  /// them rather than clearing them.
+  DidReceiveNotificationResponseCallback? _onResponse;
+
+  DidReceiveBackgroundNotificationResponseCallback? _onBackgroundResponse;
 
   /// `notifications.content#2`: `setSmallIcon(R.drawable.ic_notification)`.
   ///
@@ -952,9 +1024,11 @@ class LocalNotificationsPresenter
   /// — the integrator has to place it under `android/app/src/main/res`.
   /// `notifications.channel#1`: the channel is "REMINDERS", named after
   /// `R.string.reminder`, at default importance. Android recreates it before
-  /// every post (`notifications.channel#2`); once is enough, since creating a
-  /// channel that exists is a no-op and the name is the only thing that could
-  /// change.
+  /// every post (`notifications.channel#2`), which is a no-op except for the
+  /// one field that CAN change — the name, whenever the language does. That is
+  /// why this is not the only place it is created: [refreshLocalizedRegistrations]
+  /// re-issues it, and the Darwin categories with it, on every locale change
+  /// (`audit24.reminder-strings-are-resolved-at-build-time#1`).
   ///
   /// [remindersChannel] is what those three arguments really amount to; see it
   /// for why one plugin default has to be spelled out.
@@ -966,37 +1040,75 @@ class LocalNotificationsPresenter
   }) async {
     final resolved = plugin ?? FlutterLocalNotificationsPlugin();
     final presenter =
-        LocalNotificationsPresenter(plugin: resolved, builder: builder);
+        LocalNotificationsPresenter(plugin: resolved, builder: builder)
+          .._onResponse = onResponse
+          .._onBackgroundResponse = onBackgroundResponse;
     await resolved.initialize(
       InitializationSettings(
         android: const AndroidInitializationSettings(androidSmallIcon),
-        iOS: DarwinInitializationSettings(
-          // The permission prompt is raised from the habit list, the way
-          // `ListHabitsActivity.onResume` asks for POST_NOTIFICATIONS only when
-          // there is at least one habit with a reminder
-          // (`reminders.app-start-and-permission#6`).
-          requestAlertPermission: false,
-          requestBadgePermission: false,
-          requestSoundPermission: false,
-          notificationCategories: presenter._darwinCategories(),
-        ),
-        macOS: DarwinInitializationSettings(
-          requestAlertPermission: false,
-          requestBadgePermission: false,
-          requestSoundPermission: false,
-          notificationCategories: presenter._darwinCategories(),
-        ),
+        iOS: presenter._darwinSettings(),
+        macOS: presenter._darwinSettings(),
       ),
       onDidReceiveNotificationResponse: onResponse,
       onDidReceiveBackgroundNotificationResponse: onBackgroundResponse,
     );
-    await resolved
+    await presenter._createRemindersChannel();
+    return presenter;
+  }
+
+  /// The Darwin half of [initialize], as its own expression so that
+  /// [refreshLocalizedRegistrations] re-issues exactly what was registered.
+  DarwinInitializationSettings _darwinSettings() => DarwinInitializationSettings(
+        // The permission prompt is raised from the habit list, the way
+        // `ListHabitsActivity.onResume` asks for POST_NOTIFICATIONS only when
+        // there is at least one habit with a reminder
+        // (`reminders.app-start-and-permission#6`).
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+        notificationCategories: _darwinCategories(),
+      );
+
+  /// `AndroidNotificationTray.createAndroidNotificationChannel(context)`, with
+  /// the channel name as `R.string.reminder` reads *now*.
+  Future<void> _createRemindersChannel() async {
+    await plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(
-          remindersChannel(builder.strings.channelName),
+          remindersChannel(_builder.strings.channelName),
         );
-    return presenter;
+  }
+
+  /// Re-issues both registrations after a language change.
+  ///
+  /// Android renames an existing channel when it is created again, which is
+  /// what makes `createAndroidNotificationChannel` before every notify a
+  /// rename upstream. On Darwin the only way back into
+  /// `setNotificationCategories:` is the plugin's own `initialize`, so it is
+  /// called again with the same settings and the same callbacks; every
+  /// `request…Permission` is false, so nothing is prompted for
+  /// (`audit24.reminder-strings-are-resolved-at-build-time#1`).
+  @override
+  Future<void> refreshLocalizedRegistrations() async {
+    await _createRemindersChannel();
+    final ios = plugin.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    if (ios != null) {
+      await ios.initialize(
+        _darwinSettings(),
+        onDidReceiveNotificationResponse: _onResponse,
+        onDidReceiveBackgroundNotificationResponse: _onBackgroundResponse,
+      );
+      return;
+    }
+    // macOS has no background-response channel in this plugin.
+    final macos = plugin.resolvePlatformSpecificImplementation<
+        MacOSFlutterLocalNotificationsPlugin>();
+    await macos?.initialize(
+      _darwinSettings(),
+      onDidReceiveNotificationResponse: _onResponse,
+    );
   }
 
   List<DarwinNotificationCategory> _darwinCategories() => [

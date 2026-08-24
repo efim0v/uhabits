@@ -20,13 +20,15 @@
 /// `Activity.showMessage` is a `Snackbar.LENGTH_SHORT` with no action button:
 /// none of these messages carries an UNDO affordance, because this fork has no
 /// undo (`commands.listener-list-habits-toasts#5`, `commands.no-undo-redo#1`).
+/// The snackbar itself lives in lib/ui/common/show_message.dart — one helper
+/// for the whole app, the way upstream has exactly one `View.showMessage`
+/// (`audit24.one-show-message-helper-one-lifetime#1`).
 library;
 
 // The command layer is not re-exported from uhabits_core.dart; see
 // state/app_scope.dart.
 // ignore_for_file: implementation_imports
 
-import 'package:flutter/material.dart';
 import 'package:uhabits_core/src/commands/archive_habits_command.dart';
 import 'package:uhabits_core/src/commands/change_habit_color_command.dart';
 import 'package:uhabits_core/src/commands/command.dart';
@@ -122,16 +124,4 @@ class ListHabitsCommandToasts implements CommandRunnerListener {
     final msg = getExecuteString(strings(), command);
     if (msg != null) showMessage(msg);
   }
-}
-
-/// `Activity.showMessage(msg)`: a short snackbar over the list screen, with no
-/// action button.
-void showListHabitsMessage(BuildContext context, String message) {
-  // `catch (e: IllegalArgumentException) { return }` — a screen with no host
-  // to attach the snackbar to simply drops the message.
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) return;
-  messenger
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
 }

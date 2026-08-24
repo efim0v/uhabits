@@ -75,7 +75,7 @@ void main() {
       plugin: plugin,
       builder: ReminderNotificationBuilder(
         preferences: preferences,
-        strings: strings,
+        strings: () => strings,
       ),
     );
     platformCalls = <MethodCall>[];
@@ -128,7 +128,7 @@ void main() {
         plugin: plugin,
         builder: ReminderNotificationBuilder(
           preferences: preferences,
-          strings: strings,
+          strings: () => strings,
         ),
       );
 

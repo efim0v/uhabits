@@ -24,6 +24,7 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/habit_list_model.dart';
 import 'package:uhabits/ui/common/dialogs/confirm_delete_dialog.dart';
+import 'package:uhabits/ui/common/show_message.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
@@ -462,9 +463,13 @@ void main() {
       expect(find.byType(SnackBar), findsOneWidget,
           reason: 'list-habits.selection-menu-actions#11');
       final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
-      expect(snackBar.duration, const Duration(milliseconds: 4000),
+      // `Snackbar.LENGTH_SHORT` is `SnackbarManager.SHORT_DURATION_MS`, 1500 ms
+      // — this used to assert Flutter's own 4000 ms default while citing
+      // LENGTH_SHORT as the reason for it
+      // (`audit24.one-show-message-helper-one-lifetime#1`).
+      expect(snackBar.duration, const Duration(milliseconds: 1500),
           reason: 'list-habits.selection-menu-actions#11 — '
-              'Snackbar.LENGTH_SHORT');
+              'Snackbar.LENGTH_SHORT is 1500 ms');
       expect(snackBar.action, isNull,
           reason: 'list-habits.selection-menu-actions#11 — no action button');
       expect(find.text('Habit archived'), findsOneWidget,
@@ -479,10 +484,9 @@ void main() {
           child: SizedBox.shrink(),
         ),
       );
-      showListHabitsMessage(
-        tester.element(find.byType(SizedBox)),
-        'Habit archived',
-      );
+      // The one `ViewExtensions.showMessage` helper every message in the app
+      // goes through (`audit24.one-show-message-helper-one-lifetime#1`).
+      showMessage(tester.element(find.byType(SizedBox)), 'Habit archived');
       await tester.pump();
       expect(tester.takeException(), isNull,
           reason: 'list-habits.selection-menu-actions#11');

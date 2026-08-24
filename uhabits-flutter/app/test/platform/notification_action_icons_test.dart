@@ -46,7 +46,7 @@ void main() {
 
   ReminderNotificationBuilder builder() => ReminderNotificationBuilder(
         preferences: Preferences(MemoryStorage()),
-        strings: strings,
+        strings: () => strings,
       );
 
   Habit habitOf(HabitType type) {

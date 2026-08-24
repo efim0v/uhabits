@@ -168,7 +168,7 @@ void main() {
 
   ReminderNotificationBuilder buildBuilder() => ReminderNotificationBuilder(
         preferences: preferences,
-        strings: strings,
+        strings: () => strings,
       );
 
   /// 06:00 on the Monday: two and a half hours before every reminder below.

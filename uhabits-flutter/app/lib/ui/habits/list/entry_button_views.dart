@@ -26,6 +26,14 @@
 ///    which is what that nudge was computing, so the nudge is not repeated
 ///    here. Relative offsets — the 1.3·em between a number and its unit — are
 ///    kept exactly.
+///
+///    The with-units branch of `NumberButtonView.Drawer` is the one place
+///    where an absolute anchor is *not* a nudge: it passes `rect.centerY()`
+///    straight through, so upstream that is a bare baseline and the number is
+///    drawn half an em higher than the unitless branch draws it. Dropping a
+///    nudge that was never applied is what left the pair 0.5·em low, and the
+///    branch now subtracts it explicitly
+///    (`audit24.number-cell-unit-pair-baseline#1`).
 ///  * `Paint.Style.STROKE` has no counterpart on `core.Canvas`, so the
 ///    stroked half of the YES_AUTO check goes through the app-side
 ///    [TextOutlineCanvas] capability, and falls back to a filled glyph on a
@@ -128,6 +136,16 @@ class CheckmarkButtonView extends core.View {
 
   /// `paint.color = when (value) { ... }`
   /// (`list-habits.checkmark-button-rendering#2`).
+  ///
+  /// The two greys are the ones `Drawer` caches from the *activity theme*:
+  /// `lowContrastColor = sres.getColor(R.attr.contrast40)` and
+  /// `mediumContrastColor = sres.getColor(R.attr.contrast60)`. That is the
+  /// styles.xml table, not the Themes.kt one — and the two disagree on
+  /// contrast40 in every app theme (#D8D8D8/#525252/#424242 against
+  /// `lowContrastTextColor`'s #E0E0E0/#424242/#212121), so an unset day painted
+  /// from the token comes out one step fainter than upstream, nearly invisible
+  /// under pure black (`audit24.entry-cells-read-contrast40-off-the-themes-kt-
+  /// table#1`).
   core.Color get glyphColor {
     switch (value) {
       case core.Entry.yesManual:
@@ -135,11 +153,9 @@ class CheckmarkButtonView extends core.View {
       case core.Entry.skip:
         return color;
       case core.Entry.no:
-        return areQuestionMarksEnabled
-            ? theme.mediumContrastTextColor
-            : theme.lowContrastTextColor;
+        return areQuestionMarksEnabled ? theme.contrast60 : theme.contrast40;
       default:
-        return theme.lowContrastTextColor;
+        return theme.contrast40;
     }
   }
 
@@ -254,15 +270,21 @@ class NumberButtonView extends core_views.NumberButton {
   static const double skipValue = core.Entry.skip / 1000.0;
 
   /// `val activeColor = when { ... }` (`list-habits.number-button#3`).
+  ///
+  /// `Drawer.init` caches the same pair [CheckmarkButtonView.glyphColor] does —
+  /// `lowContrast = sres.getColor(R.attr.contrast40)` and
+  /// `mediumContrast = sres.getColor(R.attr.contrast60)` — off the activity
+  /// theme, so an unset measurement cell reads styles.xml and not Themes.kt
+  /// (`audit24.entry-cells-read-contrast40-off-the-themes-kt-table#1`).
   core.Color get activeColor {
-    if (value < 0.0) return theme.lowContrastTextColor;
+    if (value < 0.0) return theme.contrast40;
     if (targetType == core.NumericalHabitType.atLeast && value >= threshold) {
       return color;
     }
     if (targetType == core.NumericalHabitType.atMost && value <= threshold) {
       return color;
     }
-    return theme.mediumContrastTextColor;
+    return theme.contrast60;
   }
 
   /// `dim(R.dimen.smallTextSize)` under the OS font-size setting: 14sp.
@@ -334,15 +356,35 @@ class NumberButtonView extends core_views.NumberButton {
 
     if (units.trim().isEmpty) {
       // "Draw number without units" (`list-habits.number-button#7`).
+      //
+      // `rect.offset(0f, 0.5f * em)` first: that nudge is the centre-to-
+      // baseline conversion this canvas already performs, so it is not
+      // repeated and the glyph is drawn at the plain centre.
       canvas.drawText(spec.label, width / 2, height / 2);
     } else {
-      canvas.drawText(spec.label, width / 2, height / 2);
+      // "Draw number" (`list-habits.number-button#8`).
+      //
+      // This branch does *not* offset the rect, so `rect.centerY()` reaches
+      // `android.graphics.Canvas.drawText` as a raw baseline and the digits
+      // are drawn entirely above the centre — half an em higher than the
+      // blank-units branch above puts them. That is a real difference between
+      // the two branches rather than a nudge to be dropped, so it has to be
+      // subtracted here (`audit24.number-cell-unit-pair-baseline#1`). The
+      // shipped goldens pin it: NumberButtonView/render_above.png draws the
+      // same "12" as render_unitless.png with its ink 5.5 dp — Android's
+      // `0.5f * em` — higher up the 48 dp cell.
+      final numberY = height / 2 - 0.5 * em;
+      canvas.drawText(spec.label, width / 2, numberY);
 
-      // "Draw units" (`list-habits.number-button#8`, `#12`).
+      // "Draw units" (`list-habits.number-button#8`, `#12`). `rect.offset(0f,
+      // 1.3f * em)` is a relative offset and is kept exactly, so the pair ends
+      // up straddling the centre at -0.5 em / +0.8 em — the same shape the KMP
+      // [core_views.NumberButton], which draws on this very canvas, writes as
+      // -0.6 em / +0.6 em.
       canvas.setFont(core.Font.regular);
       canvas.setFontSize(scaledSmallerTextSize);
       final trimmed = trimUnits(units, width * 0.9, canvas.measureText);
-      canvas.drawText(trimmed, width / 2, height / 2 + 1.3 * em);
+      canvas.drawText(trimmed, width / 2, numberY + 1.3 * em);
     }
 
     drawNotesIndicator(canvas, color: color, size: em, notes: notes);

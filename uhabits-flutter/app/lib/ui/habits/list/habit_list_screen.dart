@@ -53,6 +53,7 @@ import '../../common/dialogs/confirm_delete_dialog.dart';
 import '../../common/dialogs/current_dialog.dart';
 import '../../common/dialogs/number_dialog.dart';
 import '../../common/screen_route_observer.dart';
+import '../../common/show_message.dart';
 import '../../intro/intro_screen.dart';
 import '../../settings/data_actions.dart';
 import '../../settings/settings_screen.dart';
@@ -275,7 +276,7 @@ class _HabitListViewState extends State<_HabitListView>
       commandRunner: _model.scope.commandRunner,
       strings: () => L10n.of(context),
       showMessage: (message) {
-        if (mounted) showListHabitsMessage(context, message);
+        if (mounted) showMessage(context, message);
       },
     )..onAttached();
     // After the first frame, because acting on the intent means showing a
@@ -1119,7 +1120,7 @@ class _HabitListViewState extends State<_HabitListView>
   Future<bool> _openLink(Uri uri) async {
     final handled = await openExternalUri(uri);
     if (!handled && mounted) {
-      showListHabitsMessage(context, L10n.of(context).activityNotFound);
+      showMessage(context, L10n.of(context).activityNotFound);
     }
     return handled;
   }

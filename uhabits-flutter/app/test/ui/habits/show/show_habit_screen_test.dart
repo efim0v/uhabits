@@ -32,6 +32,7 @@ import 'package:uhabits/ui/habits/show/cards/history_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/notes_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/overview_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/subtitle_card_view.dart';
+import 'package:uhabits/ui/common/show_message.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
 import 'package:uhabits/ui/theme/app_theme.dart' show appThemeData;
 import 'package:uhabits_core/src/commands/create_repetition_command.dart';
@@ -1872,6 +1873,15 @@ void main() {
       expect(snack.style!.color, Colors.white,
           reason: 'show-habit.archive-unarchive#3 — white text at the bottom '
               'of the screen');
+      // "short" is `Snackbar.LENGTH_SHORT`, i.e.
+      // `SnackbarManager.SHORT_DURATION_MS` = 1500 ms — the same lifetime the
+      // list screen's toasts have, because upstream both go through the one
+      // `View.showMessage` helper
+      // (`audit24.one-show-message-helper-one-lifetime#1`).
+      expect(tester.widget<SnackBar>(find.byType(SnackBar)).duration,
+          const Duration(milliseconds: 1500),
+          reason: 'audit24.one-show-message-helper-one-lifetime#1 — '
+              'Snackbar.LENGTH_SHORT is 1500 ms');
       // Let the snackbar time out and the command finish, so neither outlives
       // the test.
       await tester.pumpAndSettle(const Duration(seconds: 5));
@@ -1893,8 +1903,7 @@ void main() {
       );
       expect(ScaffoldMessenger.maybeOf(hostless), isNull,
           reason: 'show-habit.archive-unarchive#5 — no suitable parent view');
-      expect(() => showShowHabitMessage(hostless, 'Habit archived'),
-          returnsNormally,
+      expect(() => showMessage(hostless, 'Habit archived'), returnsNormally,
           reason: 'show-habit.archive-unarchive#5 — the '
               'IllegalArgumentException is swallowed');
       await tester.pump();

@@ -20,6 +20,12 @@
 /// nudge computes. The port therefore draws at the plain centre; every
 /// *relative* offset (the 1.3 em between a number and its unit, the 0.8 em
 /// inset of the notes dot) is kept literally.
+///
+/// The one place that is *not* a nudge is the with-units branch of the number
+/// drawer, which passes `rect.centerY()` through unoffset — a bare baseline,
+/// so upstream the number lands half an em higher than the unitless branch
+/// puts it. The port subtracts that half em rather than dropping a nudge that
+/// was never there (`audit24.number-cell-unit-pair-baseline#1`).
 library;
 
 // ignore_for_file: implementation_imports
@@ -86,15 +92,19 @@ void main() {
             reason: 'list-habits.checkmark-button-rendering#2 — value $value');
       }
 
-      // NO: contrast60 with question marks on, contrast40 otherwise.
-      expect(checkmark(core.Entry.no).glyphColor, theme.lowContrastTextColor,
+      // NO: contrast60 with question marks on, contrast40 otherwise. Both are
+      // `sres.getColor(R.attr.…)`, the styles.xml table — NOT the Themes.kt
+      // `mediumContrastTextColor` / `lowContrastTextColor` these expectations
+      // used to name (`audit24.entry-cells-read-contrast40-off-the-themes-kt-
+      // table#1`).
+      expect(checkmark(core.Entry.no).glyphColor, theme.contrast40,
           reason: 'list-habits.checkmark-button-rendering#2');
       expect(
         checkmark(core.Entry.no, areQuestionMarksEnabled: true).glyphColor,
-        theme.mediumContrastTextColor,
+        theme.contrast60,
         reason: 'list-habits.checkmark-button-rendering#2',
       );
-      expect(theme.mediumContrastTextColor, isNot(theme.lowContrastTextColor),
+      expect(theme.contrast60, isNot(theme.contrast40),
           reason: 'list-habits.checkmark-button-rendering#2');
 
       // UNKNOWN, and anything else, is contrast40 either way.
@@ -102,12 +112,12 @@ void main() {
         expect(
           checkmark(core.Entry.unknown, areQuestionMarksEnabled: enabled)
               .glyphColor,
-          theme.lowContrastTextColor,
+          theme.contrast40,
           reason: 'list-habits.checkmark-button-rendering#2',
         );
         expect(
           checkmark(99, areQuestionMarksEnabled: enabled).glyphColor,
-          theme.lowContrastTextColor,
+          theme.contrast40,
           reason: 'list-habits.checkmark-button-rendering#2 — the else branch',
         );
       }
@@ -116,6 +126,75 @@ void main() {
       final ops = draw(checkmark(core.Entry.skip)).opsNamed('drawText');
       expect(ops.single.color, habitColor,
           reason: 'list-habits.checkmark-button-rendering#2');
+    });
+
+    test('#2 the two greys are the styled attributes, in every theme', () {
+      // `Drawer` resolves them through StyledResources —
+      // `sres.getColor(R.attr.contrast40)` / `contrast60` — so the table is
+      // styles.xml, not Themes.kt. The two tables agree on contrast60 and
+      // disagree on contrast40 in all three app themes, which is why no single
+      // call site reads as wrong (`audit24.entry-cells-read-contrast40-off-the-
+      // themes-kt-table#1`).
+      const String rule =
+          'audit24.entry-cells-read-contrast40-off-the-themes-kt-table#1';
+      final Map<String, ({core.Theme theme, int contrast40})> themes = {
+        'LightTheme': (theme: core.LightTheme(), contrast40: 0xD8D8D8),
+        'DarkTheme': (theme: core.DarkTheme(), contrast40: 0x525252),
+        'PureBlackTheme': (theme: core.PureBlackTheme(), contrast40: 0x424242),
+      };
+      themes.forEach((name, entry) {
+        final core.Theme t = entry.theme;
+        final core.Color expected = core.Color.fromRgb(entry.contrast40);
+        expect(t.contrast40, expected,
+            reason: '$rule — @color/grey_350 / grey_750 / grey_800 in $name');
+        // The guard that keeps the two tables from being silently swapped
+        // again: they really do differ, so reading the wrong one is visible.
+        expect(t.contrast40, isNot(t.lowContrastTextColor),
+            reason: '$rule — ?attr/contrast40 is not the Themes.kt token in '
+                '$name');
+
+        CheckmarkButtonView mark(int value, {bool questionMarks = false}) =>
+            CheckmarkButtonView(
+              value: value,
+              color: habitColor,
+              theme: t,
+              notes: '',
+              areQuestionMarksEnabled: questionMarks,
+            );
+
+        // NO without question marks, UNKNOWN and the else branch are
+        // `lowContrastColor` = ?attr/contrast40.
+        expect(mark(core.Entry.no).glyphColor, expected, reason: '$rule — $name');
+        for (final bool enabled in <bool>[false, true]) {
+          expect(mark(core.Entry.unknown, questionMarks: enabled).glyphColor,
+              expected,
+              reason: '$rule — UNKNOWN in $name');
+          expect(mark(99, questionMarks: enabled).glyphColor, expected,
+              reason: '$rule — the else branch in $name');
+        }
+        // NO with question marks on is `mediumContrastColor` =
+        // ?attr/contrast60, grey_500 in all three.
+        expect(mark(core.Entry.no, questionMarks: true).glyphColor, t.contrast60,
+            reason: '$rule — $name');
+        expect(t.contrast60, const core.Color.fromRgb(0x9E9E9E),
+            reason: '$rule — @color/grey_500 in $name');
+
+        // `NumberButtonView.Drawer` reads the same pair.
+        core.Color active(double value) => NumberButtonView(
+              color: habitColor,
+              value: value,
+              threshold: 100.0,
+              units: '',
+              theme: t,
+              targetType: core.NumericalHabitType.atLeast,
+              notes: '',
+              areQuestionMarksEnabled: false,
+            ).activeColor;
+        expect(active(-0.001), expected,
+            reason: '$rule — value < 0.0 is contrast40 in $name');
+        expect(active(99.0), t.contrast60,
+            reason: '$rule — the off-target branch is contrast60 in $name');
+      });
     });
 
     test('#3 the glyph of every entry value', () {
@@ -458,9 +537,11 @@ void main() {
       final ops = draw(scaled(value: 150.0, units: 'km', notes: 'x'));
       final em = _em(14.0 * 1.5);
 
-      // `rect.offset(0f, 1.3f * em)` between the number and its unit.
+      // `rect.offset(0f, 1.3f * em)` between the number and its unit, from a
+      // number that itself sits 0.5 em above the centre
+      // (`audit24.number-cell-unit-pair-baseline#1`).
       expect(ops.opsNamed('drawText').last.args[1],
-          closeTo(24.0 + 1.3 * em, 1e-9),
+          closeTo(24.0 + 0.8 * em, 1e-9),
           reason: '$rule `em = pNumber.measureText("m")` is cached in the '
               'Drawer init block, under the number paint.');
       // `drawNotesIndicator(size = em)`.
@@ -471,11 +552,14 @@ void main() {
 
   group('list-habits.number-button', () {
     test('#3 the active colour', () {
-      // A negative value is contrast40 whatever the target says.
+      // A negative value is contrast40 whatever the target says. `contrast40`
+      // and `contrast60`, the styled attributes `Drawer.init` caches — not the
+      // Themes.kt tokens these expectations used to name
+      // (`audit24.entry-cells-read-contrast40-off-the-themes-kt-table#1`).
       for (final type in core.NumericalHabitType.values) {
         expect(
           number(value: -0.001, targetType: type).activeColor,
-          theme.lowContrastTextColor,
+          theme.contrast40,
           reason: 'list-habits.number-button#3',
         );
       }
@@ -485,7 +569,7 @@ void main() {
           reason: 'list-habits.number-button#3');
       expect(number(value: 150.0).activeColor, habitColor,
           reason: 'list-habits.number-button#3');
-      expect(number(value: 99.0).activeColor, theme.mediumContrastTextColor,
+      expect(number(value: 99.0).activeColor, theme.contrast60,
           reason: 'list-habits.number-button#3');
 
       // AT_MOST: the other way round.
@@ -496,13 +580,13 @@ void main() {
           reason: 'list-habits.number-button#3');
       expect(
         number(value: 101.0, targetType: atMost).activeColor,
-        theme.mediumContrastTextColor,
+        theme.contrast60,
         reason: 'list-habits.number-button#3',
       );
 
       // Zero is not negative, so an at-least habit with a positive target
       // still reads as "below target", not "unset".
-      expect(number(value: 0.0).activeColor, theme.mediumContrastTextColor,
+      expect(number(value: 0.0).activeColor, theme.contrast60,
           reason: 'list-habits.number-button#3');
       expect(draw(number(value: 150.0)).opsNamed('drawText').single.color,
           habitColor,
@@ -577,13 +661,19 @@ void main() {
 
       final numberOp = ops[0];
       final unitOp = ops[1];
-      expect(numberOp.args, <double>[24.0, 24.0],
-          reason: 'list-habits.number-button#8 — the number keeps the centre');
+      // `rect` is *not* offset by 0.5 em in this branch, so `rect.centerY()`
+      // reaches android.graphics.Canvas as a raw baseline and the glyphs land
+      // half an em higher than the unitless branch puts them
+      // (`audit24.number-cell-unit-pair-baseline#1`).
+      expect(numberOp.args, <double>[24.0, 24.0 - 0.5 * _em(14.0)],
+          reason: 'audit24.number-cell-unit-pair-baseline#1 — the number sits '
+              '0.5 em above the centre, where the unitless branch puts it');
       expect(unitOp.text, 'km', reason: 'list-habits.number-button#8');
       expect(unitOp.args[0], 24.0, reason: 'list-habits.number-button#8');
       // em is measured with the *number* paint (bold, 14sp), not the unit's.
-      expect(unitOp.args[1], closeTo(24.0 + 1.3 * _em(14.0), 1e-9),
-          reason: 'list-habits.number-button#8');
+      expect(unitOp.args[1], closeTo(24.0 - 0.5 * _em(14.0) + 1.3 * _em(14.0), 1e-9),
+          reason: 'audit24.number-cell-unit-pair-baseline#1 — and the unit '
+              '1.3 em below the number, i.e. 0.8 em below the centre');
       expect(unitOp.fontSize, 12.0,
           reason: 'list-habits.number-button#8 — smallerTextSize');
       expect(unitOp.color, numberOp.color,
@@ -667,6 +757,48 @@ void main() {
       expect(view.units, 'km', reason: 'list-habits.number-button#12');
       expect(view.threshold, 100.0, reason: 'list-habits.number-button#12');
       expect(view.color, habitColor, reason: 'list-habits.number-button#12');
+    });
+  });
+
+  group('audit24.number-cell-unit-pair-baseline', () {
+    const rule = 'audit24.number-cell-unit-pair-baseline#1';
+
+    test('#1 a number with a unit is drawn half an em above a unitless one',
+        () {
+      // The two shipped goldens settle this without any metrics arithmetic.
+      // NumberButtonView/render_unitless.png and render_above.png are both
+      // 96x96 px = 48x48 dp at density 2, and both draw the same "12" with the
+      // same paint; the ink rows are identical run for run, offset by exactly
+      // eleven pixels — rows 38-59 unitless against rows 27-48 with a unit,
+      // i.e. dp 19.0-29.5 against dp 13.5-24.0. That 5.5 dp is `0.5f * em`
+      // under Android's Roboto Condensed Bold 14sp paint, which is precisely
+      // the `rect.offset(0f, 0.5f * em)` the blank-units branch of
+      // `NumberButtonView.Drawer.draw` applies and the with-units branch does
+      // not. On `core.Canvas` the offset is not a nudge to be dropped but a
+      // real difference between the two branches, so it has to be subtracted.
+      final unitless =
+          draw(number(value: 12.0)).opsNamed('drawText').single.args[1];
+      final withUnit =
+          draw(number(value: 12.0, units: 'km')).opsNamed('drawText')[0].args[1];
+
+      expect(unitless - withUnit, closeTo(0.5 * _em(smallTextSize), 1e-9),
+          reason: '$rule — the with-units number is half an em higher than '
+              'the unitless one, as render_above.png is 5.5 dp above '
+              'render_unitless.png');
+    });
+
+    test('#1 the number and its unit straddle the cell centre', () {
+      // Once the nudge is removed the pair reads -0.5 em / +0.8 em about the
+      // centre, the same shape the KMP `NumberButton` — which draws on this
+      // very canvas — writes as -0.6 em / +0.6 em. Hanging both lines below
+      // the centre, as the port did, is what crowded the unit against the
+      // bottom edge of the 48 dp cell.
+      final ops = draw(number(value: 150.0, units: 'km')).opsNamed('drawText');
+      const centerY = 24.0;
+      expect(ops[0].args[1], lessThan(centerY),
+          reason: '$rule — the number sits above the centre');
+      expect(ops[1].args[1], greaterThan(centerY),
+          reason: '$rule — and the unit below it');
     });
   });
 

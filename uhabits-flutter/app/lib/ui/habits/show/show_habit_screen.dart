@@ -56,6 +56,7 @@ import '../../common/dialogs/confirm_delete_dialog.dart';
 // `Screen.showHistoryEditorDialog` override have the same name.
 import '../../common/dialogs/history_editor_dialog.dart' as editor;
 import '../../common/dialogs/number_dialog.dart';
+import '../../common/show_message.dart' as messages;
 import '../../common/window_insets.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
 import '../edit/edit_habit_screen.dart';
@@ -508,7 +509,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         // Kotlin's `else -> {}`.
         return;
     }
-    showShowHabitMessage(context, text);
+    messages.showMessage(context, text);
   }
 
   /// `Activity.showSendFileScreen(archiveFilename)`, the second half of
@@ -553,7 +554,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
       // R.string.activity_not_found through the same `showMessage` helper
       // every other message on this screen goes through.
       if (!mounted) return;
-      showShowHabitMessage(context, L10n.of(context).activityNotFound);
+      messages.showMessage(context, L10n.of(context).activityNotFound);
     }
   }
 
@@ -742,37 +743,6 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         return FrequencyCardView(key: key, state: state.frequency);
     }
   }
-}
-
-/// Port of `ViewExtensions.showMessage(text)`, the helper every message on
-/// this screen goes through:
-///
-/// ```kotlin
-/// fun Activity.showMessage(msg: String?) {
-///     if (msg == null) return
-///     try {
-///         val snackbar = Snackbar.make(findViewById(android.R.id.content), msg, LENGTH_SHORT)
-///         (snackbar.view.findViewById(...) as TextView).setTextColor(Color.WHITE)
-///         snackbar.show()
-///     } catch (e: IllegalArgumentException) {
-///         // Ignored: no suitable parent view
-///     }
-/// }
-/// ```
-///
-/// A short snackbar with white text at the bottom of the screen
-/// (`show-habit.archive-unarchive#3`); the `catch` is the part that matters
-/// here — when no host can be found the message is dropped in silence rather
-/// than crashing (`show-habit.archive-unarchive#5`).
-void showShowHabitMessage(BuildContext context, String message) {
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) return;
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(message, style: const TextStyle(color: Colors.white)),
-      duration: const Duration(seconds: 2),
-    ),
-  );
 }
 
 /// `@style/Card`, from res/values/styles.xml, on top of `@style/CardCommon`:

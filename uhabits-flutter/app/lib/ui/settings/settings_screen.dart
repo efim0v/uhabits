@@ -41,6 +41,7 @@ import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
 import '../habits/list/list_header.dart' show IntlLocalDateFormatter;
 import '../theme/app_theme.dart' show coreThemeOf;
+import '../common/show_message.dart';
 import '../common/store_listing.dart';
 
 /// The settings screen.
@@ -347,7 +348,6 @@ class _SettingsView extends StatelessWidget {
   /// `ActivityNotFoundException` branch, and gets the same message Android
   /// shows.
   Future<void> _customizeNotifications(BuildContext context, L10n l10n) async {
-    final messenger = ScaffoldMessenger.of(context);
     final settings = PlatformNotificationChannelSettings(
       creator: LocalNotificationsChannelCreator(
         plugin: FlutterLocalNotificationsPlugin(),
@@ -358,7 +358,11 @@ class _SettingsView extends StatelessWidget {
       ),
     );
     if (await settings.openReminderChannelSettings()) return;
-    messenger.showSnackBar(SnackBar(content: Text(l10n.activityNotFound)));
+    if (!context.mounted) return;
+    // The app's one `ViewExtensions.showMessage`, so this message has the same
+    // 1500 ms lifetime and the same replace-don't-queue discipline as every
+    // other one (`audit24.one-show-message-helper-one-lifetime#1`).
+    showMessage(context, l10n.activityNotFound);
   }
 
   // -------------------------------------------------------------------

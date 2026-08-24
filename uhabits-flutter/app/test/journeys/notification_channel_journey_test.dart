@@ -188,5 +188,14 @@ void main() {
             '"No app was found to support this action". Hard-disabling the row '
             'in advance shows that message to everyone, including the users '
             'whose device does handle it.');
+    // `startActivitySafely` reports it through `Activity.showMessage`, the one
+    // helper every message in the app goes through — so this snackbar has the
+    // same LENGTH_SHORT lifetime as the list screen's toasts
+    // (`audit24.one-show-message-helper-one-lifetime#1`).
+    expect(tester.widget<SnackBar>(find.byType(SnackBar)).duration,
+        const Duration(milliseconds: 1500),
+        reason: 'audit24.one-show-message-helper-one-lifetime#1 — '
+            'Snackbar.LENGTH_SHORT is 1500 ms');
+    await tester.pumpAndSettle(const Duration(seconds: 5));
   });
 }

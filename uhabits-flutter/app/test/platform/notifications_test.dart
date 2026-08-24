@@ -2,6 +2,7 @@
 // their `src` path, exactly as lib/state/app_scope.dart reaches them.
 // ignore_for_file: implementation_imports
 
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations_en.dart';
 import 'package:uhabits/platform/flutter_alarm_scheduler.dart';
@@ -90,7 +91,7 @@ void main() {
   ReminderNotificationBuilder buildBuilder({bool snoozeActionEnabled = true}) =>
       ReminderNotificationBuilder(
         preferences: preferences,
-        strings: strings,
+        strings: () => strings,
         snoozeActionEnabled: snoozeActionEnabled,
       );
 
@@ -1231,7 +1232,7 @@ void main() {
 
       final builder = ReminderNotificationBuilder(
         preferences: preferences,
-        strings: resolved,
+        strings: () => resolved,
       );
       final spec = builder.build(
         yesNoHabit(),
@@ -1249,6 +1250,70 @@ void main() {
             icon: ReminderActionIcons.snooze),
         reason: 'reminders.snooze-android12-gate#3: and that string is what '
             'labels the snooze action',
+      );
+    });
+
+    testWidgets('audit24.reminder-strings-are-resolved-at-build-time#1 the '
+        'six strings follow a runtime language change', (tester) async {
+      // `AndroidNotificationTray.buildNotification` reads every one of them out
+      // of the application Context — `context.getString(R.string.yes)` and the
+      // rest — at the moment the notification is built, and
+      // `createAndroidNotificationChannel` reads `R.string.reminder` the same
+      // way immediately before each notify(). `Resources.getString` resolves
+      // against the process's CURRENT configuration, so a device- or per-app
+      // language change is picked up by the very next reminder, with nothing to
+      // re-arm and no restart.
+      const String rule =
+          'audit24.reminder-strings-are-resolved-at-build-time#1';
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+
+      // Exactly what AppScope._startPlatformServices builds.
+      final builder = ReminderNotificationBuilder(preferences: preferences);
+
+      tester.platformDispatcher.localesTestValue = const <Locale>[Locale('de')];
+      final NotificationSpec german = builder.build(
+        yesNoHabit(question: ''),
+        10,
+        LocalDate.ymd(2015, 1, 26),
+        500,
+      );
+      expect(german.body, 'Hast du diese Gewohnheit heute erledigt?',
+          reason: '$rule — getString(R.string.default_reminder_question)');
+      expect(german.actions.map((a) => a.title).toList(),
+          <String>['Ja', 'Nein', 'Später'],
+          reason: '$rule — getString(R.string.yes / .no / .snooze)');
+      expect(german.channelName, 'Erinnerung',
+          reason: '$rule — resources.getString(R.string.reminder)');
+      expect(builder.strings.enter, 'Eingeben',
+          reason: '$rule — getString(R.string.enter)');
+
+      // The user switches the phone — or Loop itself — to English.
+      tester.platformDispatcher.localesTestValue = const <Locale>[Locale('en')];
+
+      final NotificationSpec english = builder.build(
+        yesNoHabit(question: ''),
+        10,
+        LocalDate.ymd(2015, 1, 26),
+        500,
+      );
+      expect(english.body, 'Have you completed this habit today?',
+          reason: '$rule — the very next notification is already translated; '
+              'nothing is captured at process start');
+      expect(english.actions.map((a) => a.title).toList(),
+          <String>['Yes', 'No', 'Later'],
+          reason: rule);
+      expect(english.channelName, 'Reminder', reason: rule);
+      expect(builder.strings.enter, 'Enter', reason: rule);
+      // The iOS categories are built from the same action lists, so they
+      // follow too (`LocalNotificationsPresenter._darwinCategories`).
+      expect(
+        builder
+            .categories()
+            .expand((c) => c.actions)
+            .map((a) => a.title)
+            .toSet(),
+        <String>{'Enter', 'Later', 'Yes', 'No'},
+        reason: '$rule — the Darwin action titles are the same six strings',
       );
     });
 
