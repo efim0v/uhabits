@@ -83,7 +83,7 @@ create table SleepGoals (
     bed_minutes integer not null,              -- цель отхода, минут от полуночи
     wake_minutes integer not null,             -- цель подъёма, минут от полуночи
     min_sleep_minutes integer not null,        -- по умолчанию 450 (7:30)
-    weight_duration real not null,             -- по умолчанию 0.4
+    weight_sleep real not null,             -- по умолчанию 0.4
     weight_bed real not null,                  -- по умолчанию 0.3
     weight_wake real not null,                 -- по умолчанию 0.3
     half_credit_time_minutes integer not null, -- по умолчанию 90

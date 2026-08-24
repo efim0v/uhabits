@@ -1,0 +1,111 @@
+<h2>Экран привычки «Сон» целиком</h2>
+<p class="subtitle">График в выбранной вами ориентации, встроенный в экран. Ниже границы «существующие блоки» всё уже написано и работает — оценка, календарь, серии, частота достаются даром, потому что запись дня для этой привычки хранит обычное число. Новое — только четыре блока сверху. Числа настоящие: посчитаны по модели, которую мы утвердили.</p>
+
+<style>
+.ph { max-width:390px; margin:0 auto; background:#000; border:1px solid #2a2a33; border-radius:22px; overflow:hidden;
+      color:#e8e8ee; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.ph .tb { display:flex; align-items:center; gap:14px; padding:14px 16px; background:#0b0b0f; border-bottom:1px solid #1c1c24; }
+.ph .tb .nm { font-size:17px; font-weight:600; }
+.ph .tb .dot { width:11px; height:11px; border-radius:50%; background:#6366f1; }
+.ph .blk { padding:16px; border-bottom:1px solid #16161c; }
+.ph .cap { font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:#7a7a8a; margin-bottom:12px; }
+.ph .big { font-size:44px; font-weight:300; letter-spacing:-.02em; line-height:1; }
+.ph .muted { color:#7a7a8a; font-size:12px; }
+.ph .comp { display:flex; gap:8px; }
+.ph .comp > div { flex:1; background:#101017; border:1px solid #1e1e28; border-radius:9px; padding:9px 10px; }
+.ph .comp .v { font-size:15px; font-weight:600; }
+.ph .comp .p { font-size:12px; margin-top:2px; }
+.ph .new { background:#0d0d13; }
+.ph .divider { padding:9px 16px; background:#08080b; color:#5a5a68; font-size:11px; letter-spacing:.07em; text-transform:uppercase; }
+.ph .ghost { padding:14px 16px; border-bottom:1px solid #16161c; display:flex; justify-content:space-between; align-items:center; color:#6a6a78; }
+.opt-block { display:block !important; }
+</style>
+
+<div class="section">
+<div class="ph">
+
+  <div class="tb"><span style="color:#7a7a8a">←</span><span class="dot"></span><span class="nm">Сон</span></div>
+
+  <div class="blk new">
+    <div class="cap">Прошлая ночь · пн, 24 августа</div>
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:14px">
+      <span class="big">87<span style="font-size:22px">%</span></span>
+      <span class="muted">оценка привычки 78% · серия 12 дней</span>
+    </div>
+    <div class="comp">
+      <div><div class="muted">Отход</div><div class="v">23:41</div><div class="p" style="color:#4ade80">93%</div></div>
+      <div><div class="muted">Подъём</div><div class="v">07:12</div><div class="p" style="color:#4ade80">99%</div></div>
+      <div><div class="muted">Сон</div><div class="v">6:48</div><div class="p" style="color:#fbbf24">75%</div></div>
+    </div>
+    <div class="muted" style="margin-top:10px">Лёг вовремя и встал вовремя, но заснул не сразу — балл сняла только длительность.</div>
+  </div>
+
+  <div class="blk new">
+    <div class="cap">Ночи</div>
+    <div style="position:relative;height:158px;margin-left:40px;border-left:1px solid #22222c;border-bottom:1px solid #22222c">
+      <div style="position:absolute;left:0;right:0;top:15.4%;height:61.5%;background:rgba(99,102,241,.14);border-top:1px dashed rgba(129,140,248,.5);border-bottom:1px dashed rgba(129,140,248,.5)"></div>
+      <div style="position:absolute;left:-40px;top:11%;color:#6a6a78;font-size:11px">23:00</div>
+      <div style="position:absolute;left:-40px;top:72%;color:#6a6a78;font-size:11px">07:00</div>
+      <div style="position:absolute;inset:0;display:flex;gap:2px;padding:0 3px">
+        <div style="flex:1;position:relative"><span style="position:absolute;top:16.9%;height:60.8%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:20.8%;height:58.4%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:26.2%;height:55.3%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative;background:repeating-linear-gradient(45deg,transparent,transparent 4px,#1a1a22 4px,#1a1a22 8px)"><span style="position:absolute;bottom:3px;left:0;right:0;text-align:center;color:#55555f;font-size:10px">✈</span></div>
+        <div style="flex:1;position:relative;background:repeating-linear-gradient(45deg,transparent,transparent 4px,#1a1a22 4px,#1a1a22 8px)"></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:32.3%;height:55.4%;left:14%;right:14%;border-radius:5px;background:#f59e0b"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:35.4%;height:56.9%;left:14%;right:14%;border-radius:5px;background:#f59e0b"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:18.5%;height:60.0%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:15.4%;height:62.3%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:22.3%;height:58.5%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:24.6%;height:55.4%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:17.7%;height:59.2%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:13.8%;height:61.6%;left:14%;right:14%;border-radius:5px;background:#6366f1"></span></div>
+        <div style="flex:1;position:relative"><span style="position:absolute;top:19.2%;height:59.3%;left:14%;right:14%;border-radius:5px;background:#818cf8;box-shadow:0 0 0 1.5px #c7d2fe"></span></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;color:#6a6a78;font-size:11px;margin-top:7px;padding-left:40px"><span>11 авг</span><span>15 авг</span><span>19 авг</span><span>24 авг</span></div>
+    <div class="muted" style="margin-top:9px">Штриховка — отмеченные пропуски. Оранжевым — ночи ниже половины. Лента листается вбок, как остальные графики.</div>
+  </div>
+
+  <div class="blk new">
+    <div class="cap">Стабильность · 14 ночей</div>
+    <div style="display:flex;gap:22px">
+      <div><div class="muted">Отход</div><div style="font-size:19px;font-weight:600">±38 мин</div></div>
+      <div><div class="muted">Подъём</div><div style="font-size:19px;font-weight:600">±22 мин</div></div>
+      <div><div class="muted">Сон</div><div style="font-size:19px;font-weight:600">7:04</div></div>
+    </div>
+  </div>
+
+  <div class="blk new" style="display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-weight:500">Пропущено 2 из 30 дней</div><div class="muted">Последний — перелёт 14–15 августа</div></div>
+    <span style="color:#818cf8;font-size:13px">Отметить →</span>
+  </div>
+
+  <div class="divider">Существующие блоки приложения</div>
+  <div class="ghost"><span>Оценка</span><span>78%</span></div>
+  <div class="ghost"><span>История</span><span>календарь</span></div>
+  <div class="ghost"><span>Серии</span><span>12 дней</span></div>
+  <div class="ghost" style="border-bottom:none"><span>Частота</span><span>—</span></div>
+
+</div>
+</div>
+
+<h3>Что здесь стоит подтвердить или поменять</h3>
+<div class="options" data-multiselect>
+  <div class="option" data-choice="ok" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>Всё так, идём дальше</h3><p>Состав и порядок блоков подходят, можно писать спецификацию.</p></div>
+  </div>
+  <div class="option" data-choice="bignum" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content"><h3>Крупным должна быть оценка, а не прошлая ночь</h3><p>Сейчас большим числом идёт процент последней ночи, а накопленная оценка привычки — мелкой строкой рядом. В остальном приложении крупное число — это всегда оценка. Поменять местами?</p></div>
+  </div>
+  <div class="option" data-choice="why" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content"><h3>Строка-объяснение лишняя</h3><p>«Лёг вовремя и встал вовремя, но заснул не сразу» — приложение проговаривает вывод словами. Это ново для uhabits, который никогда ничего не комментирует. Убрать?</p></div>
+  </div>
+  <div class="option" data-choice="stab" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content"><h3>Стабильность нужна числом, а не разбросом</h3><p>Сейчас это «±38 мин» — честно, но требует интерпретации. Альтернатива — свести к одному проценту регулярности от 0 до 100.</p></div>
+  </div>
+</div>
