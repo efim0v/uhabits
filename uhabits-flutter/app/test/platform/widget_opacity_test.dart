@@ -258,6 +258,49 @@ void main() {
   // #6 — what the number touches
   // -------------------------------------------------------------------------
 
+  group('audit16.widget-opacity-never-reaches-ios', () {
+    const String iosRule =
+        'audit16.widget-opacity-never-reaches-ios#1 — the preference dims the '
+        "widget's card on every platform the app ships on. On iOS the card is "
+        'the extension\'s `containerBackground`, and the extension reads only '
+        'the index document, so the alpha has to be published there and used '
+        'there.';
+
+    test('the index carries the opacity', () {
+      final MemoryStorage storage = MemoryStorage();
+      Preferences(storage).widgetOpacity = 102;
+      final MemoryHabitList habitList = MemoryHabitList();
+      final habit = MemoryModelFactory().buildHabit()..name = 'Meditate';
+      habitList.add(habit);
+      habit.recompute();
+      final HomeWidgetBridge bridge = HomeWidgetBridge(
+        habitList: habitList,
+        registry: WidgetRegistry(storage),
+        platform: _SilentPlatform(),
+        preferences: Preferences(storage),
+      );
+
+      expect(bridge.buildIndexDocument()['widgetOpacity'], 102,
+          reason: '$iosRule An iOS widget has no widget id, so the per-widget '
+              'document it never opens is the wrong place for it.');
+    });
+
+    test('the extension declares and applies it', () {
+      final String swift =
+          File('ios/HabitsWidget/WidgetData.swift').readAsStringSync();
+      expect(swift, contains(RegExp(r'let widgetOpacity\s*:')),
+          reason: '$iosRule WidgetIndex has to decode the field…');
+      expect(swift, contains('func widgetOpacity('),
+          reason: '$iosRule …and WidgetStore has to expose it to the views.');
+
+      final String card =
+          File('ios/HabitsWidget/WidgetCard.swift').readAsStringSync();
+      expect(card, contains('opacity'),
+          reason: '$iosRule …which the card chrome applies, the way '
+              'HabitWidgetView.rebuildBackground applies backgroundAlpha.');
+    });
+  });
+
   group('settings.preferences.widget-opacity#6', () {
     const String rule =
         'settings.preferences.widget-opacity#6 — The opacity is applied as the '

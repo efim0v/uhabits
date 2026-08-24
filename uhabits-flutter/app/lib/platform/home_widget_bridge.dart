@@ -502,6 +502,13 @@ class HomeWidgetBridge {
       // of this catalogue draws the same grids a bound one does, so it needs
       // the same weekday origin.
       'firstWeekday': firstWeekday,
+      // `settings.preferences.widget-opacity#5`: the alpha
+      // `HabitWidgetView.rebuildBackground` paints the card with. It is on the
+      // per-widget document too, which is what the Android provider reads —
+      // but an iOS widget has no widget id and never opens that one, so
+      // without it here the preference is inert on that platform
+      // (`audit16.widget-opacity-never-reaches-ios#1`).
+      'widgetOpacity': widgetOpacity,
     };
   }
 

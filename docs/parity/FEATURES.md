@@ -7952,3 +7952,31 @@ pass without its iOS counterpart ever being written.
 - **Severity:** cosmetic
 
 1. `audit15.habit-type-cards-lose-their-2dp-outline#1` — In the Kotlin app: both cards of the habit-type chooser carry `style="@style/SelectHabitTypeButton"`, whose `android:background` is `@drawable/round_ripple` — a `<ripple android:color="?colorAccent">` wrapping a rectangle with `<solid android:color="?cardBgColor"/>`, `<stroke android:width="2dp" android:color="?android:textColor"/>` and `<corners android:radius="5dp"/>`. The dialog's `R.style.Translucent` theme is layered over the activity theme by ContextThemeWrapper, so all three attributes resolve per app theme: the fill is `?cardBgColor` — #FAFAFA light, #303030 dark, #000000 pure black — and the stroke is `?android:textColor` — #424242 light, #F5F5F5 dark, #EEEEEE pure black. That 2dp near-white stroke is the whole of each card's shape against the #a0000000 scrim: in the dark and pure-black themes it is the only thing that says where one card ends and the other begins. `?colorAccent` is `?aboutScreenColor` in both AppBaseTheme and AppBaseThemeDark, so the ripple is the app's accent blue rather than the platform grey. The four properties are the rule: fill, 2dp stroke, 5dp corners, accent ripple — 6dp of elevation on its own reproduces none of them.
+
+## Domain: Sixteenth audit pass (2026-08-24)
+
+The same eight lenses, no new one added — so a clean lens is real convergence
+rather than a gap in its own brief. Seven of the eight came back clean,
+including the regression lens over the previous pass's widget roll-forward. The
+one finding was the third instance of a single structural blind spot, which is
+now guarded directly.
+
+#### audit16.widget-opacity-never-reaches-ios
+
+- [x] `audit16.widget-opacity-never-reaches-ios` — The "Widget opacity" setting has no effect on any iOS home-screen widget, because the value is published only on the per-widget-id document that WidgetKit never opens
+- **Platform:** ios · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/xml/preferences.xml:77-85 (the pref_widget_opacity ListPreference, default 255); uhabits-android/src/main/java/org/isoron/uhabits/widgets/BaseWidget.kt:148-155 (preferedBackgroundAlpha); uhabits-android/src/main/java/org/isoron/uhabits/widgets/views/HabitWidgetView.kt:96-97 (backgroundPaint.alpha = backgroundAlpha)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/home_widget_bridge.dart (buildIndexDocument), uhabits-flutter/app/ios/HabitsWidget/WidgetData.swift (WidgetIndex.widgetOpacity, WidgetStore.widgetOpacity) and uhabits-flutter/app/ios/HabitsWidget/WidgetCard.swift (widgetCard)`
+- **Severity:** major
+
+1. `audit16.widget-opacity-never-reaches-ios#1` — In the Kotlin app: `pref_widget_opacity` maps 100%/80%/60%/40%/20%/0% to alphas 255..0, `BaseWidget.preferedBackgroundAlpha` reads it, and `HabitWidgetView.rebuildBackground` paints the card's `RoundRectShape` with `backgroundPaint.alpha = backgroundAlpha`. All six widgets call `setBackgroundAlpha(preferedBackgroundAlpha)` in `refreshData`, so 20% or 0% fades the card away and leaves only the chart, ring and label over the wallpaper. The alpha touches the card and nothing else. In a port whose widgets are a separate process the value has to travel in the published document — and specifically in the *index* document, because an iOS widget has no widget id and resolves its habit out of the index's catalogue, so the per-widget-id document is the one place it can never see.
+
+#### audit16.index-fields-must-reach-the-extension
+
+- [x] `audit16.index-fields-must-reach-the-extension` — Nothing compared the fields the index document publishes against the fields the Swift declares, which is how three separate defects reached the user
+- **Platform:** ios · **Port risk:** low
+- **Source:** `The Android provider reads the per-widget-id document keyed by AppWidgetManager's id (uhabits-android/.../widgets/BaseWidgetProvider.kt); a WidgetKit widget has no such id and resolves its habit out of the index catalogue instead, so the two documents are not interchangeable.`
+- **Where the port should do it:** `uhabits-flutter/app/test/platform/ios_index_field_coverage_test.dart`
+- **Severity:** major
+
+1. `audit16.index-fields-must-reach-the-extension#1` — In the Kotlin app there is no such boundary: the widget provider runs against the live application component, so every preference it needs is simply readable. The port splits that into a published document and two consumers, and the index document is the whole contract with the iOS extension. Three defects have now been caused by a field crossing to one consumer and not the other — `audit5.checkmark-home-screen-widget-never-draws`, `audit15.ios-home-screen-widgets-never-roll` and `audit16.widget-opacity-never-reaches-ios` — each time because nothing in the suite compared the two sides. The port must therefore assert the comparison structurally: every top-level field `buildIndexDocument` publishes is either declared as a property of `WidgetIndex` in the Swift, or named in an explicit list of Android-only fields with the reason it cannot apply, so that a field added tomorrow either reaches the extension or is refused by the suite.

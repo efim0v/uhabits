@@ -105,8 +105,14 @@ extension View {
     /// and an alpha taken from `Preferences.widgetOpacity`
     /// (`widgets.card-chrome#2`, `#5`). WidgetKit owns both the shape and the
     /// corner radius — a widget cannot draw outside its rounded container — so
-    /// only the colour crosses over, through `containerBackground`.
+    /// only the colour and its alpha cross over, through `containerBackground`.
+    ///
+    /// The alpha is applied to the colour rather than to the view: dimming the
+    /// view would take the chart, the ring and the label with it, where
+    /// `backgroundPaint.alpha` upstream touches nothing but the card
+    /// (`audit16.widget-opacity-never-reaches-ios#1`).
     func widgetCard(_ color: Color = WidgetTheme.cardBackgroundOpaque) -> some View {
-        containerBackground(color, for: .widget)
+        containerBackground(color.opacity(WidgetStore().widgetOpacity()),
+                            for: .widget)
     }
 }

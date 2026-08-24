@@ -198,6 +198,15 @@ struct WidgetIndex: Decodable {
     /// which is what both grids used unconditionally before.
     let firstWeekday: Int?
 
+    /// `Preferences.widgetOpacity` — 0..255, the alpha
+    /// `HabitWidgetView.rebuildBackground` paints the card with on Android
+    /// (`settings.preferences.widget-opacity#5`,
+    /// `audit16.widget-opacity-never-reaches-ios#1`).
+    ///
+    /// Optional: a document written before the field existed keeps the opaque
+    /// card every widget drew before.
+    let widgetOpacity: Int?
+
     /// `Preferences.midnightDelayHours` — 3 while "new day starts at 3am" is
     /// on, 0 otherwise (`audit15.ios-home-screen-widgets-never-roll#1`).
     ///
@@ -527,6 +536,16 @@ struct WidgetStore {
     /// this side with, and it is what both grids used unconditionally before.
     func firstWeekday() -> Int {
         index()?.firstWeekday ?? DateNames.firstWeekdayDaysSinceSunday()
+    }
+
+    /// `BaseWidget.preferedBackgroundAlpha`, as the fraction SwiftUI wants.
+    ///
+    /// 255 — a fully opaque card — is both the preference's own default and
+    /// what a document written before the field was published leaves this side
+    /// with (`audit16.widget-opacity-never-reaches-ios#1`).
+    func widgetOpacity() -> Double {
+        let alpha = index()?.widgetOpacity ?? 255
+        return Double(min(255, max(0, alpha))) / 255.0
     }
 
     func habit(id: Int) -> WidgetHabit? {
