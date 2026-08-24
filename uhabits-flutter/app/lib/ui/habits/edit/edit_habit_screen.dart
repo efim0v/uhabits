@@ -26,8 +26,6 @@
 ///    (`edit-habit.color-control#4`); the ported [core.Theme] carries no
 ///    `?attr/colorPrimary`, so — exactly as `ShowHabitScreen` already does —
 ///    the habit colour is used in both themes;
-///  * `?attr/contrast0` is pure white in the Android light theme, and the
-///    closest token on the ported theme is `appBackgroundColor` (#f4f4f4);
 ///  * the name error is drawn in white by wrapping it in HTML
 ///    (`edit-habit.validation#3`), which is an artifact of the Android error
 ///    popup; both errors are rendered the same way here.
@@ -39,6 +37,7 @@ import 'package:provider/provider.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../l10n/app_localizations.dart';
+import '../../../platform/device_time_format.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/edit_habit_model.dart';
 import '../../common/dialogs/color_picker_dialog.dart';
@@ -359,8 +358,10 @@ class _EditHabitViewState extends State<_EditHabitView> {
 
     return Scaffold(
       // `android:background="?attr/contrast0"` on the root and on the
-      // ScrollView (`edit-habit.window-insets-and-chrome#4`).
-      backgroundColor: toFlutterColor(theme.appBackgroundColor),
+      // ScrollView (`edit-habit.window-insets-and-chrome#4`) — pure white in
+      // the light theme, where `appBackgroundColor` is #f4f4f4
+      // (`audit22.edit-habit-screen-paints-appbackgroundcolor-where-the-layout-paints-contrast0#1`).
+      backgroundColor: toFlutterColor(theme.contrast0),
       appBar: AppBar(
         // `edit-habit.entry-points#2`: the layout's `app:title` is
         // "Create habit"; EDIT mode replaces it with "Edit habit".
@@ -697,12 +698,26 @@ class _EditHabitViewState extends State<_EditHabitView> {
   }
 
   /// `formatTime(context, hours, minutes)`: the user's 12/24h system
-  /// preference decides the rendering (`edit-habit.reminder-time#8`).
+  /// preference picks the skeleton and the DEVICE locale supplies the pattern
+  /// (`edit-habit.reminder-time#8`).
+  ///
+  /// `DateExtensions.formatTime` has exactly two callers — this row and
+  /// `SubtitleCardView` — and both go through
+  /// `DateFormat.getTimeFormat(context)`, whose locale is the configuration
+  /// locale, region and all, never the locale the app's strings resolved to
+  /// (`audit22.edit-habit-reminder-time-follows-the-app-locale#1`,
+  /// `audit15.subtitle-card-reminder-time-ignores-the-device-locale#1`). That
+  /// is the same seam the reminder-days row below already reads, so the two
+  /// rows of one box can never disagree.
+  ///
+  /// Known divergence: [showTimePicker]'s own header still renders through
+  /// `MaterialLocalizations`, because the vendored AOSP radial dialog has no
+  /// Flutter equivalent to point at the device locale (see the library
+  /// comment).
   String _formatTime(BuildContext context, int hour, int minute) {
-    return MaterialLocalizations.of(context).formatTimeOfDay(
-      TimeOfDay(hour: hour, minute: minute),
-      alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
-    );
+    // `(hours * 60 + minutes) * 60 * 1000L`, rendered in UTC so no zone can
+    // shift it; `populateReminder` only reaches here with a valid 0..23 hour.
+    return formatDeviceTime(context, minuteOfDay: hour * 60 + minute);
   }
 
   // -----------------------------------------------------------------------
@@ -884,7 +899,7 @@ class _FormBox extends StatelessWidget {
   Widget build(BuildContext context) {
     // `?attr/contrast0` is the background of the screen, of the box and of the
     // label — the label punches a hole in the border by painting over it.
-    final background = toFlutterColor(theme.appBackgroundColor);
+    final background = toFlutterColor(theme.contrast0);
     return Padding(
       padding: EditHabitMetrics.outerBoxPadding,
       child: Stack(

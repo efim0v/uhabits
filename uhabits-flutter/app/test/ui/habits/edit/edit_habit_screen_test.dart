@@ -1184,6 +1184,22 @@ void main() {
             "device's language while the form around it stays English.",
       );
 
+      // The time row two lines above this one was rendering the resolved
+      // locale's pattern while this assertion looked past it: the days row
+      // followed the device and the time row did not, inside one box
+      // (`audit22.edit-habit-reminder-time-follows-the-app-locale#1`).
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('08:30 น.'),
+        ),
+        findsOneWidget,
+        reason: 'audit22.edit-habit-reminder-time-follows-the-app-locale#1 — '
+            'formatTime reads the same configuration locale '
+            'WeekdayList.toFormattedString does, so the two rows of the '
+            'reminder box are always in the same language.',
+      );
+
       await tester.tap(find.byKey(EditHabitScreen.reminderDaysPickerKey));
       await tester.pumpAndSettle();
       final pickerNames = tester
@@ -2537,6 +2553,53 @@ void main() {
       );
     });
 
+    testWidgets('#8 the pattern is the device locale\'s, not the one the app '
+        'strings resolved to', (tester) async {
+      const String rule =
+          'audit22.edit-habit-reminder-time-follows-the-app-locale#1 — '
+          'EditHabitActivity.populateReminder calls formatTime(this, '
+          'reminderHour, reminderMin), the same DateExtensions helper '
+          'SubtitleCardView uses, and DateFormat.getTimeFormat(context) reads '
+          'the configuration locale — the DEVICE locale, region and all.';
+
+      // The app ships no en_AU translation, so the strings resolve to plain
+      // `en` while the device keeps its region: this is the one place the two
+      // questions have different answers, and Android answers the device's.
+      tester.platformDispatcher.localesTestValue = const <Locale>[
+        Locale('en', 'AU'),
+      ];
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+
+      await pumpEditor(
+        tester,
+        openScope(dispatcher: const AsyncDispatcher()),
+        use24HourFormat: false,
+      );
+      modelOf(tester).setReminderTime(8, 30);
+      await tester.pumpAndSettle();
+
+      expect(
+        Localizations.localeOf(
+          tester.element(find.byKey(EditHabitScreen.reminderTimePickerKey)),
+        ),
+        isNot(const Locale('en', 'AU')),
+        reason: '$rule The fixture only means something while the resolved '
+            'locale really is the other answer.',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderTimePickerKey),
+          matching: find.text('8:30 am'),
+        ),
+        findsOneWidget,
+        reason: '$rule Australian English lowercases the day period; the "8:30 '
+            'AM" of the resolved `en` is the American pattern. The Show-habit '
+            'subtitle card already prints "8:30 am" for the same reminder '
+            '(audit15.subtitle-card-reminder-time-ignores-the-device-locale#1) '
+            'and the two hosts of one Kotlin helper cannot disagree.',
+      );
+    });
+
     test('#9 a saved habit has a complete reminder or none at all', () {
       final scope = openScope();
       final withReminder = createModel(scope)
@@ -2671,11 +2734,74 @@ void main() {
       final scope = openScope(dispatcher: const AsyncDispatcher());
       await pumpEditor(tester, scope);
 
+      // This test used to assert `LightTheme().appBackgroundColor` under the
+      // very reason string below, which names `?attr/contrast0`. The two are
+      // not the same colour: contrast0 is @color/white (#FFFFFF) and
+      // appBackgroundColor is #F4F4F4. They agree only in the two dark themes,
+      // which this test never exercised, so an off-white editor passed as if
+      // it were the white sheet activity_edit_habit.xml paints
+      // (`audit22.edit-habit-screen-paints-appbackgroundcolor-where-the-layout-paints-contrast0#1`)
+      // — the same false equivalence audit8 called out on the settings screen.
       expect(
         tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
-        toFlutterColor(LightTheme().appBackgroundColor),
+        toFlutterColor(LightTheme().contrast0),
         reason: 'edit-habit.window-insets-and-chrome#4 — the root and the '
             'ScrollView both take ?attr/contrast0',
+      );
+      expect(
+        tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor,
+        const material.Color(0xFFFFFFFF),
+        reason: 'audit22.edit-habit-screen-paints-appbackgroundcolor-where-the'
+            '-layout-paints-contrast0#1 — the resolved value, spelled out: '
+            '#FFFFFF, not the #F4F4F4 of appBackgroundColor',
+      );
+      expect(
+        LightTheme().contrast0,
+        isNot(LightTheme().appBackgroundColor),
+        reason: 'audit22.edit-habit-screen-paints-appbackgroundcolor-where-the'
+            '-layout-paints-contrast0#1 — the two tokens are different colours '
+            'in the light theme, which is why the old assertion was a false '
+            'equivalence',
+      );
+
+      // `@drawable/bg_input_group` is `<solid ?attr/contrast0>` with a
+      // `?attr/contrast20` stroke, and `@style/FormLabel` paints the floating
+      // caption in `?attr/contrast0` so it punches a hole in that stroke.
+      final boxes = tester
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byKey(EditHabitScreen.frequencyBoxKey),
+              matching: find.byType(Container),
+            ),
+          )
+          .toList();
+      expect(boxes, hasLength(2),
+          reason: 'edit-habit.window-insets-and-chrome#4 — the outlined box '
+              'and the caption that overlaps its border');
+      expect(
+        (boxes.first.decoration! as BoxDecoration).color,
+        toFlutterColor(LightTheme().contrast0),
+        reason: 'edit-habit.window-insets-and-chrome#4 — '
+            'audit22.edit-habit-screen-paints-appbackgroundcolor-where-the-'
+            'layout-paints-contrast0#1: bg_input_group is filled with '
+            '?attr/contrast0, not with appBackgroundColor',
+      );
+      expect(
+        boxes.last.color,
+        toFlutterColor(LightTheme().contrast0),
+        reason: 'edit-habit.window-insets-and-chrome#4 — '
+            'audit22.edit-habit-screen-paints-appbackgroundcolor-where-the-'
+            'layout-paints-contrast0#1: @style/FormLabel paints the caption in '
+            '?attr/contrast0, the same fill it hides the stroke behind',
+      );
+      expect(
+        (boxes.first.decoration! as BoxDecoration).border,
+        Border.all(
+          color: toFlutterColor(LightTheme().lowContrastTextColor),
+          width: EditHabitMetrics.innerBoxStrokeWidth,
+        ),
+        reason: 'edit-habit.window-insets-and-chrome#4 — the 1dp stroke stays '
+            '?attr/contrast20, which is what lowContrastTextColor already is',
       );
       final scroll = find.descendant(
         of: find.byType(Scaffold).last,

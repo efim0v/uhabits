@@ -8170,3 +8170,46 @@ seat.
 - **Severity:** major
 
 1. `audit21.ios-launch-window-follows-the-system-appearance#1` — In the Kotlin app: the window painted before any app code runs is themed by `android:colorBackground=@color/color_background`, and `color_background` resolves to `grey_200` (#EEEEEE) in `res/values/colors.xml` but to `grey_900` (#212121) in `res/values-night/colors.xml` — the only `-night`-qualified resource file in the whole app, and the shipped fix for "Fix splash screen background color in dark mode" (2.2.0, issue #1888). The `-night` qualifier follows the OS dark-mode setting, which is independent of the app's own theme preference, so a system-dark user never sees a light flash at launch — and, symmetrically, a user who forces Light in-app while the system is dark still gets a dark launch window that then flips. A port must carry that to EVERY host that paints a launch window before the framework starts, not just Android: on iOS the launch window is `UILaunchStoryboardName`, and the only thing there that can vary with the system appearance is an asset-catalog colour with a `luminosity: dark` appearance. A literal colour in the storyboard cannot vary at all, so it holds one appearance for the entire duration of the app's boot — for this port, the database open and every migration.
+
+## Domain: Twenty-second audit pass (2026-08-24)
+
+Three findings, one refuted. The refuted one claimed the previous pass's
+`UNUserNotificationCenter` delegate assignment was nil, because
+`self as? UNUserNotificationCenterDelegate` would fail — checked against the
+engine headers: `FlutterAppDelegate` conforms to `FlutterAppLifeCycleProvider`,
+which is declared `<UNUserNotificationCenterDelegate>`, so the cast succeeds
+and the seat is really taken.
+
+The major finding is the shape this pass was told to hunt: one rule, several
+hosts. Here both hosts were carried, and that was the defect.
+
+
+#### audit22.habit-list-applies-the-root-window-inset-twice
+
+- [x] `audit22.habit-list-applies-the-root-window-inset-twice` — Habit list applies the root window inset twice, so in landscape it is doubly inset and loses a day column
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/list/ListHabitsActivity.kt:102 — `rootView.applyRootViewInsets()` immediately before `setContentView(rootView)`; the listener is uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt:262-272`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart:730-752 — the screen's own `ColoredBox(color: Colors.black)` + `Padding(left: padding.left, right: padding.right)` over `MediaQuery.paddingOf`, on top of `RootViewInsets` in `MaterialApp.builder` at uhabits-flutter/app/lib/main.dart:400`
+- **Severity:** major
+
+1. `audit22.habit-list-applies-the-root-window-inset-twice#1` — In the Kotlin app: `applyRootViewInsets()` is installed exactly once per full-window activity, on that activity's own root view — `ListHabitsActivity.onCreate` calls it on the `ListHabitsRootView`, and `ShowHabitActivity`, `EditHabitActivity`, `SettingsActivity` and `AboutView` each do the same on theirs. The listener sets `view.setPadding(left, 0, right, 0)` with `left = max(systemBars.left, displayCutout.left)` and `right = max(systemBars.right, displayCutout.right)`, and paints the view with a `ColorDrawable(Color.BLACK)` so the padded strips read as part of the device. It returns the insets unconsumed, but no second view on the list screen ever pads by them again: on a notched phone in landscape, or one whose three-button navigation bar sits on a side, the list content starts exactly one inset in from each edge and the black band is exactly as wide as the intrusion — the same width as on every other screen of the app.
+
+#### audit22.edit-habit-screen-paints-appbackgroundcolor-where-the-layout-paints-contrast0
+
+- [x] `audit22.edit-habit-screen-paints-appbackgroundcolor-where-the-layout-paints-contrast0` — Create/edit habit screen and its form boxes paint appBackgroundColor where activity_edit_habit.xml paints ?attr/contrast0
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/res/layout/activity_edit_habit.xml:27 and :68 (`android:background="?attr/contrast0"` on the root LinearLayout and on the ScrollView); uhabits-android/src/main/res/drawable/bg_input_group.xml:22 (`<solid android:color="?attr/contrast0"/>` behind a 1dp `?attr/contrast20` stroke); uhabits-android/src/main/res/values/styles.xml `@style/FormLabel` (`<item name="android:background">?attr/contrast0</item>`) and the three theme blocks defining `contrast0` as @color/white / @color/grey_900 / @color/black`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/edit/edit_habit_screen.dart:363 (`backgroundColor: toFlutterColor(theme.appBackgroundColor)`) and :887 (`final background = toFlutterColor(theme.appBackgroundColor);` in `_FormBox`, used for both the box fill and the floating caption), with the stale rationale at :29-30`
+- **Severity:** cosmetic
+
+1. `audit22.edit-habit-screen-paints-appbackgroundcolor-where-the-layout-paints-contrast0#1` — In the Kotlin app: the create/edit habit sheet is painted in `?attr/contrast0` from top to bottom — the root LinearLayout and the ScrollView that holds the form both set it, `@drawable/bg_input_group` fills every rounded field box with it behind a 1dp `?attr/contrast20` stroke, and `@style/FormLabel` gives each floating caption the same fill so it punches a hole in that stroke where it overlaps. `?attr/contrast0` is @color/white in `AppBaseTheme`, @color/grey_900 in `AppBaseThemeDark` and @color/black in `AppBaseThemeDark.PureBlack`, so in the light theme the whole editor — page, boxes and captions — is pure white #FFFFFF with #E0E0E0 outlines, the same white the settings screen and the check-mark popup already use, not the #F4F4F4 app background.
+
+#### audit22.edit-habit-reminder-time-follows-the-app-locale
+
+- [x] `audit22.edit-habit-reminder-time-follows-the-app-locale` — Edit-habit reminder row formats the time in the resolved UI locale, where its sibling host of the same helper follows the device locale
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/EditHabitActivity.kt:329 (`val time = formatTime(this, reminderHour, reminderMin)` in `populateReminder()`) together with uhabits-android/src/main/java/org/isoron/uhabits/utils/DateExtensions.kt:62-68; the already-carried sibling caller is uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/show/views/SubtitleCardView.kt:60`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/edit/edit_habit_screen.dart:699-706 (`_formatTime`, via `MaterialLocalizations.of(context).formatTimeOfDay`), used at :636 for `EditHabitScreen.reminderTimePickerKey`; the seam it should call is `formatDeviceTime` at uhabits-flutter/app/lib/platform/device_time_format.dart:47-68, the way uhabits-flutter/app/lib/ui/habits/show/cards/subtitle_card_view.dart:178 does`
+- **Severity:** cosmetic
+
+1. `audit22.edit-habit-reminder-time-follows-the-app-locale#1` — In the Kotlin app: `DateExtensions.formatTime(context, hours, minutes)` has exactly two callers — `SubtitleCardView` and `EditHabitActivity.populateReminder()`, the label of the reminder row in the habit editor — and both go through `android.text.format.DateFormat.getTimeFormat(context)`, i.e. `SimpleDateFormat(LocaleData.get(locale).timeFormat_(h|H)m, locale)` where `locale` is `context.getResources().getConfiguration().locale`. On a single-locale device that is the DEVICE locale, region and all, even when the app ships no translation for it, so the editor's reminder row and the Show-habit subtitle card always print the same pattern: "8:30 am" on en-AU, "08 h 30" on fr-CA under a 24-hour setting, "08:30 น." on th-TH, while the form's own strings come from `values/`. It is also the same configuration locale `WeekdayList.toFormattedString(context)` reads for the reminder-days row directly beneath it, so the two rows of one box can never disagree.

@@ -703,9 +703,18 @@ class _HabitListViewState extends State<_HabitListView>
 
     // `rootView.applyRootViewInsets()`: the left and right window insets become
     // padding on the root, and the root paints itself black behind them
-    // (`list-habits.screen-layout#7`). The top inset stays with the toolbar,
-    // which Scaffold gives its AppBar for free, and the bottom one is consumed
-    // by the card list (`#8`).
+    // (`list-habits.screen-layout#7`). Upstream that listener is installed once
+    // per activity, on the activity's own root view; a Flutter app has one such
+    // root, and it is `RootViewInsets` in `MaterialApp.builder`
+    // (`platform-glue.window-insets#5`), which is above this screen and above
+    // every other one. Applying the same insets a second time here would inset
+    // the list twice — a black band of double width and one day column fewer
+    // than every other screen's toolbar is wide
+    // (`audit22.habit-list-applies-the-root-window-inset-twice#1`).
+    //
+    // What is still this screen's to do is the bottom: the top inset stays with
+    // the toolbar, which Scaffold gives its AppBar for free, and the bottom one
+    // is consumed by the card list (`#8`).
     final padding = MediaQuery.paddingOf(context);
     // The contextual action bar is an Android `ActionMode`, and the system
     // Back key destroys an active ActionMode before the activity ever sees
@@ -727,28 +736,17 @@ class _HabitListViewState extends State<_HabitListView>
         // screen to put the normal toolbar back.
         model.listController.onSelectionFinished();
       },
-      child: ColoredBox(
-        color: Colors.black,
-        child: Padding(
-          padding: EdgeInsets.only(left: padding.left, right: padding.right),
-          child: MediaQuery.removePadding(
-            context: context,
-            removeLeft: true,
-            removeRight: true,
-            child: Stack(
-              children: <Widget>[
-                _buildScaffold(context, l10n, model, theme, toolbarColor,
-                    bottomInset: padding.bottom),
-                // `addAtTop(konfettiView)` with `translationZ = 10f`: the
-                // burst covers the whole root, toolbar included, and its
-                // origin is the window position of the tapped button less the
-                // left inset the root padding above already took out
-                // (`list-habits.screen-layout#1`, `list-habits.confetti#5`).
-                Positioned.fill(child: ConfettiOverlay(key: _confettiKey)),
-              ],
-            ),
-          ),
-        ),
+      child: Stack(
+        children: <Widget>[
+          _buildScaffold(context, l10n, model, theme, toolbarColor,
+              bottomInset: padding.bottom),
+          // `addAtTop(konfettiView)` with `translationZ = 10f`: the burst
+          // covers the whole root, toolbar included, and its origin is the
+          // window position of the tapped button less the left inset the root
+          // padding above already took out (`list-habits.screen-layout#1`,
+          // `list-habits.confetti#5`).
+          Positioned.fill(child: ConfettiOverlay(key: _confettiKey)),
+        ],
       ),
     );
   }

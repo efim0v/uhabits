@@ -12,6 +12,7 @@ import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/habit_list_model.dart';
 import 'package:uhabits/ui/common/dialogs/checkmark_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
+import 'package:uhabits/ui/common/window_insets.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
@@ -758,19 +759,37 @@ void main() {
   // ListHabitsRootView: the stack, the window insets and the confetti origin
   // -------------------------------------------------------------------------
   group('root view', () {
-    /// The screen under a window that reports [padding] as its system insets.
+    /// The screen under a window that reports [padding] as its system insets,
+    /// in the shape `main.dart` builds it: the app-level [RootViewInsets] —
+    /// the one and only `rootView.applyRootViewInsets()` a Flutter app has —
+    /// sits in `MaterialApp.builder`, above the navigator, and the real screen
+    /// is pumped below it.
+    ///
+    /// Pumping the screen without that builder is what hid
+    /// `audit22.habit-list-applies-the-root-window-inset-twice#1` for as long
+    /// as it lasted: with a zero window inset the screen's own copy of the
+    /// padding and the app-level one both collapse to nothing.
     Future<void> pumpWithPadding(
       WidgetTester tester,
       AppScope scope,
       EdgeInsets padding,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: L10n.localizationsDelegates,
-          supportedLocales: L10n.supportedLocales,
-          home: MediaQuery(
-            data: MediaQueryData(padding: padding),
-            child: Provider<AppScope>.value(
+        MediaQuery(
+          data: MediaQueryData(
+            size: const Size(800, 600),
+            padding: padding,
+            // `applyRootViewInsets` reads max(systemBars, displayCutout),
+            // which is `viewPadding` here — see lib/ui/common/window_insets
+            // .dart. With no keyboard up the two are the same number.
+            viewPadding: padding,
+          ),
+          child: MaterialApp(
+            localizationsDelegates: L10n.localizationsDelegates,
+            supportedLocales: L10n.supportedLocales,
+            builder: (BuildContext context, Widget? child) =>
+                RootViewInsets(child: child ?? const SizedBox.shrink()),
+            home: Provider<AppScope>.value(
               value: scope,
               child: const HabitListScreen(),
             ),
@@ -835,34 +854,73 @@ void main() {
       const inset = EdgeInsets.only(left: 24, right: 12, top: 40, bottom: 16);
       await pumpWithPadding(tester, scope, inset);
 
-      final screen = tester.getRect(find.byType(HabitListScreen));
+      // The window itself: `applyRootViewInsets` pads the root view, so the
+      // measurement that means anything is from the window edge in, not from
+      // one widget inside the padding to another.
+      const window = Rect.fromLTWH(0, 0, 800, 600);
       final scaffold = tester.getRect(find.byType(Scaffold).first);
-      expect(scaffold.left - screen.left, 24.0,
+      expect(scaffold.left - window.left, 24.0,
           reason: 'list-habits.screen-layout#7');
-      expect(screen.right - scaffold.right, 12.0,
+      expect(window.right - scaffold.right, 12.0,
           reason: 'list-habits.screen-layout#7');
       // No vertical padding on the root: the toolbar takes the top inset.
-      expect(scaffold.top, screen.top,
+      expect(scaffold.top, window.top,
           reason: 'list-habits.screen-layout#7');
-      expect(scaffold.bottom, screen.bottom,
+      expect(scaffold.bottom, window.bottom,
           reason: 'list-habits.screen-layout#7');
 
-      // `view.background = ColorDrawable(Color.BLACK)`.
+      // `view.background = ColorDrawable(Color.BLACK)`, painted by the one
+      // root that carries the inset, over the whole window.
       final painted = tester.widget<ColoredBox>(
         find.descendant(
-          of: find.byType(HabitListScreen),
+          of: find.byType(RootViewInsets),
           matching: find.byType(ColoredBox),
         ).first,
       );
       expect(painted.color, const ui.Color(0xFF000000),
           reason: 'list-habits.screen-layout#7');
+      expect(tester.getRect(find.byType(RootViewInsets)), window,
+          reason: 'list-habits.screen-layout#7');
 
       // `applyToolbarInsets`: the toolbar grows by the top inset instead of
       // being pushed down.
       final bar = tester.getRect(find.byType(AppBar));
-      expect(bar.top, screen.top, reason: 'list-habits.screen-layout#7');
+      expect(bar.top, window.top, reason: 'list-habits.screen-layout#7');
       expect(bar.height, kToolbarHeight + 40,
           reason: 'list-habits.screen-layout#7');
+    });
+
+    testWidgets('#7 the root inset is applied once, and the day columns are '
+        'counted from what is left', (tester) async {
+      const String rule =
+          'audit22.habit-list-applies-the-root-window-inset-twice#1 — '
+          'ListHabitsActivity.onCreate calls rootView.applyRootViewInsets() '
+          'once, and no second view on the list screen pads by the same '
+          'insets again.';
+
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      // The landscape notch of test/ui/window_insets_test.dart: a cutout on
+      // the left and a navigation bar on the right, the case
+      // `hint_landscape` tells the user to rotate into for MORE days.
+      const inset = EdgeInsets.only(left: 44, top: 24, right: 12, bottom: 48);
+      await pumpWithPadding(tester, scope, inset);
+
+      final scaffold = tester.getRect(find.byType(Scaffold).first);
+      expect(scaffold.left, 44.0,
+          reason: '$rule One inset, not 44 from the builder plus 44 from the '
+              "screen's own Padding.");
+      expect(800.0 - scaffold.right, 12.0, reason: rule);
+      expect(scaffold.width, 800.0 - 44.0 - 12.0, reason: rule);
+
+      // `getCheckmarkCount()` over what the inset leaves: the label takes
+      // max(744 / 3, 160) = 248, leaving (744 - 248) / 48 = 10 buttons. Pad
+      // twice and the user loses one of them.
+      expect(modelOf(tester).buttonCount, 10,
+          reason: '$rule Doubling the inset costs a day column, in the '
+              'orientation the startup hint offers as the way to see more.');
+      expect(tester.widget<ListHeader>(find.byType(ListHeader)).buttonCount, 10,
+          reason: rule);
     });
 
     testWidgets('#8 the bottom systemBars inset is added to the last card, '

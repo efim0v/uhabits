@@ -684,3 +684,13 @@ Store у порта нет, поэтому честная замена — та 
 **Почему:** The data to do better is not on the device: no Dart package ships the CLDR "hm" best-pattern table, and inventing one ('replace H with h and append the AM/PM marker') gets CJK locales visibly wrong — ja's real "hm" pattern is "aK:mm" ("午前8:30"), while the naive derivation yields "8:30 午前". Flutter's own MaterialLocalizations.formatTimeOfDay reads alwaysUse24HourFormat:false exactly the same way, so the Edit screen already behaved like this. The divergence needs the user to have overridden the system 12/24 setting away from their locale's default; in every other configuration the two agree, and the reported defect (an en-US pattern in all 47 languages) is gone either way.
 
 **Дата:** 2026-08-24
+
+## Заголовок диалога выбора времени напоминания
+
+**Что в оригинале:** EditHabitActivity opens a vendored AOSP radial TimePickerDialog in the same Activity context, so the dialog header and the row both render in the configuration (device) locale.
+
+**Что делаем:** The port substitutes Flutter's showTimePicker (already a documented substitution in the file header, because the radial dialog has no Flutter equivalent), and its header renders through MaterialLocalizations — i.e. Localizations.localeOf. So on an en-AU device the row now reads "8:30 am" (correct) while the picker header reads "8:30 AM".
+
+**Почему:** Driving the substitute dialog's header would mean wrapping showTimePicker in a Localizations.override for the device locale, which would also swap the dialog's OK/Cancel strings and semantics labels out of the app's UI language — a bigger divergence than the one it removes. The row is the surface edit-habit.reminder-time#8 names (populateReminder's label) and the one that has to agree with the Show-habit subtitle card. Recorded in the _formatTime doc comment as a known divergence.
+
+**Дата:** 2026-08-24

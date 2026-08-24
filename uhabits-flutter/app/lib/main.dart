@@ -53,6 +53,13 @@ class UhabitsApp extends StatelessWidget {
         // `supportedLocales.first`, which gen-l10n makes Afrikaans.
         localeListResolutionCallback: resolveAppLocale,
         navigatorObservers: <NavigatorObserver>[screenRouteObserver],
+        // `rootView.applyRootViewInsets()` again: this branch also ends on the
+        // habit list, and the list no longer pads itself
+        // (`audit22.habit-list-applies-the-root-window-inset-twice#1`), so the
+        // one root that carries the insets has to be here too
+        // (`platform-glue.window-insets#5`).
+        builder: (context, child) =>
+            RootViewInsets(child: child ?? const SizedBox.shrink()),
         home: const _BootstrapScreen(),
       );
     }
