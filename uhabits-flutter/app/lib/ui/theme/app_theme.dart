@@ -288,6 +288,15 @@ ThemeData appThemeData(core.Theme theme) {
     listTileTheme: ListTileThemeData(
       textColor: highContrast,
       iconColor: mediumContrast,
+      // `ListTile(selected: true)` recolours its label and icon with
+      // `ColorScheme.primary`, which in this app is deliberately the toolbar
+      // grey #333333 — and the list dialogs sit on cardBackgroundColor, #303030
+      // in the dark theme. The one row the user is looking for would be the
+      // least readable thing on the screen. Upstream's `CheckedTextView` rows
+      // do not tint their label at all: the check drawable and the
+      // accessibility state carry the selection
+      // (`audit12.settings-dialog-selection-is-invisible-in-dark#1`).
+      selectedColor: highContrast,
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: toolbar,

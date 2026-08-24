@@ -7774,3 +7774,19 @@ defect the port manufactured for itself while compensating for a missing hook.
 - **Severity:** major
 
 1. `audit11.long-pressing-a-check-mark-or-number#1` — In the Kotlin app: every long press inside the check-mark grid buzzes, whatever the listener did with it. `CheckmarkButtonView.onLongClick` and `NumberButtonView.onLongClick` both `return true` unconditionally, and that return value is what arms the framework haptic: `View.performLongClickInternal` runs `handled = listener.onLongClick(this)`, then reads `shouldPerformHapticFeedback = listener.onLongClickUseDefaultHapticFeedback(this)` (whose default implementation returns true, and neither view overrides it), and finally runs `performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)`. So a numerical cell whose long press only calls `onEdit()`, and a boolean cell whose long press only calls `onEdit()` because `pref_short_toggle` is on, both tick — the tactile confirmation that the press landed on the intended cell, before the dialog paints. `CheckmarkButtonView.performToggle`'s own `performHapticFeedback(LONG_PRESS)` is an additional buzz layered on top when the long press happens to be the toggle, not the only source. A short click is NOT haptic: `View.performClick` plays `SoundEffectConstants.CLICK`, a sound effect gated by the system touch-sounds setting, and `NumberButtonView.onClick` only calls `onEdit()`, so a numerical tap answers with no vibration at all. Deliberate divergence: on the default boolean path (short toggle off, long press toggles) Android emits two coincident LONG_PRESS ticks — one from `performToggle`, one from `performLongClickInternal` — and the port emits one, which is the same buzz perceptually.
+
+## Domain: Twelfth audit pass (2026-08-24)
+
+The convergence pass. Seven lenses re-run with the instruction that zero findings
+is the expected answer; most of it was lost to server errors and re-run, and what
+survived is recorded here.
+
+#### audit12.settings-dialog-selection-is-invisible-in-dark
+
+- [x] `audit12.settings-dialog-selection-is-invisible-in-dark` — The selected row of a settings list dialog is painted in the toolbar grey, which is invisible on the dark and pure-black dialog backgrounds
+- **Platform:** ui · **Port risk:** low
+- **Source:** `androidx.preference.ListPreferenceDialogFragmentCompat.onPrepareDialogBuilder — AlertDialog.Builder.setSingleChoiceItems(entries, clickedIndex, listener), a ListView in CHOICE_MODE_SINGLE of CheckedTextView rows`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/theme/app_theme.dart — ListTileThemeData.selectedColor`
+- **Severity:** major
+
+1. `audit12.settings-dialog-selection-is-invisible-in-dark#1` — In the Kotlin app: a single-choice preference dialog marks the entry in force with the `CheckedTextView`'s check drawable and nothing else — the label keeps exactly the colour every other row has, on every theme. The port's fix for `audit11.the-two-settings-list-dialogs-never#1` passes `ListTile(selected: ...)` so a screen reader can hear which entry is in force, and Material answers `selected` by recolouring the label and the icon with `ColorScheme.primary`. This app maps that to the toolbar grey #333333 on purpose, and the dialogs sit on cardBackgroundColor — #303030 in the dark theme, #000000 in pure black — so the contrast ratio of the one row the user is looking for falls to 1.04 and 1.66 respectively. The selection must therefore be carried by the check mark and the accessibility flag alone, exactly as upstream carries it.
