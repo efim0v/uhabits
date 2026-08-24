@@ -307,39 +307,20 @@ void main() {
           reason: 'show-habit.subtitle-card#2');
     });
 
-    test('formatFrequency walks its branches in order', () {
-      expect(SubtitleCardState.formatFrequency(1, 30), 'Every month',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(1, 31), 'Every month',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(3, 30), '3 times per month',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(4, 31), '4 times per month',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(1, 1), 'Every day',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(1, 7), 'Every week',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(1, 5), 'Every 5 days',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(3, 7), '3 times per week',
-          reason: 'show-habit.subtitle-card#3');
-      expect(SubtitleCardState.formatFrequency(2, 3), '2 times in 3 days',
-          reason: 'show-habit.subtitle-card#3');
-    });
+    // `show-habit.subtitle-card#3` quotes the *en* values of R.string.
+    // every_month, x_times_per_month, every_day, every_week, every_x_days,
+    // x_times_per_week and x_times_per_y_days; the call SubtitleCardView.kt
+    // makes is formatFrequency(num, den, resources), and #5's "Off" is
+    // resources.getString(R.string.reminder_off). Both are looked up in the
+    // resolved locale, so both live in the widget layer now
+    // (`audit15.subtitle-card-frequency-and-off-are-hard-coded#1`), and
+    // app/test/ui/habits/show/show_habit_screen_test.dart pins them there —
+    // in English and in ru/de. What is left here is the branch ORDER, which
+    // is what makes 1/30 read "Every month" and 7/7 read "Every day", and it
+    // is pinned on the app-side formatter both screens share, in
+    // app/test/ui/habits/edit/edit_habit_screen_test.dart.
 
-    test('frequencyText reads the state frequency', () {
-      final habit = _buildHabit();
-      habit.frequency = Frequency(3, 7);
-      expect(
-        SubtitleCardPresenter.buildState(habit: habit, theme: _theme)
-            .frequencyText,
-        '3 times per week',
-        reason: 'show-habit.subtitle-card#3',
-      );
-    });
-
-    test('a frequency of n/n renders as Every day', () {
+    test('a frequency of n/n normalises to 1/1', () {
       final habit = _buildHabit();
       habit.frequency = Frequency(7, 7);
       final state =
@@ -348,47 +329,28 @@ void main() {
           reason: 'show-habit.subtitle-card#4');
       expect(state.frequency.denominator, 1,
           reason: 'show-habit.subtitle-card#4');
-      expect(state.frequencyText, 'Every day',
-          reason: 'show-habit.subtitle-card#4');
     });
 
-    test('the reminder is formatted in 12h or 24h, and Off when absent', () {
+    test('the state carries the reminder through untouched', () {
       final habit = _buildHabit();
       habit.reminder = Reminder(8, 30, WeekdayList.everyDay);
-      final state =
-          SubtitleCardPresenter.buildState(habit: habit, theme: _theme);
-      expect(state.reminderText(use24HourFormat: true), '08:30',
-          reason: 'show-habit.subtitle-card#5');
-      expect(state.reminderText(use24HourFormat: false), '8:30 AM',
-          reason: 'show-habit.subtitle-card#5');
-
       expect(
-        SubtitleCardState.formatTime(0, 5, use24HourFormat: false),
-        '12:05 AM',
-        reason: 'show-habit.subtitle-card#5',
-      );
-      expect(
-        SubtitleCardState.formatTime(13, 0, use24HourFormat: false),
-        '1:00 PM',
-        reason: 'show-habit.subtitle-card#5',
-      );
-      expect(
-        SubtitleCardState.formatTime(12, 0, use24HourFormat: false),
-        '12:00 PM',
-        reason: 'show-habit.subtitle-card#5',
-      );
-      // hour*60+minute minutes rendered in UTC, so anything past midnight
-      // wraps around instead of being rejected.
-      expect(
-        SubtitleCardState.formatTime(25, 0, use24HourFormat: true),
-        '01:00',
-        reason: 'show-habit.subtitle-card#5',
+        SubtitleCardPresenter.buildState(habit: habit, theme: _theme).reminder,
+        Reminder(8, 30, WeekdayList.everyDay),
+        reason: 'show-habit.subtitle-card#5 — the hour and the minute reach '
+            'the view unchanged; the pattern they are rendered with is '
+            'DateFormat.getTimeFormat(context) and belongs to the widget '
+            'layer (`audit15.subtitle-card-reminder-time-ignores-the-device-'
+            'locale#1`)',
       );
 
       habit.reminder = null;
-      final off = SubtitleCardPresenter.buildState(habit: habit, theme: _theme);
-      expect(off.reminderText(use24HourFormat: true), 'Off',
-          reason: 'show-habit.subtitle-card#5');
+      expect(
+        SubtitleCardPresenter.buildState(habit: habit, theme: _theme).reminder,
+        isNull,
+        reason: 'show-habit.subtitle-card#5 — a null reminder is what selects '
+            'R.string.reminder_off',
+      );
     });
 
     test('platform-glue.time-and-date-formatting#1 — the reminder time is '
@@ -398,22 +360,13 @@ void main() {
           '(hours * 60 + minutes) * 60 * 1000L, builds a Date from it, formats '
           'with android.text.format.DateFormat.getTimeFormat(context) and '
           'forces the formatter\'s TimeZone to UTC so the value is not shifted '
-          '— the result therefore respects the user\'s 12h/24h system setting.';
+          '— the result therefore respects the user\'s 12h/24h system setting. '
+          'The 12h/24h switch and the locale pattern are the widget layer\'s '
+          '(`audit15.subtitle-card-reminder-time-ignores-the-device-locale#1`); '
+          'the minute the formatter is handed is this.';
 
-      // The 12h/24h switch is the caller's, and both renderings of the same
-      // instant name the same minute.
-      expect(SubtitleCardState.formatTime(8, 30, use24HourFormat: true),
-          '08:30',
-          reason: rule);
-      expect(SubtitleCardState.formatTime(8, 30, use24HourFormat: false),
-          '8:30 AM',
-          reason: rule);
-      expect(SubtitleCardState.formatTime(20, 5, use24HourFormat: true),
-          '20:05',
-          reason: rule);
-      expect(SubtitleCardState.formatTime(20, 5, use24HourFormat: false),
-          '8:05 PM',
-          reason: rule);
+      expect(SubtitleCardState.minuteOfDay(8, 30), 8 * 60 + 30, reason: rule);
+      expect(SubtitleCardState.minuteOfDay(20, 5), 20 * 60 + 5, reason: rule);
 
       // "forces the TimeZone to UTC so the value is not shifted": the result
       // depends on nothing but the two arguments, so no zone can move it. The
@@ -421,24 +374,18 @@ void main() {
       final int realZoneOffset = DateTime.now().timeZoneOffset.inMinutes;
       expect(realZoneOffset, isNotNull);
       for (final int hour in <int>[0, 12, 23]) {
-        expect(SubtitleCardState.formatTime(hour, 0, use24HourFormat: true),
-            '${hour.toString().padLeft(2, '0')}:00',
+        expect(SubtitleCardState.minuteOfDay(hour, 0), hour * 60,
             reason: '$rule (hour $hour)');
       }
 
       // (hours * 60 + minutes) minutes since the epoch, in UTC: the value wraps
       // modulo a day instead of being rejected or clamped.
-      expect(SubtitleCardState.formatTime(24, 0, use24HourFormat: true),
-          '00:00',
+      expect(SubtitleCardState.minuteOfDay(24, 0), 0,
           reason: '$rule — hour 24 is exactly one day of minutes');
-      expect(SubtitleCardState.formatTime(25, 30, use24HourFormat: true),
-          '01:30',
-          reason: rule);
-      expect(SubtitleCardState.formatTime(0, 1440, use24HourFormat: true),
-          '00:00',
+      expect(SubtitleCardState.minuteOfDay(25, 30), 90, reason: rule);
+      expect(SubtitleCardState.minuteOfDay(0, 1440), 0,
           reason: '$rule — minutes are folded into the same total');
-      expect(SubtitleCardState.formatTime(1, 90, use24HourFormat: true),
-          '02:30',
+      expect(SubtitleCardState.minuteOfDay(1, 90), 150,
           reason: '$rule — hours*60 + minutes, then split back apart');
     });
 

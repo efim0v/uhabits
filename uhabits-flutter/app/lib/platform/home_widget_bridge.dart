@@ -54,6 +54,7 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 /// {
 ///   "version": 1,
 ///   "today": "2015-01-26",
+///   "midnightDelayHours": 0,
 ///   "providers": ["CheckmarkWidgetProvider", ...],
 ///   "widgets": [{"id": 1, "key": "uhabits.widget.1", "habits": [3, 7]}]
 /// }
@@ -468,6 +469,16 @@ class HomeWidgetBridge {
     return <String, Object?>{
       'version': schemaVersion,
       'today': formatDate(today),
+      // `audit15.ios-home-screen-widgets-never-roll#1`: how the day above was
+      // computed, so a host redrawing this document an hour — or a week —
+      // later can work out whether it has gone stale and by how many days.
+      // `buildWidgetDocument` has published it since
+      // `audit6.home-screen-widgets-go-stale-at#1`, but a WidgetKit widget
+      // never reads a per-widget document: it has no widget id and no
+      // configure activity, so it resolves its habit out of the `habits`
+      // catalogue below and the index is the only thing it reads. Without this
+      // the extension had no way to roll the snapshot on at all.
+      'midnightDelayHours': midnightDelayHours,
       'providers': providerNames,
       'widgets': <Object?>[
         for (final int widgetId in _registry.widgetIds)

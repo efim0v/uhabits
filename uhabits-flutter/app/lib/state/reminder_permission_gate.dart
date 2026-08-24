@@ -122,9 +122,13 @@ class LocalNotificationsPermissions implements NotificationPermissions {
 
 /// The resume-time decision itself.
 ///
-/// One instance per screen instance, exactly as
-/// `permissionAlreadyRequested` is one field per activity instance: a fresh
-/// gate asks again, a resumed one does not.
+/// `permissionAlreadyRequested` is one field per activity instance upstream,
+/// and the port's counterpart is one instance per launch, owned by
+/// [AppScope.permissionGate] and shared by every caller — the habit list's
+/// `didPopNext` and `main`'s startup path both reach the same gate, so a
+/// refusal answered on one is remembered by the other. An activity restart
+/// (a rotation, say) re-asks upstream where the port does not; the difference
+/// is invisible because dismissing the dialog resumes rather than recreates.
 class ReminderPermissionGate {
   ReminderPermissionGate({
     required ReminderScheduler scheduler,
@@ -164,6 +168,12 @@ class ReminderPermissionGate {
       _scheduler.scheduleAll();
       return true;
     }
+    // The gate has two callers that reach the same instance — the habit
+    // list's `didPopNext` and the startup path — so two `onResume()` calls can
+    // be in flight at once. This check and the assignment below it are
+    // adjacent with no `await` between them, which is what keeps that safe:
+    // whichever call arrives here first raises the flag before yielding again,
+    // so the second sees it and never opens a second system dialog.
     if (_permissionAlreadyRequested) return false;
     _permissionAlreadyRequested = true;
     if (await _permissions.request()) {

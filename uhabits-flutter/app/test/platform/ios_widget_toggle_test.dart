@@ -124,6 +124,20 @@ const String historyRule =
     'just wrote, so today\'s square flips colour at the same moment the check '
     'mark does.';
 
+const String rolloverRule =
+    'audit15.ios-home-screen-widgets-never-roll#1 — In the Kotlin app: a '
+    'widget redraws from live app state, so it can never draw a day that has '
+    'already passed, and the tap it sends carries no day at all. An '
+    'ACTION_TOGGLE_REPETITION broadcast has no `timestamp` extra, so '
+    '`IntentParser.parseDate` supplies `getToday().unixTime` in its place and '
+    'throws IllegalArgumentException("timestamp is not valid") for a stamp '
+    'later than that — which `WidgetReceiver.onReceive` catches, leaving the '
+    'broadcast unhandled. The day the app is on is decided by the app: '
+    '`WidgetReceiver`\'s ACTION_UPDATE_WIDGETS_VALUE branch runs '
+    '`setToday(computeToday(prefs.midnightDelayHours, 0))` at the alarm '
+    '`WidgetUpdater.scheduleStartDayWidgetUpdate()` armed for the user\'s own '
+    'midnight, and redraws.';
+
 void main() {
   // -----------------------------------------------------------------------
   // Fixtures
@@ -614,6 +628,82 @@ void main() {
           reason: '$collapseRule Applied taps leave the queue…');
       expect(habit.originalEntries.get(today).value, Entry.no,
           reason: '$collapseRule …and a second publish must not replay them.');
+    });
+  });
+
+  // =======================================================================
+  // The day a staged tap lands on
+  // =======================================================================
+
+  group('audit15.ios-home-screen-widgets-never-roll', () {
+    test('#1 a tap that names no day is recorded against today', () async {
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+      store.data[WidgetToggleQueue.key] = jsonEncode(<String, Object?>{
+        'version': WidgetToggleQueue.schemaVersion,
+        'toggles': <Object?>[
+          <String, Object?>{'seq': 1, 'habit': habit.id},
+        ],
+      });
+
+      await sync.updateWidgets();
+      await sync.settle();
+
+      expect(habit.originalEntries.get(today).value, Entry.yesManual,
+          reason: '$rolloverRule Upstream the toggle broadcast carries no '
+              '`timestamp` extra at all and `IntentParser.parseDate` supplies '
+              '`getToday()`, so a widget tap is never lost for want of a day. '
+              'The queue dropped it instead: `stageToggle` writes '
+              '`index["today"] ?? ""` and an index with no published day — the '
+              'first tap on a freshly installed widget, a document a failed '
+              'publish left half written — staged a tap the app then threw '
+              'away, with the card already flipped on the home screen.');
+      expect(store.data[WidgetToggleQueue.key], isNull,
+          reason: '$rolloverRule …and an applied tap leaves the queue.');
+    });
+
+    test('#1 a tap dated after today is refused, not written', () async {
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+      stageTap(habit.id!, date: '2015-01-27');
+
+      await sync.updateWidgets();
+      await sync.settle();
+
+      expect(habit.originalEntries.get(LocalDate.ymd(2015, 1, 27)).value,
+          Entry.unknown,
+          reason: '$rolloverRule `IntentParser.parseDate` throws '
+              'IllegalArgumentException("timestamp is not valid") for anything '
+              'later than `getToday()`, and `WidgetReceiver.onReceive` catches '
+              'it and does nothing — a widget can only ever toggle a day that '
+              'has arrived. The queue trusted the date the extension wrote, so '
+              'a device whose clock or timezone had moved backwards since the '
+              'tap wrote an entry into the future, where nothing in the app '
+              'shows it and the score cannot count it.');
+      expect(habit.originalEntries.get(today).value, Entry.unknown,
+          reason: '$rolloverRule A refused tap is refused, not redirected: '
+              'upstream nothing at all is written.');
+      expect(store.data[WidgetToggleQueue.key], isNull,
+          reason: '$rolloverRule …and it still leaves the queue, or every '
+              'publish for the life of the install retries it.');
+    });
+
+    test('#1 a tap dated before today still lands on its own day', () async {
+      final Habit habit = addHabit();
+      stageTap(habit.id!, date: '2015-01-25');
+
+      await sync.updateWidgets();
+      await sync.settle();
+
+      expect(habit.originalEntries.get(LocalDate.ymd(2015, 1, 25)).value,
+          Entry.yesManual,
+          reason: '$rolloverRule Only the future is refused. Upstream the '
+              'broadcast is handled the instant the finger lifts, so a tap '
+              'made yesterday belongs to yesterday; the queue defers the write '
+              'but not the day it was made on, and clamping it to `getToday()` '
+              'would move a tap the user made onto a day they never touched.');
+      expect(habit.originalEntries.get(LocalDate.ymd(2015, 1, 26)).value,
+          Entry.unknown, reason: rolloverRule);
     });
   });
 }

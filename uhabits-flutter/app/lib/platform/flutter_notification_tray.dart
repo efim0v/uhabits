@@ -999,22 +999,6 @@ class LocalNotificationsPresenter
     return presenter;
   }
 
-  /// `ListHabitsActivity`'s POST_NOTIFICATIONS flow, and its iOS counterpart.
-  Future<bool> requestPermission() async {
-    final android = plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    if (android != null) {
-      return await android.requestNotificationsPermission() ?? false;
-    }
-    final darwin = plugin.resolvePlatformSpecificImplementation<
-        IOSFlutterLocalNotificationsPlugin>();
-    if (darwin != null) {
-      return await darwin.requestPermissions(alert: true, sound: true, badge: true) ??
-          false;
-    }
-    return false;
-  }
-
   List<DarwinNotificationCategory> _darwinCategories() => [
         for (final category in _builder.categories())
           DarwinNotificationCategory(

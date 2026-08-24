@@ -31,10 +31,14 @@ import 'package:uhabits/ui/habits/list/list_header.dart'
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/list/list_habits_menu.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
-import 'package:uhabits/ui/theme/app_theme.dart' show toFlutterColor;
+import 'package:uhabits/ui/theme/app_theme.dart'
+    show appThemeData, toFlutterColor;
 import 'package:uhabits_core/src/models/sqlite/sql_model_factory.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/uhabits_core.dart';
+// `Theme` is exported by both `material.dart` and the core, so the core's
+// palette holder needs a prefix to be nameable at all.
+import 'package:uhabits_core/uhabits_core.dart' as core show Theme;
 
 void main() {
   late Directory tempDir;
@@ -2808,10 +2812,15 @@ void main() {
   group('habit-type-dialog.select-type, revisited', () {
     /// Opens the chooser the way `ListHabitsMenuBehavior.onCreateHabit` does,
     /// but from a bare host so the chooser is the only thing on screen.
-    Future<void> pumpChooser(WidgetTester tester, AppScope scope) async {
+    Future<void> pumpChooser(
+      WidgetTester tester,
+      AppScope scope, {
+      ThemeData? themeData,
+    }) async {
       await tester.pumpWidget(
         MaterialApp(
           key: ValueKey<int>(nextTree++),
+          theme: themeData,
           localizationsDelegates: L10n.localizationsDelegates,
           supportedLocales: L10n.supportedLocales,
           home: Provider<AppScope>.value(
@@ -2948,8 +2957,17 @@ void main() {
       );
       expect(card.elevation, 6.0,
           reason: 'habit-type-dialog.select-type#8 — 6dp elevation');
-      expect(card.borderRadius, isNotNull,
-          reason: 'habit-type-dialog.select-type#8 — a rounded background');
+      // `@drawable/round_ripple` is a rectangle with `<corners
+      // android:radius="5dp"/>`, so "rounded" has a value.
+      expect(
+        card.shape,
+        isA<RoundedRectangleBorder>().having(
+          (s) => s.borderRadius,
+          'borderRadius',
+          BorderRadius.circular(5),
+        ),
+        reason: 'habit-type-dialog.select-type#8 — a rounded background',
+      );
       final ink = tester.widget<InkWell>(
         find
             .descendant(
@@ -2958,9 +2976,76 @@ void main() {
             )
             .first,
       );
-      expect(ink.borderRadius, card.borderRadius,
+      expect(ink.borderRadius, BorderRadius.circular(5),
           reason: 'habit-type-dialog.select-type#8 — the ripple is clipped to '
               'the same rounded background');
+    });
+
+    testWidgets(
+        'audit15.habit-type-cards-lose-their-2dp-outline#1: the cards are '
+        'cardBgColor behind a 2dp textColor stroke', (tester) async {
+      const rule = 'audit15.habit-type-cards-lose-their-2dp-outline#1';
+
+      Future<void> check(core.Theme theme) async {
+        await pumpChooser(
+          tester,
+          openScope(dispatcher: const AsyncDispatcher()),
+          themeData: appThemeData(theme),
+        );
+
+        for (final key in <Key>[
+          EditHabitScreen.yesNoTypeCardKey,
+          EditHabitScreen.measurableTypeCardKey,
+        ]) {
+          final card = tester.widget<Material>(
+            find
+                .descendant(of: find.byKey(key), matching: find.byType(Material))
+                .first,
+          );
+          expect(
+            card.color,
+            toFlutterColor(theme.cardBgColor),
+            reason: '$rule — `<solid android:color="?cardBgColor"/>`, not the '
+                'window background',
+          );
+          expect(
+            card.shape,
+            isA<RoundedRectangleBorder>()
+                .having((s) => s.side.width, 'side.width', 2.0)
+                .having(
+                  (s) => s.side.color,
+                  'side.color',
+                  toFlutterColor(theme.contrast100),
+                )
+                .having(
+                  (s) => s.borderRadius,
+                  'borderRadius',
+                  BorderRadius.circular(5),
+                ),
+            reason: '$rule — `<stroke android:width="2dp" '
+                'android:color="?android:textColor"/>` and `<corners '
+                'android:radius="5dp"/>`',
+          );
+
+          final ink = tester.widget<InkWell>(
+            find
+                .descendant(of: find.byKey(key), matching: find.byType(InkWell))
+                .first,
+          );
+          expect(
+            ink.splashColor,
+            toFlutterColor(theme.aboutScreenColor),
+            reason: '$rule — `<ripple android:color="?colorAccent">`, and '
+                'colorAccent is ?aboutScreenColor',
+          );
+        }
+      }
+
+      // Pure black is where the loss is total: a #000000 card with no stroke
+      // over a #a0000000 scrim is invisible.
+      await check(PureBlackTheme());
+      await check(DarkTheme());
+      await check(LightTheme());
     });
   });
 }

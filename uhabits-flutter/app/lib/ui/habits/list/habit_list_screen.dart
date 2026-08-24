@@ -416,12 +416,46 @@ class _HabitListViewState extends State<_HabitListView>
   /// (`audit7.after-a-background-round-trip-the#1`).
   ///
   /// It is also the *only* moment the home-screen widgets hear about anything
-  /// the covering screen wrote — see [_republishWidgets].
+  /// the covering screen wrote — see [_republishWidgets] — and the only moment
+  /// a reminder the covering screen just created can ask for the permission it
+  /// needs — see [_runPermissionGate].
   @override
   void didPopNext() {
     _isCovered = false;
     _toasts.onAttached();
+    _runPermissionGate();
     _republishWidgets();
+  }
+
+  /// The POST_NOTIFICATIONS block of `ListHabitsActivity.onResume`:
+  ///
+  /// ```kotlin
+  /// if (appComponent.reminderScheduler.hasHabitsWithReminders()) {
+  ///     … checkSelfPermission / permissionLauncher.launch(POST_NOTIFICATIONS) …
+  /// }
+  /// ```
+  ///
+  /// `EditHabitActivity` is a separate activity, so pressing Save finishes it
+  /// and resumes the list *immediately*: by the time the user is looking at
+  /// their new habit, `hasHabitsWithReminders()` is true for the first time and
+  /// the permission has been asked for. Bound to the process lifecycle instead
+  /// — which is where the port's copy of this block lives, in `main.dart` — the
+  /// question is not put until the user backgrounds the app and comes back,
+  /// which for a reminder set for tonight is usually after it was missed
+  /// (`audit15.the-notification-permission-prompt-is-never#1`).
+  ///
+  /// Deliberately not conditional on [_isCovered] or on which screen was on
+  /// top: upstream the block is part of the resuming path itself, unlike the
+  /// toast re-registration. The gate is the scope's — one instance per launch,
+  /// carrying `permissionAlreadyRequested` — so a user who said no once is not
+  /// asked again on the next pop, and the repeated call is otherwise a no-op
+  /// (`reminders.app-start-and-permission#4`).
+  ///
+  /// Null before `startPlatformServices` has run — a host with no notifications
+  /// and every widget test — which is upstream's `reminderScheduler` guard.
+  void _runPermissionGate() {
+    final Future<bool>? asked = _model.scope.reminderPermissionGate?.onResume();
+    if (asked != null) unawaited(asked);
   }
 
   /// `appComponent.widgetUpdater.updateWidgets()`, the second statement of the

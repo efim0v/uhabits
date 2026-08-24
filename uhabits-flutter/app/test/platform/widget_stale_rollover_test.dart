@@ -90,6 +90,31 @@ String widgetKotlin(String name) => File(
 String widgetXml(String name) =>
     File('${androidMain.path}/res/xml/$name').readAsStringSync();
 
+// ---------------------------------------------------------------------------
+// Reading the iOS source set
+// ---------------------------------------------------------------------------
+
+final Directory widgetDir = Directory('${_findApp().path}/ios/HabitsWidget');
+
+Directory _findApp() {
+  Directory dir = Directory.current;
+  for (int i = 0; i < 6; i++) {
+    for (final String prefix in <String>['', '/app']) {
+      final Directory candidate = Directory('${dir.path}$prefix');
+      if (File('${candidate.path}/ios/HabitsWidget/WidgetData.swift')
+          .existsSync()) {
+        return candidate;
+      }
+    }
+    final Directory parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError('app/ not found from ${Directory.current.path}');
+}
+
+String swift(String name) => File('${widgetDir.path}/$name').readAsStringSync();
+
 /// [source] with its comments stripped, so an assertion about what the code
 /// does cannot be satisfied by prose that merely names the thing.
 String withoutComments(String source) => source
@@ -115,6 +140,26 @@ const String rule1 =
     '`setToday(...)` and redraws. Between the two, a Checkmark widget left on '
     'the home screen rolls over to the new day, and shows the new day as '
     'unchecked, without the user ever opening the app.';
+
+const String rule15 =
+    'audit15.ios-home-screen-widgets-never-roll#1 — In the Kotlin app: a '
+    'widget redraws from live app state, so it can never draw a day that has '
+    'already passed. `CheckmarkWidget.refreshData` calls `getToday()` on every '
+    'ACTION_APPWIDGET_UPDATE and reads `habit.computedEntries.get(today)` and '
+    '`habit.scores[today]` out of the database, and '
+    '`pendingIntentFactory.showNumberPicker(habit, getToday())` rebuilds the '
+    'value-picker intent against that same fresh day. The app-wide '
+    '`getToday()` is re-stamped without the app being opened: '
+    '`WidgetUpdater.scheduleStartDayWidgetUpdate()` arms an `AlarmManager` RTC '
+    'broadcast at `getStartOfTomorrowWithOffset(midnightDelayHours, 0)`, and '
+    '`WidgetReceiver`\'s ACTION_UPDATE_WIDGETS_VALUE branch runs '
+    '`setToday(computeToday(prefs.midnightDelayHours, 0))` and redraws. The '
+    'tap carries no day at all — an ACTION_TOGGLE_REPETITION broadcast has no '
+    '`timestamp` extra, so `IntentParser.parseDate` defaults it to '
+    '`getToday()` and refuses anything later than that. A Checkmark widget '
+    'left on the home screen therefore shows the new day unchecked at the '
+    'user\'s own midnight, and a tap on it always records against the day the '
+    'app is on.';
 
 void main() {
   // =======================================================================
@@ -323,6 +368,238 @@ void main() {
             'picker opens on comes from the same field '
             '(`widgets.checkmark#7`), so a tap after midnight edits today '
             'rather than yesterday.',
+      );
+    });
+  });
+
+  // =======================================================================
+  // The same rule on the other host: the WidgetKit extension
+  // =======================================================================
+
+  group('audit15.ios-home-screen-widgets-never-roll (the document)', () {
+    const TimeZone gmt = FixedTimeZone(0);
+    final TimeZone Function() realZone = getDefaultTimeZone;
+    final LocalDate today = LocalDate.ymd(2015, 1, 26);
+
+    late MemoryStorage storage;
+    late Preferences preferences;
+    late FakeHomeWidgetPlatform platform;
+    late HomeWidgetBridge bridge;
+
+    setUp(() {
+      DateUtils.setFixedTimeZone(gmt);
+      getDefaultTimeZone = () => gmt;
+      setToday(today);
+      final MemoryHabitList habitList = MemoryHabitList();
+      final HabitFixtures fixtures =
+          HabitFixtures(MemoryModelFactory(), habitList);
+      storage = MemoryStorage();
+      preferences = Preferences(storage);
+      platform = FakeHomeWidgetPlatform();
+      bridge = HomeWidgetBridge(
+        habitList: habitList,
+        registry: WidgetRegistry(storage),
+        platform: platform,
+        preferences: preferences,
+      );
+      habitList.add(fixtures.createEmptyHabit(name: 'Meditate'));
+    });
+
+    tearDown(() {
+      DateUtils.setFixedTimeZone(null);
+      getDefaultTimeZone = realZone;
+    });
+
+    Map<String, Object?> index() =>
+        jsonDecode(platform.data[HomeWidgetBridge.indexKey]!)
+            as Map<String, Object?>;
+
+    test('#1 the index carries the hour the day turns at', () async {
+      await bridge.publish();
+      expect(index()['today'], '2015-01-26', reason: rule15);
+      expect(index()['midnightDelayHours'], 0,
+          reason: '$rule15 An iOS widget has no per-widget document to read: '
+              'WidgetKit has no widget id and no configure activity, so the '
+              'extension resolves its habit out of the index catalogue and the '
+              'index is the only thing it reads. Rolling that snapshot on to '
+              'the day it is being drawn on needs the one input of '
+              '`computeToday(midnightDelayHours, 0)` that is not the system '
+              'clock, and the index published `today` without it.');
+
+      preferences.isMidnightDelayEnabled = true;
+      await bridge.publish();
+      expect(index()['midnightDelayHours'], 3,
+          reason: '$rule15 `WidgetUpdater.scheduleStartDayWidgetUpdate()` arms '
+              'its alarm at `getStartOfTomorrowWithOffset(midnightDelayHours, '
+              '0)`, so a user whose day starts at 3am sees the widget turn at '
+              '3am. An extension that never learns the offset turns the day up '
+              'to three hours early.');
+    });
+  });
+
+  group('audit15.ios-home-screen-widgets-never-roll (the extension)', () {
+    String widgetData() => squashed(withoutComments(swift('WidgetData.swift')));
+
+    test('#1 the extension works out which day it is being drawn on', () {
+      final String data = widgetData();
+
+      expect(
+        data,
+        contains('static func logicalToday(midnightDelayHours: Int, '
+            'now: Date = Date()) -> Date'),
+        reason: '$rule15 `WidgetStore.today()` returned the published string '
+            'verbatim, so the day the cards drew was the day the app last ran '
+            '— forever. The one thing this process may ask the system is what '
+            'instant it is now; which day that instant belongs to is still the '
+            'app\'s rule.',
+      );
+      expect(
+        data,
+        contains('now.addingTimeInterval(-Double(midnightDelayHours) * 3600)'),
+        reason: '$rule15 …minus the midnight delay the index publishes, '
+            'because `computeToday(hourOffset, 0)` is what the app itself '
+            'would have answered.',
+      );
+    });
+
+    test('#1 every document the extension reads is advanced to that day', () {
+      final String data = widgetData();
+
+      expect(
+        data,
+        contains('let document = rolledDocument(forKey: key, in: defaults)'),
+        reason: '$rule15 `WidgetStore.decode` is the single point every reader '
+            'passes through — `index()`, `document(widgetId:)` and so every '
+            'card of all six widgets — which makes it the iOS counterpart of '
+            '`WidgetData.readWidget`, where the Android host already turns a '
+            'snapshot built for an earlier day into one for this day.',
+      );
+      expect(
+        data,
+        contains('let delay = document["midnightDelayHours"] as? Int ?? 0'),
+        reason: '$rule15 Read defensively: an index written before the field '
+            'existed carries no key, and 0 — a day that turns at midnight — is '
+            'the preference\'s own default.',
+      );
+      expect(
+        data,
+        contains('let midnightDelayHours: Int?'),
+        reason: '$rule15 …and declared optional on `WidgetIndex` for the same '
+            'reason. A widget outlives an app update for as long as it sits on '
+            'the home screen, and `JSONDecoder` fails the whole struct on one '
+            'missing non-optional key — which `WidgetStore.decode` answers nil '
+            'for, turning every card into the "no habit" placeholder.',
+      );
+    });
+
+    test('#1 rolling forward moves the day and shifts the arrays', () {
+      final String data = widgetData();
+
+      expect(
+        data,
+        contains('static func rolledForward(_ document: [String: Any], '
+            'to current: Date) -> [String: Any]'),
+        reason: '$rule15 The port of `WidgetDocument.rolledForwardTo`, which '
+            'app/android/.../widgets/WidgetData.kt has had since '
+            '`audit6.home-screen-widgets-go-stale-at#1` and the extension '
+            'never got.',
+      );
+      expect(
+        data,
+        contains('let days = daysSince(published, to: current) '
+            'if days <= 0 { return document }'),
+        reason: '$rule15 A document built for today — or, under a timezone '
+            'move, for a day still ahead — is already what the extension '
+            'should draw.',
+      );
+      expect(
+        data,
+        contains('rolled["today"] = formatDate(current)'),
+        reason: '$rule15 The day every card dates itself by: the History '
+            'grid\'s column origin, the Score chart\'s axis, the Frequency '
+            'month buckets, the Streak labels and the `uhabits://widget/edit` '
+            'link all derive from it.',
+      );
+      expect(
+        data,
+        contains('let shifted = entries.indices.map { \$0 < days ? '
+            'EntryValue.unknown : entries[\$0 - days] }'),
+        reason: '$rule15 The arrays are newest-first, so a day passing shifts '
+            'every value one place down and the days nobody has answered '
+            'arrive UNKNOWN — which is what makes the Checkmark widget show '
+            'the new day as unchecked.',
+      );
+      expect(
+        data,
+        contains('rolled["value"] = shifted.first ?? EntryValue.unknown'),
+        reason: '$rule15 `value` is `entries[0]` by definition, and it is what '
+            'the tick, the ring glyph and `ToggleHabitIntent`\'s next value '
+            'are all read from.',
+      );
+      expect(
+        data,
+        contains('notes.indices.map { \$0 < days ? false : '
+            'notes[\$0 - days] }'),
+        reason: '$rule15 The note dots are indexed by the same offsets, so '
+            'they travel with the entries or they mark the wrong days.',
+      );
+      expect(
+        data,
+        contains('digits.indices.map { \$0 < days ? offSquare : '
+            'digits[\$0 - days] }'),
+        reason: '$rule15 The History grid draws `historySeries`, not '
+            '`entries` (`audit10.history-home-screen-widget-draws-more#1`); '
+            'left unshifted it would paint every square `days` days late.',
+      );
+    });
+
+    test('#1 what cannot be recomputed here rides along stale', () {
+      final String data = widgetData();
+
+      for (final String field in <String>[
+        'score',
+        'scores',
+        'streaks',
+        'weekdayFrequency',
+        'targetRows',
+      ]) {
+        expect(data, isNot(contains('rolled["$field"]')),
+            reason: '$rule15 Exactly as `WidgetData.kt` documents: `$field` is '
+                'a reduction over the habit\'s whole history and there is no '
+                'history in this process to reduce. The rollover buys the day, '
+                'the grid and the tick; the rest waits for the app.');
+      }
+    });
+
+    test('#1 a staged tap carries the day it was tapped on', () {
+      final String data = widgetData();
+
+      expect(
+        data,
+        contains('var index = rolledDocument(forKey: WidgetContract.indexKey, '
+            'in: defaults)'),
+        reason: '$rule15 `stageToggle` read `index["today"]` verbatim and '
+            'queued it as the tap\'s date, so a tap made after midnight was '
+            'applied to yesterday at the app\'s next launch: yesterday flipped '
+            'from YES to NO — the next step of the cycle — and today stayed '
+            'blank. The intent never builds a timeline entry, so the '
+            'roll-forward has to reach it through the store rather than '
+            'through the provider.',
+      );
+    });
+
+    test('#1 the timeline expires at the day the user\'s day turns', () {
+      final String timeline =
+          squashed(withoutComments(swift('HabitTimeline.swift')));
+
+      expect(
+        timeline,
+        contains('WidgetStore.startOfNextDay(midnightDelayHours:'),
+        reason: '$rule15 WidgetKit has no `AlarmManager`, so the reload policy '
+            'is what stands in for `scheduleStartDayWidgetUpdate()` — and '
+            'upstream that alarm is armed at '
+            '`getStartOfTomorrowWithOffset(midnightDelayHours, 0)`, not at the '
+            'device\'s own midnight.',
       );
     });
   });

@@ -34,7 +34,9 @@ import 'package:uhabits/main.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/platform/home_widget_bridge.dart';
 import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/state/reminder_permission_gate.dart';
 import 'package:uhabits/state/widget_sync.dart';
+import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/list/list_habits_menu.dart';
@@ -70,6 +72,10 @@ class _SilentTray implements SystemTray {
 }
 
 class _SilentScheduler implements SystemScheduler {
+  /// The habits whose next reminder has been armed — `AlarmManager.setExact`,
+  /// the last thing `reminderScheduler.scheduleAll()` reaches.
+  final List<String> armed = <String>[];
+
   @override
   void log(String componentName, String msg) {}
 
@@ -78,11 +84,52 @@ class _SilentScheduler implements SystemScheduler {
     int reminderTime,
     Habit habit,
     int timestamp,
-  ) =>
-      SchedulerResult.ok;
+  ) {
+    armed.add(habit.name);
+    return SchedulerResult.ok;
+  }
 
   @override
   SchedulerResult? scheduleWidgetUpdate(int updateTime) => SchedulerResult.ok;
+}
+
+/// A scripted `checkSelfPermission` / `requestPermissionLauncher` pair — the
+/// same shape test/state/reminder_startup_test.dart drives the gate through.
+/// "The user is on Android 13" and "the user tapped Deny" are answers no test
+/// process can produce for real.
+class _ScriptedPermissions implements NotificationPermissions {
+  _ScriptedPermissions({this.answerToRequest = true});
+
+  /// `checkSelfPermission(POST_NOTIFICATIONS) == PERMISSION_GRANTED`. Starts
+  /// false — a fresh install has never been granted anything — and follows
+  /// whatever the user answers.
+  bool granted = false;
+
+  /// What the user taps in the system dialog.
+  bool answerToRequest;
+
+  /// `permissionLauncher.launch(POST_NOTIFICATIONS)` calls.
+  int requests = 0;
+
+  @override
+  Future<bool> get needsRuntimePermission async => true;
+
+  @override
+  Future<bool> isGranted() async => granted;
+
+  /// Run when the system dialog is raised, so a test can record what the app
+  /// had already done by then. This is what makes "the grant is *followed by*
+  /// scheduleAll()" an assertion rather than a hope: saving the habit arms it
+  /// too, so only the ordering distinguishes the two.
+  void Function()? onRequest;
+
+  @override
+  Future<bool> request() async {
+    requests++;
+    onRequest?.call();
+    granted = answerToRequest;
+    return answerToRequest;
+  }
 }
 
 /// The `home_widget` plugin, counting publishes the way
@@ -155,8 +202,9 @@ void main() {
     return scope;
   }
 
-  Habit addHabit(AppScope scope, String name) {
+  Habit addHabit(AppScope scope, String name, {Reminder? reminder}) {
     final Habit habit = scope.modelFactory.buildHabit()..name = name;
+    if (reminder != null) habit.reminder = reminder;
     scope.habitList.add(habit);
     habit.recompute();
     return habit;
@@ -164,9 +212,14 @@ void main() {
 
   /// Steps (7) to (10) of `HabitsApplication.onCreate`, over seams a test can
   /// watch. This is what publishes `scope.widgetSync`.
-  _CountingWidgetPlatform startServices(AppScope scope) {
+  _CountingWidgetPlatform startServices(
+    AppScope scope, {
+    NotificationPermissions? permissions,
+    _SilentScheduler? alarms,
+  }) {
     final _CountingWidgetPlatform widgets = _CountingWidgetPlatform();
     scope.startServices(
+      permissions: permissions,
       tray: NotificationTray(
         scope.taskRunner,
         scope.commandRunner,
@@ -176,7 +229,7 @@ void main() {
       scheduler: ReminderScheduler(
         scope.commandRunner,
         scope.habitList,
-        _SilentScheduler(),
+        alarms ?? _SilentScheduler(),
         WidgetPreferences(scope.preferencesStorage),
       ),
       sync: WidgetSync(
@@ -471,6 +524,187 @@ void main() {
       expect(widgets.publishes, greaterThan(afterStartup),
           reason: '$rule The block is `onResume`\'s, and `onResume` runs '
               'whichever activity was on top.');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // audit15.the-notification-permission-prompt-is-never
+  // -----------------------------------------------------------------------
+
+  group('audit15.the-notification-permission-prompt-is-never', () {
+    const String rule =
+        'audit15.the-notification-permission-prompt-is-never#1 — '
+        '`ListHabitsActivity.onResume` runs its POST_NOTIFICATIONS block on '
+        '*every* resume of the list activity, and finishing '
+        '`EditHabitActivity` is a resume. On a fresh install the user creates '
+        'their first habit with a reminder and presses Save; the editor '
+        'finishes, the list resumes, `hasHabitsWithReminders()` is true for '
+        'the first time, and `permissionLauncher.launch(POST_NOTIFICATIONS)` '
+        'fires right there — before the user has left the app, and in time for '
+        'the reminder they just set.';
+
+    /// `IntentFactory.startEditActivity(context, habitType)` — CREATE mode,
+    /// which is where `EditHabitScreen.selectTypeAndOpen` ends up.
+    Future<void> openEditor(WidgetTester tester, AppScope scope) async {
+      unawaited(
+        Navigator.of(tester.element(find.byType(HabitListScreen)))
+            .push<void>(EditHabitScreen.route(scope: scope)),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    /// Name it, give it the default 08:00 reminder, press Save — which is
+    /// `EditHabitActivity` running `CreateHabitCommand` and finishing.
+    Future<void> fillAndSave(WidgetTester tester, String name) async {
+      await tester.enterText(
+        find.byKey(EditHabitScreen.nameFieldKey),
+        name,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(EditHabitScreen.reminderTimePickerKey));
+      await tester.pumpAndSettle();
+      final MaterialLocalizations localizations = MaterialLocalizations.of(
+        tester.element(find.byType(TimePickerDialog)),
+      );
+      await tester.tap(find.text(localizations.okButtonLabel));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        '#1 saving the first habit with a reminder asks for the notification '
+        'permission the moment the editor closes', (tester) async {
+      // The radial time picker wants more room than the default surface.
+      tester.view.physicalSize = const Size(1000, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      // A fresh install: no habits at all.
+      final AppScope scope = openScope();
+      final _ScriptedPermissions permissions = _ScriptedPermissions();
+      final _SilentScheduler alarms = _SilentScheduler();
+      startServices(scope, permissions: permissions, alarms: alarms);
+
+      // How many alarms had been armed by the time the dialog went up.
+      int? armedWhenAsked;
+      permissions.onRequest = () => armedWhenAsked = alarms.armed.length;
+
+      await tester.pumpWidget(UhabitsApp(scope: scope));
+      await tester.pumpAndSettle();
+      expect(permissions.requests, 0,
+          reason: '$rule The launch itself asks nothing: '
+              '`hasHabitsWithReminders()` is false, which is the guard the '
+              'whole block sits behind.');
+
+      await openEditor(tester, scope);
+      await fillAndSave(tester, 'Meditate');
+
+      expect(scope.habitList.getByPosition(0).hasReminder(), isTrue,
+          reason: '$rule The fixture: the habit really was saved with a '
+              'reminder.');
+      expect(permissions.requests, 1, reason: rule);
+      expect(armedWhenAsked, isNotNull,
+          reason: '$rule The dialog really was raised.');
+      expect(alarms.armed.length, greaterThan(armedWhenAsked!),
+          reason: '$rule …and the grant is followed by `scheduleReminders()` '
+              '= `reminderScheduler.scheduleAll()`, so the reminder the user '
+              'just configured is armed *because of the grant*. Counting arms '
+              'across the dialog is what makes this load-bearing: saving the '
+              'habit arms it as well, through '
+              '`ReminderScheduler.onCommandFinished`, so `contains(...)` alone '
+              'passes with the gate removed entirely.');
+    });
+
+    testWidgets('#4 starting the services again rebuilds the gate', (tester) async {
+      // The gate is cached because `permissionAlreadyRequested` is one field
+      // per activity and must survive an editor round trip. But it holds the
+      // scheduler and the permissions seam it was built with, so a second
+      // `startServices` — a test reusing a scope, or any future restart path —
+      // must not leave it bound to the pair that call has just replaced.
+      final AppScope scope = openScope();
+      addHabit(scope, 'Meditate',
+          reminder: Reminder(8, 30, WeekdayList.everyDay));
+
+      final _ScriptedPermissions first = _ScriptedPermissions();
+      startServices(scope, permissions: first);
+      final ReminderPermissionGate? before = scope.reminderPermissionGate;
+      expect(before, isNotNull, reason: rule);
+      await before!.onResume();
+      expect(first.requests, 1, reason: rule);
+
+      final _ScriptedPermissions second = _ScriptedPermissions();
+      startServices(scope, permissions: second);
+      final ReminderPermissionGate? after = scope.reminderPermissionGate;
+
+      expect(after, isNot(same(before)),
+          reason: '$rule A gate that outlived the services it was built from '
+              'would ask the previous seam, while the scope reads as the new '
+              'one — a stale answer no caller could see was stale.');
+      await after!.onResume();
+      expect(second.requests, 1,
+          reason: '$rule The rebuilt gate asks the seam that is installed now.');
+    });
+
+    testWidgets('#1 a user who denied the permission is not asked again on '
+        'the next return to the list', (tester) async {
+      final AppScope scope = openScope();
+      addHabit(scope, 'Meditate',
+          reminder: Reminder(8, 0, WeekdayList.everyDay));
+      final _ScriptedPermissions permissions =
+          _ScriptedPermissions(answerToRequest: false);
+      startServices(scope, permissions: permissions);
+
+      await tester.pumpWidget(UhabitsApp(scope: scope));
+      await tester.pumpAndSettle();
+      expect(permissions.requests, 1,
+          reason: '$rule A habit with a reminder is already there, so the '
+              'launch asks — and the user taps Deny.');
+
+      // Any screen over the list, opened and backed out of, twice.
+      final NavigatorState navigator =
+          Navigator.of(tester.element(find.byType(HabitListScreen)));
+      for (int i = 0; i < 2; i++) {
+        unawaited(navigator.push<void>(MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: SizedBox.shrink()),
+        )));
+        await tester.pumpAndSettle();
+        navigator.pop();
+        await tester.pumpAndSettle();
+      }
+
+      expect(permissions.requests, 1,
+          reason: '$rule `permissionAlreadyRequested` is a field of '
+              '`ListHabitsActivity`, and `EditHabitActivity` does not destroy '
+              'it — the flag survives the round trip, which is exactly the '
+              'infinite `onResume` loop the comment upstream warns about '
+              '(`reminders.app-start-and-permission#4`).');
+    });
+
+    testWidgets('#1 returning to a list with no reminders anywhere asks '
+        'nothing', (tester) async {
+      final AppScope scope = openScope();
+      addHabit(scope, 'Meditate');
+      final _ScriptedPermissions permissions = _ScriptedPermissions();
+      startServices(scope, permissions: permissions);
+
+      await tester.pumpWidget(UhabitsApp(scope: scope));
+      await tester.pumpAndSettle();
+
+      final NavigatorState navigator =
+          Navigator.of(tester.element(find.byType(HabitListScreen)));
+      unawaited(navigator.push<void>(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: SizedBox.shrink()),
+      )));
+      await tester.pumpAndSettle();
+      navigator.pop();
+      await tester.pumpAndSettle();
+
+      expect(permissions.requests, 0,
+          reason: '$rule The block is guarded on '
+              '`reminderScheduler.hasHabitsWithReminders()`, so a user with no '
+              'reminders is never shown the system dialog — on a pop no more '
+              'than on a launch (`reminders.app-start-and-permission#6`).');
     });
   });
 }

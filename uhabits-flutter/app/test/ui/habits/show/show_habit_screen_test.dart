@@ -46,6 +46,8 @@ import 'package:uhabits_core/uhabits_core.dart' hide Color, Theme;
 import 'package:uhabits_core/uhabits_core.dart' as core show Color, Theme;
 
 void main() {
+  final TestWidgetsFlutterBinding binding =
+      TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tempDir;
   final scopes = <AppScope>[];
 
@@ -59,6 +61,7 @@ void main() {
       scope.close();
     }
     scopes.clear();
+    binding.platformDispatcher.clearLocalesTestValue();
     tempDir.deleteSync(recursive: true);
   });
 
@@ -116,8 +119,9 @@ void main() {
     );
   }
 
-  Widget wrapCard(Widget card) {
+  Widget wrapCard(Widget card, {Locale? locale}) {
     return MaterialApp(
+      locale: locale,
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: L10n.supportedLocales,
       home: Scaffold(body: card),
@@ -509,6 +513,130 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(textOf(tester, SubtitleCardView.reminderLabelKey).data, 'Off');
+    });
+
+    testWidgets(
+        'audit15.subtitle-card-frequency-and-off-are-hard-coded#1: both '
+        'strings come from the resolved UI locale', (tester) async {
+      const rule = 'audit15.subtitle-card-frequency-and-off-are-hard-coded#1';
+      final scope = openScope();
+      final daily = addHabit(scope, 'Meditate');
+      final thrice = addHabit(scope, 'Run', frequency: Frequency(3, 7));
+      final monthly = addHabit(scope, 'Bill', frequency: Frequency(1, 30));
+
+      await tester.pumpWidget(
+        wrapCard(
+          SubtitleCardView(state: stateOf(scope, daily).subtitle),
+          locale: const Locale('ru'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.frequencyLabelKey).data,
+        'Каждый день',
+        reason: '$rule — R.string.every_day, values-ru-rRU/strings.xml:126',
+      );
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        'Выкл',
+        reason: '$rule — R.string.reminder_off, values-ru-rRU/strings.xml:65',
+      );
+
+      await tester.pumpWidget(
+        wrapCard(
+          SubtitleCardView(state: stateOf(scope, thrice).subtitle),
+          locale: const Locale('ru'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.frequencyLabelKey).data,
+        '3 раз в неделю',
+        reason: '$rule — R.string.x_times_per_week takes its numerator as a '
+            'positional argument of the translated string',
+      );
+
+      await tester.pumpWidget(
+        wrapCard(
+          SubtitleCardView(state: stateOf(scope, monthly).subtitle),
+          locale: const Locale('de'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.frequencyLabelKey).data,
+        'Monatlich',
+        reason: '$rule — the branch order is unchanged; only the resource '
+            'lookup is (R.string.every_month)',
+      );
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        'Aus',
+        reason: rule,
+      );
+    });
+
+    testWidgets(
+        'audit15.subtitle-card-reminder-time-ignores-the-device-locale#1: the '
+        'time pattern follows the device locale', (tester) async {
+      const rule =
+          'audit15.subtitle-card-reminder-time-ignores-the-device-locale#1';
+      final scope = openScope();
+      final habit = addHabit(
+        scope,
+        'Meditate',
+        reminder: Reminder(8, 30, WeekdayList.everyDay),
+      );
+
+      // A Korean device: the 12-hour pattern is "a h:mm", so the day period
+      // comes first.
+      binding.platformDispatcher.localesTestValue = const <Locale>[Locale('ko')];
+      await tester.pumpWidget(
+        wrapCard(
+          SubtitleCardView(state: stateOf(scope, habit).subtitle),
+          locale: const Locale('ko'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        '오전 8:30',
+        reason: '$rule — DateFormat.getTimeFormat(context) builds its pattern '
+            "from the configuration locale, not from en-US's",
+      );
+
+      // An en-AU device: the app ships no en_AU translation, so the strings
+      // resolve to plain `en` while the time pattern stays the device's —
+      // lowercase "am", the same split audit9 records for dates and numbers.
+      binding.platformDispatcher.localesTestValue = const <Locale>[
+        Locale('en', 'AU'),
+      ];
+      await tester.pumpWidget(
+        wrapCard(SubtitleCardView(state: stateOf(scope, habit).subtitle)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        '8:30 am',
+        reason: '$rule — the DEVICE locale keeps its region where the resolved '
+            'UI locale drops it',
+      );
+
+      // The 24-hour branch is the same pattern lookup, one skeleton over.
+      await tester.pumpWidget(
+        wrapCard(
+          SubtitleCardView(
+            state: stateOf(scope, habit).subtitle,
+            use24HourFormat: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        textOf(tester, SubtitleCardView.reminderLabelKey).data,
+        '08:30',
+        reason: '$rule — is24HourFormat picks the "Hm" skeleton',
+      );
     });
 
     testWidgets(

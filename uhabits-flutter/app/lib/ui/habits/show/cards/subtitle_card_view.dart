@@ -4,10 +4,21 @@
 /// androidTest/assets/views/habits/show/SubtitleCard/render.png).
 ///
 /// A question label over a single row of icon/label pairs: target, frequency,
-/// reminder. Every string and every visibility decision already lives on the
-/// core [SubtitleCardState] — `frequencyText`, `reminderText`,
-/// `targetText`, `targetIconGlyph`, `isQuestionVisible`, `isTargetVisible` —
-/// so this widget only lays them out and paints them.
+/// reminder. The visibility decisions and the target text already live on the
+/// core [SubtitleCardState] — `targetText`, `targetIconGlyph`,
+/// `isQuestionVisible`, `isTargetVisible`.
+///
+/// The other two labels are built here, because upstream they are built from
+/// `Resources` and from the device locale rather than from the KMP state
+/// object (`audit15.subtitle-card-frequency-and-off-are-hard-coded#1`,
+/// `audit15.subtitle-card-reminder-time-ignores-the-device-locale#1`):
+///
+///  * the frequency sentence is `formatFrequency(num, den, resources)`, the
+///    top-level function in EditHabitActivity.kt that `SubtitleCardView.kt`
+///    imports — so this file imports the port's one copy of it too, rather
+///    than growing a second;
+///  * the reminder is `formatTime(context, hour, minute)` when the habit has
+///    one and `resources.getString(R.string.reminder_off)` when it does not.
 ///
 /// What the Kotlin view *does* keep to itself, and is reproduced here, is the
 /// order in which visibility is assigned: the question label is set VISIBLE
@@ -22,6 +33,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/subtitle_card.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
+
+import '../../../../l10n/app_localizations.dart';
+import '../../../../platform/device_time_format.dart';
+// `SubtitleCardView.kt` opens with `import
+// org.isoron.uhabits.activities.habits.edit.formatFrequency`; this is the same
+// import, so the two screens can never disagree about one habit's frequency.
+import '../../edit/edit_habit_screen.dart' show formatFrequency;
 
 class SubtitleCardView extends StatelessWidget {
   const SubtitleCardView({
@@ -56,8 +74,7 @@ class SubtitleCardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final use24 =
-        use24HourFormat ?? MediaQuery.of(context).alwaysUse24HourFormat;
+    final l10n = L10n.of(context);
     final captionColor = _toFlutterColor(state.theme.mediumContrastTextColor);
     final captionStyle = TextStyle(
       color: captionColor,
@@ -122,7 +139,11 @@ class SubtitleCardView extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                state.frequencyText,
+                formatFrequency(
+                  state.frequency.numerator,
+                  state.frequency.denominator,
+                  l10n,
+                ),
                 key: frequencyLabelKey,
                 style: captionStyle,
               ),
@@ -137,7 +158,7 @@ class SubtitleCardView extends StatelessWidget {
                 // `android:paddingTop="1dp"` on reminderLabel.
                 padding: const EdgeInsets.only(top: 1),
                 child: Text(
-                  state.reminderText(use24HourFormat: use24),
+                  _reminderText(context, l10n),
                   key: reminderLabelKey,
                   style: captionStyle,
                 ),
@@ -146,6 +167,21 @@ class SubtitleCardView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// `binding.reminderLabel.text`: the reminder time, or the string resource
+  /// `reminder_off` when the habit has no reminder.
+  String _reminderText(BuildContext context, L10n l10n) {
+    final core.Reminder? reminder = state.reminder;
+    if (reminder == null) return l10n.reminderOff;
+    return formatDeviceTime(
+      context,
+      minuteOfDay: SubtitleCardState.minuteOfDay(
+        reminder.hour,
+        reminder.minute,
+      ),
+      use24HourFormat: use24HourFormat,
     );
   }
 

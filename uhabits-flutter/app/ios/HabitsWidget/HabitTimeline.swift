@@ -115,31 +115,46 @@ struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
         entry(for: configuration)
     }
 
-    /// One entry, valid until the start of the next day.
+    /// One entry, valid until the user's day turns.
     ///
     /// Two things refresh a widget. The app pokes `WidgetCenter` after every
     /// command through `HomeWidgetBridge.publish`, which covers every edit the
-    /// user makes; and the reload policy below covers the day rollover
-    /// (`widgets.day-rollover`), which upstream is an AlarmManager alarm that
-    /// fires whether or not the app is running. WidgetKit has no alarm, so the
-    /// timeline expires at midnight instead.
+    /// user makes; and the reload policy below asks WidgetKit to rebuild the
+    /// entry at the next logical midnight (`widgets.day-rollover`), which
+    /// upstream is the AlarmManager alarm
+    /// `WidgetUpdater.scheduleStartDayWidgetUpdate()` arms at
+    /// `getStartOfTomorrowWithOffset(midnightDelayHours, 0)` — the same hour,
+    /// now that the index publishes the midnight delay.
     ///
-    /// The rollover here is the device's midnight, not
-    /// `getStartOfTomorrowWithOffset(midnightDelayHours, 0)`: the
-    /// midnight-delay preference is not part of the published contract, so a
-    /// user with the 3-hour delay enabled sees the widget roll over up to
-    /// three hours early, until the app's next publish corrects it.
+    /// The policy alone is not the day rollover, and used to be mistaken for
+    /// it: a rebuild reads the same published document, so before
+    /// `audit15.ios-home-screen-widgets-never-roll#1` it repainted a
+    /// byte-identical stale card. What moves the day is
+    /// `WidgetStore.rolledDocument`, which every read below passes through; the
+    /// policy only decides when the redraw happens.
     func timeline(
         for configuration: Configuration,
         in context: Context
     ) async -> Timeline<HabitTimelineEntry> {
         let current = entry(for: configuration)
-        return Timeline(entries: [current], policy: .after(Self.startOfTomorrow()))
+        return Timeline(
+            entries: [current],
+            policy: .after(
+                WidgetStore.startOfNextDay(
+                    midnightDelayHours: WidgetStore().midnightDelayHours()
+                )
+            )
+        )
     }
 
     private func entry(for configuration: Configuration) -> HabitTimelineEntry {
         let store = WidgetStore()
-        let today = store.today() ?? Calendar.current.startOfDay(for: Date())
+        // Already advanced to the day this process is drawing on; see
+        // `WidgetStore.today()`. The fallback is for a device where nothing has
+        // been published at all, which is also the only case with no
+        // midnight-delay preference to honour.
+        let today = store.today()
+            ?? WidgetStore.logicalToday(midnightDelayHours: 0)
         let todayText = store.todayText() ?? WidgetStore.formatDate(today)
         if let habit = store.resolve(configuration, eligible: eligible) {
             return HabitTimelineEntry(
@@ -163,11 +178,5 @@ struct HabitTimelineProvider<Configuration: HabitSelectionIntent>:
             areQuestionMarksEnabled: store.areQuestionMarksEnabled(),
             firstWeekday: store.firstWeekday()
         )
-    }
-
-    static func startOfTomorrow(from now: Date = Date()) -> Date {
-        let calendar = Calendar.current
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-        return calendar.startOfDay(for: tomorrow)
     }
 }

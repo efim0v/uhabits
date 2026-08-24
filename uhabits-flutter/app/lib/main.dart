@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/app_localizations.dart';
@@ -14,7 +13,7 @@ import 'platform/locale_first_weekday.dart';
 import 'state/app_scope.dart';
 import 'state/intent_router.dart';
 import 'state/reminder_link.dart';
-import 'state/reminder_permission_gate.dart';
+import 'state/reminder_permission_gate.dart' show MidnightTimerLifecycle;
 import 'state/theme_model.dart';
 import 'state/widget_link.dart';
 import 'state/widget_sync.dart';
@@ -103,11 +102,6 @@ class _ThemedApp extends StatefulWidget {
 }
 
 class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
-  /// `ListHabitsActivity`'s `permissionAlreadyRequested` lives here, because
-  /// this is the object with the activity's lifetime: one instance per launch,
-  /// asking at most once (`reminders.app-start-and-permission#4`).
-  ReminderPermissionGate? _permissionGate;
-
   /// The navigator the home-screen widget deep links push onto. They arrive
   /// from another process, outside any build, so they need a way in that is not
   /// a `BuildContext`.
@@ -294,17 +288,12 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     // or `getToday()` stays frozen and a tap on the newest column writes the
     // entry to yesterday.
     _resumeMidnightTimer(scope);
-    final scheduler = scope.reminderScheduler;
-    if (scheduler != null) {
-      final gate = _permissionGate ??= ReminderPermissionGate(
-        scheduler: scheduler,
-        permissions: LocalNotificationsPermissions(
-          plugin: FlutterLocalNotificationsPlugin(),
-        ),
-        logging: scope.logging,
-      );
-      await gate.onResume();
-    }
+    // `ListHabitsActivity`'s `permissionAlreadyRequested` is a field of the
+    // activity, and the activity outlives every screen pushed over it — so the
+    // gate is the scope's, and the habit list's `didPopNext` runs *this same
+    // instance* when the editor or the settings screen closes
+    // (`audit15.the-notification-permission-prompt-is-never#1`).
+    await scope.reminderPermissionGate?.onResume();
     // Outside the branch above, exactly as upstream: the background block is a
     // sibling of the `hasHabitsWithReminders()` test, not a continuation of it.
     await _runResumeTasks(scope);

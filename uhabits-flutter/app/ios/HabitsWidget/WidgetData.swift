@@ -198,6 +198,27 @@ struct WidgetIndex: Decodable {
     /// which is what both grids used unconditionally before.
     let firstWeekday: Int?
 
+    /// `Preferences.midnightDelayHours` — 3 while "new day starts at 3am" is
+    /// on, 0 otherwise (`audit15.ios-home-screen-widgets-never-roll#1`).
+    ///
+    /// The one input of `computeToday(midnightDelayHours, 0)` that is not the
+    /// system clock, and so the one thing this side needs in order to tell
+    /// whether [today] is still the day it is drawing on. A widget still never
+    /// *asks* the system what day it is: it asks what day the app would say it
+    /// is.
+    ///
+    /// It rides on the index rather than only on the per-widget document
+    /// because a WidgetKit widget never reads a per-widget document — it has no
+    /// widget id and no configure activity, and resolves its habit out of
+    /// [habits]. [WidgetStore.rolledDocument] reads the raw value; this
+    /// declaration is what [WidgetStore.midnightDelayHours] answers the reload
+    /// policy with.
+    ///
+    /// Optional, like the three preferences above: an index written before the
+    /// field existed carries no key, and 0 — a day that turns at midnight — is
+    /// the preference's own default.
+    let midnightDelayHours: Int?
+
     struct WidgetBinding: Decodable {
         let id: Int
         let key: String
@@ -414,15 +435,11 @@ struct WidgetStore {
     }
 
     func index() -> WidgetIndex? {
-        decode(WidgetIndex.self, key: WidgetContract.indexKey, version: \.version)
+        decode(WidgetIndex.self, key: WidgetContract.indexKey)
     }
 
     func document(widgetId: Int) -> WidgetDocument? {
-        decode(
-            WidgetDocument.self,
-            key: WidgetContract.documentKey(widgetId),
-            version: \.version
-        )
+        decode(WidgetDocument.self, key: WidgetContract.documentKey(widgetId))
     }
 
     /// Every habit the app has published, in habit-list order, deduplicated by
@@ -458,6 +475,12 @@ struct WidgetStore {
     /// `today` as the app computed it — already offset by the midnight-delay
     /// preference (`widgets.checkmark#5`), which is why it is read from the
     /// document rather than from `Date()` here.
+    ///
+    /// It is the *rolled-forward* day: [rolledDocument] has already advanced
+    /// the index to the day this process is drawing on
+    /// (`audit15.ios-home-screen-widgets-never-roll#1`), so a widget nobody has
+    /// republished since yesterday reports today rather than the day the app
+    /// last ran.
     func today() -> Date? {
         guard let raw = index()?.today else { return nil }
         return Self.parseDate(raw)
@@ -466,6 +489,14 @@ struct WidgetStore {
     /// The same day as [today], in the wire format, for the links that carry a
     /// date back to the app.
     func todayText() -> String? { index()?.today }
+
+    /// `Preferences.midnightDelayHours`, as the app published it.
+    ///
+    /// Zero when nothing has been published, or when the index predates the
+    /// field — the preference's own default, a day that turns at midnight.
+    func midnightDelayHours() -> Int {
+        index()?.midnightDelayHours ?? 0
+    }
 
     /// `Preferences.areQuestionMarksEnabled`, as the app published it.
     ///
@@ -513,17 +544,26 @@ struct WidgetStore {
         return false
     }
 
-    private func decode<T: Decodable>(
-        _ type: T.Type,
-        key: String,
-        version: KeyPath<T, Int>
-    ) -> T? {
+    /// The document under [key], advanced to the day it is being drawn on, as
+    /// the type that describes it.
+    ///
+    /// This is the single point every reader passes through — `index()`,
+    /// `document(widgetId:)`, and so every card of all six widgets — which
+    /// makes it the counterpart of `WidgetData.readWidget` on the Android host,
+    /// where the same roll-forward already happens
+    /// (`audit15.ios-home-screen-widgets-never-roll#1`). The document is rolled
+    /// while it is still a dictionary rather than after decoding, because
+    /// [stageToggle] has to roll the very same document by hand — it writes the
+    /// index back, so it may not lose the keys this side does not understand —
+    /// and two implementations of the shift would be two chances to disagree.
+    private func decode<T: Decodable>(_ type: T.Type, key: String) -> T? {
         guard
-            let raw = defaults?.string(forKey: key),
-            let data = raw.data(using: .utf8),
+            let defaults,
+            let document = rolledDocument(forKey: key, in: defaults),
+            JSONSerialization.isValidJSONObject(document),
+            let data = try? JSONSerialization.data(withJSONObject: document),
             let decoded = try? JSONDecoder().decode(type, from: data)
         else { return nil }
-        guard decoded[keyPath: version] == WidgetContract.schemaVersion else { return nil }
         return decoded
     }
 
@@ -551,6 +591,159 @@ struct WidgetStore {
         components.month = parts[1]
         components.day = parts[2]
         return Calendar.current.date(from: components)
+    }
+}
+
+// MARK: - Rolling a snapshot forward
+
+/// Turning a document built for an earlier day into one for *this* day
+/// (`audit15.ios-home-screen-widgets-never-roll#1`).
+///
+/// Upstream a widget has nothing to roll: `CheckmarkWidget.refreshData` calls
+/// `getToday()` and reads the database on every `ACTION_APPWIDGET_UPDATE`, and
+/// the app-wide today is re-stamped at the user's own midnight by an
+/// `AlarmManager` broadcast (`WidgetUpdater.scheduleStartDayWidgetUpdate`)
+/// whether or not the app is running. Here the data arrives pre-computed, so
+/// WidgetKit re-rendering at midnight would otherwise redraw the identical
+/// stale card: the reload policy was never the missing piece, the moved day
+/// was.
+///
+/// Every method is a port of one in
+/// `app/android/app/src/main/kotlin/org/isoron/uhabits/widgets/WidgetData.kt`,
+/// which the Android host has had since
+/// `audit6.home-screen-widgets-go-stale-at#1`. Keep the two together.
+extension WidgetStore {
+
+    /// `DateUtils.getTodayWithOffset()` / the core's
+    /// `computeToday(hourOffset, 0)`, recomputed from the system clock.
+    ///
+    /// This is the *one* thing a widget asks the system: what instant it is
+    /// now. Which day that instant belongs to is still the app's rule — local
+    /// wall clock, minus the midnight delay the index carries — so a user whose
+    /// day turns at 3am sees the widget turn at 3am too. It exists only so a
+    /// redraw can notice a snapshot has gone stale; the day a card *draws* is
+    /// still the document's own `today`.
+    static func logicalToday(midnightDelayHours: Int, now: Date = Date()) -> Date {
+        let shifted = now.addingTimeInterval(-Double(midnightDelayHours) * 3600)
+        return Calendar.current.startOfDay(for: shifted)
+    }
+
+    /// The next instant [logicalToday] answers a different day —
+    /// `getStartOfTomorrowWithOffset(midnightDelayHours, 0)`, which is when
+    /// `WidgetUpdater.scheduleStartDayWidgetUpdate()` arms its alarm.
+    static func startOfNextDay(
+        midnightDelayHours: Int,
+        from now: Date = Date()
+    ) -> Date {
+        let calendar = Calendar.current
+        let today = logicalToday(midnightDelayHours: midnightDelayHours, now: now)
+        guard
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
+            let turn = calendar.date(
+                byAdding: .hour,
+                value: midnightDelayHours,
+                to: tomorrow
+            )
+        else { return now }
+        return turn
+    }
+
+    /// Whole days from [from] to [to] — `LocalDate.daysSince`.
+    static func daysSince(_ from: Date, to: Date) -> Int {
+        let calendar = Calendar.current
+        return calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: from),
+            to: calendar.startOfDay(for: to)
+        ).day ?? 0
+    }
+
+    /// The raw document under [key], advanced to the day this process is
+    /// drawing on.
+    ///
+    /// The version is checked here rather than after decoding: a document from
+    /// a schema this build does not know is one whose fields may have moved,
+    /// and shifting arrays inside it would be a guess.
+    func rolledDocument(forKey key: String, in defaults: UserDefaults) -> [String: Any]? {
+        guard
+            let document = object(forKey: key, in: defaults),
+            (document["version"] as? Int) == WidgetContract.schemaVersion
+        else { return nil }
+        let delay = document["midnightDelayHours"] as? Int ?? 0
+        return Self.rolledForward(
+            document,
+            to: Self.logicalToday(midnightDelayHours: delay)
+        )
+    }
+
+    /// [document] as it would have been published on [current], for a [current]
+    /// later than the day it names — `WidgetDocument.rolledForwardTo`.
+    ///
+    /// The arrays are newest-first, so a day passing shifts every value one
+    /// place down and the days nobody has answered arrive UNKNOWN — which is
+    /// precisely what upstream's live redraw from the database would find,
+    /// since the app has not run to record anything.
+    ///
+    /// What cannot be rolled is left alone and stays a day old until the app
+    /// republishes: `score`, `scores`, `streaks`, `weekdayFrequency` and
+    /// `targetRows` are reductions over the habit's whole history, and there is
+    /// no history in this process to reduce. The rollover buys the day, the
+    /// grid and the tick, which is what the six cards draw from.
+    static func rolledForward(_ document: [String: Any], to current: Date) -> [String: Any] {
+        guard let published = (document["today"] as? String).flatMap(parseDate)
+        else { return document }
+        let days = daysSince(published, to: current)
+        if days <= 0 { return document }
+        var rolled = document
+        rolled["today"] = formatDate(current)
+        if let habits = document["habits"] as? [[String: Any]] {
+            rolled["habits"] = habits.map { rolledHabit($0, days: days) }
+        }
+        return rolled
+    }
+
+    /// One habit of [rolledForward] — `HabitData.rolledForward(days)`.
+    ///
+    /// Shifting past the end of an array simply empties it, which is the right
+    /// answer for a widget nobody has looked at in sixty days.
+    private static func rolledHabit(_ habit: [String: Any], days: Int) -> [String: Any] {
+        var rolled = habit
+        let entries = habit["entries"] as? [Int] ?? []
+        let shifted = entries.indices.map {
+            $0 < days ? EntryValue.unknown : entries[$0 - days]
+        }
+        rolled["entries"] = shifted
+        // `value` is `entries[0]` by definition, and it is what the tick, the
+        // ring glyph and `ToggleHabitIntent`'s next value are read from.
+        rolled["value"] = shifted.first ?? EntryValue.unknown
+        if let notes = habit["notesIndicators"] as? [Bool] {
+            rolled["notesIndicators"] = notes.indices.map {
+                $0 < days ? false : notes[$0 - days]
+            }
+        }
+        // The History grid draws `historySeries`, not `entries`
+        // (`audit10.history-home-screen-widget-draws-more#1`), and it is
+        // newest-first too: left unshifted the grid would paint every square
+        // `days` days late.
+        let series = habit["historySeries"] as? String
+        if let series {
+            let digits = Array(series)
+            rolled["historySeries"] = String(
+                digits.indices.map { $0 < days ? offSquare : digits[$0 - days] }
+            )
+        }
+        if let notes = habit["historyNotes"] as? [Int] {
+            rolled["historyNotes"] = notes
+                .map { $0 + days }
+                .filter { $0 < (series?.count ?? 0) }
+        }
+        return rolled
+    }
+
+    /// The digit `historySeries` spells an unanswered day with, which is what
+    /// the days at the front of a shifted series have to arrive as.
+    private static var offSquare: Character {
+        Character(String(HistorySquare.off.ordinal))
     }
 }
 
@@ -624,11 +817,18 @@ extension WidgetStore {
     func stageToggle(habitId: Int) {
         guard
             let defaults,
-            var index = object(forKey: WidgetContract.indexKey, in: defaults),
-            (index["version"] as? Int) == WidgetContract.schemaVersion
+            // The rolled-forward index, not the published one
+            // (`audit15.ios-home-screen-widgets-never-roll#1`). The intent runs
+            // without ever building a timeline entry, so the roll has to reach
+            // it through the store; and the flip below writes into offset 0 of
+            // arrays that are only today's once the day has been moved on.
+            // Rolling the whole index rather than the one habit is deliberate:
+            // `today` is re-stamped by it, so a partial roll would freeze every
+            // other habit at the old day forever.
+            var index = rolledDocument(forKey: WidgetContract.indexKey, in: defaults)
         else { return }
 
-        let today = index["today"] as? String ?? ""
+        let today = index["today"] as? String
         let isSkipEnabled = index["isSkipEnabled"] as? Bool ?? false
         let areQuestionMarksEnabled = index["areQuestionMarksEnabled"] as? Bool ?? false
 
@@ -685,7 +885,17 @@ extension WidgetStore {
         // `seq` is what makes the app's drain idempotent, and what lets a tap
         // that arrives mid-drain survive it.
         let seq = (toggles.compactMap { $0["seq"] as? Int }.max() ?? 0) + 1
-        toggles.append(["seq": seq, "habit": habitId, "date": today])
+        var toggle: [String: Any] = ["seq": seq, "habit": habitId]
+        // The day the tap was made on, which the roll above has made the day
+        // the card was drawing. An index that names no day at all names none
+        // here either — the Android toggle deep link carries no date and
+        // `IntentParser.parseDate` supplies `getToday()` for it, which is what
+        // `WidgetToggleQueue._apply` does with a dateless tap. A `""` would
+        // have been a date the app could only throw away.
+        if let today, !today.isEmpty {
+            toggle["date"] = today
+        }
+        toggles.append(toggle)
         queue["toggles"] = toggles
         write(queue, forKey: WidgetContract.pendingKey, in: defaults)
     }

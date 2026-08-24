@@ -1082,6 +1082,29 @@ class HabitTypeDialog extends StatelessWidget {
 
   static const double cardElevation = 6.0;
 
+  /// `@style/SelectHabitTypeButton`'s `android:background` is
+  /// `@drawable/round_ripple`: a `<ripple android:color="?colorAccent">`
+  /// wrapping a rectangle with `<solid android:color="?cardBgColor"/>`, a
+  /// `<stroke android:width="2dp" android:color="?android:textColor"/>` and
+  /// `<corners android:radius="5dp"/>`
+  /// (`audit15.habit-type-cards-lose-their-2dp-outline#1`).
+  ///
+  /// The two colours are the themed *attributes*, not the Themes.kt tokens
+  /// nearest to them — the same distinction `audit8.entry-popups-paint-
+  /// themselves-cardbgcolor-over#1` draws for the entry popups. `?cardBgColor`
+  /// is #FAFAFA / #303030 / #000000 and `?android:textColor` is
+  /// #424242 / #F5F5F5 / #EEEEEE, which the core theme carries as `cardBgColor`
+  /// and `contrast100`.
+  static const BorderRadius cardBorderRadius =
+      BorderRadius.all(Radius.circular(5));
+
+  static const double cardStrokeWidth = 2.0;
+
+  /// Android's `RippleDrawable` paints the steady press state with its own
+  /// colour at the platform's `colorControlHighlight` alpha; Flutter's default
+  /// `ThemeData.highlightColor` is black at the same 12%. Only the hue moves.
+  static const double cardRippleHighlightOpacity = 0.12;
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -1134,11 +1157,26 @@ class _HabitTypeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = coreThemeOf(context);
+    // `<ripple android:color="?colorAccent">`, and `colorAccent` is
+    // `?aboutScreenColor` in both AppBaseTheme and AppBaseThemeDark.
+    final accent = toFlutterColor(theme.aboutScreenColor);
     return Material(
       elevation: HabitTypeDialog.cardElevation,
-      borderRadius: BorderRadius.circular(4),
+      color: toFlutterColor(theme.cardBgColor),
+      shape: RoundedRectangleBorder(
+        borderRadius: HabitTypeDialog.cardBorderRadius,
+        side: BorderSide(
+          color: toFlutterColor(theme.contrast100),
+          width: HabitTypeDialog.cardStrokeWidth,
+        ),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: HabitTypeDialog.cardBorderRadius,
+        splashColor: accent,
+        highlightColor: accent.withValues(
+          alpha: HabitTypeDialog.cardRippleHighlightOpacity,
+        ),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),

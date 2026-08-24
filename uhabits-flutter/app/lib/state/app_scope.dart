@@ -34,6 +34,7 @@ import '../platform/home_widget_bridge.dart';
 import 'app_preferences.dart';
 import 'intent_router.dart';
 import 'reminder_link.dart';
+import 'reminder_permission_gate.dart';
 import 'widget_sync.dart';
 import 'widget_toggle_queue.dart';
 
@@ -459,7 +460,16 @@ class AppScope {
     required NotificationTray tray,
     required ReminderScheduler scheduler,
     required WidgetSync sync,
+    NotificationPermissions? permissions,
   }) {
+    // `checkSelfPermission` / `requestPermissionLauncher`, which only a test
+    // ever replaces: off a device there is no permission to ask for.
+    _permissions = permissions;
+    // The cached gate is bound to the scheduler and the permissions seam this
+    // call is installing, so it cannot outlive them. Production starts the
+    // services once, but a test that reuses a scope would otherwise get a gate
+    // still holding the previous pair while `_permissions` read as the new one.
+    _permissionGate = null;
     // (7) the widget updater: subscribe, then arm the start-of-day refresh at
     // getStartOfTomorrowWithOffset(midnightDelayHours, 0).
     sync.startListening();
@@ -485,6 +495,35 @@ class AppScope {
 
   /// Arms the next alarm for every habit that has a reminder.
   ReminderScheduler? get reminderScheduler => _started?.scheduler;
+
+  NotificationPermissions? _permissions;
+
+  ReminderPermissionGate? _permissionGate;
+
+  /// The POST_NOTIFICATIONS block of `ListHabitsActivity.onResume`, built once
+  /// per launch and shared by every caller. Null until [startServices] has run,
+  /// which widget tests never do — upstream's `reminderScheduler` is what the
+  /// block is guarded on, and there is nothing to arm without it.
+  ///
+  /// It lives on the scope rather than on a `State` because
+  /// `permissionAlreadyRequested` is a *field of the activity*, and
+  /// `EditHabitActivity` does not destroy `ListHabitsActivity`: the flag
+  /// survives the editor round trip. Two gates over one launch would re-ask a
+  /// user who already said no on every single route pop, which is the infinite
+  /// `onResume` loop the flag exists to prevent
+  /// (`reminders.app-start-and-permission#4`).
+  ReminderPermissionGate? get reminderPermissionGate {
+    final scheduler = _started?.scheduler;
+    if (scheduler == null) return null;
+    return _permissionGate ??= ReminderPermissionGate(
+      scheduler: scheduler,
+      permissions: _permissions ??
+          LocalNotificationsPermissions(
+            plugin: FlutterLocalNotificationsPlugin(),
+          ),
+      logging: logging,
+    );
+  }
 
   /// Publishes the data the native home-screen widgets read.
   WidgetSync? get widgetSync => _started?.sync;

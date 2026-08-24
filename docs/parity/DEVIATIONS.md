@@ -663,3 +663,24 @@ Store у порта нет, поэтому честная замена — та 
 **Почему:** A home-screen widget is resized by the user and no launcher guarantees a minimum width; an Infinity column width would blank the chart. The guard changes nothing at any reachable size — the default 300x300 px square still yields the same column count as upstream.
 
 **Дата:** 2026-08-24
+
+## Отложенное нажатие на виджете применяется к своему дню
+
+**Что в оригинале:** The tap is an ACTION_TOGGLE_REPETITION broadcast handled the instant the finger lifts, inside the app's own process, and it carries no timestamp: `IntentParser.parseDate` supplies `getToday()`. A widget toggle therefore always lands on the day the app is currently on.
+
+**Что делаем:** The extension cannot run Dart, so the write is deferred to the app's next publish; the queue entry carries the day the card was drawing when it was tapped, and `_apply` uses that day even when `getToday()` has since moved on. Only the future is refused. A test (`#1 a tap dated before today still lands on its own day`) pins this.
+
+**Почему:** It is the closest reachable behaviour, and the alternative loses data. Clamping a past date to `getToday()` would move a tick the user made on Monday — and watched the card answer on Monday — onto Tuesday, leaving Monday blank and Tuesday marked without being asked. The deferral is already a documented port-wide deviation (`WidgetToggleQueue`: "for as long as the app stays closed, the flipped card is a promise rather than a record"); this is the day-arithmetic consequence of it.
+
+**Дата:** 2026-08-24
+
+
+## Формат часа следует локали устройства
+
+**Что в оригинале:** android.text.format.DateFormat.getTimeFormat(context) builds its pattern from ICU's getBestDateTimePattern(configurationLocale, is24HourFormat ? "Hm" : "hm"). The "hm" skeleton FORCES a 12-hour rendering, so a de or ja device whose owner has switched the system 24-hour setting off shows "8:30 AM" / "午前8:30".
+
+**Что делаем:** formatDeviceTime uses intl.DateFormat.Hm(locale) for the 24-hour branch and intl.DateFormat.jm(locale) for the 12-hour one. `package:intl` (and flutter_localizations' bundled pattern table) carries no forced-12-hour "hm" skeleton — only "j", the locale's PREFERRED hour cycle. So on a locale whose CLDR preference is 24-hour, use24HourFormat: false keeps that locale's 24-hour pattern instead of switching to "h:mm a".
+
+**Почему:** The data to do better is not on the device: no Dart package ships the CLDR "hm" best-pattern table, and inventing one ('replace H with h and append the AM/PM marker') gets CJK locales visibly wrong — ja's real "hm" pattern is "aK:mm" ("午前8:30"), while the naive derivation yields "8:30 午前". Flutter's own MaterialLocalizations.formatTimeOfDay reads alwaysUse24HourFormat:false exactly the same way, so the Edit screen already behaved like this. The divergence needs the user to have overridden the system 12/24 setting away from their locale's default; in every other configuration the two agree, and the reported defect (an en-US pattern in all 47 languages) is gone either way.
+
+**Дата:** 2026-08-24

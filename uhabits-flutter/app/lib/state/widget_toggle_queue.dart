@@ -69,6 +69,14 @@ import 'widget_sync.dart' show WidgetBehavior;
 /// `seq` is what makes draining idempotent: entries are removed by sequence
 /// number after they are applied, and a tap that arrives while the drain is
 /// running survives it. The extension allocates it as `max(seq) + 1`.
+///
+/// `date` is the day the tap was made on — the day the card was drawing, which
+/// is the published day rolled forward to the day the extension is being drawn
+/// on (`audit15.ios-home-screen-widgets-never-roll#1`). It is optional, exactly
+/// as the Android toggle deep link carries no date at all: a tap staged out of
+/// an index that names no day names none either, and [_apply] resolves it to
+/// `getToday()` the way `IntentParser.parseDate` resolves a broadcast with no
+/// `timestamp` extra.
 class WidgetToggleQueue {
   WidgetToggleQueue({
     required WidgetDataStore store,
@@ -156,10 +164,33 @@ class WidgetToggleQueue {
     await _remove(handled);
   }
 
-  /// One staged tap. A tap naming a habit that no longer exists, or a day that
-  /// does not parse, is dropped: it is still removed from the queue, because
+  /// One staged tap. A tap naming a habit that no longer exists, or a day the
+  /// app refuses, is dropped: it is still removed from the queue, because
   /// leaving it there would retry it on every publish for the life of the
   /// install.
+  ///
+  /// ## The day a tap lands on
+  ///
+  /// Upstream a widget tap carries no day: `ACTION_TOGGLE_REPETITION` has no
+  /// `timestamp` extra, and `IntentParser.parseDate` reads the extra with
+  /// `getToday().unixTime` as its default and then refuses anything later than
+  /// that — `IllegalArgumentException("timestamp is not valid")`, which
+  /// `WidgetReceiver.onReceive` catches, leaving the broadcast unhandled. The
+  /// same two rules apply to a staged tap, and for the same reason: the date on
+  /// the queue was written by another process, out of a document that may be
+  /// days old (`audit15.ios-home-screen-widgets-never-roll#1`).
+  ///
+  ///  * No date, or one that does not parse, means today — never "drop it".
+  ///    `WidgetStore.stageToggle` omits the key when the index carries no
+  ///    published day, exactly as the Android toggle deep link carries none,
+  ///    and a tap the user has already watched the card answer must not vanish.
+  ///  * A date later than [getToday] is refused outright. It is a day that has
+  ///    not arrived — a clock or timezone that moved backwards between the tap
+  ///    and the drain — and upstream nothing at all is written for one.
+  ///
+  /// A date *earlier* than today is applied as it stands. Upstream the write
+  /// happens the instant the finger lifts, so a tap made yesterday belongs to
+  /// yesterday; only the write is deferred here, not the day it was made on.
   ///
   /// ## Why the starting value is carried in [walked]
   ///
@@ -184,8 +215,15 @@ class WidgetToggleQueue {
   /// day still reads the model, because upstream it would have too.
   void _apply(Map<String, Object?> entry, Map<String, Entry> walked) {
     final int? habitId = _asInt(entry['habit']);
-    final LocalDate? date = _parseDate(entry['date']);
-    if (habitId == null || date == null) return;
+    if (habitId == null) return;
+    final LocalDate today = getToday();
+    final LocalDate date = _parseDate(entry['date']) ?? today;
+    if (date > today) {
+      _logger?.info(
+        'Dropping a widget toggle for $date, which is later than $today',
+      );
+      return;
+    }
     final Habit? habit = _habitList.getById(habitId);
     if (habit == null) {
       _logger?.info('Dropping a widget toggle for unknown habit $habitId');
