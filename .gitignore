@@ -32,3 +32,4 @@ kotlin-js-store
 Pods/
 *.lock
 !pubspec.lock
+.superpowers/
