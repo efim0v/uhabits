@@ -81,8 +81,8 @@ struct WidgetColor: Equatable {
 /// system to split them across: [color(paletteIndex:)] is the core
 /// `WidgetTheme` (`widgets.theme#2`), `cardBackground`/`highContrastText`/...
 /// are the core theme colours (`widgets.theme#3`), and `cardBgColor`/
-/// `contrast0`/`contrast60`/`contrast100` are the XML attributes of the same
-/// name (`widgets.theme#1`).
+/// `contrast0`/`contrast20`/`contrast60`/`contrast100` are the XML attributes
+/// of the same name (`widgets.theme#1`).
 ///
 /// `widgets.theme#5`: none of this consults the user's light/dark preference.
 /// A widget is always drawn with these colours, so every view below is written
@@ -159,6 +159,18 @@ enum WidgetTheme {
 
     /// `?attr/contrast0` = `@color/white`.
     static let contrast0 = Color.white
+
+    /// `?attr/contrast20` = `@color/white_a0` = #0fffffff, i.e. white at
+    /// alpha 0x0f/0xff.
+    ///
+    /// Kept in [WidgetColor] form as well, unlike its siblings, because
+    /// `FrequencyChart.initColors` blends it into the marker ramp
+    /// componentwise — alpha included — and a `SwiftUI.Color` cannot be taken
+    /// apart again.
+    static let rawContrast20 = WidgetColor.white.withAlpha(Double(0x0f) / 255.0)
+
+    /// `?attr/contrast20`, as a `SwiftUI.Color`.
+    static let contrast20 = rawContrast20.color
 
     /// `?attr/contrast60` = `@color/white_aa` = #afffffff, i.e. white at
     /// alpha 0xaf/0xff.

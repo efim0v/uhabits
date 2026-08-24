@@ -39,6 +39,14 @@ import kotlin.math.min
  * The drawing is upstream's, row for row. What feeds it is not: see
  * [org.isoron.uhabits.widgets.TargetWidget] for which of the five windows the
  * published document can actually fill.
+ *
+ * The colours are the style attributes, not the core theme's. `TargetChart.init`
+ * calls its fields `lowContrastTextColor`/`mediumContrastTextColor`/
+ * `highContrastReverseTextColor` but assigns them `res.getColor(R.attr.contrast20
+ * / contrast60 / contrast0)`, and inside a widget those resolve against
+ * `R.style.WidgetTheme` — white_a0 (#0fffffff) and white_aa (#afffffff), not the
+ * KMP `WidgetTheme` class's 10% and 50% whites, which only [HistoryChartView]
+ * ever sees.
  */
 class TargetChartView(context: Context) : View(context) {
 
@@ -97,14 +105,14 @@ class TargetChartView(context: Context) : View(context) {
         val round = dpToPixels(context, 2f)
         val stop = maxLabelSize + padding * 2
         paint.style = Paint.Style.FILL
-        paint.color = WidgetTheme.MEDIUM_CONTRAST_TEXT_COLOR
+        paint.color = WidgetTheme.CONTRAST_60
 
         paint.textSize = tinyTextSize
         paint.textAlign = Paint.Align.RIGHT
         var yTextAdjust = (paint.descent() + paint.ascent()) / 2.0f
         canvas.drawText(labels[row], rect.left + stop - padding, rect.centerY() - yTextAdjust, paint)
 
-        paint.color = WidgetTheme.LOW_CONTRAST_TEXT_COLOR
+        paint.color = WidgetTheme.CONTRAST_20
         barRect.set(
             rect.left + stop + padding,
             rect.top + baseSize * 0.05f,
@@ -131,11 +139,11 @@ class TargetChartView(context: Context) : View(context) {
         val completedText = values[row].toShortString()
         val remainingText = remaining.toShortString()
         if (completedWidth > paint.measureText(completedText) + 2 * padding) {
-            paint.color = WidgetTheme.HIGH_CONTRAST_TEXT_COLOR
+            paint.color = WidgetTheme.CONTRAST_0
             canvas.drawText(completedText, barRect.centerX(), barRect.centerY() - yTextAdjust, paint)
         }
         if (remainingWidth > paint.measureText(remainingText) + 2 * padding) {
-            paint.color = WidgetTheme.MEDIUM_CONTRAST_TEXT_COLOR
+            paint.color = WidgetTheme.CONTRAST_60
             barRect.set(
                 rect.left + stop + padding + completedWidth,
                 barRect.top,

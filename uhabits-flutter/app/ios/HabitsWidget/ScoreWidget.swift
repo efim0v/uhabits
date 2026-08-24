@@ -214,8 +214,7 @@ struct ScoreChartView: View {
             rule.addLine(to: CGPoint(x: rect.maxX, y: top))
             context.stroke(
                 rule,
-                // `?attr/contrast20` = `@color/white_a0` = white at alpha 0x0f.
-                with: .color(Color.white.opacity(Double(0x0f) / 255.0)),
+                with: .color(WidgetTheme.contrast20),
                 lineWidth: 1
             )
             guard i < nRows else { break }

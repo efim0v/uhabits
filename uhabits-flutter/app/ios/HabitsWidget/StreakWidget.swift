@@ -236,7 +236,7 @@ struct StreakChartView: View {
                 context,
                 label(streak.startOffset),
                 font: font,
-                color: WidgetTheme.mediumContrastText.color,
+                color: StreakState.labelColor,
                 at: CGPoint(x: gap - textMargin, y: centerY),
                 anchor: .trailing
             )
@@ -244,7 +244,7 @@ struct StreakChartView: View {
                 context,
                 label(streak.endOffset),
                 font: font,
-                color: WidgetTheme.mediumContrastText.color,
+                color: StreakState.labelColor,
                 at: CGPoint(x: width - gap + textMargin, y: centerY),
                 anchor: .leading
             )
@@ -309,6 +309,14 @@ struct WidgetStreak: Equatable {
 /// The pure half of `StreakWidget.refreshData`: `habit.streaks.getBest(n)`,
 /// with `StreakList.recompute` kept as the pre-schema fallback.
 enum StreakState {
+
+    /// `initColors`: `textColors[1] = ?attr/contrast60`, the colour
+    /// `drawRow` paints both of a bar's date labels with.
+    ///
+    /// The chart is an Android `View` living inside a widget, so this is
+    /// `R.style.WidgetTheme`'s `@color/white_aa` and NOT the core
+    /// `WidgetTheme.mediumContrastTextColor`, which is a different table.
+    static let labelColor = WidgetTheme.contrast60
 
     /// `habit.streaks` as this chart measures them — offsets back from the
     /// published `today` — or nil when the document predates the field.
@@ -414,14 +422,17 @@ enum StreakState {
     }
 
     /// `percentageToColor`: the habit colour, then the same colour at alpha
-    /// 192 and 96, then `?attr/contrast20`, which under the widget theme is
-    /// the low-contrast white the History widget's empty squares use.
+    /// 192 and 96, then `?attr/contrast20` = `@color/white_a0`.
+    ///
+    /// Not the core theme's `lowContrastTextColor`: that table is a different
+    /// one and only `HistoryChart`, which is handed a `Theme` object, reads
+    /// it.
     static func barColor(_ percentage: Double, habit: WidgetHabit) -> Color {
         let primary = WidgetTheme.rawColor(paletteIndex: habit.color)
         if percentage >= 1.0 { return primary.color }
         if percentage >= 0.8 { return primary.withAlpha(192.0 / 255.0).color }
         if percentage >= 0.5 { return primary.withAlpha(96.0 / 255.0).color }
-        return WidgetTheme.lowContrastText.color
+        return WidgetTheme.contrast20
     }
 
     /// `percentageToTextColor`: `?attr/contrast0` over a filled bar,

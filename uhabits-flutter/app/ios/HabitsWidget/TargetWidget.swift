@@ -171,7 +171,7 @@ struct TargetChartView: View {
                 ),
                 cornerRadius: cornerRadius
             ),
-            with: .color(WidgetTheme.lowContrastText.color)
+            with: .color(TargetState.trackColor)
         )
 
         let target = state.targets[row]
@@ -294,6 +294,16 @@ struct TargetCardState {
 /// `TargetCardPresenter.buildState` run over the published entries
 /// (`widgets.target#3`).
 enum TargetState {
+
+    /// `init`: `lowContrastTextColor = ?attr/contrast20`, the colour
+    /// `drawRow` fills the empty part of a bar's track with.
+    ///
+    /// The chart is an Android `View` living inside a widget, so this is
+    /// `R.style.WidgetTheme`'s `@color/white_a0` and NOT the core
+    /// `WidgetTheme.lowContrastTextColor`, which is a different table.
+    /// Upstream's field name says "lowContrast"; the value it is
+    /// assigned is the attribute.
+    static let trackColor = WidgetTheme.contrast20
 
     /// The windows `buildState` aggregates over, in the order it lists them.
     enum Window: CaseIterable {

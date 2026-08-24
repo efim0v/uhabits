@@ -312,6 +312,91 @@ class WidgetArithmeticTests: XCTestCase {
         }
     }
 
+    // MARK: - which contrast table the chart chrome comes from
+
+    /// A widget chart is an Android `View` whose provider has just called
+    /// `context.setTheme(R.style.WidgetTheme)`, so every `?attr/` it resolves
+    /// comes from that style — `contrast60 = @color/white_aa` (#afffffff) and
+    /// `contrast20 = @color/white_a0` (#0fffffff).
+    ///
+    /// The core class `org.isoron.uhabits.core.ui.views.WidgetTheme` is a
+    /// SECOND table of the same name, and its `mediumContrastTextColor` (50%
+    /// white) and `lowContrastTextColor` (10% white) are only ever read by
+    /// `HistoryChart`, which is handed a `Theme` object rather than a context
+    /// (`audit23.widget-chart-chrome-reads-the-widget-style-attributes#1`).
+    func testTheAttributeTableCarriesTheWidgetStylesOwnWhites() {
+        XCTAssertEqual(
+            WidgetTheme.rawContrast20.alpha, Double(0x0f) / 255.0, accuracy: 1e-12,
+            "`?attr/contrast20` under R.style.WidgetTheme is @color/white_a0, "
+            + "#0fffffff — not the core theme's 10% white "
+            + "(audit23.widget-chart-chrome-reads-the-widget-style-attributes#1)")
+        XCTAssertNotEqual(
+            WidgetTheme.contrast20, WidgetTheme.lowContrastText.color,
+            "the two tables disagree here, which is the whole point of having "
+            + "both (audit23.widget-chart-chrome-reads-the-widget-style-"
+            + "attributes#1)")
+        XCTAssertNotEqual(
+            WidgetTheme.contrast60, WidgetTheme.mediumContrastText.color,
+            "and here (audit23.widget-chart-chrome-reads-the-widget-style-"
+            + "attributes#1)")
+    }
+
+    /// `FrequencyChart.initColors`: `textColor = res.getColor(R.attr.contrast60)`,
+    /// `gridColor = res.getColor(R.attr.contrast20)`, `colors[0] = gridColor`.
+    func testTheFrequencyChartTakesItsChromeFromTheAttributes() {
+        XCTAssertEqual(
+            FrequencyState.textColor, WidgetTheme.contrast60,
+            "the weekday, month and year labels are drawn with `textColor`, "
+            + "which initColors assigns from ?attr/contrast60 — 69% white. At "
+            + "the core theme's 50% they sit faded next to the Score and "
+            + "Checkmark widgets on the same home screen "
+            + "(audit23.widget-chart-chrome-reads-the-widget-style-attributes#1)")
+        XCTAssertEqual(
+            FrequencyState.gridColor, WidgetTheme.rawContrast20,
+            "and the grid rules with `gridColor` = ?attr/contrast20 "
+            + "(audit23.widget-chart-chrome-reads-the-widget-style-attributes#1)")
+        XCTAssertEqual(
+            FrequencyState.colorRamp(paletteIndex: 3).first,
+            WidgetTheme.rawContrast20,
+            "`colors[0] = gridColor` — and mixColors blends alpha too, so the "
+            + "wrong base shifts every marker in the ramp, not just the empty "
+            + "one (audit23.widget-chart-chrome-reads-the-widget-style-"
+            + "attributes#1)")
+    }
+
+    /// `StreakChart.initColors`: `textColors[1] = res.getColor(R.attr.contrast60)`
+    /// — what `drawRow` paints both date labels with — and
+    /// `colors[0] = res.getColor(R.attr.contrast20)`, the bar below 50%.
+    func testTheStreakChartTakesItsChromeFromTheAttributes() throws {
+        XCTAssertEqual(
+            StreakState.labelColor, WidgetTheme.contrast60,
+            "`paint.color = textColors[1]` before drawing the start and end "
+            + "labels (audit23.widget-chart-chrome-reads-the-widget-style-"
+            + "attributes#1)")
+
+        let habit = try self.habit(value: EntryValue.yesManual)
+        XCTAssertEqual(
+            StreakState.barColor(0.2, habit: habit), WidgetTheme.contrast20,
+            "`percentageToColor` returns colors[0] = ?attr/contrast20 below "
+            + "50% (audit23.widget-chart-chrome-reads-the-widget-style-"
+            + "attributes#1)")
+        XCTAssertEqual(
+            StreakState.numberColor(0.2), WidgetTheme.contrast60,
+            "and `percentageToTextColor` returns ?attr/contrast60 there "
+            + "(audit23.widget-chart-chrome-reads-the-widget-style-attributes#1)")
+    }
+
+    /// `TargetChart.init`: the field called `lowContrastTextColor` is assigned
+    /// `res.getColor(R.attr.contrast20)`. The name is upstream's; the value is
+    /// the attribute, and `drawRow` fills the empty track with it.
+    func testTheTargetChartTakesItsTrackFromTheAttributes() {
+        XCTAssertEqual(
+            TargetState.trackColor, WidgetTheme.contrast20,
+            "the empty part of every target bar is ?attr/contrast20 = "
+            + "@color/white_a0, not the core theme's 10% white "
+            + "(audit23.widget-chart-chrome-reads-the-widget-style-attributes#1)")
+    }
+
     /// One habit, decoded the way the extension decodes them — so this
     /// exercises the decoder too, rather than a hand-built struct that could
     /// drift from the wire format.

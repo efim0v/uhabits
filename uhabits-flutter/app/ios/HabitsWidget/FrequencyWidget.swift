@@ -206,7 +206,7 @@ struct FrequencyChartView: View {
                 context,
                 DateNames.shortWeekday(daysSinceSunday: weekday),
                 font: font,
-                color: WidgetTheme.mediumContrastText.color,
+                color: FrequencyState.textColor,
                 at: CGPoint(
                     x: right - columnWidth,
                     y: top + rowHeight / 2 + 0.25 * em - 0.34 * textSize
@@ -259,7 +259,7 @@ struct FrequencyChartView: View {
             context,
             DateNames.shortMonth(month: month.month),
             font: font,
-            color: WidgetTheme.mediumContrastText.color,
+            color: FrequencyState.textColor,
             at: CGPoint(x: cx, y: footerCy - 0.1 * em - 0.34 * textSize),
             anchor: .center
         )
@@ -268,7 +268,7 @@ struct FrequencyChartView: View {
                 context,
                 "\(month.year)",
                 font: font,
-                color: WidgetTheme.mediumContrastText.color,
+                color: FrequencyState.textColor,
                 at: CGPoint(x: cx, y: footerCy + 0.9 * em - 0.34 * textSize),
                 anchor: .center
             )
@@ -313,7 +313,11 @@ struct FrequencyChartView: View {
         path.move(to: from)
         path.addLine(to: to)
         // `pGrid.strokeWidth = 1f`, overriding what onSizeChanged computed.
-        context.stroke(path, with: .color(WidgetTheme.lowContrastText.color), lineWidth: 1)
+        context.stroke(
+            path,
+            with: .color(FrequencyState.gridColor.color),
+            lineWidth: 1
+        )
     }
 
     private func maxMonthWidth(_ context: GraphicsContext, _ font: Font) -> CGFloat {
@@ -413,6 +417,19 @@ struct MonthKey: Hashable {
 /// The pure half of `FrequencyWidget.refreshData`.
 enum FrequencyState {
 
+    /// `initColors`: `textColor = ?attr/contrast60`.
+    ///
+    /// The chart is an Android `View` living inside a widget, so the
+    /// attribute it resolves is `R.style.WidgetTheme`'s — `@color/white_aa`
+    /// — and NOT the core `WidgetTheme.mediumContrastTextColor`, which is a
+    /// different table and a fainter white.
+    static let textColor = WidgetTheme.contrast60
+
+    /// `initColors`: `gridColor = ?attr/contrast20` = `@color/white_a0`.
+    ///
+    /// Both the rules `drawGrid` strokes and index 0 of the marker ramp.
+    static let gridColor = WidgetTheme.rawContrast20
+
     /// `habit.weekdayFrequency` as the chart indexes it — one 7-slot array per
     /// [MonthKey] — or nil when the document predates the field.
     ///
@@ -485,7 +502,7 @@ enum FrequencyState {
     /// grid colour and index 2 mostly habit colour. It blends packed ARGB and
     /// truncates, alpha included, which is what [mix] reproduces.
     static func colorRamp(paletteIndex: Int) -> [WidgetColor] {
-        let grid = WidgetTheme.lowContrastText
+        let grid = gridColor
         let habit = WidgetTheme.rawColor(paletteIndex: paletteIndex)
         return [
             grid,

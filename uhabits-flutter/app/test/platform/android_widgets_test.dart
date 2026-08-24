@@ -1407,6 +1407,88 @@ void main() {
             reason: 'widgets.theme#5: $view resolves no theme attribute');
       }
     });
+
+    // WidgetTheme.kt holds two tables of the same name side by side, and the
+    // charts have to pick the right one. Which one is right is decided by how
+    // upstream builds the chart, not by what the constant is called:
+    //
+    //   * `FrequencyChart`, `StreakChart`, `TargetChart`, `ScoreChart` and
+    //     `CheckmarkWidgetView` are Android `View`s. Their provider has just
+    //     called `context.setTheme(R.style.WidgetTheme)`, so every `?attr/`
+    //     they resolve through `StyledResources` comes from that style —
+    //     contrast20 = @color/white_a0 (#0fffffff), contrast60 =
+    //     @color/white_aa (#afffffff).
+    //   * `HistoryChart` is the one core-drawn chart: `HistoryWidget.kt` hands
+    //     it `theme = WidgetTheme()`, the KMP class, whose
+    //     mediumContrastTextColor is WHITE at 50% and lowContrastTextColor
+    //     WHITE at 10%.
+    //
+    // The two tables only disagree under the widget theme, which is what makes
+    // a wrong pick invisible to a reader of any single call site.
+    //
+    // The Android widget host has no test target — no Robolectric, no
+    // instrumentation — so unlike the iOS extension, whose sources compile into
+    // RunnerTests and are executed by tool/swift_widget_tests.sh, this half can
+    // only be read as source text from here.
+    test('only the History chart reads the core theme; every other widget view '
+        'reads the style attributes', () {
+      const Set<String> coreThemeOnly = <String>{
+        'CARD_BACKGROUND_COLOR',
+        'HIGH_CONTRAST_TEXT_COLOR',
+        'MEDIUM_CONTRAST_TEXT_COLOR',
+        'LOW_CONTRAST_TEXT_COLOR',
+      };
+      final Map<String, List<String>> offenders = <String, List<String>>{};
+      for (final File source in Directory(
+              '${androidMain.path}/kotlin/org/isoron/uhabits/widgets')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((File f) => f.path.endsWith('.kt'))) {
+        final String name = source.uri.pathSegments.last;
+        // The declaration itself, and the one chart upstream hands a Theme.
+        if (name == 'WidgetTheme.kt' || name == 'HistoryChartView.kt') continue;
+        final List<String> used = captureAll(
+                source.readAsStringSync(), RegExp(r'WidgetTheme\.([A-Z_]+)'))
+            .where(coreThemeOnly.contains)
+            .toSet()
+            .toList()
+          ..sort();
+        if (used.isNotEmpty) offenders[name] = used;
+      }
+
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'audit23.widget-chart-chrome-reads-the-widget-style-attributes#1 — '
+            'a chart drawn inside a widget resolves ?attr/contrast60 and '
+            '?attr/contrast20 against R.style.WidgetTheme, i.e. #afffffff and '
+            '#0fffffff. MEDIUM_CONTRAST_TEXT_COLOR and LOW_CONTRAST_TEXT_COLOR '
+            'are the core WidgetTheme class\'s 50%/10% whites, which only '
+            'HistoryChart ever sees. Naming them anywhere else draws that '
+            'widget\'s chrome faded next to the Score and Checkmark widgets on '
+            'the same home screen.',
+      );
+    });
+
+    test('TargetChartView paints its label, track and counts from the '
+        'attributes', () {
+      expect(
+        captureAll(widgetViewKotlin('TargetChartView.kt'),
+            RegExp(r'paint\.color = WidgetTheme\.(\w+)')),
+        <String>['CONTRAST_60', 'CONTRAST_20', 'CONTRAST_0', 'CONTRAST_60'],
+        reason:
+            'audit23.widget-chart-chrome-reads-the-widget-style-attributes#1 — '
+            'TargetChart.init() reads lowContrastTextColor = '
+            'res.getColor(R.attr.contrast20), mediumContrastTextColor = '
+            'res.getColor(R.attr.contrast60) and highContrastReverseTextColor '
+            '= res.getColor(R.attr.contrast0); drawRow then paints the '
+            'interval label with contrast60, the empty track with contrast20, '
+            'the completed count with contrast0 and the remaining count with '
+            'contrast60. The upstream FIELD names say "contrast text colour", '
+            'but the VALUES they hold are the style attributes.',
+      );
+    });
   });
 
   // =======================================================================
