@@ -421,6 +421,45 @@ void main() {
       );
     });
 
+    const String monthRule =
+        'audit20.the-scan-must-cover-the-month-length-substitution#1 — the '
+        'auto-completed run is the denominator except at 30 and 31, where '
+        "`buildIntervals` substitutes the calendar month's length; seven "
+        'months have 31 days, so a monthly habit is completed for one day '
+        'longer than its own denominator.';
+
+    test('a monthly habit keeps its reminder in a 31-day month', () async {
+      // `buildIntervals` substitutes the calendar month's length for the
+      // denominators 30 and 31 — `size = begin.monthLength` — so a habit
+      // ticked in January is auto-completed for 31 days, one more than its
+      // denominator. A scan of `denominator + 7` is one iteration short of the
+      // Wednesday two weekdays past the tick, and the alarm is cancelled
+      // instead of deferred.
+      final habit = yesNoHabit(
+        // Wednesdays only: index (daysSinceSunday + 1) % 7 == 4.
+        reminder: Reminder(8, 30, WeekdayList(1 << 4)),
+      );
+      habit.frequency = Frequency(1, 30);
+      habitList.add(habit);
+      record(habit, monday, Entry.yesManual);
+
+      final alarms = await armFor(habit, monday);
+
+      expect(alarms, isNotEmpty,
+          reason: '$monthRule Denominator 30 is the ordinary monthly '
+              'frequency — '
+              "the picker's own \"times per month\" row hard-codes it — so "
+              'this is not an exotic import value.');
+      expect(plugin.cancelled, isEmpty, reason: monthRule);
+      // Offsets 0..30 are YES_AUTO; the next Wednesday after that is offset 37.
+      final LocalDate expected = LocalDate(monday.daysSince2000 + 37);
+      expect(
+        alarms.single.whenMillis,
+        unixTime(expected.year, expected.month, expected.day, 8, 30),
+        reason: monthRule,
+      );
+    });
+
     test('a short frequency is unaffected', () async {
       final alarms = await armWithFrequency(3);
       final LocalDate expected = LocalDate(monday.daysSince2000 + 3);

@@ -8085,3 +8085,29 @@ reading of `buildIntervals`.
 - **Severity:** major
 
 1. `audit19.a-long-frequency-must-not-cancel-the-reminder#1` — In the Kotlin app the alarm chain is one day deep and self-perpetuating: `ReminderScheduler.schedule` arms only the next occurrence, and `onShowReminder` ends in `scheduleAll()` whatever gate 1 did with the notification. So a boolean habit with `Frequency(1, 90)` has an alarm armed on each of the ninety auto-completed days, has its notification dropped on each, and is reminded on day 90 when the computed entry is UNKNOWN again — with no user action in between. A port that decides at schedule time instead must look as far as that run can actually reach, and the run is the habit's own denominator: `buildIntervals` sets `size = den` and substitutes the calendar month's length only for 30 and 31. A fixed bound the denominator outgrows does not defer the reminder — every scanned day is rejected, the scan falls out, and the alarm is cancelled outright, so "Every 90 days: replace the water filter" is silently never reminded again while the edit screen still shows its reminder time.
+
+## Domain: Twentieth audit pass (2026-08-24)
+
+Two findings, one refuted. One was the residual of the nineteenth pass's own
+fix; the other was the iOS half of a gap whose Android half `audit5` had found —
+the reminder's two answer buttons, dead on one platform for the whole project.
+
+#### audit20.the-scan-must-cover-the-month-length-substitution
+
+- [x] `audit20.the-scan-must-cover-the-month-length-substitution` — The per-habit scan bound is one day short for denominator 30, so a monthly habit ticked in a 31-day month still has its reminder cancelled
+- **Platform:** both · **Port risk:** medium
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt:242-266 — `var size = den; if (den == 30 || den == 31) { size = if (begin.day == begin.monthLength) begin.plus(1).monthLength else begin.monthLength }`, then `end = begin.plus(size - 1)``
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart — _daysToScan`
+- **Severity:** major
+
+1. `audit20.the-scan-must-cover-the-month-length-substitution#1` — In the Kotlin app the auto-completed run a frequency produces is the denominator, *except* for 30 and 31, where `buildIntervals` substitutes the calendar month's length instead. Seven months have 31 days, so a habit with `Frequency(1, 30)` ticked in one of them is YES_AUTO for 31 days — one more than its own denominator. A port that scans forward for the first day both gates admit must therefore size the scan by the run and not by the denominator: `denominator + 7` is one iteration short exactly at 30, and falling out of the scan does not defer the reminder, it cancels the alarm. Denominator 30 is the ordinary monthly frequency — the picker's "X times per month" row hard-codes it — so this is not an exotic imported value.
+
+#### audit20.ios-background-notification-actions-need-a-registrant
+
+- [x] `audit20.ios-background-notification-actions-need-a-registrant` — On iOS the reminder's "Yes" and "No" buttons kill the process and record nothing, because no plugin registrant callback is installed
+- **Platform:** ios · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/intents/PendingIntentFactory.kt (addCheckmark / removeRepetition build broadcast PendingIntents) and .../receivers/WidgetReceiver.kt (ACTION_ADD_REPETITION / ACTION_REMOVE_REPETITION → WidgetBehavior.onAddRepetition / onRemoveRepetition), which write the entry with no UI whether or not the process was alive`
+- **Where the port should do it:** `uhabits-flutter/app/ios/Runner/AppDelegate.swift — FlutterLocalNotificationsPlugin.setPluginRegistrantCallback`
+- **Severity:** critical
+
+1. `audit20.ios-background-notification-actions-need-a-registrant#1` — In the Kotlin app "Yes" and "No" are broadcasts: Android delivers them to the manifest-declared `WidgetReceiver`, which writes `Entry.YES_MANUAL` or `Entry.NO` for the alarm's day with no UI at all, running or not. That is the primary way a reminder is answered. The port keeps them as background actions on both platforms, which is right — but iOS answers a non-foreground action by starting a second Flutter engine, and `FlutterEngineManager` registers the app's plugins into that engine through the block `setPluginRegistrantCallback` installs. With no callback it calls a nil block, and the `NSAssert` that would name the problem is compiled out of a release build: the process dies and the tap records nothing, on every "Yes" and every "No", from the lock screen or a banner. iOS additionally requires this; Android has no equivalent, which is why fixing the Android half (`audit5`) did not fix this one.

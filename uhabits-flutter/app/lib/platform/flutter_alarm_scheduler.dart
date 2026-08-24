@@ -101,7 +101,15 @@ class FlutterAlarmScheduler implements SystemScheduler {
   /// the denominator outgrows does not defer the reminder — it cancels it, and
   /// the user is never told (`audit19.a-long-frequency-must-not-cancel-the-
   /// reminder#1`).
-  static int _daysToScan(int denominator) => denominator + 7;
+  ///
+  /// The run is not always the denominator, though. For 30 and 31
+  /// `buildIntervals` substitutes the calendar month's length, which is 31 in
+  /// seven months of the year — so a monthly habit ticked in January is
+  /// auto-completed for 31 days, one more than its own denominator, and a
+  /// bound of `denominator + 7` is one iteration short
+  /// (`audit20.the-scan-must-cover-the-month-length-substitution#1`).
+  static int _daysToScan(int denominator) =>
+      (denominator == 30 || denominator == 31 ? 31 : denominator) + 7;
 
   final AlarmPlugin _plugin;
 
