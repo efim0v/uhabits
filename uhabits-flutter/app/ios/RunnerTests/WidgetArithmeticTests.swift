@@ -247,6 +247,71 @@ class WidgetArithmeticTests: XCTestCase {
         }
     }
 
+    // MARK: - the chart month names
+
+    /// Every month INDEX in this extension is Gregorian — `MonthKey` is built
+    /// with `widgetCalendar`, and upstream reads its names off
+    /// `LocalDate.toGregorianCalendar()`, an explicit `GregorianCalendar`. So
+    /// the NAME the footer prints has to be the Gregorian one for that index,
+    /// whatever calendar the device is set to
+    /// (`audit21.ios-widget-month-names-come-from-the-gregorian-calendar#1`).
+    ///
+    /// A bare `DateFormatter` takes its calendar from its locale, and
+    /// `fa_IR`/`ar_SA` resolve to persian/islamic-umalqura with no Settings
+    /// override at all — so this is the region default, not an exotic choice.
+    /// Buddhist and Japanese are Gregorian-month-aligned and would hide the
+    /// defect, which is exactly why the seventeenth pass's sweep walked past
+    /// this one.
+    func testTheChartMonthNamesAreTheGregorianOnes() throws {
+        for identifier in ["fa_IR", "ar_SA", "he_IL@calendar=hebrew",
+                           "en_US", "zh_CN"] {
+            let locale = Locale(identifier: identifier)
+            // What upstream prints: this locale's words for the twelve
+            // GREGORIAN months.
+            let reference: [String] = {
+                let formatter = DateFormatter()
+                formatter.locale = locale
+                formatter.calendar = Calendar(identifier: .gregorian)
+                return formatter.shortMonthSymbols ?? []
+            }()
+            XCTAssertEqual(reference.count, 12,
+                           "\(identifier): a Gregorian year has twelve months "
+                           + "in every locale")
+
+            for month in 1...12 {
+                XCTAssertEqual(
+                    DateNames.shortMonth(month: month, locale: locale),
+                    reference[month - 1],
+                    "\(identifier) month \(month): the grid column is a "
+                    + "Gregorian month, so the footer under it must carry the "
+                    + "Gregorian month's name. A device-calendar formatter "
+                    + "names a Hijri or Solar-Hijri month the chart is not "
+                    + "showing — or, on a Hebrew calendar, returns fourteen "
+                    + "symbols, fails the count guard and prints nothing at all")
+            }
+        }
+    }
+
+    /// The two overloads are the same function with and without a date in
+    /// hand: `ScoreChart` measures all twelve to size its columns and then
+    /// labels the axis from a `Date`. If they disagree the axis and the width
+    /// it was laid out for come from different calendars.
+    func testTheTwoMonthNameOverloadsAgree() throws {
+        for identifier in ["fa_IR", "ar_SA", "he_IL@calendar=hebrew", "en_US"] {
+            let locale = Locale(identifier: identifier)
+            for month in 1...12 {
+                let day = try XCTUnwrap(WidgetStore.parseDate(
+                    String(format: "2026-%02d-15", month)))
+                XCTAssertEqual(
+                    DateNames.shortMonth(month: month, locale: locale),
+                    DateNames.shortMonth(day, locale: locale),
+                    "\(identifier) month \(month): FrequencyWidget draws its "
+                    + "footer with the first and ScoreWidget its axis with the "
+                    + "second, on the same home screen")
+            }
+        }
+    }
+
     /// One habit, decoded the way the extension decodes them — so this
     /// exercises the decoder too, rather than a hand-built struct that could
     /// drift from the wire format.

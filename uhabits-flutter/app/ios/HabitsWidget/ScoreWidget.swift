@@ -337,16 +337,6 @@ struct ScoreChartView: View {
 
 extension DateNames {
 
-    /// The short month name for a 1-based month number, for the width
-    /// measurements `ScoreChart` makes without a date in hand.
-    static func shortMonth(month: Int) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale.current
-        let names = formatter.shortMonthSymbols ?? []
-        guard names.count == 12, month >= 1, month <= 12 else { return "" }
-        return names[month - 1]
-    }
-
     static func yearNumber(_ date: Date) -> Int {
         widgetCalendar.component(.year, from: date)
     }

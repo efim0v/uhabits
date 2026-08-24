@@ -22,6 +22,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+const String monthRule =
+    'audit21.ios-widget-month-names-come-from-the-gregorian-calendar#1 — '
+    'upstream reads every month and weekday name off '
+    'LocalDate.toGregorianCalendar(), an explicit GregorianCalendar, so the '
+    'names are indexed by the same Gregorian month number the charts are '
+    'keyed by. A DateFormatter with no calendar assigned takes its locale\'s.';
+
 const String rule =
     'audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar#1 — the wire '
     'format is a Gregorian day number, so the extension has to read and write '
@@ -114,6 +121,49 @@ void main() {
           '${offenders.join(', ')} renders a Date with a DateFormatter whose '
           'time zone is the device\'s. Every Date in the extension is a UTC '
           'midnight, so the label names the previous day west of GMT.',
+    );
+  });
+
+  test('a formatter that reads month or weekday symbols pins its calendar', () {
+    // The gap the twenty-first pass found: the guard above only looks at
+    // files that render a `Date`, because only rendering needs a time zone.
+    // Reading `shortMonthSymbols` off a formatter needs no zone but very much
+    // needs a CALENDAR — with none assigned a `DateFormatter` takes its
+    // locale's, and `fa_IR`/`ar_SA` resolve to persian/islamic-umalqura with
+    // no Settings override at all. So the Gregorian month index the charts are
+    // keyed by came out labelled with a month the grid was not showing.
+    //
+    // The behaviour is exercised in
+    // ios/RunnerTests/WidgetArithmeticTests.swift; this is the cheap guard
+    // that a fourth formatter does not repeat the omission — including one
+    // declared, as that one was, in a file this rule's name does not mention.
+    final Directory dir = Directory('ios/HabitsWidget');
+    final List<File> sources = dir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.swift'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    expect(sources, isNotEmpty, reason: monthRule);
+
+    final List<String> offenders = <String>[];
+    for (final File source in sources) {
+      final String code = source
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .join('\n');
+      if (!code.contains('DateFormatter()')) continue;
+      if (!code.contains(RegExp(r'\.calendar\s*='))) {
+        offenders.add(source.uri.pathSegments.last);
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: '$monthRule ${offenders.join(', ')} builds a DateFormatter '
+          'without assigning its calendar, so the names it hands back are '
+          'indexed by whichever calendar the device is set to.',
     );
   });
 

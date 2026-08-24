@@ -197,4 +197,110 @@ void main() {
               'thing that can localize this label.');
     });
   });
+
+  // The home-screen Streak widget draws the same chart a second time, in
+  // Kotlin, inside the launcher's process — upstream literally reuses
+  // `StreakChart` there (`StreakWidget.buildView()`), so it inherits
+  // `JavaLocalDateFormatter.longFormat` and every locale's medium pattern with
+  // it. Nothing in `flutter test` can execute that host: there is no Android
+  // test target under `app/android`, so unlike the iOS extension — whose
+  // sources are compiled into RunnerTests — the only guard available is to
+  // read the Kotlin as text. It can see that the right formatter is built and
+  // that the hard-coded template is gone; it cannot see what the formatter
+  // prints. That weakness is the finding.
+  group('audit21.android-widget-streak-labels-use-the-locale-medium-date', () {
+    const String rule21 =
+        'audit21.android-widget-streak-labels-use-the-locale-medium-date#1 — '
+        'In the Kotlin app: the home-screen Streak widget IS StreakChart '
+        '(StreakWidget.buildView returns GraphWidgetView(context, '
+        'StreakChart(context))), and StreakChart.init builds '
+        'JavaLocalDateFormatter(Locale.getDefault()), whose longFormat is '
+        'DateFormat.getDateInstance(DateFormat.MEDIUM, locale) with '
+        'df.timeZone = TimeZone.getTimeZone("UTC"). The widget\'s labels '
+        'therefore follow the device locale\'s medium pattern — separators and '
+        'field order included — exactly as the in-app Streak card\'s do.';
+
+    late String formatter;
+
+    setUpAll(() => formatter = _widgetDateFormatter());
+
+    test('#1 longFormat is the locale\'s MEDIUM date instance, not a template',
+        () {
+      expect(
+        formatter,
+        contains(RegExp(
+          r'DateFormat\.getDateInstance\(\s*DateFormat\.MEDIUM,\s*'
+          r'Locale\.getDefault\(\)\s*\)',
+        )),
+        reason: '$rule21 The pattern has to come from the locale. A string '
+            'built out of shortMonthName is the American "MMM d, yyyy" in '
+            'every locale on earth.',
+      );
+      expect(
+        formatter,
+        isNot(contains(RegExp(r'\$day,\s*\$year'))),
+        reason: '$rule21 …so the hard-coded "\$month \$day, \$year" template '
+            'must be gone: it is what made a German widget read "Nov 24, '
+            '2014" where the app\'s own Streak card reads "24.11.2014".',
+      );
+    });
+
+    test('#1 the formatter is pinned to UTC, like the day key it prints', () {
+      expect(
+        formatter,
+        contains(RegExp(r'timeZone\s*=\s*TimeZone\.getTimeZone\("UTC"\)')),
+        reason: '$rule21 df.timeZone = TimeZone.getTimeZone("UTC") is the '
+            'second half of longFormat upstream. A LocalDate is a UTC '
+            'midnight, so a formatter left on the device zone names the '
+            'previous day everywhere west of GMT.',
+      );
+      expect(
+        formatter,
+        contains(RegExp(r'GregorianCalendar\(TimeZone\.getTimeZone\("(UTC|GMT)"\)\)')),
+        reason: '$rule21 …and the instant handed to it is the one '
+            'LocalDate.toGregorianCalendar() builds: a GregorianCalendar in '
+            'that same zone, not a default-zone one.',
+      );
+    });
+
+    test('#1 java.text.DateFormat, not android.text.format.DateFormat', () {
+      expect(
+        _widgetCanvasSource(),
+        contains('import java.text.DateFormat\n'),
+        reason: '$rule21 android.text.format.DateFormat is a different class '
+            'with no getDateInstance; the import is what decides which one '
+            'DateFormat.MEDIUM resolves against.',
+      );
+    });
+  });
+}
+
+/// `android/app/src/main/kotlin/.../widgets/views/WidgetCanvas.kt`, found from
+/// wherever the test runner was started.
+String _widgetCanvasSource() {
+  Directory dir = Directory.current;
+  for (int i = 0; i < 6; i++) {
+    for (final String prefix in <String>['', 'app/']) {
+      final File file = File('${dir.path}/${prefix}android/app/src/main/kotlin/'
+          'org/isoron/uhabits/widgets/views/WidgetCanvas.kt');
+      if (file.existsSync()) return file.readAsStringSync();
+    }
+    final Directory parent = dir.parent;
+    if (parent.path == dir.path) break;
+    dir = parent;
+  }
+  throw StateError('WidgetCanvas.kt not found from ${Directory.current.path}');
+}
+
+/// The `object WidgetDateFormatter { ... }` declaration, comments stripped, so
+/// no assertion below can be satisfied by prose.
+String _widgetDateFormatter() {
+  final String source = _widgetCanvasSource()
+      .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+      .replaceAll(RegExp('//[^\n]*'), '');
+  final int start = source.indexOf('object WidgetDateFormatter');
+  if (start < 0) {
+    throw StateError('object WidgetDateFormatter not found in WidgetCanvas.kt');
+  }
+  return source.substring(start);
 }
