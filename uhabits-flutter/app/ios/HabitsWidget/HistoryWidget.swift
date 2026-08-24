@@ -79,6 +79,24 @@ struct HistoryChartView: View {
     let habit: WidgetHabit
     let today: Date
 
+    /// `habit.historySeries` decoded once rather than once per square: the grid
+    /// draws up to `7 * nColumns` of them and `String` has no random access, so
+    /// indexing it per square would be quadratic in the widget's width
+    /// (`audit10.history-home-screen-widget-draws-more#1`).
+    private let publishedSeries: [HistorySquare]?
+
+    /// `habit.historyNotes` as a set, for the same reason.
+    private let publishedNotes: Set<Int>?
+
+    init(habit: WidgetHabit, today: Date) {
+        self.habit = habit
+        self.today = today
+        self.publishedSeries = habit.historySeries.map { series in
+            series.map { HistorySquare.of(ordinal: $0.wholeNumberValue ?? 1) }
+        }
+        self.publishedNotes = habit.historyNotes.map { Set($0) }
+    }
+
     /// `HistoryChart.padding`, set to 2.5 by `HistoryWidget`.
     private let padding: CGFloat = 2.5
 
@@ -261,18 +279,32 @@ struct HistoryChartView: View {
         }
     }
 
-    /// `HistoryCardPresenter.buildState`, evaluated one offset at a time
-    /// against the published entries. Offsets past the end of the array fall
-    /// back to `defaultSquare`, which the History widget sets to OFF
-    /// (`widgets.history#2`).
+    /// `HistoryCardPresenter.buildState(...).series`, as the document carries
+    /// it (`audit10.history-home-screen-widget-draws-more#1`).
+    ///
+    /// `nColumns` above is geometric and nothing bounds it by the data behind
+    /// it, so this card asks for 127-133 days at `.systemMedium`. Upstream the
+    /// series runs from the habit's oldest known entry to today, which is why
+    /// `defaultSquare = OFF` past its end means "before the habit existed" and
+    /// nothing else; `historySeries` is that series. Falling back to `entries`
+    /// — sixty days — is only for a document written before the field existed.
     private func square(offset: Int) -> HistorySquare {
+        if let series = publishedSeries {
+            guard offset < series.count else { return .off }
+            return series[offset]
+        }
         guard offset < habit.entries.count else { return .off }
         return HistorySquare.of(value: habit.entries[offset], habit: habit)
     }
 
-    /// `HistoryChart.drawSquare`'s `hasNotes`: false past the end of the
-    /// published flags, exactly as it is false past the end of the series.
+    /// `HistoryChart.drawSquare`'s `hasNotes`: the published offsets when the
+    /// document carries them, the sixty-day flag array otherwise, and false
+    /// past the end of either — exactly as it is false past the end of the
+    /// series.
     private func hasNotes(offset: Int) -> Bool {
+        if let offsets = publishedNotes {
+            return offsets.contains(offset)
+        }
         guard let indicators = habit.notesIndicators,
               offset < indicators.count else { return false }
         return indicators[offset]
@@ -313,7 +345,22 @@ enum HistorySquare {
     case dimmed
     case hatched
 
-    /// `HistoryCardPresenter.buildState`.
+    /// The published `historySeries` digit, which is the square's ordinal in
+    /// the order all four ports declare it — ON, OFF, GREY, DIMMED, HATCHED.
+    /// Anything else is OFF, the same answer an absent day gets.
+    static func of(ordinal: Int) -> HistorySquare {
+        switch ordinal {
+        case 0: return .on
+        case 1: return .off
+        case 2: return .grey
+        case 3: return .dimmed
+        case 4: return .hatched
+        default: return .off
+        }
+    }
+
+    /// `HistoryCardPresenter.buildState`, evaluated one entry at a time — the
+    /// fallback for a document written before `historySeries` existed.
     static func of(value: Int, habit: WidgetHabit) -> HistorySquare {
         if habit.isNumerical {
             if value == EntryValue.unknown { return .off }

@@ -227,27 +227,56 @@ class CoroutineTaskRunner implements TaskRunner {
     }
   }
 
-  /// `withContext(ioDispatcher) { ... }` followed by the epilogue: continues
-  /// inline when the background step did not actually suspend.
+  /// `withContext(ioDispatcher) { ... }` followed by the epilogue.
+  ///
+  /// When the background step did not actually suspend, Kotlin's
+  /// `DispatchedCoroutine` bails out of the round trip (`afterResume` sees that
+  /// the caller never suspended) and the epilogue continues on this very stack;
+  /// [value] not being a `Future` is the same situation, so [block] is called
+  /// directly.
+  ///
+  /// When it did suspend, `withContext` resumes the outer coroutine by posting
+  /// the continuation **to the main dispatcher**, which is the same queue
+  /// [publishProgress] posts to — and it posts it *after* every progress
+  /// runnable `doInBackground` already queued, because the queue is FIFO. So
+  /// the epilogue is handed back to [_mainDispatcher] rather than chained with
+  /// a bare `then`: `then` schedules a microtask, Dart drains the microtask
+  /// queue before the next event, and the epilogue would overtake the very
+  /// progress callbacks it is supposed to follow
+  /// (`audit10.task-runner-progress-before-post#1`).
   ///
   /// [onError] runs instead of [block] when the background step fails, and the
-  /// failure is then re-thrown untouched.
-  static FutureOr<void> _andThen(
+  /// failure is then re-thrown untouched. It takes the same route back: in
+  /// Kotlin a `withContext` block that throws also resumes the caller on the
+  /// main dispatcher.
+  FutureOr<void> _andThen(
     FutureOr<void> value,
     void Function() block,
     void Function() onError,
   ) {
     if (value is Future<void>) {
       return value.then(
-        (_) => block(),
-        onError: (Object error, StackTrace stack) {
-          onError();
-          Error.throwWithStackTrace(error, stack);
-        },
+        (_) => _mainDispatcher.dispatch(block),
+        onError: (Object error, StackTrace stack) =>
+            _rethrowAfter(_mainDispatcher.dispatch(onError), error, stack),
       );
     }
     block();
     return null;
+  }
+
+  /// Re-throws [error] once [resumed] — the failure half of the epilogue, back
+  /// on the main dispatcher — has run, so the counter is always released
+  /// before the exception escapes.
+  static FutureOr<void> _rethrowAfter(
+    FutureOr<void> resumed,
+    Object error,
+    StackTrace stack,
+  ) {
+    if (resumed is Future<void>) {
+      return resumed.then((_) => Error.throwWithStackTrace(error, stack));
+    }
+    Error.throwWithStackTrace(error, stack);
   }
 
   @override

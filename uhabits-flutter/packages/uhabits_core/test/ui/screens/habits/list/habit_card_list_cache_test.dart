@@ -55,6 +55,32 @@ class _RecordingListener extends HabitCardListCacheListener {
   void reset() => calls.clear();
 }
 
+/// A [_RecordingListener] that also samples what the cache actually holds at
+/// the instant `onRefreshFinished` fires.
+///
+/// `onRefreshFinished` is the cache's "the list is now up to date" signal — the
+/// adapter turns it straight into `notifyListeners()` — so whatever the cache
+/// holds at that moment is what the view is asked to redraw.
+class _SamplingListener extends _RecordingListener {
+  _SamplingListener(this.cacheOf);
+
+  final HabitCardListCache Function() cacheOf;
+
+  /// One entry per `onRefreshFinished`: today's checkmark for the sampled id.
+  final List<int> checkmarksAtRefreshFinished = <int>[];
+
+  int? sampledId;
+
+  @override
+  void onRefreshFinished() {
+    final id = sampledId;
+    if (id != null) {
+      checkmarksAtRefreshFinished.add(cacheOf().getCheckmarks(id)[0]);
+    }
+    super.onRefreshFinished();
+  }
+}
+
 /// Captures what the cache logs, so the `performMove` workaround for upstream
 /// issue 968 can be observed.
 class _CapturingLogging implements Logging {
@@ -783,6 +809,51 @@ void main() {
           reason: 'list-habits.toggle-from-row#3: so other rows keep their '
               'cached values');
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // #13 under the production wiring: two AsyncDispatchers, which is what
+  // AppScope.open builds. Kotlin posts publishProgress and the continuation of
+  // `withContext(ioDispatcher)` to the same FIFO main queue, so the
+  // incremental notifications always land before onPostExecute.
+  // -------------------------------------------------------------------------
+
+  test('onRefreshFinished comes last when the runner actually defers',
+      () async {
+    final asyncRunner = CoroutineTaskRunner(
+      mainDispatcher: const AsyncDispatcher(),
+      ioDispatcher: const AsyncDispatcher(),
+    );
+    final asyncCache = HabitCardListCache(
+        habitList, CommandRunner(asyncRunner), asyncRunner, logging);
+    asyncCache.setCheckmarkCount(10);
+    asyncCache.onAttached();
+    await asyncRunner.awaitAll();
+    await Future<void>.delayed(Duration.zero);
+
+    final sampling = _SamplingListener(() => asyncCache);
+    asyncCache.setListener(sampling);
+
+    final h2 = habitList.getByPosition(2);
+    sampling.sampledId = h2.id;
+    h2.originalEntries.add(Entry(today, Entry.no));
+    h2.recompute();
+    asyncCache.refreshHabit(h2.id!);
+    await asyncRunner.awaitAll();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(sampling.calls, <String>['onItemChanged(2)', 'onRefreshFinished()'],
+        reason: 'audit10.task-runner-progress-before-post#1: publishProgress '
+            'and the post-background continuation share the main queue, so '
+            'onRefreshFinished fires after every incremental notification '
+            '(list-habits.card-list-cache#13) even when the task runner really '
+            'defers.');
+    expect(sampling.checkmarksAtRefreshFinished, <int>[Entry.no],
+        reason: 'audit10.task-runner-progress-before-post#1: the cache is '
+            'already up to date when it announces that it is, so the rebuild '
+            'the adapter triggers never draws the pre-refresh checkmarks.');
+
+    asyncCache.onDetached();
   });
 
   test('testCommandListener_all', () {

@@ -940,4 +940,60 @@ void main() {
               'empty field delegates to the close listener');
     });
   });
+
+  group('audit10.the-overflow-menu-button-and-the', () {
+    const rule = 'audit10.the-overflow-menu-button-and-the#1 — the three-dot '
+        'button on the main toolbar is AppCompat\'s '
+        '`ActionMenuPresenter.OverflowMenuButton`, whose constructor sets '
+        '`contentDescription = R.string.abc_action_menu_overflow_description` '
+        '("More options") and installs it as a TooltipCompat tooltip, so '
+        'TalkBack names it and a long press shows it. Nothing in the port '
+        'declares a menu resource, so every such control has to carry the '
+        'label itself.';
+
+    testWidgets('#1 the toolbar overflow button is named', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpScreen(tester, openScope());
+      final material = MaterialLocalizations.of(
+        tester.element(find.byType(HabitListScreen)),
+      );
+
+      // Read back what a screen reader would announce, not what a ValueKey
+      // says: every other toolbar control already publishes a name, and the
+      // three-dot button is the only route to Settings, Dark theme, Help &
+      // FAQ and About.
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(const ValueKey<String>('listHabits.overflowMenu')),
+            )
+            .tooltip,
+        material.showMenuTooltip,
+        reason: rule,
+      );
+      handle.dispose();
+    });
+
+    testWidgets('#1 the search bar\'s X says "clear", not "search"',
+        (tester) async {
+      await pumpScreen(tester, openScope());
+      await openFilterMenu(tester);
+      await tester.tap(itemFinder(ListHabitsMenuItems.search));
+      await tester.pumpAndSettle();
+
+      final close = tester.widget<IconButton>(
+        find.byKey(const ValueKey<String>('listHabitsMenu.searchClose')),
+      );
+      final l10n = L10n.of(tester.element(find.byType(HabitListScreen)));
+      final material = MaterialLocalizations.of(
+        tester.element(find.byType(HabitListScreen)),
+      );
+      expect(close.tooltip, isNot(l10n.search),
+          reason: '$rule AppCompat\'s SearchView close button carries '
+              '`abc_searchview_description_clear` ("Clear query"), not the '
+              'query hint — and its first tap clears the field rather than '
+              'closing the bar (`audit7.the-search-bar-s-x-button#1`).');
+      expect(close.tooltip, material.clearButtonTooltip, reason: rule);
+    });
+  });
 }

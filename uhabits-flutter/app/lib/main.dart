@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
 
 import 'l10n/app_localizations.dart';
+import 'l10n/locale_resolution.dart';
 import 'platform/auto_backup.dart';
 import 'platform/crash_handler.dart';
 import 'platform/device_locale.dart';
@@ -48,6 +49,10 @@ class UhabitsApp extends StatelessWidget {
         onGenerateTitle: (context) => L10n.of(context).appName,
         localizationsDelegates: L10n.localizationsDelegates,
         supportedLocales: L10n.supportedLocales,
+        // `res/values/` for a language the app does not translate — see
+        // lib/l10n/locale_resolution.dart. Without it Flutter's last resort is
+        // `supportedLocales.first`, which gen-l10n makes Afrikaans.
+        localeListResolutionCallback: resolveAppLocale,
         navigatorObservers: <NavigatorObserver>[screenRouteObserver],
         home: const _BootstrapScreen(),
       );
@@ -378,6 +383,13 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
       navigatorKey: _navigatorKey,
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: L10n.supportedLocales,
+      // Android serves the default `res/values/` strings — English — to any
+      // device whose language it ships no `values-<lang>` for
+      // (`audit10.untranslated-device-language-serves-english#1`). Flutter
+      // would serve `supportedLocales.first` instead, and gen-l10n orders that
+      // list by ARB filename, so the untranslated half of the world would read
+      // a 22-message Afrikaans UI.
+      localeListResolutionCallback: resolveAppLocale,
       // Android runs `onPause` on the activity a new activity covers, and
       // `onResume` when it is finished. This is where a screen hears about
       // that — see lib/ui/common/screen_route_observer.dart.

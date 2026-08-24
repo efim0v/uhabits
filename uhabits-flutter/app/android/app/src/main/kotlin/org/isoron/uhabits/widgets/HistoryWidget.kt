@@ -30,10 +30,11 @@ import org.isoron.uhabits.widgets.views.HistoryChartView
  * `widgets.history#1`: default 250x250 px, a GraphWidgetView wrapping the core
  * HistoryChart. `widgets.history#3`: the title is the habit name.
  *
- * The one widget of the six whose *series* the entry window can supply in full:
- * 60 days of `computedEntries` is exactly what the grid needs at every size the
- * launcher offers. Its origin is a preference, though, and that has to be
- * published too — see [firstWeekday].
+ * Its series is published rather than derived from the entry window: the grid
+ * sizes its columns from the widget's geometry and asks for up to 735 days,
+ * where `entries` holds sixty, so everything past the ninth column was drawn as
+ * a lapse (`audit10.history-home-screen-widget-draws-more#1`). Its origin is a
+ * preference, and that has to be published too — see [firstWeekday].
  */
 class HistoryWidget(
     context: Context,
@@ -77,7 +78,7 @@ class HistoryWidget(
                 // presenter that computes it runs in the app's process, so the
                 // flags arrive on the document next to the entries they index
                 // (`audit6.history-home-screen-widget-never-draws#1`).
-                notesIndicators = habit.notesIndicators
+                notesIndicators = HistoryChartView.notesOf(habit)
                 defaultSquare = HistoryChartView.Square.OFF
             }
         }

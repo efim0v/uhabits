@@ -367,6 +367,10 @@ class _ListHeaderState extends State<ListHeader>
       widget.buttonCount,
       theme,
       formatter,
+      // `dim(R.dimen.tinyTextSize)` reads a 10sp dimension, so the date strip
+      // follows the OS font-size setting
+      // (`audit10.canvas-drawn-text-stopped-following-the#1`).
+      textScaler: MediaQuery.textScalerOf(context),
     );
 
     return GestureDetector(
@@ -422,12 +426,29 @@ class _HeaderPreferencesListener extends core.PreferencesListener {
 /// from the list with `elevation = dp(2f)` instead — and the port keeps the
 /// drawn line because a Flutter header casts no shadow onto the list.
 class HeaderDatesView extends core.View {
-  HeaderDatesView(this._today, this._nButtons, this._theme, this._fmt);
+  HeaderDatesView(
+    this._today,
+    this._nButtons,
+    this._theme,
+    this._fmt, {
+    TextScaler textScaler = TextScaler.noScaling,
+  }) : _textScaler = textScaler;
 
   final core.LocalDate _today;
   final int _nButtons;
   final core.Theme _theme;
   final core.LocalDateFormatter _fmt;
+
+  /// The OS font-size / accessibility text-scale setting
+  /// (`audit10.canvas-drawn-text-stopped-following-the#1`).
+  ///
+  /// `paint.textSize = dim(R.dimen.tinyTextSize)` reads a `<dimen>` declared
+  /// in **sp**, and `Resources.getDimension` multiplies a COMPLEX_UNIT_SP
+  /// value by `DisplayMetrics.scaledDensity` — density times fontScale. A
+  /// logical pixel already carries the density, so the font-scale factor is
+  /// the one conversion left, and `core.Canvas` has no ambient scaler of its
+  /// own. [ListHeader] passes `MediaQuery.textScalerOf(context)`.
+  final TextScaler _textScaler;
 
   @override
   void draw(core.Canvas canvas) {
@@ -446,7 +467,7 @@ class HeaderDatesView extends core.View {
     // sres.getColor(R.attr.contrast60) }` (`list-habits.header-dates#12`).
     canvas.setColor(_theme.headerTextColor);
     canvas.setFont(core.Font.bold);
-    canvas.setFontSize(_theme.smallTextSize);
+    canvas.setFontSize(_textScaler.scale(_theme.smallTextSize));
 
     // `val em = paint.measureText("m")`, hoisted out of the loop exactly as
     // the Drawer hoists it.

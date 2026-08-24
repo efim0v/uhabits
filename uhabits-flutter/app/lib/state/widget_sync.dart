@@ -459,7 +459,27 @@ class WidgetBehavior {
   }
 
   void onToggleRepetition(Habit habit, LocalDate date) {
-    final Entry entry = habit.originalEntries.get(date);
+    onToggleRepetitionFrom(habit, date, habit.originalEntries.get(date));
+  }
+
+  /// The same toggle, computed from an [entry] the caller already holds rather
+  /// than from the one the model currently stores, and returning the entry the
+  /// command it just ran will store.
+  ///
+  /// Upstream there is no such method and none is needed. Every widget tap
+  /// arrives as its own `ACTION_TOGGLE_REPETITION` broadcast, seconds apart, so
+  /// by the time the next one reads `habit.originalEntries.get(date)` the
+  /// previous tap's `CreateRepetitionCommand` has long since run and the read
+  /// returns what it wrote (`audit10.ios-widget-taps-collapse#1`).
+  ///
+  /// The port's iOS half does not have that spacing: `WidgetToggleQueue`
+  /// replays a whole run of taps in one pass, and `CommandRunner.run` returns
+  /// before the command has executed — `AsyncDispatcher.dispatch` is
+  /// `Future(() => block())`. Re-reading the model between taps would hand
+  /// every tap in the run the same starting value and collapse the run into a
+  /// single advance. So the replay carries the value forward itself, which is
+  /// the arithmetic the separate broadcasts performed for free.
+  Entry onToggleRepetitionFrom(Habit habit, LocalDate date, Entry entry) {
     final int newValue = Entry.nextToggleValue(
       entry.value,
       isSkipEnabled: _preferences.isSkipEnabled,
@@ -467,6 +487,7 @@ class WidgetBehavior {
     );
     setValue(habit, date, newValue, entry.notes);
     _notificationTray.cancel(habit);
+    return Entry(date, newValue, notes: entry.notes);
   }
 
   void onIncrement(Habit habit, LocalDate date, int amount) {

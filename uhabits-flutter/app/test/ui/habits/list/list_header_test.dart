@@ -838,6 +838,52 @@ void main() {
               'list-habits.header-dates#11 — the two flips cancel out');
     });
   });
+
+  group('audit10.canvas-drawn-text-stopped-following-the', () {
+    const rule = 'audit10.canvas-drawn-text-stopped-following-the#1 — '
+        '`HeaderView.Drawer`\'s paint is sized from '
+        '`dim(R.dimen.tinyTextSize)`, and dimens.xml declares tinyTextSize as '
+        '**10sp**. `Resources.getDimension` resolves a COMPLEX_UNIT_SP value '
+        'against `scaledDensity` (density x fontScale), so the weekday names '
+        'and day numbers of the date strip grow with the OS font-size '
+        'setting, like every other sp text on the same screen.';
+
+    testWidgets('#1 the two lines follow the OS text-scale setting',
+        (tester) async {
+      // Android's system font-size slider, two notches up.
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+
+      final texts = canvas.opsNamed('drawText');
+      expect(texts, hasLength(10), reason: rule);
+      for (final op in texts) {
+        expect(op.fontSize, 10.0 * 1.5, reason: rule);
+      }
+    });
+
+    testWidgets('#1 the em the two baselines hang off is measured under the '
+        'scaled paint', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await _pumpHeader(tester, buttonCount: 5);
+      final canvas = _draw(tester);
+
+      // `val em = paint.measureText("m")` is taken after the textSize
+      // assignment, so `centerY - 0.25 * em` / `+ 1.25 * em` open up with the
+      // glyphs instead of leaving them overlapping.
+      final em = 0.6 * (10.0 * 1.5);
+      const centerY = 48.0 / 2;
+      final texts = canvas.opsNamed('drawText');
+      expect(texts[0].args[1], closeTo(centerY - 0.25 * em, 1e-9),
+          reason: rule);
+      expect(texts[1].args[1], closeTo(centerY + 1.25 * em, 1e-9),
+          reason: rule);
+    });
+  });
 }
 
 /// Pumps a [ListHeader] inside a 600dp-wide slot, the width the Android

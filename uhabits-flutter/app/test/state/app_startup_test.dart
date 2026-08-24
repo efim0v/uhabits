@@ -39,9 +39,27 @@
 ///
 /// One more is asserted only in the half the port kept: `#2` (there is no test
 /// mode, so the database file is never deleted at launch and is always
-/// `uhabits.db`). `#3` is now ported whole — the opener refuses a file outside
-/// 8..25 and `boot()` renames it aside and re-initialises
-/// (`audit3.an-unusable-database-file-is-no`).
+/// `uhabits.db`).
+///
+/// ## `#3`, and the half of it Kotlin does not have
+///
+/// The opener half is parity: `onUpgrade` throws below 8 and `onDowngrade`
+/// throws unconditionally, so a file outside 8..25 is refused
+/// (`persistence.android-opener#4`/`#5`). The *recovery* half is not.
+/// `DatabaseUtils.initializeDatabase` only constructs the `SQLiteOpenHelper`
+/// (DatabaseUtils.kt:52-58), which opens nothing, so the
+/// `catch (UnsupportedDatabaseVersionException)` at HabitsApplication.kt:54-60
+/// never fires and the rename inside it is dead code; the file is first opened
+/// at `component.habitList` (:73), past the try, and the throw escapes
+/// `Application.onCreate`. The Android app crash-loops on such a file with the
+/// data untouched. This port renames it aside and boots empty instead — a
+/// deliberate divergence (`audit10.the-invalid-quarantine-is-the-ports-own#1`),
+/// asserted below as the port's own behaviour rather than as parity.
+///
+/// The one recovery Android really does perform is for a file sqlite cannot
+/// read at all, and it happens inside the framework rather than in
+/// `HabitsApplication`: `#3b` and `#3c`
+/// (`audit10.a-corrupt-database-file-recovers#1`).
 library;
 
 // The commands, preferences, task and time layers are reached by their `src`
@@ -616,35 +634,44 @@ void main() {
       stamped.setVersion(databaseVersion + 40);
       stamped.close();
 
-      const String rule =
-          'platform-glue.app-startup-order#3 — DatabaseUtils.initializeDatabase '
-          'is wrapped in try/catch for UnsupportedDatabaseVersionException: on '
-          'that exception the existing database file is renamed to its absolute '
-          'path + ".invalid" and initializeDatabase is retried, so a too-new/'
-          'too-old DB never crashes startup but silently starts a fresh empty '
-          'database.';
+      const String opener =
+          'persistence.android-opener#4/#5 — HabitsDatabaseOpener.onUpgrade '
+          'throws UnsupportedDatabaseVersionException when db.version < 8, and '
+          'onDowngrade throws unconditionally, so a file outside 8..25 is '
+          'refused rather than silently used.';
+      const String quarantine =
+          'audit10.the-invalid-quarantine-is-the-ports-own#1 — the recovery '
+          'that follows is the port\'s own, not Kotlin\'s. '
+          'DatabaseUtils.initializeDatabase only constructs the '
+          'SQLiteOpenHelper (DatabaseUtils.kt:52-58), which opens nothing, so '
+          'the catch at HabitsApplication.kt:54-60 never fires; the file is '
+          'first opened at `component.habitList` (:73), past the try, and the '
+          'throw escapes Application.onCreate — the Android app crash-loops '
+          'with the data untouched. The port renames the file aside and boots '
+          'empty instead, a deliberate divergence recorded in DEVIATIONS.md.';
 
-      // The opener's half of the rule: `onDowngrade` always throws, so a file
-      // past this build's schema is refused at the door rather than opened and
-      // failing later at the first query.
+      // The opener's half, which IS parity: `onDowngrade` always throws, so a
+      // file past this build's schema is refused at the door rather than
+      // opened and failing later at the first query.
       expect(
         () => AppDatabase.openAndMigrate(path),
         throwsA(isA<UnsupportedDatabaseVersionException>()),
-        reason: '$rule persistence.android-opener#5: a database file newer '
-            'than 25 is refused rather than silently downgraded.',
+        reason: '$opener A database file newer than $databaseVersion is '
+            'refused rather than silently downgraded.',
       );
 
-      // And `boot()`'s half: the file is set aside and a fresh one takes its
-      // place, so the user gets an empty app rather than a startup that never
-      // reaches runApp.
+      // And `boot()`'s half, which is the divergence: the file is set aside
+      // and a fresh one takes its place, so the user gets an empty app rather
+      // than a startup that never reaches runApp.
       final AppScope scope = await boot();
       expect(File('$path.invalid').existsSync(), isTrue,
-          reason: '$rule The file is renamed, not deleted: the data is still '
-              'there to be recovered.');
+          reason: '$quarantine The file is renamed, not deleted: the data is '
+              'still there to be recovered.');
       expect(scope.habitList.size(), 0,
-          reason: '$rule …and the app comes up on a fresh empty database.');
+          reason: '$quarantine …and the app comes up on a fresh empty '
+              'database.');
       expect(scope.database.getVersion(), databaseVersion,
-          reason: '$rule …stamped at this build\'s own schema version.');
+          reason: '$quarantine …stamped at this build\'s own schema version.');
 
       // The other direction — a file older than the app — is brought forward
       // rather than quarantined, as long as it is one this build can migrate:
@@ -654,8 +681,8 @@ void main() {
       final Database migrated = AppDatabase.openAndMigrate(old);
       addTearDown(migrated.close);
       expect(migrated.getVersion(), databaseVersion,
-          reason: 'platform-glue.app-startup-order#3: an older file is brought '
-              'forward rather than rejected');
+          reason: '$opener An older file inside the range is brought forward '
+              'rather than rejected.');
 
       // Below 8 there is no migration script at all, which is the other arm of
       // `onUpgrade`'s throw.
@@ -666,8 +693,94 @@ void main() {
       expect(
         () => AppDatabase.openAndMigrate(ancient),
         throwsA(isA<UnsupportedDatabaseVersionException>()),
-        reason: '$rule persistence.android-opener#4: onUpgrade throws when '
-            'db.version < 8.',
+        reason: '$opener onUpgrade throws when db.version < 8.',
+      );
+    });
+
+    test('#3b a database file sqlite cannot read at all is quarantined too',
+        () async {
+      final String path = p.join(supportDir.path, databaseFilename);
+      seedHabits(path, count: 1);
+
+      const String rule =
+          'audit10.a-corrupt-database-file-recovers#1 — HabitsDatabaseOpener '
+          'passes a null errorHandler to SQLiteOpenHelper '
+          '(HabitsDatabaseOpener.kt:35), so SQLiteDatabase.open() catches the '
+          'SQLiteDatabaseCorruptException that SQLITE_NOTADB and SQLITE_CORRUPT '
+          'map to, hands the file to DefaultDatabaseErrorHandler.onCorruption() '
+          '— which deletes it — and reopens with CREATE_IF_NECESSARY, so the '
+          'Android app launches on a fresh empty database.';
+
+      // Zeroing the 16-byte header magic: "file is not a database".
+      final Uint8List bytes = File(path).readAsBytesSync();
+      final Uint8List patched = Uint8List.fromList(bytes)..fillRange(0, 16, 0);
+      File(path).writeAsBytesSync(patched, flush: true);
+
+      expect(
+        () => AppDatabase.openAndMigrate(path),
+        throwsA(isA<UnreadableDatabaseException>()),
+        reason: '$rule The port names that condition rather than letting a '
+            'raw SqliteException escape, so boot() can act on it.',
+      );
+
+      final AppScope scope = await boot();
+      expect(scope.habitList.size(), 0,
+          reason: '$rule The port reaches the same outcome — an app that '
+              'opens, empty — instead of throwing before runApp.');
+      expect(scope.database.getVersion(), databaseVersion,
+          reason: '$rule The replacement is built by onCreate plus the '
+              'migrations, so it carries this build\'s schema version.');
+      expect(File('$path.invalid').existsSync(), isTrue,
+          reason: '$rule Android deletes the file; the port sets it aside as '
+              '`<absolutePath>.invalid` instead — a deliberate divergence '
+              'recorded in DEVIATIONS.md, since the bytes are the only copy of '
+              'the user\'s history.');
+    });
+
+    test('#3c corruption discovered during a migration is quarantined, and '
+        'other sqlite failures are not', () async {
+      const String rule =
+          'audit10.a-corrupt-database-file-recovers#1 — only SQLITE_CORRUPT '
+          'and SQLITE_NOTADB reach SQLiteDatabaseCorruptException upstream '
+          '(android_database_SQLiteCommon.cpp); every other SQLiteException is '
+          'rethrown by SQLiteOpenHelper.getDatabaseLocked for a writable open.';
+
+      // A file written by the previous schema version, whose first page went
+      // bad afterwards: the header still reads, `PRAGMA user_version` still
+      // answers, and sqlite only finds out when migration 25 prepares its
+      // first statement against the schema.
+      final String path = p.join(supportDir.path, databaseFilename);
+      seedHabits(path, count: 1);
+      final Database stamped = AppDatabase.openAndMigrate(path);
+      stamped.setVersion(databaseVersion - 1);
+      stamped.close();
+      final Uint8List bytes = File(path).readAsBytesSync();
+      final Uint8List patched = Uint8List.fromList(bytes)
+        ..fillRange(100, 4096, 0xab);
+      File(path).writeAsBytesSync(patched, flush: true);
+
+      expect(
+        () => AppDatabase.openAndMigrate(path),
+        throwsA(isA<UnreadableDatabaseException>()),
+        reason: '$rule Android\'s handler is installed on the connection, not '
+            'only on the initial open, so damage found while upgrading '
+            'recovers the same way.',
+      );
+
+      final AppScope scope = await boot();
+      expect(scope.habitList.size(), 0, reason: rule);
+      expect(File('$path.invalid').existsSync(), isTrue, reason: rule);
+
+      // And the negative half: a plain SQL error is not corruption and must
+      // not cost the user their file.
+      final String broken = p.join(supportDir.path, 'broken.db');
+      final Database database = AppDatabase.openAndMigrate(broken);
+      addTearDown(database.close);
+      expect(
+        () => database.run('select * from NoSuchTable'),
+        throwsA(isA<SqliteException>()),
+        reason: '$rule A SqliteException that is not code 11 or 26 stays a '
+            'SqliteException and is never mistaken for a broken file.',
       );
     });
 
@@ -1111,6 +1224,54 @@ void main() {
       expect(int.parse(version!.group(1)!), appVersionCode,
           reason: '$rule BuildConfig.VERSION_CODE is that build number, and '
               'appVersionCode — the value written at launch — is it.');
+    });
+
+    test('#4 a settings file that cannot be written does not stop the launch',
+        () async {
+      const String audit =
+          'audit10.every-preference-write-can-throw-out#1: prefs.lastAppVersion '
+          '= BuildConfig.VERSION_CODE goes through SharedPreferences.Editor'
+          '.apply(), which commits to memory and writes on a background '
+          'thread, so a device that cannot write the settings still finishes '
+          'onCreate and shows the habit list.';
+
+      final String path = p.join(supportDir.path, databaseFilename);
+      final String prefsPath = p.join(supportDir.path, preferencesFilename);
+      seedHabits(path, count: 1);
+      // A device out of storage: the temp file every settings write goes
+      // through cannot be created, so step (4) fails.
+      Directory('$prefsPath.tmp').createSync();
+
+      // An app that has already run once: the settings file is there and
+      // still readable, and it is the `last_version` write that fails.
+      File(prefsPath).writeAsStringSync(
+          jsonEncode(<String, String>{'last_version': '19000'}));
+
+      final Future<AppScope> booting = boot();
+      await expectLater(booting, completes,
+          reason: '$audit boot() is awaited before runApp, so anything that '
+              'escapes it is a window with no widget tree at all.');
+
+      final AppScope first = await booting;
+      expect(first.habitList.size(), 1,
+          reason: '$audit …and the app comes up on the user\'s real data, '
+              'which the database still holds.');
+      expect(first.preferences.lastAppVersion, appVersionCode,
+          reason: '$audit The value is committed to memory whether or not it '
+              'reaches the disk.');
+      await pumpEventQueue();
+      first.close();
+      scopes.remove(first);
+      resetToday();
+
+      // And a first launch on the same device, where the XML defaults are what
+      // cannot be written.
+      File(prefsPath).deleteSync();
+      final Future<AppScope> reBooting = boot();
+      await expectLater(reBooting, completes,
+          reason: '$audit PreferenceManager.setDefaultValues writes through '
+              'the same editor, so a first launch cannot fail either.');
+      expect((await reBooting).habitList.size(), 1, reason: audit);
     });
   });
 }

@@ -360,6 +360,35 @@ class HabitData(
      */
     val notesIndicators: List<Boolean>,
     /**
+     * The History grid's own series, newest first: one character per day,
+     * `Square.ordinal` as a digit, running back to the habit's oldest known
+     * entry (`audit10.history-home-screen-widget-draws-more#1`).
+     *
+     * Not [entries] under another name. [entries] is sixty days long because
+     * that is all the tick mark needs; the History grid lays its columns out
+     * from the *widget's geometry* — `nColumns = floor((width - 2 * padding -
+     * weekdayColumnWidth) / squareSize)`, spanning `7 * nColumns` days — and
+     * asks for as many days as it has room for, up to 735 on the widest cell a
+     * launcher offers. Every day past the end of the series is painted
+     * `defaultSquare`, i.e. OFF, in the same colour a genuinely missed day
+     * gets, so a series cut at sixty turned months of completed days into
+     * lapses.
+     *
+     * Null in a document written before the field existed; [HistoryChartView
+     * .seriesOf] then falls back to mapping [entries], which is what this
+     * replaced.
+     */
+    val historySeries: String?,
+    /**
+     * The offsets into [historySeries] whose day carries a note
+     * (`audit6.history-home-screen-widget-never-draws#1`), ascending.
+     *
+     * Offsets rather than one flag per day: notes are sparse — most habits have
+     * none — and a `[false, false, …]` array over 750 days would be the largest
+     * thing in the document.
+     */
+    val historyNotes: List<Int>?,
+    /**
      * Today's score, 0..1 — `habit.scores[today].value`, which
      * `widgets.checkmark#2` sets the ring percentage from.
      *
@@ -436,6 +465,20 @@ class HabitData(
             notesIndicators = List(notesIndicators.size) {
                 if (it < days) false else notesIndicators[it - days]
             },
+            // The History series is newest-first too, so it shifts with the
+            // rest: the days at the front are the ones nobody has answered and
+            // come back OFF, which is `Square.OFF.ordinal` — the digit '1'.
+            // Left unshifted the grid would draw every square [days] days late
+            // (`audit10.history-home-screen-widget-draws-more#1`).
+            historySeries = historySeries?.let { series ->
+                String(CharArray(series.length) {
+                    if (it < days) OFF_SQUARE else series[it - days]
+                })
+            },
+            historyNotes = historyNotes?.mapNotNull { offset ->
+                val moved = offset + days
+                if (moved < (historySeries?.length ?: 0)) moved else null
+            },
             score = score,
             scores = scores,
             bucketSize = bucketSize,
@@ -446,10 +489,14 @@ class HabitData(
     }
 
     companion object {
+        /** `HistoryChartView.Square.OFF.ordinal` as the digit the wire uses. */
+        private const val OFF_SQUARE = '1'
+
         fun parse(json: JSONObject): HabitData {
             val entriesJson = json.optJSONArray("entries") ?: JSONArray()
             val entries = IntArray(entriesJson.length()) { entriesJson.getInt(it) }
             val notesJson = json.optJSONArray("notesIndicators") ?: JSONArray()
+            val historyNotesJson = json.optJSONArray("historyNotes")
             val scoresJson = json.optJSONArray("scores")
             val streaksJson = json.optJSONArray("streaks")
             val frequencyJson = json.optJSONObject("weekdayFrequency")
@@ -467,6 +514,14 @@ class HabitData(
                 value = if (json.has("value")) json.getInt("value") else Entry.UNKNOWN,
                 entries = entries,
                 notesIndicators = (0 until notesJson.length()).map { notesJson.getBoolean(it) },
+                historySeries = if (json.has("historySeries")) {
+                    json.optString("historySeries")
+                } else {
+                    null
+                },
+                historyNotes = historyNotesJson?.let { arr ->
+                    (0 until arr.length()).map { arr.getInt(it) }
+                },
                 score = if (json.has("score")) json.getDouble("score") else null,
                 scores = scoresJson?.let { arr ->
                     DoubleArray(arr.length()) { arr.getDouble(it) }

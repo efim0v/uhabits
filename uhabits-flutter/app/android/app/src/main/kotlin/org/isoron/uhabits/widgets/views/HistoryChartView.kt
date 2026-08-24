@@ -238,13 +238,55 @@ class HistoryChartView(context: Context) : View(context) {
 
     companion object {
         /**
+         * `HistoryCardPresenter.buildState(...).series`, as the document
+         * carries it (`audit10.history-home-screen-widget-draws-more#1`).
+         *
+         * The grid's column count is geometric — `nColumns = floor((width - 2 *
+         * padding - weekdayColumnWidth) / squareSize)`, `7 * nColumns` days —
+         * and nothing bounds it by the data behind it, so a widget wider than
+         * about 1.25x its height asks for more days than [HabitData.entries]
+         * holds and every one of them is drawn `defaultSquare`. Upstream that
+         * never happens: the presenter's series runs from the habit's oldest
+         * known entry to today, so OFF past its end means "before the habit
+         * existed" and nothing else. [HabitData.historySeries] is that series.
+         *
+         * [entriesSeriesOf] is the fallback, and only for a document written
+         * before the field existed — a widget outlives an app update for as
+         * long as the user leaves it on the home screen.
+         */
+        fun seriesOf(habit: HabitData): List<Square> {
+            val published = habit.historySeries ?: return entriesSeriesOf(habit)
+            val squares = Square.values()
+            return published.map { digit ->
+                val ordinal = digit - '0'
+                if (ordinal in squares.indices) squares[ordinal] else Square.OFF
+            }
+        }
+
+        /**
+         * `HistoryChart.notesIndicators` (`audit6.history-home-screen-widget
+         * -never-draws#1`), expanded from the sparse offsets the document
+         * carries into the flag-per-day list the chart indexes.
+         *
+         * Falls back to [HabitData.notesIndicators] — the sixty-day array — for
+         * a document written before [HabitData.historyNotes] existed.
+         */
+        fun notesOf(habit: HabitData): List<Boolean> {
+            val offsets = habit.historyNotes ?: return habit.notesIndicators
+            val length = habit.historySeries?.length ?: 0
+            val flags = BooleanArray(length)
+            for (offset in offsets) if (offset in 0 until length) flags[offset] = true
+            return flags.toList()
+        }
+
+        /**
          * Port of `HistoryCardPresenter.buildState`'s series mapping
          * (`widgets.history#4`), reading the published entries instead of
          * `computedEntries`.
          *
          * The list is newest-first in both, so the index means the same thing.
          */
-        fun seriesOf(habit: HabitData): List<Square> = habit.entries.map { value ->
+        private fun entriesSeriesOf(habit: HabitData): List<Square> = habit.entries.map { value ->
             if (habit.isNumerical) {
                 when {
                     value == Entry.UNKNOWN -> Square.OFF

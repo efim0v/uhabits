@@ -29,7 +29,9 @@ import WidgetKit
 /// nor a widget id — the user edits a widget in place, and the chosen value is
 /// an `AppIntent` parameter the system stores for that instance. So the picker
 /// becomes the entity query below, and the "eligible habits" become whatever
-/// the app has published into the App Group.
+/// the app has published into the App Group, minus the same habits the dialog
+/// drops: archived ones always, and the wrong type for the two filtered
+/// variants (`widgets.config-picker#3`, `#4`, `#5`).
 ///
 /// One consequence worth stating plainly: nothing on this side can *create* a
 /// binding. Until the Dart side publishes at least one widget document there
@@ -80,10 +82,18 @@ struct HabitEntityQuery: EntityQuery {
     /// `HabitPickerDialog` lists habits from `habitList` and the numerical /
     /// boolean variants filter it down (`widgets.registration#6`). Checkmark,
     /// Frequency, History and Score are the four whose Android picker is the
-    /// unfiltered `HabitPickerDialog`, so no filter is applied here either;
-    /// Streaks and Target have their own queries below.
+    /// unfiltered `HabitPickerDialog`, so no *type* filter is applied here
+    /// either; Streaks and Target have their own queries below.
+    ///
+    /// "Unfiltered" is about the type only. Every picker upstream, the plain
+    /// one included, opens with `if (h.isArchived) continue`
+    /// (`widgets.config-picker#3`), so a habit the user retired is never
+    /// offered for any of the six widgets
+    /// (`audit10.ios-widget-picker-offers-archived#1`).
     func suggestedEntities() async throws -> [HabitEntity] {
-        WidgetStore().allHabits().map { HabitEntity(id: $0.id, name: $0.name) }
+        WidgetStore().allHabits()
+            .filter { !$0.isArchived }
+            .map { HabitEntity(id: $0.id, name: $0.name) }
     }
 }
 
@@ -135,14 +145,22 @@ struct BooleanHabitEntity: AppEntity {
 
 struct BooleanHabitEntityQuery: EntityQuery {
 
+    /// Resolves an id the system already stored, which is a different question
+    /// from what the picker offers: archiving a habit does not unbind the
+    /// widgets pointing at it upstream, and
+    /// `BaseWidgetProvider.getHabitsFromWidgetId` looks its habits up by id
+    /// with no archived test. So this one reads the catalogue directly rather
+    /// than going through the filtered list below
+    /// (`audit10.ios-widget-picker-offers-archived#1`).
     func entities(for identifiers: [Int]) async throws -> [BooleanHabitEntity] {
-        try await suggestedEntities()
-            .filter { identifiers.contains($0.id) }
+        WidgetStore().allHabits()
+            .filter { !$0.isNumerical && identifiers.contains($0.id) }
+            .map { BooleanHabitEntity(id: $0.id, name: $0.name) }
     }
 
     func suggestedEntities() async throws -> [BooleanHabitEntity] {
         WidgetStore().allHabits()
-            .filter { !$0.isNumerical }
+            .filter { !$0.isNumerical && !$0.isArchived }
             .map { BooleanHabitEntity(id: $0.id, name: $0.name) }
     }
 }
@@ -189,14 +207,17 @@ struct NumericalHabitEntity: AppEntity {
 
 struct NumericalHabitEntityQuery: EntityQuery {
 
+    /// Unfiltered on archived, for the reason `BooleanHabitEntityQuery.
+    /// entities(for:)` gives.
     func entities(for identifiers: [Int]) async throws -> [NumericalHabitEntity] {
-        try await suggestedEntities()
-            .filter { identifiers.contains($0.id) }
+        WidgetStore().allHabits()
+            .filter { $0.isNumerical && identifiers.contains($0.id) }
+            .map { NumericalHabitEntity(id: $0.id, name: $0.name) }
     }
 
     func suggestedEntities() async throws -> [NumericalHabitEntity] {
         WidgetStore().allHabits()
-            .filter { $0.isNumerical }
+            .filter { $0.isNumerical && !$0.isArchived }
             .map { NumericalHabitEntity(id: $0.id, name: $0.name) }
     }
 }
@@ -229,10 +250,23 @@ extension WidgetStore {
     ///
     /// Falls back to the first published habit the widget's own picker would
     /// have offered, so that a freshly dropped widget shows something instead
-    /// of an empty card while the user has not opened the edit sheet yet. The
-    /// fallback is filtered too: a Target widget must never fall back onto a
-    /// boolean habit, which is a habit its picker refuses to list
-    /// (`widgets.target#8`).
+    /// of an empty card while the user has not opened the edit sheet yet.
+    /// WidgetKit places a widget before it is configured — there is no
+    /// configure activity to leave `RESULT_CANCELED` in, so upstream's "the
+    /// launcher drops the placement" (`widgets.config-picker#11`) is not
+    /// available — which makes this fallback the picker, for that widget, until
+    /// the user opens the edit sheet.
+    ///
+    /// It is therefore filtered exactly as the picker is. The type half keeps a
+    /// Target widget from falling back onto a boolean habit, which is a habit
+    /// its picker refuses to list (`widgets.target#8`); the archived half keeps
+    /// every widget off a habit the user retired, which
+    /// `HabitPickerDialog.kt:69` refuses first of all
+    /// (`audit10.ios-widget-picker-offers-archived#1`).
+    ///
+    /// A habit that *was* picked is returned whatever its state: archiving does
+    /// not unbind a widget upstream, and a widget that started drawing "Quit
+    /// smoking" goes on drawing it.
     func resolve(
         _ configuration: some HabitSelectionIntent,
         eligible: (WidgetHabit) -> Bool = { _ in true }
@@ -240,7 +274,7 @@ extension WidgetStore {
         if let selected = configuration.selectedHabitId {
             return habit(id: selected)
         }
-        return allHabits().first(where: eligible)
+        return allHabits().first { !$0.isArchived && eligible($0) }
     }
 
     /// Distinguishes "you have not picked a habit / there are none" from

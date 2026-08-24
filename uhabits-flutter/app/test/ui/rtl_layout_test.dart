@@ -6,14 +6,25 @@
 /// Rules 1, 2, 4 and 5 are asserted in test/l10n/localization_inventory_test
 /// .dart, where the RTL locales themselves live. These two are about widget
 /// geometry rather than about which translations ship, so they are here.
+///
+/// The other half of the same subject — a screen whose start/end attributes
+/// must actually mirror when the layout does — is
+/// `audit10.the-edit-habit-form-pins-its-floating#1` at the bottom.
 library;
+
+// The core package does not export the database plumbing the editor needs.
+// ignore_for_file: implementation_imports
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
+import 'package:uhabits/platform/app_database.dart';
+import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
 import 'package:uhabits/ui/habits/list/list_header.dart';
-// ignore: implementation_imports
 import 'package:uhabits_core/src/time/local_date.dart';
 
 void main() {
@@ -230,6 +241,150 @@ void main() {
           reason: '$rule EdgeInsetsDirectional is marginStart/marginEnd, and '
               'it does mirror — which is what makes the other choice a '
               'choice.');
+    });
+  });
+
+  // =======================================================================
+  // audit10.the-edit-habit-form-pins-its-floating#1
+  // =======================================================================
+
+  group('audit10.the-edit-habit-form-pins-its-floating', () {
+    const String rule = 'audit10.the-edit-habit-form-pins-its-floating#1 — '
+        '@style/FormLabel carries android:layout_marginStart="8dp" inside a '
+        'bare vertical LinearLayout (@style/FormInnerBox), whose default '
+        'gravity START resolves to the right edge under RTL, and the Save '
+        'button carries android:layout_marginEnd="16dp"; the manifest declares '
+        'android:supportsRtl="true" and four RTL locales ship, so in Arabic, '
+        'Hebrew, Persian and Uyghur every form caption sits against the *right* '
+        'border of its box and the Save button keeps its 16dp gap from the '
+        'left screen edge.';
+
+    late Directory tempDir;
+    final List<AppScope> scopes = <AppScope>[];
+
+    setUp(() {
+      tempDir = Directory.systemTemp.createTempSync('uhabits_rtl_form');
+    });
+
+    tearDown(() {
+      for (final AppScope scope in scopes) {
+        scope.close();
+      }
+      scopes.clear();
+      tempDir.deleteSync(recursive: true);
+    });
+
+    /// The create-habit form, rendered in [locale].
+    Future<L10n> pumpEditor(WidgetTester tester, Locale locale) async {
+      final AppScope scope = AppScope.open(
+        AppDatabase.openAndMigrate('${tempDir.path}/${locale.languageCode}.db'),
+      );
+      scope.preferences.isFirstRun = false;
+      scopes.add(scope);
+      await tester.pumpWidget(
+        MaterialApp(
+          // A fresh key per locale, so the second pump builds a new navigator
+          // instead of reusing the one still holding the first editor.
+          key: ValueKey<String>(locale.languageCode),
+          locale: locale,
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          home: Provider<AppScope>.value(
+            value: scope,
+            child: Builder(
+              builder: (BuildContext context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).push(
+                      EditHabitScreen.route(scope: scope),
+                    ),
+                    child: const Text('host'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('host'));
+      await tester.pumpAndSettle();
+      return L10n.of(tester.element(find.byType(EditHabitScreen)));
+    }
+
+    /// The gap between a caption and the border of the box it floats over, on
+    /// whichever side the ambient direction calls the start.
+    double captionInset(WidgetTester tester, String label, TextDirection d) {
+      final Finder caption = find.text(label);
+      final Rect box = tester.getRect(
+        find.ancestor(of: caption, matching: find.byType(Stack)).first,
+      );
+      final Rect text = tester.getRect(caption);
+      // The caption's own Container pads it by labelInset on both sides, and
+      // that padding is symmetric — only the Positioned decides the side.
+      final double padded = EditHabitMetrics.labelInset;
+      return d == TextDirection.ltr
+          ? text.left - padded - box.left
+          : box.right - (text.right + padded);
+    }
+
+    testWidgets('#1 every caption floats over the start border, whichever '
+        'side that is', (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final L10n en = await pumpEditor(tester, const Locale('en'));
+      final Map<String, double> ltr = <String, double>{
+        for (final String label in <String>[
+          en.name,
+          en.question,
+          en.frequency,
+          en.reminder,
+          en.notes,
+        ])
+          label: captionInset(tester, label, TextDirection.ltr),
+      };
+      for (final MapEntry<String, double> entry in ltr.entries) {
+        expect(entry.value, EditHabitMetrics.labelInset,
+            reason: '$rule (LTR, "${entry.key}")');
+      }
+
+      final L10n ar = await pumpEditor(tester, const Locale('ar'));
+      expect(
+        Directionality.of(tester.element(find.byType(EditHabitScreen))),
+        TextDirection.rtl,
+        reason: '$rule Arabic is one of the four RTL locales that ship.',
+      );
+      for (final String label in <String>[
+        ar.name,
+        ar.question,
+        ar.frequency,
+        ar.reminder,
+        ar.notes,
+      ]) {
+        expect(captionInset(tester, label, TextDirection.rtl),
+            EditHabitMetrics.labelInset,
+            reason: '$rule (RTL, "$label") — layout_marginStart is 8dp from '
+                'whichever border the layout calls the start, so the caption '
+                'must not stay stranded on the far left, detached from the '
+                'right-aligned text it names.');
+      }
+    });
+
+    testWidgets('#1 the Save button keeps its 16dp gap from the near screen '
+        'edge', (WidgetTester tester) async {
+      await pumpEditor(tester, const Locale('en'));
+      Rect bar = tester.getRect(find.byType(AppBar));
+      Rect save = tester.getRect(find.byKey(EditHabitScreen.saveButtonKey));
+      expect(bar.right - save.right, 16.0,
+          reason: '$rule (LTR) android:layout_marginEnd="16dp"');
+
+      await pumpEditor(tester, const Locale('ar'));
+      bar = tester.getRect(find.byType(AppBar));
+      save = tester.getRect(find.byKey(EditHabitScreen.saveButtonKey));
+      expect(save.left - bar.left, 16.0,
+          reason: '$rule (RTL) the same margin, measured from the edge the '
+              'button now sits against — not a button flush against the '
+              'screen with its 16dp migrated to the title side.');
     });
   });
 }

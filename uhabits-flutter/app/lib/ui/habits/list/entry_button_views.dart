@@ -116,8 +116,12 @@ class CheckmarkButtonView extends core.View {
   /// so the check, cross, skip and question-mark glyphs of every habit row grow
   /// and shrink with the setting again.
   ///
-  /// [core_views.NumberButton] deliberately gets none: upstream sizes
-  /// `NumberButtonView` from `getDimension` / `dim(...)`, never `sp(...)`.
+  /// [NumberButtonView] takes the same scaler for the same reason: its paints
+  /// are sized from `dim(R.dimen.smallTextSize)` /
+  /// `getDimension(context, R.dimen.smallerTextSize)`, and `dimens.xml`
+  /// declares those dimensions in **sp**, which `Resources.getDimension`
+  /// resolves against the scaled density
+  /// (`audit10.canvas-drawn-text-stopped-following-the#1`).
   ///
   /// Defaults to [TextScaler.noScaling] — fontScale 1, where sp and dp agree.
   final TextScaler textScaler;
@@ -218,7 +222,25 @@ class NumberButtonView extends core_views.NumberButton {
     this.targetType = core.NumericalHabitType.atLeast,
     this.notes = '',
     this.areQuestionMarksEnabled = false,
+    this.textScaler = TextScaler.noScaling,
   }) : super(color, value, threshold, units, theme);
+
+  /// The OS font-size / accessibility text-scale setting
+  /// (`audit10.canvas-drawn-text-stopped-following-the#1`).
+  ///
+  /// `pNumber.textSize = dim(R.dimen.smallTextSize)` and
+  /// `pUnit.textSize = getDimension(context, R.dimen.smallerTextSize)` both
+  /// read `<dimen>`s declared in **sp** (14sp and 12sp), and
+  /// `Resources.getDimension` multiplies a COMPLEX_UNIT_SP value by
+  /// `DisplayMetrics.scaledDensity` — density times fontScale. A Flutter
+  /// logical pixel already carries the density, so the one conversion left is
+  /// the font-scale one, and nothing below `core.Canvas` consults the ambient
+  /// scaler the way a `Text` widget does. [EntryPanel] passes
+  /// `MediaQuery.textScalerOf(context)` here, exactly as it does for
+  /// [CheckmarkButtonView].
+  ///
+  /// Defaults to [TextScaler.noScaling] — fontScale 1, where sp and dp agree.
+  final TextScaler textScaler;
 
   /// `habit.targetType`.
   final core.NumericalHabitType targetType;
@@ -243,30 +265,36 @@ class NumberButtonView extends core_views.NumberButton {
     return theme.mediumContrastTextColor;
   }
 
+  /// `dim(R.dimen.smallTextSize)` under the OS font-size setting: 14sp.
+  double get scaledSmallTextSize => textScaler.scale(smallTextSize);
+
+  /// `getDimension(context, R.dimen.smallerTextSize)` under it: 12sp.
+  double get scaledSmallerTextSize => textScaler.scale(smallerTextSize);
+
   /// The four label branches, in order (`list-habits.number-button#4`).
   ({String label, core.Font font, double size}) get labelSpec {
     if (value == skipValue) {
       return (
         label: core.FontAwesome.skipped,
         font: core.Font.fontAwesome,
-        size: smallTextSize,
+        size: scaledSmallTextSize,
       );
     }
     if (value >= 0) {
       return (
         label: value.toShortStringAndroid(),
         font: core.Font.bold,
-        size: smallTextSize,
+        size: scaledSmallTextSize,
       );
     }
     if (areQuestionMarksEnabled) {
       return (
         label: core.FontAwesome.question,
         font: core.Font.fontAwesome,
-        size: smallerTextSize,
+        size: scaledSmallerTextSize,
       );
     }
-    return (label: '0', font: core.Font.bold, size: smallTextSize);
+    return (label: '0', font: core.Font.bold, size: scaledSmallTextSize);
   }
 
   /// `while (trimmedUnits.length > 2 && pUnit.measureText(trimmedUnits) >
@@ -295,7 +323,7 @@ class NumberButtonView extends core_views.NumberButton {
     // `em = pNumber.measureText("m")` is computed once, in the Drawer's init
     // block, while the number paint still carries smallTextSize.
     canvas.setFont(core.Font.bold);
-    canvas.setFontSize(smallTextSize);
+    canvas.setFontSize(scaledSmallTextSize);
     final em = canvas.measureText('m');
 
     final spec = labelSpec;
@@ -312,7 +340,7 @@ class NumberButtonView extends core_views.NumberButton {
 
       // "Draw units" (`list-habits.number-button#8`, `#12`).
       canvas.setFont(core.Font.regular);
-      canvas.setFontSize(smallerTextSize);
+      canvas.setFontSize(scaledSmallerTextSize);
       final trimmed = trimUnits(units, width * 0.9, canvas.measureText);
       canvas.drawText(trimmed, width / 2, height / 2 + 1.3 * em);
     }

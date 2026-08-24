@@ -28,7 +28,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 // The preferences layer is not re-exported from uhabits_core.dart yet.
 // ignore: implementation_imports
@@ -40,6 +39,7 @@ import '../../platform/flutter_notification_tray.dart'
     show LocalNotificationsChannelCreator, PlatformNotificationChannelSettings;
 import '../../state/app_scope.dart';
 import '../../state/settings_model.dart';
+import '../habits/list/list_header.dart' show IntlLocalDateFormatter;
 import '../theme/app_theme.dart' show coreThemeOf;
 import '../common/store_listing.dart';
 
@@ -767,29 +767,20 @@ class _TextInputDialogState extends State<_TextInputDialog> {
 /// `JavaLocalDateFormatter(Locale.getDefault()).longWeekdayNames(SATURDAY)`:
 /// the seven long weekday names, starting at Saturday.
 ///
-/// 2024-01-06 is a Saturday, so formatting seven consecutive days from it
-/// produces exactly the Android order.
+/// The formatter is the DEVICE locale's, not the locale the UI resolved to
+/// (`audit10.weekday-name-rows-follow-the-device-locale#1`). Android keeps the
+/// two apart — `updateWeekdayPreference()` builds
+/// `JavaLocalDateFormatter(Locale.getDefault())` while the strings around it
+/// come from whichever `values-*` matched — so a Thai phone reads an English
+/// row summarised with a Thai weekday. [IntlLocalDateFormatter.of] is the seam
+/// that keeps that split, and going through it also replaces an ad-hoc
+/// try/catch with the port's documented "closest installed locale" fallback.
 List<String> _longWeekdayNamesFromSaturday(BuildContext context) {
-  const List<String> fallback = <String>[
-    'Saturday',
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
+  final formatter = IntlLocalDateFormatter.of(context);
+  return <String>[
+    for (final day in core.getWeekdaySequence(core.DayOfWeek.saturday))
+      formatter.longWeekdayNameOf(day),
   ];
-  try {
-    final localeName = Localizations.localeOf(context).toString();
-    final format = intl.DateFormat.EEEE(localeName);
-    return List<String>.generate(
-      7,
-      (offset) => format.format(DateTime(2024, 1, 6 + offset)),
-    );
-  } catch (_) {
-    // Locale data that flutter_localizations has not initialised.
-    return fallback;
-  }
 }
 
 Color _toFlutterColor(core.Color color) => Color.fromARGB(

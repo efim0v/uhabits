@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:home_widget/home_widget.dart';
 import 'package:uhabits_core/src/io/logging.dart';
+import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
@@ -137,12 +138,16 @@ class WidgetToggleQueue {
     final List<Object?> toggles =
         (decoded['toggles'] as List<Object?>?) ?? const <Object?>[];
     final Set<int> handled = <int>{};
+    // The value each (habit, day) has been walked to so far in this pass. See
+    // [_apply]: it is what stands in for the seconds that separate two
+    // broadcasts upstream.
+    final Map<String, Entry> walked = <String, Entry>{};
     for (final Object? entry in toggles) {
       if (entry is! Map<String, Object?>) continue;
       final int? seq = _asInt(entry['seq']);
       if (seq == null) continue;
       handled.add(seq);
-      _apply(entry);
+      _apply(entry, walked);
     }
     if (handled.isEmpty) {
       await _store.write(key, null);
@@ -155,7 +160,29 @@ class WidgetToggleQueue {
   /// does not parse, is dropped: it is still removed from the queue, because
   /// leaving it there would retry it on every publish for the life of the
   /// install.
-  void _apply(Map<String, Object?> entry) {
+  ///
+  /// ## Why the starting value is carried in [walked]
+  ///
+  /// Upstream every tap is its own `ACTION_TOGGLE_REPETITION` broadcast, and
+  /// `WidgetBehavior.onToggleRepetition` re-reads
+  /// `habit.originalEntries.get(date)` as its first statement — so tap 2, some
+  /// seconds after tap 1, starts from what tap 1 wrote and a run of taps walks
+  /// the cycle one step per tap (`audit10.ios-widget-taps-collapse#1`).
+  ///
+  /// Here the whole run is replayed in one pass, and the command the tap runs
+  /// does not execute before this method returns: `CommandRunner.run` hands the
+  /// command to the `TaskRunner`, whose production dispatcher is
+  /// `AsyncDispatcher` — `Future(() => block())`. So the model still holds the
+  /// pre-drain value for every tap in the run, and re-reading it would give
+  /// each of them the same starting point: two taps would produce two identical
+  /// commands, i.e. one advance, and a user who ticked a habit by mistake and
+  /// tapped again to undo it would watch the card un-tick on the home screen
+  /// and find the correction gone at the next publish.
+  ///
+  /// [walked] therefore remembers, per habit and day, the entry the previous
+  /// tap in this pass asked for. Only that: a tap on another habit or another
+  /// day still reads the model, because upstream it would have too.
+  void _apply(Map<String, Object?> entry, Map<String, Entry> walked) {
     final int? habitId = _asInt(entry['habit']);
     final LocalDate? date = _parseDate(entry['date']);
     if (habitId == null || date == null) return;
@@ -164,8 +191,11 @@ class WidgetToggleQueue {
       _logger?.info('Dropping a widget toggle for unknown habit $habitId');
       return;
     }
-    // The same call the broadcast made upstream, on the same CommandRunner.
-    _behavior.onToggleRepetition(habit, date);
+    final String key = '$habitId@${date.daysSince2000}';
+    final Entry current = walked[key] ?? habit.originalEntries.get(date);
+    // The same call the broadcast made upstream, on the same CommandRunner:
+    // one `CreateRepetitionCommand` per tap, each separately undoable.
+    walked[key] = _behavior.onToggleRepetitionFrom(habit, date, current);
   }
 
   /// Rewrites the queue without [handled], re-reading it first so that a tap

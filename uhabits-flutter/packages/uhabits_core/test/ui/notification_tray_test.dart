@@ -1568,8 +1568,9 @@ void main() {
     });
 
     test('the ShowNotificationTask splits across the two dispatchers', () async {
-      final mainDispatcher = _RecordingDispatcher('main');
-      final ioDispatcher = _RecordingDispatcher('io');
+      final trace = <String>[];
+      final mainDispatcher = _RecordingDispatcher('main', trace);
+      final ioDispatcher = _RecordingDispatcher('io', trace);
       final f = _Fixture(
         runner: CoroutineTaskRunner(
           mainDispatcher: mainDispatcher,
@@ -1579,14 +1580,27 @@ void main() {
       final habit = f.habit();
 
       f.tray.show(habit, _sunday, 456);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      // The pipeline hops main -> io -> main, so it takes more than one turn
+      // of the event loop; awaitAll joins the launched job itself.
+      await f.taskRunner.awaitAll();
 
       expect(
+        trace,
+        <String>['main', 'io', 'main'],
+        reason: 'reminders.dependency-wiring#7 — scope.launch puts the '
+            'prologue on the main dispatcher, withContext(ioDispatcher) puts '
+            'doInBackground on the IO one, and resuming from it posts the '
+            'continuation that carries onPostExecute back to the main '
+            'dispatcher (audit10.task-runner-progress-before-post#1): three '
+            'dispatches, main-io-main.',
+      );
+      expect(
         mainDispatcher.dispatched,
-        1,
+        2,
         reason: 'reminders.dependency-wiring#7 — the ShowNotificationTask runs '
-            'onPostExecute on the main dispatcher via CoroutineTaskRunner',
+            'onPostExecute on the main dispatcher via CoroutineTaskRunner, so '
+            'the main dispatcher is used twice: once to launch and once to '
+            'resume.',
       );
       expect(
         ioDispatcher.dispatched,
@@ -1737,14 +1751,21 @@ class _BothCommand extends CreateRepetitionCommand
 
 /// Counts how many blocks each dispatcher role received.
 class _RecordingDispatcher implements Dispatcher {
-  _RecordingDispatcher(this.name);
+  _RecordingDispatcher(this.name, [List<String>? log])
+      : log = log ?? <String>[];
 
   final String name;
-  int dispatched = 0;
+
+  /// Appended to on every dispatch, so a test can see not just how many times
+  /// each dispatcher was used but in which order. Pass the same list to both
+  /// dispatchers to get one interleaved trace.
+  final List<String> log;
+
+  int get dispatched => log.where((String e) => e == name).length;
 
   @override
   Future<void> dispatch(FutureOr<void> Function() block) {
-    dispatched++;
+    log.add(name);
     return Future<void>(() => block());
   }
 }

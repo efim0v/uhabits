@@ -717,6 +717,55 @@ void main() {
               '(`list-habits.selection-menu-actions#4`)');
     });
   });
+
+  group('audit10.the-overflow-menu-button-and-the', () {
+    const rule = 'audit10.the-overflow-menu-button-and-the#1 — selection mode '
+        'is a support action mode (`startSupportActionMode`), so both of its '
+        'chrome controls come from AppCompat already named: the close control '
+        'is `abc_action_mode_close_item_material`, whose '
+        '`android:contentDescription="?attr/actionModeCloseContentDescription"` '
+        'resolves to @string/abc_action_mode_done ("Done") under '
+        'Base.Theme.AppCompat, and the bar\'s three-dot button is the same '
+        '`OverflowMenuButton` as the main toolbar\'s, described "More '
+        'options". The port builds both by hand, so both have to carry the '
+        'label themselves.';
+
+    testWidgets('#1 both controls of the contextual bar are named',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      final scope = openScope();
+      addHabit(scope, 'Meditate');
+      await pumpScreen(tester, scope);
+      await selectRow(tester, 'Meditate');
+
+      final material = MaterialLocalizations.of(
+        tester.element(find.byType(ListHabitsSelectionMenu)),
+      );
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(const ValueKey<String>('listHabitsSelection.close')),
+            )
+            .tooltip,
+        material.closeButtonTooltip,
+        reason: '$rule Without it, "get me out of selection mode" is not '
+            'identifiable without guessing.',
+      );
+      expect(
+        tester
+            .getSemantics(
+              find.byKey(
+                const ValueKey<String>('listHabitsSelection.overflowMenu'),
+              ),
+            )
+            .tooltip,
+        material.showMenuTooltip,
+        reason: '$rule And neither is "show me what I can do with these '
+            'habits".',
+      );
+      handle.dispose();
+    });
+  });
 }
 
 /// A [SystemTray] that records what it was asked to post.

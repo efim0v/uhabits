@@ -501,3 +501,90 @@ Store у порта нет, поэтому честная замена — та 
 `feedback.rate-app-row-is-dead-outside-android#1`.
 
 **Дата:** 2026-08-24
+
+## Восстановление после непригодной версии базы
+
+**Что в оригинале:** HabitsApplication.onCreate's `catch (e: UnsupportedDatabaseVersionException)` at HabitsApplication.kt:54-60 is unreachable: DatabaseUtils.initializeDatabase (DatabaseUtils.kt:52-58) only constructs HabitsDatabaseOpener, and an SQLiteOpenHelper opens nothing until getWritableDatabase(). The file is first opened lazily through HabitsApplicationComponent.providedDb (:89) when `val habitList = component.habitList` runs at HabitsApplication.kt:73 — thirteen lines past the catch — so the throw from HabitsDatabaseOpener.onUpgrade:54 / onDowngrade:70 escapes Application.onCreate with no BaseExceptionHandler installed yet. The Android app crashes on every launch and the rename inside the catch never runs, leaving databases/uhabits.db exactly where it was.
+
+**Что делаем:** AppScope._initializeDatabase catches UnsupportedDatabaseVersionException, renames the file to `<path>.invalid`, opens a fresh database and boots onto an empty habit list, logging the quarantine through BugReportLogging.
+
+**Почему:** A crash loop leaves the user with an app that cannot be opened at all and no way to act from inside it; the port already awaits boot() before runApp, so the same throw would be a blank window rather than even a crash dialog. The recovery already existed in the port and is kept — what changes is that the ledger and the tests stop calling it parity.
+
+**Дата:** 2026-08-24
+
+
+## Повреждённая база отставляется в сторону, а не удаляется
+
+**Что в оригинале:** HabitsDatabaseOpener passes a null errorHandler to SQLiteOpenHelper (HabitsDatabaseOpener.kt:35), so AOSP's DefaultDatabaseErrorHandler is installed; SQLiteDatabase.open() catches the SQLiteDatabaseCorruptException the framework raises for SQLITE_CORRUPT and SQLITE_NOTADB and calls onCorruption(), which DELETES the file, then reopens with CREATE_IF_NECESSARY. The user's bytes are gone.
+
+**Что делаем:** AppScope._quarantine renames the unreadable file to `<path>.invalid` and opens a fresh database in its place. The outcome the user sees — an app that opens, empty — is identical; the damaged file survives on disk.
+
+**Почему:** That file is the only copy of the user's history, and much real corruption is partial and recoverable with external tools. Deleting it makes the loss permanent for no behavioural gain, and it is consistent with the branch the port already had for the unsupported-version case.
+
+**Дата:** 2026-08-24
+
+
+## Ненастроенный виджет на iOS
+
+**Что в оригинале:** There is no such thing as an unconfigured widget. HabitPickerDialog leaves RESULT_CANCELED unless the user picks a habit (`widgets.config-picker#11`), so the launcher drops the placement and no widget ever exists without a binding. HabitPickerDialog.kt:68-74 also refuses to offer an archived habit, so no binding to one can be created.
+
+**Что делаем:** WidgetKit places a widget before the user configures it and has no RESULT_CANCELED to return, so `WidgetStore.resolve` (app/ios/HabitsWidget/HabitSelection.swift) falls back, at render time and persisting nothing, to `allHabits().first { !$0.isArchived && eligible($0) }`. This fix narrows that pre-existing fallback so it refuses exactly the habits the picker refuses — archived always, plus the widget's type filter — rather than removing it.
+
+**Почему:** Removing the fallback would leave every freshly dropped iOS widget on the 'open Loop Habit Tracker to set up this widget' card with no way to reproduce Android's 'the placement never happens'. Leaving it unfiltered was the defect: a user whose oldest habits are archived got a live Checkmark toggle button bound to a habit they had retired. Filtering it is the closest available reading of `widgets.config-picker#3`.
+
+**Дата:** 2026-08-24
+
+
+## Ограничение публикуемой истории 750 днями
+
+**Что в оригинале:** `HistoryWidget.refreshData` assigns `HistoryCardPresenter.buildState(...).series` straight onto the chart in-process. The series is unbounded — it runs from the habit's oldest known entry to today, so a ten-year-old habit hands the chart 3,650 squares for the cost of an array reference.
+
+**Что делаем:** Publishes the same presenter's series, from the oldest known entry to today, truncated at 750 days.
+
+**Почему:** The port serialises the series into shared storage on every publish, for every habit in the catalogue, where Kotlin passes a reference inside one process. 750 is set above the widest grid any launcher can produce: `squareSize = round((height - 2*padding) / 8)` is at least 12dp at the provider's declared `minHeight` of 100dp, so a full-width ~1280dp landscape strip — the (maxWidth x minHeight) pair `BaseWidgetProvider` hands `landscapeRemoteViews` — is 105 columns, i.e. 735 days. No reachable geometry draws past the cap, so the rendered grid is identical to Kotlin's; only the wire contract is bounded.
+
+**Дата:** 2026-08-24
+
+
+## Строка привычки достижима с клавиатуры
+
+**Что в оригинале:** HabitCardListView.bindCardView attaches only `cardView.setOnTouchListener { _, ev -> detector.onTouchEvent(ev); true }` and never setOnClickListener, so HabitCardView's FOCUSABLE_AUTO resolves to NOT_FOCUSABLE. Keyboard focus lands only on grid cells, and there is no keyboard path to the habit detail screen.
+
+**Что делаем:** After this fix both the row's InkWell and every grid cell are focusable: Tab reaches the row (Enter opens the detail screen) and then each cell (Enter/Space toggles or edits).
+
+**Почему:** The defect was that the primary action had no keyboard path. Restoring the cells restores it; deleting the row's focus node would remove a working access path rather than add one, and would make the app less operable than either side.
+
+**Дата:** 2026-08-24
+
+
+## Удержание клавиши подтверждения не даёт долгого нажатия
+
+**Что в оригинале:** View.onKeyDown arms checkForLongClick for confirm keys, so holding ENTER/SPACE/DPAD_CENTER on a cell reaches onLongClick — the notes/number popup when isShortToggleEnabled, the toggle otherwise.
+
+**Что делаем:** ActivateIntent/ButtonActivateIntent map to the click branch only; there is no key-hold path to onLongPress.
+
+**Почему:** Both branches are still reachable from the keyboard for numerical cells (onClick and onLongClick are the same `edit`), and for boolean cells the branch the preference puts on the tap is the one the report named as lost. Reproducing Android's key-hold timer inside a Flutter Action has no idiomatic counterpart and was not worth inventing for this fix.
+
+**Дата:** 2026-08-24
+
+
+## Формулировки подсказок берутся из MaterialLocalizations
+
+**Что в оригинале:** AppCompat names the two overflow buttons "More options" (abc_action_menu_overflow_description), the action-mode close control "Done" (abc_action_mode_done, via ?attr/actionModeCloseContentDescription) and the SearchView X "Clear query" (abc_searchview_description_clear).
+
+**Что делаем:** Uses MaterialLocalizations.showMenuTooltip ("Show menu"), closeButtonTooltip ("Close") and clearButtonTooltip ("Clear text").
+
+**Почему:** flutter_localizations ships these translated in every locale the app supports, whereas a new ARB key would land untranslated in the other 47 locales — a worse accessibility outcome than a one-word wording difference. "Show menu" is also what the port's show-habit PopupMenuButton already announces, so the two overflow buttons in the app now agree instead of differing.
+
+**Дата:** 2026-08-24
+
+
+## Освобождение счётчика задач на пути ошибки
+
+**Что в оригинале:** An exception out of `withContext(ioDispatcher) { doInBackground() }` resumes the launch body on the main dispatcher and terminates it there; `activeCount--` and `onTaskFinished` are never reached, and on Android the uncaught exception ends the process so nothing observes the leak.
+
+**Что делаем:** The failure half of the epilogue (`_release`: `_activeCount--` plus `onTaskFinished`) is still run on every path, but it is now handed to `_mainDispatcher.dispatch(...)` instead of running in the `.then` microtask, and the original error is re-thrown only after that dispatch has run. So the counter release and the listener notification now land after any progress callbacks `doInBackground` had already queued, and the unhandled error surfaces one event-loop turn later than before.
+
+**Почему:** Kotlin has no failure-path release to copy the ordering from, so the port has to choose one. Keeping the whole `withContext` resumption on a single queue is what makes the success ordering correct in the first place; splitting the two outcomes across a microtask and an event task would reintroduce the same class of inversion for `onTaskFinished` and would make `awaitAll()` complete with the error before the progress callbacks it queued had run. The pre-existing `feedback.the-task-progress-bar-never-hides-again#1` guarantees (counter released, listeners told, exception still loud) are unchanged and still asserted by task_runner_failure_test.dart.
+
+**Дата:** 2026-08-24

@@ -21,7 +21,9 @@
 ///  * `verify.sticky-dismiss-unrouted` — a reminder that left the shade
 ///    reaches `ReminderController.onDismiss`;
 ///  * `verify.snooze-picker-uncalled` — "Later" opens the snooze picker and
-///    the choice reaches `ReminderController.onSnoozeDelayPicked`.
+///    the choice reaches `ReminderController.onSnoozeDelayPicked`;
+///  * `audit10.platform-services-start-on-every-device-language` — the whole
+///    startup survives a device language the app does not translate.
 library;
 
 // The core's preferences and models are reached by their `src` path, exactly
@@ -153,7 +155,8 @@ class _PluginHost {
 }
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final TestWidgetsFlutterBinding binding =
+      TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
   late _PluginHost plugin;
@@ -637,6 +640,78 @@ void main() {
             'notification, which is ReminderController.onSnoozeDelayPicked '
             'running snooze-first, cancel-second.',
       );
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // audit10.platform-services-start-on-every-device-language
+  // -----------------------------------------------------------------------
+
+  group('audit10.platform-services-start-on-every-device-language', () {
+    const String rule =
+        'audit10.platform-services-start-on-every-device-language#1 — '
+        'HabitsApplication.onCreate starts the widget updater, the reminder '
+        'scheduler and the notification tray unconditionally, and the '
+        'notification copy comes from context.getString at fire time, which '
+        'never fails: Android falls back to res/values/ for any language it '
+        'ships no translation for. Nothing about the device language can stop '
+        'those three singletons from being built.';
+
+    /// The device language, driven through the binding rather than
+    /// `PlatformDispatcher.instance`, which no test can drive.
+    void setDeviceLanguage(Locale locale) {
+      binding.platformDispatcher.localesTestValue = <Locale>[locale];
+      addTearDown(binding.platformDispatcher.clearLocalesTestValue);
+    }
+
+    test('#1 an untranslated device language leaves the tray, the scheduler '
+        'and the widget publisher standing', () async {
+      setDeviceLanguage(const Locale('th', 'TH'));
+      final AppScope scope = openScope();
+      addHabit(scope);
+
+      await scope.startPlatformServices();
+
+      expect(scope.notificationTray, isNotNull,
+          reason: '$rule A Thai phone has to get the same reminders an '
+              'English one gets.');
+      expect(scope.reminderScheduler, isNotNull,
+          reason: '$rule Without it no alarm is ever armed, and '
+              'ListHabitsActivity.onResume skips scheduleAll for the whole '
+              'session.');
+      expect(scope.widgetSync, isNotNull,
+          reason: '$rule Without it every home-screen widget stays blank and '
+              'lib/main.dart cannot even build the deep links that configure '
+              'one.');
+      expect(scope.reminderResponses, isNotNull,
+          reason: '$rule …and nothing the user does to a notification would '
+              'reach Dart.');
+    });
+
+    testWidgets('#1 and the reminder it posts carries the default English '
+        'copy', (WidgetTester tester) async {
+      setDeviceLanguage(const Locale('th', 'TH'));
+      final AppScope scope = openScope();
+      final Habit habit = addHabit(scope);
+      // R.string.default_reminder_question is what a habit with no question
+      // shows, and it is resolved from the app's strings, not from the habit.
+      habit.question = '';
+      await scope.startPlatformServices();
+
+      scope.notificationTray!.show(
+        habit,
+        getToday(),
+        DateUtils.applyTimezone(DateUtils.getLocalTime()),
+      );
+      await tester.pumpAndSettle();
+
+      final MethodCall? show = plugin.lastCallNamed('show');
+      expect(show, isNotNull,
+          reason: '$rule The notification is posted at all.');
+      expect((show!.arguments as Map<Object?, Object?>)['body'],
+          'Have you completed this habit today?',
+          reason: '$rule getString falls back to values/, so the Thai user '
+              'reads the English question — not nothing.');
     });
   });
 }

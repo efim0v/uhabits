@@ -362,8 +362,11 @@ void main() {
     });
 
     test('#1 no scaler is fontScale 1, where sp and dp agree', () {
-      // `NumberButtonView` keeps its literals whatever the slider says:
-      // upstream sizes it from `getDimension` / `dim(...)`, never `sp(...)`.
+      // A cell built without a scaler is fontScale 1, where an sp and a dp are
+      // the same length — for *both* drawers. (The number cell is sp too:
+      // `dim(R.dimen.smallTextSize)` reads a `<dimen>14sp</dimen>`, which is
+      // `audit10.canvas-drawn-text-stopped-following-the#1`; at scale 1 that
+      // rule and this one agree on the number.)
       expect(
         draw(checkmark(core.Entry.yesManual)).opsNamed('drawText').single
             .fontSize,
@@ -376,10 +379,93 @@ void main() {
         draw(number(value: 5.0, threshold: 3.0)).opsNamed('drawText').first
             .fontSize,
         smallTextSize,
-        reason: 'audit4.check-mark-cell-glyphs-no-longer#1 — the rule names '
-            'CheckmarkButtonView.kt:170-174; NumberButtonView is sized from '
-            'getDimension/dim, so it takes no scaler.',
+        reason: 'audit4.check-mark-cell-glyphs-no-longer#1 — and a number '
+            'cell built without one draws the same 14 logical pixels.',
       );
+    });
+  });
+
+  group('audit10.canvas-drawn-text-stopped-following-the', () {
+    const rule = 'audit10.canvas-drawn-text-stopped-following-the#1 — '
+        '`NumberButtonView.Drawer` sizes `pNumber` from '
+        '`dim(R.dimen.smallTextSize)` and `pUnit` from '
+        '`getDimension(context, R.dimen.smallerTextSize)`, and dimens.xml '
+        'declares both in **sp** (14sp / 12sp). `Resources.getDimension` '
+        'resolves a COMPLEX_UNIT_SP value against `scaledDensity`, so the '
+        'number, the unit label, the SKIP glyph and the question mark all '
+        'grow with the OS font-size setting, exactly like the check-mark '
+        'glyph beside them.';
+
+    // Android's system font-size slider, two notches up.
+    const scaler = TextScaler.linear(1.5);
+
+    NumberButtonView scaled({
+      double value = 0.0,
+      double threshold = 100.0,
+      String units = '',
+      String notes = '',
+      bool areQuestionMarksEnabled = false,
+    }) =>
+        NumberButtonView(
+          color: habitColor,
+          value: value,
+          threshold: threshold,
+          units: units,
+          theme: theme,
+          notes: notes,
+          areQuestionMarksEnabled: areQuestionMarksEnabled,
+          textScaler: scaler,
+        );
+
+    test('#1 the number, the SKIP glyph and the fallback zero are 14sp', () {
+      for (final view in <NumberButtonView>[
+        scaled(value: 5.0, threshold: 3.0),
+        scaled(value: NumberButtonView.skipValue),
+        scaled(value: -1.0),
+      ]) {
+        expect(draw(view).opsNamed('drawText').first.fontSize, 14.0 * 1.5,
+            reason: rule);
+      }
+    });
+
+    test('#1 the question mark is 12sp', () {
+      expect(
+        draw(scaled(value: -1.0, areQuestionMarksEnabled: true))
+            .opsNamed('drawText')
+            .single
+            .fontSize,
+        12.0 * 1.5,
+        reason: rule,
+      );
+    });
+
+    test('#1 the unit label is 12sp, and is trimmed at the scaled width', () {
+      final ops = draw(scaled(value: 150.0, units: 'km')).opsNamed('drawText');
+      expect(ops.last.fontSize, 12.0 * 1.5, reason: rule);
+
+      // `maxUnitsWidth = width * 0.9f` is a *pixel* width the scaled paint is
+      // measured against, so a raised font size trims sooner.
+      expect(
+        draw(scaled(value: 150.0, units: 'kilometres')).opsNamed('drawText')
+            .last.text,
+        isNot('kilometres'),
+        reason: '$rule The trimming loop measures with the scaled unit paint.',
+      );
+    });
+
+    test('#1 the em every offset hangs off is measured under the scaled '
+        'number paint', () {
+      final ops = draw(scaled(value: 150.0, units: 'km', notes: 'x'));
+      final em = _em(14.0 * 1.5);
+
+      // `rect.offset(0f, 1.3f * em)` between the number and its unit.
+      expect(ops.opsNamed('drawText').last.args[1],
+          closeTo(24.0 + 1.3 * em, 1e-9),
+          reason: '$rule `em = pNumber.measureText("m")` is cached in the '
+              'Drawer init block, under the number paint.');
+      // `drawNotesIndicator(size = em)`.
+      expect(ops.opsNamed('fillCircle').single.args[1], closeTo(0.8 * em, 1e-9),
+          reason: rule);
     });
   });
 

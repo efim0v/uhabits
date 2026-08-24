@@ -244,6 +244,31 @@ struct WidgetHabit: Decodable, Identifiable {
     /// the field existed simply has no dots to draw.
     let notesIndicators: [Bool]?
 
+    /// The History grid's own series, newest first: one character per day,
+    /// `HistorySquare`'s ordinal as a digit, running back to the habit's oldest
+    /// known entry (`audit10.history-home-screen-widget-draws-more#1`).
+    ///
+    /// Not [entries] under another name. [entries] is sixty days long because
+    /// that is all the tick mark needs; the History grid lays its columns out
+    /// from the *card's geometry* — `nColumns = Int(floor((width - 2 * padding
+    /// - weekdayColumnWidth) / squareSize))`, spanning `7 * nColumns` days — so
+    /// a `.systemMedium` card, which this widget offers by default, asks for
+    /// 127-133 days. Every day past the end of the series is drawn `.off`, in
+    /// the same low-contrast colour a genuinely missed day gets, so more than
+    /// half the grid was a fabricated record of failure.
+    ///
+    /// Optional, like [score] and [scores]: a document written before the field
+    /// existed falls back to mapping [entries], which is what this replaced.
+    let historySeries: String?
+
+    /// The offsets into [historySeries] whose day carries a note
+    /// (`audit6.history-home-screen-widget-never-draws#1`), ascending.
+    ///
+    /// Offsets rather than one flag per day: notes are sparse, and a
+    /// `[false, false, …]` array over 750 days would be the largest thing in
+    /// the document.
+    let historyNotes: [Int]?
+
     /// `habit.scores[today].value`, the ring percentage the Checkmark widget
     /// needs (`widgets.checkmark#2`).
     ///

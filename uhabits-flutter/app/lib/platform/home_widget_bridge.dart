@@ -15,6 +15,7 @@ import 'package:uhabits_core/src/models/streak.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart';
 import 'package:uhabits_core/src/preferences/widget_preferences.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/score_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 
@@ -75,6 +76,8 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 ///     "value": 500,
 ///     "entries": [500, 1500, ... 60 values, newest first ...],
 ///     "notesIndicators": [false, true, ... one per entry ...],
+///     "historySeries": "0014...one digit per day, newest first...",
+///     "historyNotes": [3, 204],
 ///     "score": 0.63,
 ///     "scores": [0.63, 0.41, ... newest bucket first ...],
 ///     "bucketSize": 7,
@@ -97,6 +100,15 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 /// History grid marks with a dot (`widgets.history#4`,
 /// `audit6.history-home-screen-widget-never-draws#1`).
 ///
+/// `historySeries` and `historyNotes` are the History grid's own pair, and they
+/// are not `entries` and `notesIndicators` under other names: the grid lays its
+/// columns out from the widget's geometry, so it asks for as many days as it
+/// has room for — up to 735 on the widest cell a launcher offers — and every
+/// day it asks for past the end of the series is drawn as a lapse. They
+/// therefore run back to the habit's oldest known entry, exactly as
+/// `HistoryCardPresenter.buildState` does, capped at [historyDayCount]
+/// (`audit10.history-home-screen-widget-draws-more#1`).
+///
 /// ## Why the derived fields are here rather than in the widget
 ///
 /// Everything from `score` down is something a widget *draws* and cannot
@@ -108,7 +120,8 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 /// it has this document — so a contract carrying only sixty daily values leaves
 /// the Checkmark ring empty, the Score chart blank, the Streak chart limited to
 /// the last two months and the Target chart drawing rows the habit does not
-/// have (`audit4.checkmark-widget-s-score-ring-is`,
+/// have, and the History grid painting a completed day as a missed one for as
+/// many weeks as the widget is wide (`audit4.checkmark-widget-s-score-ring-is`,
 /// `audit4.score-widget-draws-an-empty-chart`,
 /// `audit4.streak-and-frequency-widgets-only-see`,
 /// `audit4.target-widget-shows-the-wrong-rows`).
@@ -223,8 +236,11 @@ class HomeWidgetBridge {
   ///
   /// Sunday when no preferences were supplied, which is the default both native
   /// charts already carry.
-  int get firstWeekday =>
-      (_preferences?.firstWeekday ?? DayOfWeek.sunday).daysSinceSunday;
+  int get firstWeekday => firstWeekdayOfWeek.daysSinceSunday;
+
+  /// The same preference as [firstWeekday], in the type the presenters take.
+  DayOfWeek get firstWeekdayOfWeek =>
+      _preferences?.firstWeekday ?? DayOfWeek.sunday;
 
   /// `Preferences.midnightDelayHours` — 3 while the "new day starts at 3am"
   /// row is on, 0 otherwise.
@@ -246,15 +262,37 @@ class HomeWidgetBridge {
   /// preferences describes a user who has never touched the spinner.
   int get scoreCardSpinnerPosition => _preferences?.scoreCardSpinnerPosition ?? 1;
 
-  /// The number of daily values published per habit. Sixty days covers the
-  /// history grid at every size the launcher offers.
+  /// The number of daily values published per habit, and the window
+  /// `CheckmarkWidgetView` reads `value` out of.
   ///
-  /// It deliberately does *not* cover the Streak, Frequency, Score or Target
-  /// widgets: each of those needs the habit's whole history, and widening this
-  /// array until it did would put years of daily values in every document.
-  /// What crosses instead is what those four draw, already reduced — `streaks`,
-  /// `weekdayFrequency`, `scores`, `targetRows`.
+  /// It deliberately does *not* cover the History, Streak, Frequency, Score or
+  /// Target widgets: each of those needs more of the habit's history than sixty
+  /// days, and widening this array until it did would put years of daily values
+  /// in every document. What crosses instead is what those five draw, already
+  /// reduced — `historySeries`, `streaks`, `weekdayFrequency`, `scores`,
+  /// `targetRows`.
   static const int entryCount = 60;
+
+  /// The longest History series a document carries, in days.
+  ///
+  /// `HistoryChart` sizes its squares off the height — `squareSize =
+  /// round((height - 2 * padding) / 8)` — and then fills the width with
+  /// `nColumns = floor((width - 2 * padding - weekdayColumnWidth) / squareSize)`
+  /// columns of seven days each, so the grid spans up to `7 * nColumns` days
+  /// and nothing bounds that by the data behind it. The shortest a launcher can
+  /// make the History widget is the provider's own `minHeight` of 100dp, which
+  /// pins `squareSize` at 12dp; the widest cell any launcher offers is a
+  /// full-width strip on a ~1280dp tablet in landscape — which is exactly the
+  /// (maxWidth x minHeight) pair `BaseWidgetProvider` hands
+  /// `landscapeRemoteViews`. That is 105 columns, i.e. 735 days. Seven hundred
+  /// and fifty is the round number above it.
+  ///
+  /// Upstream needs no such bound: `HistoryWidget.refreshData` hands the chart
+  /// the presenter's whole series in-process, so a ten-year-old habit costs an
+  /// array reference. Here the series is serialised into shared storage on
+  /// every publish, for every habit in the catalogue, so it is capped — and the
+  /// cap is set where no grid can reach past it.
+  static const int historyDayCount = 750;
 
   /// How many score buckets travel with a habit, newest first.
   ///
@@ -298,6 +336,87 @@ class HomeWidgetBridge {
   /// shared storage.
   final Set<int> _published = <int>{};
 
+  // -------------------------------------------------------------------------
+  // The filtered publish (`audit10.every-command-republishes-the-whole#1`)
+  // -------------------------------------------------------------------------
+
+  /// The habit documents the last publish built, by habit id.
+  ///
+  /// Upstream a finished command costs no habit work at all: `WidgetUpdater`
+  /// asks `AppWidgetManager` which widget ids exist, filters them by the
+  /// modified habit, and broadcasts — the presenters run afterwards, inside
+  /// each provider, only for the widgets that were named. Here the presenters
+  /// run *before* the write, on the one Dart isolate, because what crosses the
+  /// process boundary is data rather than a redraw request; and the catalogue
+  /// half of the index is every habit in the list, because that is what an iOS
+  /// widget is configured from (`audit4.ios-the-app-group-is-never#1`). So a
+  /// single checkmark tap rebuilt every habit's score buckets, target windows,
+  /// streaks and weekday frequency over its whole history.
+  ///
+  /// [publish] applies upstream's own filter to that work: the same
+  /// `modifiedHabitId` that decides which widget documents are rewritten also
+  /// decides which habit documents are rebuilt. What is published never
+  /// changes — the catalogue is still the whole list, in list order — only how
+  /// much of it is recomputed.
+  final Map<int, Map<String, Object?>> _habitDocuments =
+      <int, Map<String, Object?>>{};
+
+  /// The shared inputs [_habitDocuments] was built from.
+  ///
+  /// A habit document is keyed by its habit *and* by three things no command
+  /// names: the logical day, the first weekday, and the score bucket the user
+  /// last chose. Each of those moves every document at once, so the memo is
+  /// dropped whole when any of them differs rather than trusted per habit.
+  String? _habitDocumentInputs;
+
+  /// True only while a filtered [publish] is running.
+  ///
+  /// The memo is *written* by every build and *read* only here, so
+  /// [buildIndexDocument] and [buildWidgetDocument] called on their own always
+  /// build fresh: a caller outside [publish] has made no promise about what
+  /// changed since last time.
+  bool _reuseHabitDocuments = false;
+
+  String get _currentHabitDocumentInputs =>
+      '${formatDate(getToday())}/$firstWeekday/$scoreCardSpinnerPosition';
+
+  /// Port of `WidgetUpdater.updateWidgets(modifiedHabitId, ...)`'s filtering
+  /// step, applied to the habit documents rather than to the widget ids.
+  ///
+  /// A null [modifiedHabitId] is every widget and therefore every habit —
+  /// `onCommandFinished` passes null for every command that is not a
+  /// `CreateRepetitionCommand`, which is every command that could have renamed,
+  /// archived, deleted, reordered or re-frequencied anything. A non-null one
+  /// came from a `CreateRepetitionCommand`, whose `run()` writes one entry on
+  /// one habit and recomputes that habit, so it is the only habit whose
+  /// document can have moved.
+  void _beginPublish(int? modifiedHabitId) {
+    final String inputs = _currentHabitDocumentInputs;
+    if (modifiedHabitId == null || inputs != _habitDocumentInputs) {
+      _habitDocuments.clear();
+      _habitDocumentInputs = inputs;
+      _reuseHabitDocuments = false;
+      return;
+    }
+    _habitDocuments.remove(modifiedHabitId);
+    _reuseHabitDocuments = true;
+  }
+
+  /// [_habitDocument], or what the last publish built for this habit when the
+  /// publish in progress has promised nothing about it changed.
+  ///
+  /// A habit with no id is never memoised: the map is keyed by id, and a habit
+  /// the list has not yet numbered is one nothing can name as unmodified.
+  Map<String, Object?> _habitDocumentFor(Habit habit, LocalDate today) {
+    final int? id = habit.id;
+    if (id == null) return _habitDocument(habit, today);
+    if (_reuseHabitDocuments) {
+      final Map<String, Object?>? memo = _habitDocuments[id];
+      if (memo != null) return memo;
+    }
+    return _habitDocuments[id] = _habitDocument(habit, today);
+  }
+
   /// Port of `WidgetUpdater.updateWidgets(modifiedHabitId, providerClass)`'s
   /// filtering step.
   ///
@@ -336,6 +455,12 @@ class HomeWidgetBridge {
   /// anyway: a `Platform.isIOS` branch here would be one more thing a widget
   /// test cannot reach, which is the class of defect this document is being
   /// fixed for.
+  ///
+  /// What the catalogue *costs* is bounded by [_habitDocuments]: it is always
+  /// the whole list, but a publish that names a modified habit only recomputes
+  /// that one (`audit10.every-command-republishes-the-whole#1`). Called on its
+  /// own, outside [publish], it rebuilds every habit — nobody has said what
+  /// changed.
   Map<String, Object?> buildIndexDocument() {
     final LocalDate today = getToday();
     return <String, Object?>{
@@ -351,7 +476,7 @@ class HomeWidgetBridge {
           },
       ],
       'habits': <Object?>[
-        for (final Habit habit in _habitList) _habitDocument(habit, today),
+        for (final Habit habit in _habitList) _habitDocumentFor(habit, today),
       ],
       // `widgets.behavior#3`: the two preferences `Entry.nextToggleValue`
       // reads. They cross because an iOS widget flips its own card the instant
@@ -377,7 +502,7 @@ class HomeWidgetBridge {
       if (habit == null) {
         missing.add(habitId);
       } else {
-        habits.add(_habitDocument(habit, today));
+        habits.add(_habitDocumentFor(habit, today));
       }
     }
     return <String, Object?>{
@@ -424,6 +549,20 @@ class HomeWidgetBridge {
     // the index (`audit4.deleting-a-widget-from-the-launcher#1`).
     await reapDeletedWidgets();
 
+    // Then decide how much of the catalogue this publish has to rebuild —
+    // upstream's `modifiedHabitId` filter, applied to the presenters as well as
+    // to the widget ids (`audit10.every-command-republishes-the-whole#1`).
+    _beginPublish(modifiedHabitId);
+    try {
+      await _publish(modifiedHabitId);
+    } finally {
+      // Outside a publish nobody has promised what changed, so the memo is
+      // written but never read.
+      _reuseHabitDocuments = false;
+    }
+  }
+
+  Future<void> _publish(int? modifiedHabitId) async {
     final List<int> installed = _registry.widgetIds;
     final List<int> modified = widgetIdsFor(modifiedHabitId);
 
@@ -506,6 +645,17 @@ class HomeWidgetBridge {
       firstWeekday: firstWeekday + 1,
       theme: theme,
     );
+    // `audit10.history-home-screen-widget-draws-more#1`: the History grid's own
+    // series, over the habit's whole record rather than over `entries`.
+    final HistoryCardState historyCard = HistoryCardPresenter.buildState(
+      habit: habit,
+      firstWeekday: firstWeekdayOfWeek,
+      theme: theme,
+    );
+    final int historyLength =
+        historyCard.series.length < historyDayCount
+            ? historyCard.series.length
+            : historyDayCount;
     return <String, Object?>{
       'id': habit.id,
       'name': habit.name,
@@ -529,6 +679,42 @@ class HomeWidgetBridge {
       // nothing.
       'notesIndicators': <bool>[
         for (final Entry entry in entries) entry.notes != '',
+      ],
+      // `audit10.history-home-screen-widget-draws-more#1`: the History grid,
+      // which is the one chart whose columns are laid out from the widget's
+      // geometry rather than from its data. `nColumns = floor((width - 2 *
+      // padding - weekdayColumnWidth) / squareSize)` spans `7 * nColumns` days,
+      // which is past sixty from nine columns on and reaches 127-133 days on an
+      // iOS `.systemMedium` card — a family the History widget offers by
+      // default. Every square past the end of the series is drawn
+      // `defaultSquare`, i.e. OFF, in the same low-contrast colour a genuinely
+      // missed day gets, so the grid turned a completed day three months back
+      // into a lapse.
+      //
+      // Upstream there is nothing to publish: `HistoryWidget.refreshData`
+      // assigns `HistoryCardPresenter.buildState(...).series` straight onto the
+      // chart, and that series runs from the habit's oldest known entry to
+      // today. So this is the same presenter's output, in the same newest-first
+      // order, capped at [historyDayCount] — and it stops at the oldest entry
+      // exactly as the presenter does, which is what leaves `defaultSquare`
+      // meaning the one thing it means upstream: the days before the habit
+      // existed.
+      //
+      // One character per day, `Square.index` as a digit: the array reaches
+      // three digits' worth of days for a habit years old, and it travels in
+      // every habit of the catalogue, so a `[0,1,0,…]` JSON array would double
+      // the document for nothing.
+      'historySeries': String.fromCharCodes(<int>[
+        for (int i = 0; i < historyLength; i++)
+          0x30 + historyCard.series[i].index,
+      ]),
+      // The note dots, as the offsets that carry one rather than as a flag per
+      // day (`audit6.history-home-screen-widget-never-draws#1`). Notes are
+      // sparse — most habits have none — and `[false,false,…]` over 750 days is
+      // the largest thing a habit document could carry.
+      'historyNotes': <int>[
+        for (int i = 0; i < historyLength; i++)
+          if (historyCard.notesIndicators[i]) i,
       ],
       // `widgets.checkmark#2`: the ring around the glyph is
       // `habit.scores[today].value`.

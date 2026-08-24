@@ -16,6 +16,8 @@ import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/settings_model.dart';
+import 'package:uhabits/ui/habits/list/list_header.dart'
+    show IntlLocalDateFormatter;
 import 'package:uhabits/ui/settings/data_actions.dart';
 import 'package:uhabits/ui/settings/settings_screen.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
@@ -579,6 +581,62 @@ void main() {
       ], reason: 'settings.preferences.first-weekday#9 — the entries are the '
           'seven localized long weekday names starting at Saturday, i.e. '
           'longWeekdayNames(DayOfWeek.SATURDAY)');
+    });
+
+    testWidgets(
+        'audit10.weekday-name-rows-follow-the-device-locale#1 — the row and '
+        'its dialog name the days in the device language, not the language '
+        'the UI resolved to', (tester) async {
+      const String rule =
+          'audit10.weekday-name-rows-follow-the-device-locale#1 — '
+          'updateWeekdayPreference() builds its entries and its summary from '
+          'JavaLocalDateFormatter(Locale.getDefault()).longWeekdayNames('
+          'DayOfWeek.SATURDAY) — the DEVICE locale, which Android keeps '
+          'separate from the locale the strings resolved against. On a Thai '
+          'phone the surrounding copy is English and the seven names are Thai.';
+
+      // A device language the app ships no translation for: the split between
+      // the two locales is only observable there.
+      tester.platformDispatcher.localesTestValue =
+          const <Locale>[Locale('th', 'TH')];
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+
+      await open(tester);
+
+      // Built after the first pump: flutter_localizations installs intl's
+      // per-locale date tables the first time one of its delegates loads.
+      final formatter = IntlLocalDateFormatter('th');
+      expect(formatter.localeName, 'th',
+          reason: '$rule The fixture is only meaningful with real Thai date '
+              'data installed.');
+      final thaiNames = <String>[
+        for (final day
+            in core.getWeekdaySequence(core.DayOfWeek.saturday))
+          formatter.longWeekdayNameOf(day),
+      ];
+
+      expect(
+        find.descendant(
+          of: rowNamed('pref_first_weekday'),
+          matching: find.text(thaiNames[1]),
+        ),
+        findsOneWidget,
+        reason: '$rule The summary is dayNames[currentFirstWeekday % 7], and '
+            'the locale hook default of 1 gives index 1 — Sunday, spelled the '
+            "device's way.",
+      );
+
+      await tester.tap(rowNamed('pref_first_weekday'));
+      await tester.pumpAndSettle();
+      final dialogNames = tester
+          .widgetList<ListTile>(find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(ListTile),
+          ))
+          .map((tile) => (tile.title! as Text).data)
+          .toList();
+      expect(dialogNames, thaiNames,
+          reason: '$rule …and so are the seven entries the dialog lists.');
     });
 
     testWidgets(

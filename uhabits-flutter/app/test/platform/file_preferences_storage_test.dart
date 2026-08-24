@@ -509,6 +509,87 @@ void main() {
       expect(FilePreferencesStorage.atPath(nested).getString('a', ''), '1');
     });
   });
+
+  // =========================================================================
+  // audit10.every-preference-write-can-throw-out
+  //
+  // A write is best-effort, exactly as on Android: every mutator of
+  // SharedPreferencesStorage ends in `.apply()`, which commits the value to
+  // memory and hands the XML write to a background thread. The call site is
+  // told nothing, so a device that cannot write — one that has run out of
+  // storage — keeps running with the setting live for this session, and the
+  // startup write of `last_version` cannot take the app down with it.
+  // =========================================================================
+
+  group('audit10.every-preference-write-can-throw-out', () {
+    const rule = 'audit10.every-preference-write-can-throw-out#1: on Android '
+        'every Preferences.Storage mutator ends in SharedPreferences.Editor'
+        '.apply(), which commits to memory and writes on a background thread, '
+        'so a failed write is never reported to the caller and never throws.';
+
+    /// Puts a directory where the temp file has to go, so the very
+    /// `writeAsStringSync` that fails on a full device fails here too —
+    /// deterministically, and on every platform.
+    void blockWrites() => Directory('$path.tmp').createSync();
+
+    test('#1 a write that cannot reach the disk is dropped, not thrown', () {
+      final storage = FilePreferencesStorage.atPath(path);
+      storage.putString('committed', 'old');
+      blockWrites();
+
+      expect(() => storage.putBoolean('pref_short_toggle', true),
+          returnsNormally,
+          reason: rule);
+      expect(() => storage.putInt('last_version', 30), returnsNormally,
+          reason: rule);
+      expect(() => storage.putLong('a_long', 946684800000), returnsNormally,
+          reason: rule);
+      expect(() => storage.putString('a_string', 'hello'), returnsNormally,
+          reason: rule);
+      expect(() => storage.putLongArray('ids', <int>[1, 2]), returnsNormally,
+          reason: rule);
+      expect(() => storage.remove('committed'), returnsNormally, reason: rule);
+      // clear() is the Settings "delete all data" path, where Kotlin's
+      // sharedPrefs.edit().clear().apply() equally cannot throw.
+      expect(storage.clear, returnsNormally, reason: rule);
+    });
+
+    test('#1 the value still applies for the session, and the committed file '
+        'is untouched', () {
+      final storage = FilePreferencesStorage.atPath(path);
+      storage.putString('committed', 'old');
+      blockWrites();
+
+      storage.putBoolean('pref_midnight_delay', true);
+      expect(storage.getBoolean('pref_midnight_delay', false), isTrue,
+          reason: '$rule apply() commits to memory before it queues the '
+              'write, so the setting holds until the app is restarted.');
+
+      // The failure is in the temp write, before the rename, so the settings
+      // the user already had are still on disk and still readable.
+      expect(_readFile(path)['committed'], 'old',
+          reason: '$rule a failed write cannot damage the committed file.');
+      expect(FilePreferencesStorage.atPath(path).getString('committed', ''),
+          'old',
+          reason: '$rule and the store reopens on them.');
+    });
+
+    test('#1 a first launch that cannot write its defaults still opens', () {
+      blockWrites();
+
+      late FilePreferencesStorage storage;
+      expect(() => storage = FilePreferencesStorage.atPath(path),
+          returnsNormally,
+          reason: '$rule PreferenceManager.setDefaultValues writes through the '
+              'same editor, so a first launch on a full device cannot fail '
+              'either.');
+      expect(storage.getString('pref_sync_base_url', ''),
+          'https://sync.loophabits.org',
+          reason: '$rule the XML defaults are live in memory even though '
+              'nothing reached the disk.');
+      expect(File(path).existsSync(), isFalse, reason: rule);
+    });
+  });
 }
 
 Map<String, String> _readFile(String path) =>

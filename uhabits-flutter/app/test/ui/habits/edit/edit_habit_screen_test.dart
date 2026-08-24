@@ -26,6 +26,8 @@ import 'package:uhabits/state/edit_habit_model.dart';
 import 'package:uhabits/ui/common/dialogs/current_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/weekday_picker_dialog.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
+import 'package:uhabits/ui/habits/list/list_header.dart'
+    show IntlLocalDateFormatter;
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/list/list_habits_menu.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
@@ -1134,6 +1136,67 @@ void main() {
         ),
         findsOneWidget,
         reason: 'edit-habit.reminder-days#3',
+      );
+    });
+
+    testWidgets(
+        'audit10.weekday-name-rows-follow-the-device-locale#1: the days '
+        'summary names the day in the device language, exactly as the picker '
+        'it opens does', (tester) async {
+      const String rule =
+          'audit10.weekday-name-rows-follow-the-device-locale#1 — '
+          'WeekdayList.toFormattedString(context) builds '
+          'JavaLocalDateFormatter(Locale.getDefault()) — the DEVICE locale — '
+          'for both its short and its long names, the same formatter '
+          'WeekdayPickerDialog uses. The two can never disagree upstream.';
+
+      // A device language the app ships no translation for: only there do the
+      // device locale and the locale the UI resolved to differ.
+      tester.platformDispatcher.localesTestValue =
+          const <Locale>[Locale('th', 'TH')];
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+
+      await pumpEditor(tester, openScope(dispatcher: const AsyncDispatcher()));
+      modelOf(tester)
+        ..setReminderTime(8, 30)
+        ..setReminderDays(WeekdayList(4));
+      await tester.pumpAndSettle();
+
+      // Built after the first pump: flutter_localizations installs intl's
+      // per-locale date tables the first time one of its delegates loads.
+      final formatter = IntlLocalDateFormatter('th');
+      expect(formatter.localeName, 'th',
+          reason: '$rule The fixture is only meaningful with real Thai date '
+              'data installed.');
+      final monday = formatter.longWeekdayNameOf(DayOfWeek.monday);
+
+      expect(
+        find.descendant(
+          of: find.byKey(EditHabitScreen.reminderDaysPickerKey),
+          matching: find.text(monday),
+        ),
+        findsOneWidget,
+        reason: '$rule WeekdayList(4) is Monday, and Android names it in the '
+            "device's language while the form around it stays English.",
+      );
+
+      await tester.tap(find.byKey(EditHabitScreen.reminderDaysPickerKey));
+      await tester.pumpAndSettle();
+      final pickerNames = tester
+          .widgetList<CheckboxListTile>(find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(CheckboxListTile),
+          ))
+          .map((tile) => (tile.title! as Text).data)
+          .toList();
+      expect(
+        pickerNames,
+        <String>[
+          for (final day in getWeekdaySequence(DayOfWeek.saturday))
+            formatter.longWeekdayNameOf(day),
+        ],
+        reason: '$rule The picker already reads the device locale; the label '
+            'that opens it has to agree, or one pump shows both spellings.',
       );
     });
 

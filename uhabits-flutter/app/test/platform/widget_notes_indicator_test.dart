@@ -206,7 +206,19 @@ void main() {
       expect(
         (published['notesIndicators']! as List<Object?>).length,
         HomeWidgetBridge.entryCount,
-        reason: '$rule1 …which is the same 60 days the History grid draws.',
+        reason: '$rule1 …which is the entry window, and only the entry window. '
+            'It is NOT what the History grid draws: the grid lays its columns '
+            'out from the widget\'s geometry and asks for up to 735 days, so '
+            'the dots it draws come from `historyNotes`, over the same whole '
+            'record as `historySeries` '
+            '(`audit10.history-home-screen-widget-draws-more#1`).',
+      );
+      expect(
+        published['historyNotes'],
+        <int>[2],
+        reason: '$rule1 The grid\'s own dots, as the offsets that carry a '
+            'note: the flag at offset 2 of the sixty-day array is the same '
+            'day as offset 2 of the History series.',
       );
     });
 
@@ -272,10 +284,13 @@ void main() {
       final String body =
           widget.substring(widget.indexOf('override fun refreshData'));
 
-      expect(body, contains('notesIndicators = habit.notesIndicators'),
+      expect(body, contains('notesIndicators = HistoryChartView.notesOf(habit)'),
           reason: '$rule1 This is the assignment `HistoryWidget.refreshData` '
               'makes upstream — without it the chart keeps its empty default '
-              'and every square takes the `hasNotes == false` branch.');
+              'and every square takes the `hasNotes == false` branch. '
+              '`notesOf` is where the published offsets are expanded back into '
+              'the flag-per-day list the chart indexes '
+              '(`audit10.history-home-screen-widget-draws-more#1`).');
       expect(body, contains('series = HistoryChartView.seriesOf(habit)'),
           reason: '$rule1 …alongside the series it already assigned, from the '
               'same habit, so the two can never be a day out of step.');
@@ -293,9 +308,10 @@ void main() {
         view,
         contains('val hasNotes = if (offset >= notesIndicators.size) false '
             'else notesIndicators[offset]'),
-        reason: '$rule1 `HistoryChart.drawSquare`\'s own guard: the grid is '
-            'wider than the published window, and every square past the end of '
-            'the array is drawn without a dot rather than crashing.',
+        reason: '$rule1 `HistoryChart.drawSquare`\'s own guard, and it means '
+            'upstream\'s thing: the flags run back to the habit\'s oldest '
+            'entry, so a square past the end of the array is a day before the '
+            'habit existed and is drawn without a dot rather than crashing.',
       );
       expect(
         view,

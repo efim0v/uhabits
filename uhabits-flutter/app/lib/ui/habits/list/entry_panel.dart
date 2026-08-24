@@ -29,6 +29,10 @@ library;
 
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
+// `Theme.focusColor` is the Material counterpart of
+// `?android:attr/colorControlHighlight`, the tint `View` draws its default
+// focus highlight with; nothing else on this screen needs Material.
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart' as core;
@@ -275,6 +279,11 @@ class _EntryPanelState extends State<EntryPanel> {
           notes: note,
           areQuestionMarksEnabled:
               widget.preferences.areQuestionMarksEnabled,
+          // `dim(R.dimen.smallTextSize)` / `getDimension(context,
+          // R.dimen.smallerTextSize)` read sp dimensions, so the number and
+          // its unit follow the OS font-size setting exactly as the check-mark
+          // glyph does (`audit10.canvas-drawn-text-stopped-following-the#1`).
+          textScaler: MediaQuery.textScalerOf(context),
         ),
         onTap: edit,
         onLongPress: edit,
@@ -350,7 +359,7 @@ class _PanelPreferencesListener extends core.PreferencesListener {
 /// Android sizes both button views from `R.dimen.checkmarkWidth` /
 /// `checkmarkHeight`, both 48dp; the same 48 is [core.Theme.checkmarkButtonSize],
 /// which is what [EntryPanel] passes.
-class EntryButton extends StatelessWidget {
+class EntryButton extends StatefulWidget {
   const EntryButton({
     required this.view,
     required this.size,
@@ -365,11 +374,60 @@ class EntryButton extends StatelessWidget {
   final VoidCallback? onLongPress;
 
   @override
+  State<EntryButton> createState() => _EntryButtonState();
+}
+
+class _EntryButtonState extends State<EntryButton> {
+  /// Whether the traversal is currently parked on this cell.
+  ///
+  /// Only used to paint the highlight; `View` keeps the same bit in
+  /// `mPrivateFlags` and repaints on it.
+  bool _hasFocus = false;
+
+  /// `View.performClick()` — the branch `onClick` would have taken from a tap.
+  void _activate(Intent intent) => widget.onTap?.call();
+
+  @override
   Widget build(BuildContext context) {
+    // `CheckmarkButtonView.init { setOnClickListener(this) }` makes the cell
+    // CLICKABLE, and under `targetSdk >= 26` that resolves FOCUSABLE_AUTO to
+    // focusable — so the grid is a Tab / D-pad path and a confirm key runs
+    // `performClick()` (`audit10.the-check-mark-grid-cannot-be-reached-or#1`).
+    //
+    // Flutter's default shortcut map already binds exactly the confirm keys
+    // `KeyEvent.isConfirmKey` lists — enter, numpadEnter, space and select
+    // (KEYCODE_DPAD_CENTER), plus gameButtonA — to `ActivateIntent`, so the
+    // handler goes on the intent rather than on the raw key. The web map
+    // spells the same key `ButtonActivateIntent`.
     return SizedBox(
-      width: size,
-      height: size,
-      child: CoreView(view: view, onTap: onTap, onLongPress: onLongPress),
+      width: widget.size,
+      height: widget.size,
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: _activate),
+          ButtonActivateIntent:
+              CallbackAction<ButtonActivateIntent>(onInvoke: _activate),
+        },
+        child: Focus(
+          // A cell with no click listener is not clickable upstream either,
+          // and FOCUSABLE_AUTO then resolves the other way.
+          canRequestFocus: widget.onTap != null,
+          onFocusChange: (bool value) => setState(() => _hasFocus = value),
+          child: DecoratedBox(
+            // `defaultFocusHighlightEnabled` is true and the cell sets no
+            // background of its own, so `View` paints the platform's default
+            // focus highlight behind it while it holds focus.
+            decoration: BoxDecoration(
+              color: _hasFocus ? Theme.of(context).focusColor : null,
+            ),
+            child: CoreView(
+              view: widget.view,
+              onTap: widget.onTap,
+              onLongPress: widget.onLongPress,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -12,6 +12,15 @@ import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 import 'database.dart';
 
+/// The driver's own error type, re-exported so that a caller can tell "this
+/// file is not a readable database" from every other kind of failure without
+/// taking a direct dependency on `package:sqlite3`.
+///
+/// It is the port's stand-in for `android.database.sqlite.SQLiteException` and
+/// its `SQLiteDatabaseCorruptException` subclass, which are what the Android
+/// framework raises for SQLITE_NOTADB and SQLITE_CORRUPT.
+export 'package:sqlite3/sqlite3.dart' show SqliteException;
+
 /// The path that opens a private, temporary, in-memory database.
 const String inMemoryPath = ':memory:';
 

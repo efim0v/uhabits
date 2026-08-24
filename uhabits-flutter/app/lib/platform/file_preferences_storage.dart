@@ -47,6 +47,16 @@ const String preferencesFilename = 'preferences.json';
 /// which returns before the write reaches the disk — the file is a few hundred
 /// bytes and preferences change at human speed, so the synchronous write is
 /// not worth batching.
+///
+/// Writing synchronously does not make it fallible, though: `apply()` commits
+/// the value to memory and hands the disk write to a background thread, so no
+/// mutator of `SharedPreferencesStorage` can fail at the call site
+/// (`audit10.every-preference-write-can-throw-out#1`). A device that has run
+/// out of storage keeps the new value for the session and simply does not
+/// carry it across a restart — it does not take down the caller, which for
+/// `preferences.lastAppVersion = appVersionCode` in `AppScope.open` is every
+/// single launch, before `runApp`. [_flush] therefore swallows a
+/// [FileSystemException] the same way [_read], [_delete] and [_decode] do.
 class FilePreferencesStorage extends PreferencesStorage {
   /// Opens the settings file at [path], loading it if it is already there and
   /// materialising [xmlDefaults] if it is not.
@@ -251,18 +261,30 @@ class FilePreferencesStorage extends PreferencesStorage {
   /// Serialises [_values] into the temp file and renames it over the real one.
   /// Rename is atomic on every platform the app targets, so readers see either
   /// the whole previous file or the whole new one, never a partial write.
+  ///
+  /// Best-effort, exactly like the `apply()` every Android mutator ends in
+  /// (`audit10.every-preference-write-can-throw-out#1`): [_values] has already
+  /// been updated by the time this runs, so a store that cannot be written —
+  /// a device out of space — keeps the setting for this session and loses it
+  /// on the next launch, rather than throwing at whoever flipped the switch or
+  /// out of `AppScope.open`, which writes `last_version` before `runApp`.
   void _flush() {
-    final directory = _file.parent;
-    if (!directory.existsSync()) directory.createSync(recursive: true);
-    final keys = _values.keys.toList()..sort();
-    final ordered = <String, String>{
-      for (final key in keys) key: _values[key]!,
-    };
-    _temp.writeAsStringSync(
-      '${const JsonEncoder.withIndent('  ').convert(ordered)}\n',
-      flush: true,
-    );
-    _temp.renameSync(_file.path);
+    try {
+      final directory = _file.parent;
+      if (!directory.existsSync()) directory.createSync(recursive: true);
+      final keys = _values.keys.toList()..sort();
+      final ordered = <String, String>{
+        for (final key in keys) key: _values[key]!,
+      };
+      _temp.writeAsStringSync(
+        '${const JsonEncoder.withIndent('  ').convert(ordered)}\n',
+        flush: true,
+      );
+      _temp.renameSync(_file.path);
+    } on FileSystemException {
+      // Nothing reached the disk, and nothing is damaged: the write fails
+      // before the rename, so the committed file is whatever it already was.
+    }
   }
 
   static String? _read(File file) {

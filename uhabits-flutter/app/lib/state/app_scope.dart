@@ -17,14 +17,13 @@ import 'package:uhabits_core/src/utils/midnight_timer.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
 import 'dart:async';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:uhabits_core/src/preferences/widget_preferences.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/ui/notification_tray.dart';
 
-import '../l10n/app_localizations.dart';
+import '../l10n/locale_resolution.dart';
 import '../platform/app_database.dart';
 import '../platform/bug_reporter.dart';
 import '../platform/file_preferences_storage.dart';
@@ -157,25 +156,51 @@ class AppScope {
     return scope;
   }
 
-  /// Step (2) of `HabitsApplication.onCreate`, with the `try`/`catch` that is
-  /// the difference between a bad file and a permanent crash loop:
-  ///
-  /// ```kotlin
-  /// try {
-  ///     DatabaseUtils.initializeDatabase(this)
-  /// } catch (e: UnsupportedDatabaseVersionException) {
-  ///     val db = DatabaseUtils.getDatabaseFile(this)
-  ///     db.renameTo(File(db.absolutePath + ".invalid"))
-  ///     DatabaseUtils.initializeDatabase(this)
-  /// }
-  /// ```
+  /// Step (2) of `HabitsApplication.onCreate`: open the database file, and
+  /// when it cannot be used, set it aside and open a fresh one.
   ///
   /// `boot()` is awaited by `main()` *before* `runApp`, so anything that
   /// escapes here is a window with no widget tree at all — no message, no
-  /// retry, nothing the user can do but reinstall and lose everything. The
-  /// file is set aside instead of deleted, so the data is still there to be
-  /// recovered (`platform-glue.app-startup-order#3`,
-  /// `persistence.android-opener#7`).
+  /// retry, nothing the user can do but reinstall and lose everything. There
+  /// are two ways a file gets here, and upstream answers them differently:
+  ///
+  ///  * **The file is not readable as a database** — a zeroed header, a
+  ///    truncated copy, a page killed mid-write. Android recovers, and does so
+  ///    inside the framework: `HabitsDatabaseOpener` passes a null
+  ///    `errorHandler` to `SQLiteOpenHelper` (HabitsDatabaseOpener.kt:35), so
+  ///    `SQLiteDatabase.open()` catches the `SQLiteDatabaseCorruptException`
+  ///    that SQLITE_NOTADB and SQLITE_CORRUPT map to, calls
+  ///    `DefaultDatabaseErrorHandler.onCorruption()` — which deletes the file —
+  ///    and reopens with `CREATE_IF_NECESSARY`. The app comes up empty
+  ///    (`audit10.a-corrupt-database-file-recovers#1`).
+  ///
+  ///  * **The file is a database this build cannot use** — `user_version`
+  ///    below 8 or above [databaseVersion]. Android does *not* recover from
+  ///    this, however much HabitsApplication.kt:54-60 looks like it does:
+  ///
+  ///    ```kotlin
+  ///    try {
+  ///        DatabaseUtils.initializeDatabase(this)
+  ///    } catch (e: UnsupportedDatabaseVersionException) { … rename … }
+  ///    ```
+  ///
+  ///    `DatabaseUtils.initializeDatabase` (DatabaseUtils.kt:52-58) only
+  ///    constructs the `SQLiteOpenHelper`, which by contract opens nothing
+  ///    until `getWritableDatabase()`. The file is first opened lazily through
+  ///    `providedDb` when `component.habitList` is touched at
+  ///    HabitsApplication.kt:73 — thirteen lines past the catch — so the throw
+  ///    from `onUpgrade`/`onDowngrade` escapes `Application.onCreate` and the
+  ///    real app crashes on every launch with the data untouched on disk. The
+  ///    catch is unreachable; the rename never happens
+  ///    (`audit10.the-invalid-quarantine-is-the-ports-own#1`).
+  ///
+  /// This port recovers from both, and in both cases by setting the file aside
+  /// rather than deleting it. Two deliberate divergences, recorded in
+  /// DEVIATIONS.md: recovering from the unusable *version* at all, because a
+  /// crash loop leaves the user with an app that cannot be opened and no way
+  /// to act; and keeping the bytes as `<path>.invalid` where Android's error
+  /// handler unlinks them, because that file is the only copy of the user's
+  /// history.
   ///
   /// The retry is deliberately not itself guarded: the second call opens a
   /// path that no longer exists, which is the fresh-install path, and a
@@ -184,20 +209,29 @@ class AppScope {
     try {
       return await AppDatabase.open();
     } on UnsupportedDatabaseVersionException catch (error) {
-      final file = await AppDatabase.resolveFile();
-      // `File.renameTo` overwrites an existing target on POSIX, so a second
-      // unusable file replaces the first `.invalid` rather than failing.
-      if (file.existsSync()) {
-        file.renameSync('${file.path}.invalid');
-      }
-      final database = await AppDatabase.open();
-      // After the reopen, so that the logger this writes to is the one the
-      // fresh scope will keep using.
-      BugReportLogging(StandardLogging(), BugReportLog.instance)
-          .getLogger('HabitsApplication')
-          .error('Unusable database set aside as ${file.path}.invalid: $error');
-      return database;
+      return _quarantine(error);
+    } on UnreadableDatabaseException catch (error) {
+      return _quarantine(error);
     }
+  }
+
+  /// Moves the unusable file to `<path>.invalid` and opens a fresh database in
+  /// its place — the port's stand-in both for the rename upstream never
+  /// reaches and for the delete its error handler performs.
+  static Future<AppDatabase> _quarantine(Object error) async {
+    final file = await AppDatabase.resolveFile();
+    // `File.renameTo` overwrites an existing target on POSIX, so a second
+    // unusable file replaces the first `.invalid` rather than failing.
+    if (file.existsSync()) {
+      file.renameSync('${file.path}.invalid');
+    }
+    final database = await AppDatabase.open();
+    // After the reopen, so that the logger this writes to is the one the
+    // fresh scope will keep using.
+    BugReportLogging(StandardLogging(), BugReportLog.instance)
+        .getLogger('HabitsApplication')
+        .error('Unusable database set aside as ${file.path}.invalid: $error');
+    return database;
   }
 
   /// Points [bugReporter] at `ContextCompat.getExternalFilesDirs(context,
@@ -247,8 +281,14 @@ class AppScope {
     await LocalNotificationsAlarmPlugin.ensureTimeZones();
 
     // Notification copy has to come from somewhere before any widget exists,
-    // so it is looked up by locale rather than by BuildContext.
-    final l10n = lookupL10n(PlatformDispatcher.instance.locale);
+    // so it is looked up by locale rather than by BuildContext. It goes through
+    // the same fallback the widget tree uses: `lookupL10n` throws for a
+    // language the app does not translate, and handing it the raw device locale
+    // aborted this method on its second statement — leaving the tray, the
+    // scheduler and the widget publisher null for the whole session behind one
+    // swallowed log line (`audit10.platform-services-start-on-every-device-
+    // language#1`).
+    final l10n = platformL10n();
     final builder = ReminderNotificationBuilder(
       preferences: preferences,
       strings: NotificationStrings.from(l10n),

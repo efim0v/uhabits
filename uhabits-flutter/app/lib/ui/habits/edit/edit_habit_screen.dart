@@ -35,7 +35,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
@@ -47,6 +46,7 @@ import '../../common/dialogs/current_dialog.dart';
 import '../../common/dialogs/frequency_picker_dialog.dart';
 import '../../common/dialogs/weekday_picker_dialog.dart';
 import '../../theme/app_theme.dart';
+import '../list/list_header.dart' show IntlLocalDateFormatter;
 
 // ---------------------------------------------------------------------------
 // The two label formatters, both top-level functions in Kotlin too
@@ -110,43 +110,28 @@ String formatWeekdayList(
   return selected.map((i) => shortNames[i]).join(', ');
 }
 
-/// `JavaLocalDateFormatter(locale).longWeekdayNames(SATURDAY)` and its short
-/// counterpart. 2024-01-06 is a Saturday, so seven consecutive days from it
-/// produce the Android order.
+/// `JavaLocalDateFormatter(Locale.getDefault()).longWeekdayNames(SATURDAY)`
+/// and its short counterpart, the pair `WeekdayList.toFormattedString(context)`
+/// builds.
+///
+/// The locale is the DEVICE one, not the locale the UI resolved to
+/// (`audit10.weekday-name-rows-follow-the-device-locale#1`): upstream builds
+/// one `JavaLocalDateFormatter(Locale.getDefault())` for both name sets, and it
+/// is the same formatter [WeekdayPickerDialog] uses, so the summary and the
+/// picker it opens can never disagree. Reading `Localizations.localeOf` here
+/// made them disagree in a single pump on any device whose language the app
+/// does not translate.
 List<String> _weekdayNamesFromSaturday(
   BuildContext context, {
   required bool long,
 }) {
-  const List<String> longFallback = <String>[
-    'Saturday',
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
+  final formatter = IntlLocalDateFormatter.of(context);
+  return <String>[
+    for (final day in core.getWeekdaySequence(core.DayOfWeek.saturday))
+      long
+          ? formatter.longWeekdayNameOf(day)
+          : formatter.shortWeekdayNameOf(day),
   ];
-  const List<String> shortFallback = <String>[
-    'Sat',
-    'Sun',
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-  ];
-  try {
-    final localeName = Localizations.localeOf(context).toString();
-    final format =
-        long ? intl.DateFormat.EEEE(localeName) : intl.DateFormat.E(localeName);
-    return List<String>.generate(
-      7,
-      (offset) => format.format(DateTime(2024, 1, 6 + offset)),
-    );
-  } catch (_) {
-    // Locale data flutter_localizations has not initialised.
-    return long ? longFallback : shortFallback;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -380,8 +365,13 @@ class _EditHabitViewState extends State<_EditHabitView> {
         elevation: 10,
         actions: <Widget>[
           Padding(
-            // `android:layout_marginEnd="16dp"`.
-            padding: const EdgeInsets.only(right: 16),
+            // `android:layout_marginEnd="16dp"` — direction-relative, so the
+            // gap follows the edge the button sits against
+            // (`audit10.the-edit-habit-form-pins-its-floating#1`). The colour
+            // button below stays a plain `EdgeInsets`: upstream spells that
+            // one marginLeft/marginRight, which is the split
+            // `platform-glue.rtl-layout#6` is about.
+            padding: const EdgeInsetsDirectional.only(end: 16),
             child: OutlinedButton(
               key: EditHabitScreen.saveButtonKey,
               onPressed: _onSave,
@@ -908,8 +898,13 @@ class _FormBox extends StatelessWidget {
             ),
             child: child,
           ),
-          Positioned(
-            left: EditHabitMetrics.labelInset,
+          // `@style/FormLabel` sets no layout_gravity, so the caption takes
+          // `@style/FormInnerBox`'s default LinearLayout gravity — START —
+          // and `android:layout_marginStart="8dp"` insets it from whichever
+          // border that resolves to. Under RTL that is the right one
+          // (`audit10.the-edit-habit-form-pins-its-floating#1`).
+          PositionedDirectional(
+            start: EditHabitMetrics.labelInset,
             top: EditHabitMetrics.labelOffset,
             child: Container(
               color: background,

@@ -383,7 +383,12 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
         IconButton(
           key: const ValueKey<String>('listHabitsMenu.searchClose'),
           icon: const Icon(Icons.close),
-          tooltip: l10n.search,
+          // `SearchView`'s X is `abc_searchview_description_clear`, "Clear
+          // query" — not the query hint, and not "close": its first tap
+          // empties the field (`audit10.the-overflow-menu-button-and-the#1`).
+          // `MaterialLocalizations` ships the nearest string, "Clear text", in
+          // every locale flutter_localizations covers.
+          tooltip: MaterialLocalizations.of(context).clearButtonTooltip,
           // `SearchView`'s X runs onCloseClicked(), which only *sometimes*
           // reaches the close listener (`audit7.the-search-bar-s-x-button#1`).
           onPressed: onCloseClicked,
@@ -452,6 +457,15 @@ class ListHabitsMenuState extends State<ListHabitsMenu> {
         builder: (context, controller, child) => IconButton(
           key: const ValueKey<String>('listHabits.overflowMenu'),
           icon: const Icon(Icons.more_vert),
+          // AppCompat builds this button itself, as
+          // `ActionMenuPresenter.OverflowMenuButton`, and names it
+          // `abc_action_menu_overflow_description` ("More options") for both
+          // TalkBack and the long-press tooltip
+          // (`audit10.the-overflow-menu-button-and-the#1`). The port declares
+          // no menu resource, so the label is spelled out here; the string is
+          // Material's, which is also what the show-habit screen's
+          // `PopupMenuButton` announces.
+          tooltip: MaterialLocalizations.of(context).showMenuTooltip,
           onPressed: () =>
               controller.isOpen ? controller.close() : controller.open(),
         ),

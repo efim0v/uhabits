@@ -25,7 +25,8 @@ library;
 
 import 'dart:io';
 
-import 'package:sqlite3/sqlite3.dart' show SqliteException;
+// SqliteException reaches here through sqlite3_database.dart, which re-exports
+// the driver's error type.
 import 'package:test/test.dart';
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/database/migrations.g.dart';

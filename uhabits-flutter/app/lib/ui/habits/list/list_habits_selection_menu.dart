@@ -167,6 +167,13 @@ class ListHabitsSelectionMenu extends StatelessWidget
       leading: IconButton(
         key: const ValueKey<String>('listHabitsSelection.close'),
         icon: const Icon(Icons.close),
+        // The action mode's close control is AppCompat's
+        // `abc_action_mode_close_item_material`, whose
+        // `?attr/actionModeCloseContentDescription` resolves to
+        // @string/abc_action_mode_done under Base.Theme.AppCompat
+        // (`audit10.the-overflow-menu-button-and-the#1`). Nothing here is
+        // built by the framework, so the label is spelled out.
+        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
         // `onDestroyActionMode` -> `listController.onSelectionFinished()`.
         onPressed: model.listController.onSelectionFinished,
       ),
@@ -194,6 +201,11 @@ class ListHabitsSelectionMenu extends StatelessWidget
           builder: (context, controller, child) => IconButton(
             key: const ValueKey<String>('listHabitsSelection.overflowMenu'),
             icon: const Icon(Icons.more_vert),
+            // The contextual bar's three-dot button is the same
+            // `ActionMenuPresenter.OverflowMenuButton` the main toolbar gets,
+            // described "More options"
+            // (`audit10.the-overflow-menu-button-and-the#1`).
+            tooltip: MaterialLocalizations.of(context).showMenuTooltip,
             onPressed: () =>
                 controller.isOpen ? controller.close() : controller.open(),
           ),

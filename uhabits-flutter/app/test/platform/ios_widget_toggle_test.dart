@@ -53,7 +53,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/home_widget_bridge.dart';
 import 'package:uhabits/state/widget_sync.dart';
 import 'package:uhabits/state/widget_toggle_queue.dart';
+import 'package:uhabits_core/src/commands/command.dart';
 import 'package:uhabits_core/src/commands/command_runner.dart';
+import 'package:uhabits_core/src/commands/create_repetition_command.dart';
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
@@ -100,6 +102,16 @@ const String rule =
     'opens, the user stays on the home screen — which is the entire point of '
     'the Checkmark widget.';
 
+const String collapseRule =
+    'audit10.ios-widget-taps-collapse#1 — In the Kotlin app: Each widget tap '
+    'is its own `ACTION_TOGGLE_REPETITION` broadcast, and '
+    '`WidgetBehavior.onToggleRepetition` re-reads '
+    '`habit.originalEntries.get(date)` before computing `nextToggleValue`. '
+    'Successive taps on the same habit and day therefore each start from the '
+    'value the previous one wrote and walk the cycle one step at a time: '
+    'UNKNOWN -> YES_MANUAL -> NO by default, UNKNOWN -> YES_MANUAL -> SKIP -> '
+    'NO with skip enabled.';
+
 void main() {
   // -----------------------------------------------------------------------
   // Fixtures
@@ -120,16 +132,24 @@ void main() {
   late FakePlatform platform;
   late WidgetSync sync;
 
-  setUp(() {
-    setToday(LocalDate.ymd(2015, 1, 26));
+  /// The whole harness, over one [Dispatcher] pair.
+  ///
+  /// Parameterised because the dispatcher is not an implementation detail of
+  /// this feature: `UnconfinedTestDispatcher` runs every command inline, so a
+  /// drain that reads the model between taps sees the previous tap's write
+  /// whether or not the code was written to. Production wires
+  /// [AsyncDispatcher] (`AppScope.open`), where a command runs two event-loop
+  /// turns after `CommandRunner.run` returns — which is the arrangement
+  /// `audit10.ios-widget-taps-collapse#1` is about.
+  void buildHarness(Dispatcher dispatcher) {
     modelFactory = MemoryModelFactory();
     habitList = MemoryHabitList();
     fixtures = HabitFixtures(modelFactory, habitList);
     storage = MemoryStorage();
     preferences = Preferences(storage);
     taskRunner = CoroutineTaskRunner(
-      mainDispatcher: const UnconfinedTestDispatcher(),
-      ioDispatcher: const UnconfinedTestDispatcher(),
+      mainDispatcher: dispatcher,
+      ioDispatcher: dispatcher,
     );
     commandRunner = CommandRunner(taskRunner);
     tray = NotificationTray(
@@ -164,6 +184,11 @@ void main() {
       preferences: preferences,
       pendingToggles: queue,
     );
+  }
+
+  setUp(() {
+    setToday(LocalDate.ymd(2015, 1, 26));
+    buildHarness(const UnconfinedTestDispatcher());
   });
 
   Habit addHabit() {
@@ -340,6 +365,175 @@ void main() {
       expect(body, contains('EntryValue.unknown'), reason: rule);
     });
   });
+
+  // =======================================================================
+  // The ordering contract, under the dispatchers production actually wires
+  // =======================================================================
+
+  group('audit10.ios-widget-taps-collapse', () {
+    /// Every test here rebuilds the harness on [AsyncDispatcher], which is
+    /// what `AppScope.open` passes to `CoroutineTaskRunner` for both roles.
+    /// Under it `CommandRunner.run` returns before the command has run, so a
+    /// drain that re-reads `habit.originalEntries` between taps reads the
+    /// value the *previous* publish left, not the one the previous tap wrote.
+    setUp(() => buildHarness(const AsyncDispatcher()));
+
+    /// Runs the event loop until nothing is left in flight.
+    ///
+    /// `WidgetSync.settle()` awaits the publishes only. Under
+    /// [AsyncDispatcher] the `CreateRepetitionCommand` a drain issues is a
+    /// task-runner job of its own that outlives the publish that issued it,
+    /// and finishing it schedules another publish — so quiescence is reached
+    /// by alternating the two until both are empty, which is what the running
+    /// app does between one tap and the next.
+    Future<void> quiesce() async {
+      for (int i = 0; i < 10; i++) {
+        await sync.settle();
+        await taskRunner.awaitAll();
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    void stageTaps(int habitId, int count, {String date = '2015-01-26'}) {
+      store.data[WidgetToggleQueue.key] = jsonEncode(<String, Object?>{
+        'version': WidgetToggleQueue.schemaVersion,
+        'toggles': <Object?>[
+          for (int seq = 1; seq <= count; seq++)
+            <String, Object?>{'seq': seq, 'habit': habitId, 'date': date},
+        ],
+      });
+    }
+
+    test('#1 two taps on the same day walk the cycle twice, not once',
+        () async {
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+      stageTaps(habit.id!, 2);
+
+      await sync.updateWidgets();
+      await quiesce();
+
+      expect(habit.originalEntries.get(today).value, Entry.no,
+          reason: '$collapseRule Upstream each tap is its own '
+              '`ACTION_TOGGLE_REPETITION` broadcast, and '
+              '`WidgetBehavior.onToggleRepetition` re-reads '
+              '`habit.originalEntries.get(date)` as its first statement — so '
+              'tap 2 starts from what tap 1 wrote and the pair walks UNKNOWN '
+              '-> YES_MANUAL -> NO. Landing on YES_MANUAL means the user who '
+              'mis-tapped and tapped again to undo it watched the card '
+              'un-tick and had the correction thrown away.');
+    });
+
+    test('#1 two taps with skip enabled reach SKIP', () async {
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+      preferences.isSkipEnabled = true;
+      stageTaps(habit.id!, 2);
+
+      await sync.updateWidgets();
+      await quiesce();
+
+      expect(habit.originalEntries.get(today).value, Entry.skip,
+          reason: '$collapseRule `widgets.checkmark#9` — with skip enabled the '
+              'cycle is UNKNOWN -> YES_MANUAL -> SKIP -> NO, and two taps is '
+              'two steps along it whatever dispatcher the task runner was '
+              'built from.');
+    });
+
+    test('#1 three taps walk three steps', () async {
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+      preferences.isSkipEnabled = true;
+      stageTaps(habit.id!, 3);
+
+      await sync.updateWidgets();
+      await quiesce();
+
+      expect(habit.originalEntries.get(today).value, Entry.no,
+          reason: '$collapseRule A run of taps is a run of broadcasts '
+              'upstream; the queue is only the delivery mechanism, so N '
+              'staged taps have to be N advances.');
+    });
+
+    test('#1 each staged tap is its own command, in sequence order', () async {
+      final Habit habit = addHabit();
+      final _RecordingListener recorder = _RecordingListener();
+      commandRunner.addListener(recorder);
+      preferences.isSkipEnabled = true;
+      stageTaps(habit.id!, 2);
+
+      await sync.updateWidgets();
+      await quiesce();
+
+      expect(recorder.values, <int>[Entry.yesManual, Entry.skip],
+          reason: '$collapseRule Each broadcast upstream runs one '
+              '`CreateRepetitionCommand` through `CommandRunner`, so each is '
+              'separately undoable and each notifies the list cache, the tray '
+              'and the widget updater. Collapsing the run into one command — '
+              'or into two commands carrying the same value — loses both.');
+    });
+
+    test('#1 taps on different habits are independent', () async {
+      final Habit first = addHabit();
+      final Habit second = fixtures.createEmptyHabit(name: 'Run');
+      habitList.add(second);
+      final LocalDate today = getToday();
+      store.data[WidgetToggleQueue.key] = jsonEncode(<String, Object?>{
+        'version': WidgetToggleQueue.schemaVersion,
+        'toggles': <Object?>[
+          <String, Object?>{'seq': 1, 'habit': first.id, 'date': '2015-01-26'},
+          <String, Object?>{'seq': 2, 'habit': second.id, 'date': '2015-01-26'},
+          <String, Object?>{'seq': 3, 'habit': first.id, 'date': '2015-01-26'},
+        ],
+      });
+
+      await sync.updateWidgets();
+      await quiesce();
+
+      expect(first.originalEntries.get(today).value, Entry.no,
+          reason: '$collapseRule Two taps on one habit walk two steps…');
+      expect(second.originalEntries.get(today).value, Entry.yesManual,
+          reason: '$collapseRule …and the single tap on the other habit walks '
+              'exactly one, unaffected by its neighbours in the queue.');
+    });
+
+    test('#1 taps on different days are independent', () async {
+      final Habit habit = addHabit();
+      store.data[WidgetToggleQueue.key] = jsonEncode(<String, Object?>{
+        'version': WidgetToggleQueue.schemaVersion,
+        'toggles': <Object?>[
+          <String, Object?>{'seq': 1, 'habit': habit.id, 'date': '2015-01-26'},
+          <String, Object?>{'seq': 2, 'habit': habit.id, 'date': '2015-01-25'},
+        ],
+      });
+
+      await sync.updateWidgets();
+      await quiesce();
+
+      expect(habit.originalEntries.get(LocalDate.ymd(2015, 1, 26)).value,
+          Entry.yesManual,
+          reason: '$collapseRule A tap carries its own date; two taps on '
+              'different days are one advance each.');
+      expect(habit.originalEntries.get(LocalDate.ymd(2015, 1, 25)).value,
+          Entry.yesManual, reason: collapseRule);
+    });
+
+    test('#1 the queue is still drained exactly once', () async {
+      final Habit habit = addHabit();
+      final LocalDate today = getToday();
+      stageTaps(habit.id!, 2);
+
+      await sync.updateWidgets();
+      await quiesce();
+      await sync.updateWidgets();
+      await quiesce();
+
+      expect(store.data[WidgetToggleQueue.key], isNull,
+          reason: '$collapseRule Applied taps leave the queue…');
+      expect(habit.originalEntries.get(today).value, Entry.no,
+          reason: '$collapseRule …and a second publish must not replay them.');
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +579,18 @@ class FakePlatform implements HomeWidgetPlatform {
 
   @override
   Future<void> setAppGroupId(String groupId) async {}
+}
+
+/// Every `CreateRepetitionCommand` the runner finished, in order, reduced to
+/// the value it stored — which is what "one command per tap, walking the
+/// cycle" means from outside.
+class _RecordingListener implements CommandRunnerListener {
+  final List<int> values = <int>[];
+
+  @override
+  void onCommandFinished(Command command) {
+    if (command is CreateRepetitionCommand) values.add(command.value);
+  }
 }
 
 class _NullSystemTray implements SystemTray {
