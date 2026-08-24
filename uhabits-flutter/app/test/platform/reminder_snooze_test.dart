@@ -195,6 +195,66 @@ void main() {
     return habit;
   }
 
+  group('audit14.day-stepping-derives-its-base-day-from-utc', () {
+    const String rule =
+        'audit14.day-stepping-derives-its-base-day-from-utc#1 — the day a '
+        'reminder instant belongs to is its LOCAL day. Deriving it from the '
+        'UTC instant is off by one wherever the zone offset carries the '
+        'reminder across a UTC midnight, which is most of the inhabited world.';
+
+    /// New York in January: five hours behind, so a 20:00 reminder is already
+    /// past UTC midnight and its UTC day is the day after its local one.
+    const TimeZone newYork = FixedTimeZone(-5 * 60 * 60 * 1000, 'America/New_York');
+
+    /// Tokyo: nine hours ahead, so an 08:30 reminder is still on the previous
+    /// UTC day.
+    const TimeZone tokyo = FixedTimeZone(9 * 60 * 60 * 1000, 'Asia/Tokyo');
+
+    test('west of GMT, a completed habit does not buzz again the same evening',
+        () async {
+      DateUtils.setFixedTimeZone(newYork);
+      // Monday 2015-01-26, 21:00 local — the 20:00 reminder has already gone.
+      DateUtils.setFixedLocalTime(unixTime(2015, 1, 26, 21, 0));
+      final habit = fixtures.createEmptyHabit();
+      habit.id = 12;
+      habit.reminder = Reminder(20, 0, WeekdayList.everyDay);
+      habitList.add(habit);
+      habit.originalEntries.add(Entry(monday, Entry.yesManual));
+      habit.recompute();
+
+      scheduler.scheduleAll();
+      await settleAll();
+
+      final int id = plugin.pending.keys.single;
+      final int local = DateUtils.removeTimezone(plugin.pending[id]!, newYork);
+      expect(LocalDate.fromUnixTime(local), LocalDate.ymd(2015, 1, 27),
+          reason: '$rule Today is done, so the alarm belongs to tomorrow — not '
+              'to tonight, where gate 1 exists to stop it.');
+    });
+
+    test('east of GMT, the skipped day lands on the next covered weekday',
+        () async {
+      DateUtils.setFixedTimeZone(tokyo);
+      // Monday 2015-01-26, 09:00 local — past the 08:30 reminder.
+      DateUtils.setFixedLocalTime(unixTime(2015, 1, 26, 9, 0));
+      final habit = fixtures.createEmptyHabit();
+      habit.id = 13;
+      // Mon/Wed/Fri. The scheduler indexes days from Saturday, so Monday is
+      // bit 2, Wednesday bit 4 and Friday bit 6.
+      habit.reminder = Reminder(8, 30, WeekdayList(0x54));
+      habitList.add(habit);
+
+      scheduler.scheduleAll();
+      await settleAll();
+
+      final int id = plugin.pending.keys.single;
+      final int local = DateUtils.removeTimezone(plugin.pending[id]!, tokyo);
+      expect(LocalDate.fromUnixTime(local), LocalDate.ymd(2015, 1, 28),
+          reason: '$rule Wednesday, the next covered day — not Thursday, which '
+              'the reminder does not cover at all.');
+    });
+  });
+
   group('audit13.a-snooze-overtaken-by-completion-moves', () {
     const String rule =
         'audit13.a-snooze-overtaken-by-completion-moves#1 — a snoozed instant '

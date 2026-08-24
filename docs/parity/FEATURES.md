@@ -7865,3 +7865,30 @@ confirmed, two refuted — 16, then 11, then 6, then 1.
 - **Severity:** major
 
 1. `audit13.a-snooze-overtaken-by-completion-moves#1` — In the Kotlin app: a snoozed instant is only ever an alarm time, never a template for later days. `ReminderScheduler.schedule` substitutes `snoozedUntil` for `getUpcomingTimeInMillis(hour, minute)` while it is still in the future, and nothing advances it: ticking the habit off runs `CreateRepetitionCommand`, which `onCommandFinished` explicitly returns on, so the alarm stays where it was. At the snoozed instant the alarm fires, gate 1 of `ShowNotificationTask` drops the notification because the habit is already complete, and `onShowReminder`'s trailing `scheduleAll()` — now seeing an expired snooze — clears it and re-arms from the habit's own reminder time. The next day's reminder is therefore at the hour the user configured. The port has no fire-time hook, so gate 1 lives in the scheduler and a rejected day is skipped before the alarm is filed; the day-stepping must therefore rebase each later day on the habit's own reminder time rather than adding whole days to the instant it was handed, which while a snooze is live is the snoozed one.
+
+## Domain: Fourteenth audit pass (2026-08-24)
+
+Three findings, two of them the same critical regression reported independently
+by two lenses: the day-stepping added by the thirteenth pass derived its base
+day from a UTC instant, and every reminder test in the suite pins GMT — the one
+offset at which that is indistinguishable from correct.
+
+#### audit14.day-stepping-derives-its-base-day-from-utc
+
+- [x] `audit14.day-stepping-derives-its-base-day-from-utc` — The reminder day-stepping derives the reminder's own day from a UTC instant, so every skipped day lands on the wrong date outside GMT
+- **Platform:** core · **Port risk:** high
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/uhabits/core/reminders/ReminderScheduler.kt (schedule/scheduleAtTime) with uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt:78-97 (getUpcomingTimeInMillis ends in applyTimezone, i.e. a UTC instant)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart — FlutterAlarmScheduler._advanceToReminderDay, the `ownDay` derivation`
+- **Severity:** critical
+
+1. `audit14.day-stepping-derives-its-base-day-from-utc#1` — In the Kotlin app: no day arithmetic is ever done on a reminder instant. Every firing ends in `ReminderController.onShowReminder`'s `scheduleAll()`, which re-derives the next instant from the habit's wall-clock `hour:minute` through `getUpcomingTimeInMillis`, so the reminder is on the correct local day in every timezone. The port has no fire-time hook and must therefore step over rejected days at schedule time — and the day a reminder instant belongs to is its LOCAL day. `getUpcomingTimeInMillis` returns a UTC instant while `LocalDate.fromUnixTime` is a plain floor-divide that wants timezone-removed local millis, which is what the neighbouring `LocalDate.fromUnixTime(timestamp)` receives. Mixing the two agrees only at GMT: west of it (reminder hour + |offset| >= 24) every stepped-to day lands a day early, east of it (reminder hour < offset) a day late. Concretely, a completed habit in New York still buzzes at its own evening reminder and a "Yes" tap writes the checkmark to tomorrow, and a Mon/Wed/Fri reminder in Tokyo arrives on Thursday. The conversion has to be applied before the day is taken.
+
+#### audit14.selection-bar-keeps-the-toolbar-colour
+
+- [x] `audit14.selection-bar-keeps-the-toolbar-colour` — The selection-mode contextual bar is painted the toolbar colour instead of ?attr/actionModeBackground, so entering selection mode changes nothing about the bar
+- **Platform:** ui · **Port risk:** low
+- **Source:** `uhabits-android/src/main/res/values/styles.xml:24 (actionModeBackground = @color/grey_700 in AppBaseTheme) and :72 (@color/grey_800 in AppBaseThemeDark), resolved by androidx.appcompat's Widget.AppCompat.ActionMode on the bar ListHabitsSelectionMenu.startSelection inflates`
+- **Where the port should do it:** `uhabits-flutter/packages/uhabits_core/lib/src/gui/theme.dart (actionModeBackgroundColor) and uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart, where the selection menu is built`
+- **Severity:** cosmetic
+
+1. `audit14.selection-bar-keeps-the-toolbar-colour#1` — In the Kotlin app: `startSupportActionMode` inflates the contextual bar with `style="?attr/actionModeStyle"`, whose background is `?attr/actionModeBackground` — `@color/grey_700` (#616161) in the light theme and `@color/grey_800` (#424242) in the dark one, which `AppBaseThemeDark.PureBlack` inherits by restating neither. Long-pressing a habit therefore recolours the top bar to a grey that is visibly not the toolbar's, and the colour returns when the selection ends. That recolouring is the standard Android cue that a contextual bar has taken the screen over; without it the only signal is that the title becomes a number.

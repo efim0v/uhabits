@@ -322,7 +322,17 @@ class FlutterAlarmScheduler implements SystemScheduler {
     // (`audit13.a-snooze-overtaken-by-completion-moves#1`).
     final int ownTime =
         DateUtils.getUpcomingTimeInMillis(reminder.hour, reminder.minute);
-    final int ownDay = LocalDate.fromUnixTime(ownTime).daysSince2000;
+    // `getUpcomingTimeInMillis` returns a UTC instant, while
+    // `LocalDate.fromUnixTime` is a plain floor-divide that wants local
+    // wall-clock millis — which is what the neighbouring
+    // `LocalDate.fromUnixTime(timestamp)` is handed, because the core builds
+    // `timestamp` with `removeTimezone`. The two agree only at GMT; anywhere
+    // the offset carries the reminder across a UTC midnight they differ by a
+    // day, and every day the loop steps to would land a day early west of GMT
+    // or a day late east of it
+    // (`audit14.day-stepping-derives-its-base-day-from-utc#1`).
+    final int ownDay =
+        LocalDate.fromUnixTime(DateUtils.removeTimezone(ownTime)).daysSince2000;
 
     var date = LocalDate.fromUnixTime(timestamp);
     var time = reminderTime;

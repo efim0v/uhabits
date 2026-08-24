@@ -32,6 +32,12 @@ abstract class Theme {
 
   Color get statusBarBackgroundColor => const Color.fromRgb(0x333333);
 
+  /// `<item name="actionModeBackground">@color/grey_700</item>` in
+  /// `AppBaseTheme` — the background AppCompat's `Widget.AppCompat.ActionMode`
+  /// paints the contextual bar with while a selection is in force
+  /// (`audit14.selection-bar-keeps-the-toolbar-colour#1`).
+  Color get actionModeBackgroundColor => const Color.fromRgb(0x616161);
+
   Color get toolbarBackgroundColor => const Color.fromRgb(0xf4f4f4);
 
   Color get toolbarColor => const Color.fromRgb(0xffffff);
@@ -281,6 +287,12 @@ class DarkTheme extends Theme {
 
   @override
   Color get statusBarBackgroundColor => const Color.fromRgb(0x333333);
+
+  /// `<item name="actionModeBackground">@color/grey_800</item>` in
+  /// `AppBaseThemeDark`. `AppBaseThemeDark.PureBlack` restates neither, so it
+  /// inherits this one.
+  @override
+  Color get actionModeBackgroundColor => const Color.fromRgb(0x424242);
 
   @override
   Color get toolbarBackgroundColor => const Color.fromRgb(0xf4f4f4);

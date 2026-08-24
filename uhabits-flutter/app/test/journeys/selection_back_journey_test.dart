@@ -21,6 +21,7 @@
 /// `SystemNavigator.pop()`, which is `Activity.finish()`.
 library;
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/ui/habits/list/habit_card.dart';
@@ -75,6 +76,34 @@ void main() {
     // subject; only what a Back press sends is.
     platformCalls.clear();
   }
+
+  testWidgets('the contextual bar recolours itself when selection starts',
+      (WidgetTester tester) async {
+    await launchWithHabits(tester);
+
+    final Color toolbar = tester
+        .widget<AppBar>(find.descendant(
+            of: find.byType(ListHabitsMenu), matching: find.byType(AppBar)))
+        .backgroundColor!;
+
+    await longPressHabit(tester, 'Track time');
+
+    final Color contextual = tester
+        .widget<AppBar>(find.descendant(
+            of: find.byType(ListHabitsSelectionMenu),
+            matching: find.byType(AppBar)))
+        .backgroundColor!;
+
+    expect(contextual, isNot(toolbar),
+        reason: 'audit14.selection-bar-keeps-the-toolbar-colour#1 — AppCompat '
+            "paints the contextual bar from ?attr/actionModeBackground, so it "
+            'is visibly a different bar from the toolbar it covers. Asserting '
+            'this through the running screen rather than on the theme, because '
+            'a token nothing reads is the defect this port keeps finding.');
+    expect(contextual, const Color(0xFF616161),
+        reason: 'audit14.selection-bar-keeps-the-toolbar-colour#1 — '
+            '@color/grey_700, the light theme value.');
+  });
 
   testWidgets('Back cancels selection mode instead of closing the app',
       (WidgetTester tester) async {

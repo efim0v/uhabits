@@ -740,7 +740,12 @@ class _HabitListViewState extends State<_HabitListView>
             )
           : ListHabitsSelectionMenu(
               model: model,
-              backgroundColor: toolbarColor,
+              // The contextual bar is not the toolbar: AppCompat paints it
+              // with `?attr/actionModeBackground`, a lighter grey that is the
+              // cue selection mode has taken the screen over
+              // (`audit14.selection-bar-keeps-the-toolbar-colour#1`).
+              backgroundColor:
+                  _toFlutterColor(theme.actionModeBackgroundColor),
             ),
       body: LayoutBuilder(
         builder: (context, constraints) {
