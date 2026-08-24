@@ -27,11 +27,17 @@ import Foundation
 /// the device locale too.
 enum DateNames {
 
-    private static let calendar = Calendar.current
+    private static let calendar = widgetCalendar
 
     private static let symbols: DateFormatter = {
         let formatter = DateFormatter()
+        // The words follow the device locale, as
+        // `JavaLocalDateFormatter(Locale.getDefault())` does upstream; the
+        // calendar does not, because the month these names are indexed by is a
+        // Gregorian month
+        // (`audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar#1`).
         formatter.locale = Locale.current
+        formatter.calendar = widgetCalendar
         return formatter
     }()
 

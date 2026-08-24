@@ -340,7 +340,7 @@ enum StreakState {
     /// Whole days from [date] to [today], which is how far back a bar's label
     /// has to count. Negative for a date in the future, which no streak has.
     private static func offset(of date: Date, from today: Date) -> Int? {
-        let calendar = Calendar.current
+        let calendar = widgetCalendar
         return calendar.dateComponents(
             [.day],
             from: calendar.startOfDay(for: date),
@@ -443,7 +443,11 @@ extension DateNames {
     /// a 30 MB memory budget.
     private static let mediumDate: DateFormatter = {
         let formatter = DateFormatter()
+        // The pattern and the words are the device's; the calendar is
+        // Gregorian, the one the day number was written in
+        // (`audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar#1`).
         formatter.locale = Locale.current
+        formatter.calendar = widgetCalendar
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter

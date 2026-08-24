@@ -435,6 +435,26 @@ enum EntryValue {
 /// plus a `JSONDecoder`. Nothing here throws: a widget that cannot read its
 /// data renders a placeholder, never a crash — an extension that traps is
 /// killed and the user sees a blank card with no way to tell why.
+/// The calendar every date in the extension is read and written with.
+///
+/// Every date in this port is a proleptic-Gregorian day number — the core's
+/// `LocalDate` is integer arithmetic over `daysSince2000` — and the bridge
+/// serialises it as a Gregorian ISO string. `Calendar.current` is the user's
+/// Settings > General > Language & Region > Calendar choice, so on a Buddhist,
+/// Persian, Islamic or Japanese device it would read that string back as a
+/// different civil day and stamp everything this side emits with the wrong
+/// era. The Android host pins `GregorianCalendar(TimeZone.getTimeZone("GMT"))`
+/// for exactly this reason
+/// (`audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar#1`).
+///
+/// UTC, not the device zone, because the day being named is the one the app
+/// computed: re-deriving it in local time can land on the day either side.
+let widgetCalendar: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+    return calendar
+}()
+
 struct WidgetStore {
 
     let defaults: UserDefaults?
@@ -593,7 +613,7 @@ struct WidgetStore {
     /// day, used when nothing has been published and the device's own today is
     /// the best a link can carry.
     static func formatDate(_ date: Date) -> String {
-        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let parts = widgetCalendar.dateComponents([.year, .month, .day], from: date)
         return String(
             format: "%04d-%02d-%02d",
             parts.year ?? 0,
@@ -609,7 +629,7 @@ struct WidgetStore {
         components.year = parts[0]
         components.month = parts[1]
         components.day = parts[2]
-        return Calendar.current.date(from: components)
+        return widgetCalendar.date(from: components)
     }
 }
 
@@ -644,7 +664,7 @@ extension WidgetStore {
     /// still the document's own `today`.
     static func logicalToday(midnightDelayHours: Int, now: Date = Date()) -> Date {
         let shifted = now.addingTimeInterval(-Double(midnightDelayHours) * 3600)
-        return Calendar.current.startOfDay(for: shifted)
+        return widgetCalendar.startOfDay(for: shifted)
     }
 
     /// The next instant [logicalToday] answers a different day —
@@ -654,7 +674,7 @@ extension WidgetStore {
         midnightDelayHours: Int,
         from now: Date = Date()
     ) -> Date {
-        let calendar = Calendar.current
+        let calendar = widgetCalendar
         let today = logicalToday(midnightDelayHours: midnightDelayHours, now: now)
         guard
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
@@ -669,7 +689,7 @@ extension WidgetStore {
 
     /// Whole days from [from] to [to] — `LocalDate.daysSince`.
     static func daysSince(_ from: Date, to: Date) -> Int {
-        let calendar = Calendar.current
+        let calendar = widgetCalendar
         return calendar.dateComponents(
             [.day],
             from: calendar.startOfDay(for: from),

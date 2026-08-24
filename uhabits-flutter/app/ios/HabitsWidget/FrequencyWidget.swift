@@ -368,7 +368,7 @@ struct MonthKey: Hashable {
     }
 
     init(of date: Date) {
-        let components = Calendar.current.dateComponents([.year, .month], from: date)
+        let components = widgetCalendar.dateComponents([.year, .month], from: date)
         self.init(year: components.year ?? 2000, month: components.month ?? 1)
     }
 
@@ -392,7 +392,7 @@ struct MonthKey: Hashable {
         components.year = year
         components.month = month
         components.day = 1
-        return Calendar.current.date(from: components) ?? Date()
+        return widgetCalendar.date(from: components) ?? Date()
     }
 
     /// `countWeekdayOccurrencesInMonth`: how many Sundays, Mondays … the month
@@ -400,7 +400,7 @@ struct MonthKey: Hashable {
     func weekdayOccurrences() -> [Int] {
         let start = startOfMonth
         let weekday = (DateNames.daysSinceSunday(start) + 1) % 7
-        let length = Calendar.current
+        let length = widgetCalendar
             .range(of: .day, in: .month, for: start)?.count ?? 30
         var frequency = [Int](repeating: 0, count: 7)
         for day in weekday..<(weekday + length) {

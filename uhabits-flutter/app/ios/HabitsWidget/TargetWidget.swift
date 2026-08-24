@@ -367,7 +367,7 @@ enum TargetState {
     /// The offsets from today that fall inside the bucket containing today —
     /// which is what `groupedSum(...).firstOrNull` picks out upstream.
     static func daysOf(_ window: Window, today: Date, entryCount: Int) -> Range<Int> {
-        let calendar = Calendar.current
+        let calendar = widgetCalendar
         let parts = calendar.dateComponents([.year, .month], from: today)
         let year = parts.year ?? 2000
         let month = parts.month ?? 1
@@ -436,7 +436,7 @@ enum TargetState {
         today: Date,
         dailyTarget: Double
     ) -> Double {
-        let calendar = Calendar.current
+        let calendar = widgetCalendar
         switch window {
         case .day:
             return dailyTarget

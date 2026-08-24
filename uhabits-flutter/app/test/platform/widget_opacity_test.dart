@@ -285,6 +285,45 @@ void main() {
               'document it never opens is the wrong place for it.');
     });
 
+    test('a completed checkmark card stays solid, as on Android', () {
+      // `CheckmarkWidgetView.refresh()` assigns `backgroundPaint!!.color =
+      // bgColor` *after* the opacity alpha was put on that paint, and
+      // `Paint.setColor(int)` replaces the whole ARGB — so on Android a
+      // completed or skipped card is a solid habit-colour square at every
+      // opacity setting, and only the unanswered card fades. Fading both would
+      // make "done" and "not done" look identical at 20%, which is the one
+      // signal the widget exists to carry
+      // (`audit17.ios-checkmark-done-card-must-stay-opaque#1`).
+      final String android = File(
+        'android/app/src/main/kotlin/org/isoron/uhabits/widgets/views/'
+        'CheckmarkWidgetView.kt',
+      ).readAsStringSync();
+      expect(android, contains('backgroundPaint!!.color = bgColor'),
+          reason: 'audit17.ios-checkmark-done-card-must-stay-opaque#1 — this '
+              'is the assignment the rule is read off; if it moves, the iOS '
+              'side has to be revisited with it.');
+
+      final String checkmark =
+          File('ios/HabitsWidget/CheckmarkWidget.swift').readAsStringSync();
+      final int cardColor = checkmark.indexOf('static func cardColor(');
+      expect(cardColor, greaterThan(0),
+          reason: 'audit17.ios-checkmark-done-card-must-stay-opaque#1');
+      final String body = checkmark.substring(
+          cardColor, checkmark.indexOf('\n    }', cardColor));
+      final int palette = body.indexOf('WidgetTheme.color(paletteIndex:');
+      final int fallback = body.indexOf('WidgetTheme.cardBackgroundOpaque');
+      expect(palette, greaterThan(0), reason: 'the completed branch');
+      expect(fallback, greaterThan(palette), reason: 'the unanswered branch');
+
+      expect(body.substring(palette, fallback), isNot(contains('.opacity(')),
+          reason: 'audit17.ios-checkmark-done-card-must-stay-opaque#1 — the '
+              'completed branch must hand the card an opaque habit colour.');
+      expect(body.substring(fallback), contains('.opacity('),
+          reason: 'audit17.ios-checkmark-done-card-must-stay-opaque#1 — and '
+              'the unanswered branch must carry the preference alpha, since '
+              'that is the paint Android leaves untouched.');
+    });
+
     test('the extension declares and applies it', () {
       final String swift =
           File('ios/HabitsWidget/WidgetData.swift').readAsStringSync();

@@ -111,8 +111,16 @@ extension View {
     /// view would take the chart, the ring and the label with it, where
     /// `backgroundPaint.alpha` upstream touches nothing but the card
     /// (`audit16.widget-opacity-never-reaches-ios#1`).
-    func widgetCard(_ color: Color = WidgetTheme.cardBackgroundOpaque) -> some View {
-        containerBackground(color.opacity(WidgetStore().widgetOpacity()),
-                            for: .widget)
+    ///
+    /// A caller that passes a colour has already resolved its own alpha and is
+    /// left alone — which is how the Checkmark widget keeps a completed card
+    /// solid, the way `CheckmarkWidgetView.refresh()` does by overwriting the
+    /// paint's whole ARGB (`audit17.ios-checkmark-done-card-must-stay-opaque#1`).
+    func widgetCard(_ color: Color? = nil) -> some View {
+        containerBackground(
+            color ??
+                WidgetTheme.cardBackgroundOpaque
+                    .opacity(WidgetStore().widgetOpacity()),
+            for: .widget)
     }
 }

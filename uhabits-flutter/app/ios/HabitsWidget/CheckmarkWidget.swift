@@ -103,9 +103,20 @@ struct CheckmarkWidgetView: View {
     static func cardColor(_ habit: WidgetHabit) -> Color {
         switch CheckmarkState.entryState(habit) {
         case EntryValue.yesManual, EntryValue.yesAuto, EntryValue.skip:
+            // `CheckmarkWidgetView.refresh()` assigns
+            // `backgroundPaint!!.color = bgColor` after the widget-opacity
+            // alpha has been put on that same paint, and `Paint.setColor(int)`
+            // replaces the whole ARGB — so the alpha is discarded and a
+            // completed card is a solid habit-colour square at every opacity
+            // setting (`audit17.ios-checkmark-done-card-must-stay-opaque#1`).
+            // Fading it here would erase the strongest signal the widget
+            // carries: done and not-done would look the same.
             return WidgetTheme.color(paletteIndex: habit.color)
         default:
+            // The untouched paint: the card colour with the preference's alpha,
+            // exactly as `HabitWidgetView.rebuildBackground` leaves it.
             return WidgetTheme.cardBackgroundOpaque
+                .opacity(WidgetStore().widgetOpacity())
         }
     }
 }

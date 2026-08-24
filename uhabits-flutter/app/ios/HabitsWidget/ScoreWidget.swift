@@ -348,6 +348,6 @@ extension DateNames {
     }
 
     static func yearNumber(_ date: Date) -> Int {
-        Calendar.current.component(.year, from: date)
+        widgetCalendar.component(.year, from: date)
     }
 }

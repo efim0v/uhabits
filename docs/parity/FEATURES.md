@@ -7980,3 +7980,30 @@ now guarded directly.
 - **Severity:** major
 
 1. `audit16.index-fields-must-reach-the-extension#1` — In the Kotlin app there is no such boundary: the widget provider runs against the live application component, so every preference it needs is simply readable. The port splits that into a published document and two consumers, and the index document is the whole contract with the iOS extension. Three defects have now been caused by a field crossing to one consumer and not the other — `audit5.checkmark-home-screen-widget-never-draws`, `audit15.ios-home-screen-widgets-never-roll` and `audit16.widget-opacity-never-reaches-ios` — each time because nothing in the suite compared the two sides. The port must therefore assert the comparison structurally: every top-level field `buildIndexDocument` publishes is either declared as a property of `WidgetIndex` in the Swift, or named in an explicit list of Android-only fields with the reason it cannot apply, so that a field added tomorrow either reaches the extension or is refused by the suite.
+
+## Domain: Seventeenth audit pass (2026-08-24)
+
+Two findings, both in the iOS widget extension, both from lenses that had been
+clean the round before: the regression lens caught the previous pass's own fix,
+and the timezone lens found a second ambient device setting the suite cannot
+vary. Six of the eight lenses came back clean.
+
+#### audit17.ios-checkmark-done-card-must-stay-opaque
+
+- [x] `audit17.ios-checkmark-done-card-must-stay-opaque` — Applying the widget-opacity alpha to the completed checkmark card fades the one signal the widget carries; Android leaves that card solid at every setting
+- **Platform:** ios · **Port risk:** low
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/widgets/views/HabitWidgetView.kt:96-97 (backgroundPaint.color = cardBgColor; backgroundPaint.alpha = backgroundAlpha) and .../views/CheckmarkWidgetView.kt:64-80 (refresh(): setShadowAlpha(0x4f) then backgroundPaint!!.color = bgColor for YES_MANUAL/SKIP/YES_AUTO)`
+- **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/CheckmarkWidget.swift (cardColor) and uhabits-flutter/app/ios/HabitsWidget/WidgetCard.swift (widgetCard)`
+- **Severity:** major
+
+1. `audit17.ios-checkmark-done-card-must-stay-opaque#1` — In the Kotlin app: `HabitWidgetView.rebuildBackground()` sets the card paint's colour and then its alpha from the opacity preference, but `CheckmarkWidgetView.refresh()` afterwards assigns `backgroundPaint!!.color = bgColor` for YES_MANUAL, SKIP and YES_AUTO, and `Paint.setColor(int)` replaces the whole ARGB. The palette colour is opaque, so the alpha just applied is discarded: a completed or skipped Checkmark card is a solid, saturated habit-colour square at every "Widget opacity" setting, and only the unanswered card — whose branch never touches `backgroundPaint.color` — fades. A port that applies the alpha uniformly makes done and not-done look identical at 20%, and invisible at 0%, on exactly the setting that was meant to be honoured.
+
+#### audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar
+
+- [x] `audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar` — The iOS widget extension reads and writes the date wire format through Calendar.current, so on a non-Gregorian device every widget is permanently blank and every tap is dropped
+- **Platform:** ios · **Port risk:** high
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/platform/time/Dates.kt:47-190 (LocalDate is integer arithmetic over daysSince2000 — proleptic Gregorian by construction) and the port's own Android host, uhabits-flutter/app/android/.../widgets/WidgetData.kt, whose LocalDate.of/parse/today all pin GregorianCalendar(TimeZone.getTimeZone("GMT"))`
+- **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/WidgetData.swift (widgetCalendar, and every date it is used from), plus the DateFormatters in DateNames.swift and StreakWidget.swift`
+- **Severity:** major
+
+1. `audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar#1` — In the Kotlin app no date ever leaves the process as text and no `Calendar` ever touches a day number: `LocalDate` is integer arithmetic over `daysSince2000`, independent of every locale, region and calendar setting. A port whose widgets are a separate process must serialise the day, and must therefore read it back in the calendar it was written in. `Calendar.current` is the user's Settings > General > Language & Region > Calendar choice — Buddhist is the default for the Thailand region — so it reads the Gregorian ISO string `2026-08-24` as BE 2026 = CE 1483. The roll-forward then shifts every newest-first array roughly 198,000 days past its own end and all six widgets go permanently blank; a staged tap is stamped `2569-08-24`, which the queue refuses as later than today and silently drops, and the value-picker link is rejected by `IntentParser` for the same reason. The names on the charts still follow the device locale — upstream builds `JavaLocalDateFormatter(Locale.getDefault())` — but the month and year they are indexed by are Gregorian, so the formatters must be pinned too.
