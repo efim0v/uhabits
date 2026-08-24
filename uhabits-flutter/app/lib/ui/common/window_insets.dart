@@ -90,7 +90,35 @@ class RootViewInsets extends StatelessWidget {
       color: const Color(0xFF000000),
       child: Padding(
         padding: rootViewInsetsOf(MediaQuery.of(context)),
-        child: child,
+        // The strips are now behind this widget, so nothing below it may pad
+        // by them again. Upstream cannot double up: the listener is installed
+        // once per activity, `SettingsFragment` adds only `applyBottomInset()`
+        // to its list, and `EditHabitActivity`'s second call replaces the
+        // first on the same view — one listener slot per view. Here a screen
+        // that wraps its body in a bare `SafeArea` would read the same
+        // untouched padding and indent its content twice as far as its own
+        // toolbar (`audit23.the-root-inset-must-be-consumed-once#1`).
+        //
+        // Only the horizontal edges are consumed: the top belongs to the
+        // toolbar and the bottom to `BottomInset`, which is the port of
+        // `applyBottomInset()` and is applied per screen
+        // (`platform-glue.window-insets#5`).
+        //
+        // `MediaQuery.removePadding` is the wrong tool: it also subtracts from
+        // `viewPadding`, and that is the field carrying the Android meaning —
+        // the raw intrusion, whatever anyone has consumed, which `BottomInset`
+        // and the toolbar still compute from. Only `padding` is reduced.
+        child: Builder(
+          builder: (context) {
+            final MediaQueryData data = MediaQuery.of(context);
+            return MediaQuery(
+              data: data.copyWith(
+                padding: data.padding.copyWith(left: 0, right: 0),
+              ),
+              child: child,
+            );
+          },
+        ),
       ),
     );
   }

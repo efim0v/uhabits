@@ -8213,3 +8213,19 @@ hosts. Here both hosts were carried, and that was the defect.
 - **Severity:** cosmetic
 
 1. `audit22.edit-habit-reminder-time-follows-the-app-locale#1` — In the Kotlin app: `DateExtensions.formatTime(context, hours, minutes)` has exactly two callers — `SubtitleCardView` and `EditHabitActivity.populateReminder()`, the label of the reminder row in the habit editor — and both go through `android.text.format.DateFormat.getTimeFormat(context)`, i.e. `SimpleDateFormat(LocaleData.get(locale).timeFormat_(h|H)m, locale)` where `locale` is `context.getResources().getConfiguration().locale`. On a single-locale device that is the DEVICE locale, region and all, even when the app ships no translation for it, so the editor's reminder row and the Show-habit subtitle card always print the same pattern: "8:30 am" on en-AU, "08 h 30" on fr-CA under a 24-hour setting, "08:30 น." on th-TH, while the form's own strings come from `values/`. It is also the same configuration locale `WeekdayList.toFormattedString(context)` reads for the reminder-days row directly beneath it, so the two rows of one box can never disagree.
+
+## Domain: Twenty-third audit pass (2026-08-24)
+
+Two findings, one refuted. The major one is the previous pass's fix seen from
+the other side: that commit deleted a wrapper which did three things, and only
+two of them existed in the widget it deferred to.
+
+#### audit23.the-root-inset-must-be-consumed-once
+
+- [x] `audit23.the-root-inset-must-be-consumed-once` — The root window inset is left in MediaQuery.padding, so any screen wrapping its body in a bare SafeArea indents its content twice
+- **Platform:** ui · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/utils/ViewExtensions.kt:262-272 (applyRootViewInsets) and :274-281 (applyBottomInset); SettingsActivity.kt:46 with SettingsFragment.kt:121; EditHabitActivity.kt:98-100`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/common/window_insets.dart — RootViewInsets`
+- **Severity:** major
+
+1. `audit23.the-root-inset-must-be-consumed-once#1` — In the Kotlin app the horizontal inset is applied at most once per screen, and it cannot be applied twice: `ViewCompat.setOnApplyWindowInsetsListener` has one listener slot per view, so `EditHabitActivity`'s `applyBottomInset()` replaces its own `applyRootViewInsets()`, and `SettingsFragment` adds only a bottom inset to a different view. The listener returns the insets unconsumed, but that is an Android statement about *receiving* the `WindowInsets` object — a view pads only if it has its own listener, and none of these children do for the horizontal edges. Flutter's `MediaQuery.padding` means something narrower: it is what a `SafeArea` will pad by. So a port that adds a root `Padding` and leaves `padding` whole makes every descendant `SafeArea` pad again, and the content of a screen that uses one steps in twice as far as its own toolbar — about 56 logical pixels of a landscape window, with a visible seam. The port must therefore consume the horizontal edges of `padding` at the root while leaving `viewPadding` untouched, since that is the field carrying the Android meaning and the one `BottomInset` and the toolbar still compute from.

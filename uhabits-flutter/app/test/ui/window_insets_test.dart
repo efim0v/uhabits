@@ -166,11 +166,28 @@ void main() {
 
     testWidgets('#4 the insets are not consumed: a child still sees all of '
         'them', (WidgetTester tester) async {
+      // CORRECTED, LOUDLY. This used to also assert
+      // `seen.padding == keyboardUp.padding`, under the same rule — a literal
+      // reading of "unconsumed" that translated the Android mechanism into the
+      // wrong Flutter field. On Android an unconsumed inset means the child
+      // *receives the WindowInsets object*; it does not mean the child pads by
+      // it, because only a view with its own listener pads at all, and no view
+      // below these has one for the horizontal edges. In Flutter
+      // `MediaQuery.padding` is precisely "what a SafeArea will pad by", so
+      // leaving it whole made every descendant SafeArea pad a second time —
+      // which is exactly the defect that reached the Settings and Edit-habit
+      // screens (`audit23.the-root-inset-must-be-consumed-once#1`).
+      //
+      // `viewPadding` is the field that carries the Android meaning: the raw
+      // intrusion, whatever anyone has consumed. It is still untouched, so a
+      // descendant can still compute with the real numbers — which is what
+      // makes nesting `BottomInset` inside work.
       const String rule = 'platform-glue.window-insets#4 — All three listeners '
           'return the original insets unconsumed, so child views still receive '
-          'them. The two widgets here get that by construction: they add '
-          'Padding and leave the ambient MediaQuery untouched, so a descendant '
-          'reads exactly the viewPadding and viewInsets its ancestor read.';
+          'them. In Flutter that is `viewPadding` and `viewInsets`, which these '
+          'widgets leave untouched; `padding` is the not-yet-consumed part, and '
+          'the horizontal edges really have been consumed by the time the child '
+          'is built.';
 
       late MediaQueryData seen;
       Widget probe() => Builder(builder: (BuildContext context) {
@@ -186,7 +203,16 @@ void main() {
 
       expect(seen.viewPadding, keyboardUp.viewPadding, reason: rule);
       expect(seen.viewInsets, keyboardUp.viewInsets, reason: rule);
-      expect(seen.padding, keyboardUp.padding, reason: rule);
+      expect(seen.padding.top, keyboardUp.padding.top,
+          reason: '$rule The top belongs to the toolbar, and nothing here has '
+              'taken it.');
+      expect(seen.padding.bottom, keyboardUp.padding.bottom,
+          reason: '$rule The bottom belongs to BottomInset, which is applied '
+              'per screen.');
+      expect(seen.padding.left, 0,
+          reason: '$rule The horizontal edges are behind RootViewInsets now, '
+              'so a SafeArea below it must not pad by them again.');
+      expect(seen.padding.right, 0, reason: rule);
       // Which is exactly what makes nesting them work: the inner widget can
       // still compute its own inset from the untouched numbers.
       expect(bottomInsetOf(seen), 300, reason: rule);
