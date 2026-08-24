@@ -446,7 +446,7 @@ void main() {
       expect(
         data,
         contains('static func logicalToday(midnightDelayHours: Int, '
-            'now: Date = Date()) -> Date'),
+            'now: Date = Date(), zone: TimeZone = .current) -> Date'),
         reason: '$rule15 `WidgetStore.today()` returned the published string '
             'verbatim, so the day the cards drew was the day the app last ran '
             '— forever. The one thing this process may ask the system is what '
@@ -455,7 +455,17 @@ void main() {
       );
       expect(
         data,
-        contains('now.addingTimeInterval(-Double(midnightDelayHours) * 3600)'),
+        contains('let local = '
+            'now.addingTimeInterval(Double(zone.secondsFromGMT(for: now)))'),
+        reason: '$rule15 …and the day that instant belongs to is the LOCAL '
+            'civil day, exactly as `DateUtils.getLocalTime()` is `now + '
+            'tz.getOffset(now)` before the day is floored. `widgetCalendar` is '
+            'pinned to UTC for the wire format, so flooring the raw instant '
+            'with it would answer the UTC day instead.',
+      );
+      expect(
+        data,
+        contains('local.addingTimeInterval(-Double(midnightDelayHours) * 3600)'),
         reason: '$rule15 …minus the midnight delay the index publishes, '
             'because `computeToday(hourOffset, 0)` is what the app itself '
             'would have answered.',

@@ -8007,3 +8007,64 @@ vary. Six of the eight lenses came back clean.
 - **Severity:** major
 
 1. `audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar#1` — In the Kotlin app no date ever leaves the process as text and no `Calendar` ever touches a day number: `LocalDate` is integer arithmetic over `daysSince2000`, independent of every locale, region and calendar setting. A port whose widgets are a separate process must serialise the day, and must therefore read it back in the calendar it was written in. `Calendar.current` is the user's Settings > General > Language & Region > Calendar choice — Buddhist is the default for the Thailand region — so it reads the Gregorian ISO string `2026-08-24` as BE 2026 = CE 1483. The roll-forward then shifts every newest-first array roughly 198,000 days past its own end and all six widgets go permanently blank; a staged tap is stamped `2569-08-24`, which the queue refuses as later than today and silently drops, and the value-picker link is rejected by `IntentParser` for the same reason. The names on the charts still follow the device locale — upstream builds `JavaLocalDateFormatter(Locale.getDefault())` — but the month and year they are indexed by are Gregorian, so the formatters must be pinned too.
+
+## Domain: Eighteenth audit pass (2026-08-24)
+
+Six findings, two refuted. Three of the six were one critical regression from
+the seventeenth pass's own fix, reported independently by three lenses: pinning
+the widget calendar to UTC was right for the wire format and wrong for deciding
+what day it is. That defect, and the two before it, are why the widget sources
+are now compiled into the RunnerTests bundle and executed — a source-text
+assertion can see that a field is declared and can never see an off-by-one.
+
+
+#### audit18.streak-date-labels-must-be-formatted-in-utc
+
+- [x] `audit18.streak-date-labels-must-be-formatted-in-utc` — The streak chart's date labels are formatted in UTC, not in the device time zone
+- **Platform:** ios · **Port risk:** medium
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/JavaDates.kt:86-90 (JavaLocalDateFormatter.longFormat); consumed by uhabits-android/src/main/java/org/isoron/uhabits/activities/common/views/StreakChart.kt:180-181 and :239-240`
+- **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/StreakWidget.swift:444-462 (DateNames.mediumDate / longFormat), consumed at :255-257`
+- **Severity:** major
+
+1. `audit18.streak-date-labels-must-be-formatted-in-utc#1` — In the Kotlin app: `JavaLocalDateFormatter.longFormat` is two settings, not one. It builds `DateFormat.getDateInstance(DateFormat.MEDIUM, locale)` so the pattern and the words follow the device locale, and then forces `df.timeZone = TimeZone.getTimeZone("UTC")` before `df.format(date.toGregorianCalendar().time)` — because `LocalDate.toGregorianCalendar()` is a UTC-midnight instant, and reading it back in local time lands on the day either side. `StreakChart` flanks every bar with that pair (`audit3.streak-chart-date-labels-are-hard#1`), so both ends of a streak name the day the app computed, in every time zone. A port that carries the same UTC-midnight day keys must pin the formatter's time zone as well as its calendar: `DateFormatter.calendar` and `DateFormatter.timeZone` are independent properties, and a formatter whose zone is left at `NSTimeZone.default` prints the previous day everywhere west of GMT while the app's own Show-habit screen prints the right one.
+
+#### audit18.the-completion-gate-must-judge-the-alarms-own-day
+
+- [x] `audit18.the-completion-gate-must-judge-the-alarms-own-day` — Gate 1 judges the day the reminder is for, and a frequency-completed future day already answers it
+- **Platform:** both · **Port risk:** medium
+- **Source:** `uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/ui/NotificationTray.kt (ShowNotificationTask.doInBackground + onPostExecute, gate 1); uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/Habit.kt:60-71 (isCompletedToday); uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt:242-267 (buildIntervals) and :163-190 (buildEntriesFromInterval)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart:376-441 (_isAlreadyCompleted / _isCompletedOn), reached from _advanceToReminderDay at :350`
+- **Severity:** major
+
+1. `audit18.the-completion-gate-must-judge-the-alarms-own-day#1` — In the Kotlin app: gate 1 of `NotificationTray.ShowNotificationTask` runs when the alarm fires — `doInBackground` computes `isCompleted = habit.isCompletedToday()` and `onPostExecute` returns early when `isCompleted && habit.targetType != AT_MOST` (`notifications.show-gating#3`). `isCompletedToday()` reads `computedEntries.get(getToday()).value`, and for a boolean habit that is true for YES_MANUAL, YES_AUTO and SKIP alike (`models.habit-completed-entered#3`, `notifications.show-gating#10`). For any habit whose frequency is not daily the value is already decided in advance: `EntryList.buildIntervals` ends the newest interval at `begin.plus(size - 1)` and `buildEntriesFromInterval` writes YES_AUTO across the whole of it, days after today included. So an "Every 3 days" habit ticked on Monday is YES_AUTO on Tuesday and Wednesday and the daily reminder stays silent on both; a "3 times per week" habit satisfied by Wednesday is YES_AUTO to the end of its week and stays silent until the following Monday. Only a day no interval covers is UNKNOWN, which is not completed — which is why a daily habit ticked today is still reminded tomorrow. A port that must decide at schedule time rather than fire time has to ask the question about the day the alarm names, not about today.
+
+#### audit18.the-type-choosers-scrim-must-reach-the-screen-edges
+
+- [x] `audit18.the-type-choosers-scrim-must-reach-the-screen-edges` — The Add-habit type chooser's scrim covers the whole screen, system bars included
+- **Platform:** both · **Port risk:** medium
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/activities/habits/edit/HabitTypeDialog.kt:32 (getTheme() = R.style.Translucent); uhabits-android/src/main/res/values/styles.xml:303-310 (the Translucent style, incl. android:windowTranslucentStatus); uhabits-android/src/main/res/layout/select_habit_type.xml:21-30`
+- **Where the port should do it:** `uhabits-flutter/app/lib/ui/habits/edit/edit_habit_screen.dart:296-316 (EditHabitScreen.selectTypeAndOpen's showDialog call); the scrim itself at :1119-1124`
+- **Severity:** cosmetic
+
+1. `audit18.the-type-choosers-scrim-must-reach-the-screen-edges#1` — In the Kotlin app: `HabitTypeDialog` overrides `getTheme()` to `R.style.Translucent`, which sets `android:windowIsTranslucent` and `android:windowTranslucentStatus` and does not set `windowIsFloating`, so the dialog gets an ordinary MATCH_PARENT/MATCH_PARENT window whose decor does not fit system windows. The layout it inflates, `select_habit_type.xml`, is a single LinearLayout with `layout_width="match_parent"`, `layout_height="match_parent"` and `android:background="#a0000000"`. The scrim therefore covers every pixel of the screen — behind the status bar at the top and behind the navigation bar at the bottom — with the two cards floating vertically centred over a uniformly dimmed habit list (`habit-type-dialog.select-type#2`, `#3`). A port whose dialog route paints no barrier of its own must not inset that dialog by the view padding, or the system-bar bands stay bright with a hard seam at each boundary.
+
+#### audit18.widget-today-must-be-the-local-day
+
+- [x] `audit18.widget-today-must-be-the-local-day` — The iOS widgets decided what day it is in UTC, so west of GMT every card rolled early and every evening tap was dropped
+- **Platform:** ios · **Port risk:** high
+- **Source:** `uhabits-core/src/jvmMain/java/org/isoron/platform/time/DateUtils.kt:43-51 (getLocalTime() is `now + tz.getOffset(now)`, and getStartOfDay floors those already-localised millis); mirrored by the port's Android host at uhabits-flutter/app/android/.../widgets/WidgetData.kt (LocalDate.today)`
+- **Where the port should do it:** `uhabits-flutter/app/ios/HabitsWidget/WidgetData.swift — WidgetStore.logicalToday and startOfNextDay`
+- **Severity:** critical
+
+1. `audit18.widget-today-must-be-the-local-day#1` — In the Kotlin app the day an instant belongs to is always the LOCAL civil day: `getLocalTime()` adds the zone's offset and only then is the value floored, so the Gregorian/GMT calendar is the arithmetic vehicle and never the source of the day. A port that pins its widget calendar to UTC — correctly, for reading back a wire format written as a Gregorian day string — must still add the device's offset before flooring, or the widget's "today" becomes the UTC day. West of GMT it then turns early by the size of the offset: in New York the Checkmark card silently un-ticks at 20:00, the History grid gains a blank column, and a tap made between then and local midnight is staged with tomorrow's date, which the queue refuses as later than today and drops — so for four hours every evening the card answers the tap and nothing is recorded. East of GMT the roll is late by the same amount, and the reload policy fires at UTC midnight instead of the hour the user's own day turns at.
+
+#### audit18.the-widget-extension-must-be-executable-by-tests
+
+- [x] `audit18.the-widget-extension-must-be-executable-by-tests` — The iOS widget extension had no test target, so its logic could only be guarded by reading its source as text
+- **Platform:** ios · **Port risk:** medium
+- **Source:** `Upstream the widgets are ordinary classes in the app's own source set, covered by uhabits-android's instrumentation and unit tests like any other view; there is no process boundary and no separate language to cross.`
+- **Where the port should do it:** `uhabits-flutter/app/ios/RunnerTests/WidgetArithmeticTests.swift, the widget sources added to the RunnerTests target in uhabits-flutter/app/ios/Runner.xcodeproj/project.pbxproj, and uhabits-flutter/tool/swift_widget_tests.sh`
+- **Severity:** major
+
+1. `audit18.the-widget-extension-must-be-executable-by-tests#1` — In the Kotlin app the widget code is tested like the rest of the app. In this port it is Swift in a separate process, and `flutter test` cannot run it — so for eighteen audit passes it was guarded only by Dart tests that read the Swift as text. Those can assert that a field is declared or that a pattern is absent; they cannot see an off-by-one, a day computed in the wrong zone, or an alpha applied to the wrong colour, and each of those reached the user. The extension's sources must therefore be compiled into a unit-test bundle and its arithmetic executed: the wire format's round trip, the roll-forward's shift, the day boundary in a named time zone, and the card-colour rule. A guard that cannot fail on a logic error is not a guard.
+

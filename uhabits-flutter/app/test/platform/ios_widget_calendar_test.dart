@@ -71,6 +71,52 @@ void main() {
             'on the day either side of it.');
   });
 
+  test('a formatter that renders a Date pins its time zone too', () {
+    // `DateFormatter.calendar` and `DateFormatter.timeZone` are independent:
+    // assigning the UTC-pinned `widgetCalendar` leaves the formatter on
+    // `NSTimeZone.default`, so a formatter that only pins the calendar reads
+    // the extension's UTC-midnight dates back in local time. Upstream's
+    // `JavaLocalDateFormatter.longFormat` states both halves —
+    // `DateFormat.getDateInstance(MEDIUM, locale)` and `df.timeZone =
+    // TimeZone.getTimeZone("UTC")`.
+    //
+    // Reading weekday or month *symbols* off a formatter needs no zone; only
+    // rendering a `Date` does, which is `string(from:)`. The behaviour itself
+    // is exercised in ios/RunnerTests/WidgetArithmeticTests.swift; this is the
+    // cheap guard that a new formatter does not repeat the omission.
+    final Directory dir = Directory('ios/HabitsWidget');
+    final List<File> sources = dir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.swift'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+
+    final List<String> offenders = <String>[];
+    for (final File source in sources) {
+      final List<String> lines = source
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .toList();
+      final String code = lines.join('\n');
+      if (!code.contains('DateFormatter()')) continue;
+      if (!code.contains(RegExp(r'\.string\(from:\s*\w+\s*\)'))) continue;
+      if (!code.contains(RegExp(r'\.timeZone\s*='))) {
+        offenders.add(source.uri.pathSegments.last);
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'audit18.streak-date-labels-must-be-formatted-in-utc#1 — '
+          '${offenders.join(', ')} renders a Date with a DateFormatter whose '
+          'time zone is the device\'s. Every Date in the extension is a UTC '
+          'midnight, so the label names the previous day west of GMT.',
+    );
+  });
+
   test('date names still follow the device locale', () {
     // The pinning is about arithmetic, not about language: upstream builds
     // `JavaLocalDateFormatter(Locale.getDefault())`, so the weekday and month

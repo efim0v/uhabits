@@ -662,8 +662,21 @@ extension WidgetStore {
     /// day turns at 3am sees the widget turn at 3am too. It exists only so a
     /// redraw can notice a snapshot has gone stale; the day a card *draws* is
     /// still the document's own `today`.
-    static func logicalToday(midnightDelayHours: Int, now: Date = Date()) -> Date {
-        let shifted = now.addingTimeInterval(-Double(midnightDelayHours) * 3600)
+    static func logicalToday(
+        midnightDelayHours: Int,
+        now: Date = Date(),
+        zone: TimeZone = .current
+    ) -> Date {
+        // `DateUtils.getLocalTime()` is `now + tz.getOffset(now)`, and
+        // `getStartOfDay` floors those already-localised millis; the
+        // Gregorian/GMT calendar is the arithmetic vehicle, never the source of
+        // the day. Flooring the raw instant instead would make the widget's
+        // "today" the UTC day: west of GMT it turns early — in New York the
+        // card un-ticks at 20:00 and a tap until midnight is stamped tomorrow
+        // and dropped — and east of it, late
+        // (`audit18.widget-today-must-be-the-local-day#1`).
+        let local = now.addingTimeInterval(Double(zone.secondsFromGMT(for: now)))
+        let shifted = local.addingTimeInterval(-Double(midnightDelayHours) * 3600)
         return widgetCalendar.startOfDay(for: shifted)
     }
 
@@ -672,10 +685,12 @@ extension WidgetStore {
     /// `WidgetUpdater.scheduleStartDayWidgetUpdate()` arms its alarm.
     static func startOfNextDay(
         midnightDelayHours: Int,
-        from now: Date = Date()
+        from now: Date = Date(),
+        zone: TimeZone = .current
     ) -> Date {
         let calendar = widgetCalendar
-        let today = logicalToday(midnightDelayHours: midnightDelayHours, now: now)
+        let today = logicalToday(
+            midnightDelayHours: midnightDelayHours, now: now, zone: zone)
         guard
             let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
             let turn = calendar.date(
@@ -684,7 +699,10 @@ extension WidgetStore {
                 to: tomorrow
             )
         else { return now }
-        return turn
+        // [logicalToday] answers in the day-key space — the UTC midnight that
+        // names a local civil day — so the turn has to come back out of it to
+        // be a real instant WidgetKit can wake on.
+        return turn.addingTimeInterval(-Double(zone.secondsFromGMT(for: now)))
     }
 
     /// Whole days from [from] to [to] — `LocalDate.daysSince`.

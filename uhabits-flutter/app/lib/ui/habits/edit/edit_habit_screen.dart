@@ -301,6 +301,14 @@ class EditHabitScreen extends StatelessWidget {
       // The scrim belongs to the dialog's own layout here
       // (`habit-type-dialog.select-type#3`).
       barrierColor: Colors.transparent,
+      // `@style/Translucent` is neither floating nor fitting system windows,
+      // so the window is the whole screen and the `match_parent` scrim covers
+      // the status bar and the navigation bar too
+      // (`habit-type-dialog.select-type#2`). Left at its default, `showDialog`
+      // would inset the dialog by `MediaQuery.padding` and — with the barrier
+      // transparent — leave those bands undimmed
+      // (`audit18.the-type-choosers-scrim-must-reach-the-screen-edges#1`).
+      useSafeArea: false,
       builder: (context) => const HabitTypeDialog(),
     );
     if (habitType == null) return;

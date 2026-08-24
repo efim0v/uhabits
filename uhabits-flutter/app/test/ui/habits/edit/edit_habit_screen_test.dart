@@ -2911,6 +2911,35 @@ void main() {
       );
     });
 
+    testWidgets('#3 the scrim still reaches every edge under a status bar and '
+        'a navigation bar', (tester) async {
+      // The test view reports no insets by default, which is the one shape in
+      // which a `SafeArea` around the dialog is invisible. Give it the two a
+      // modern phone always has.
+      addTearDown(tester.view.reset);
+      const FakeViewPadding insets = FakeViewPadding(top: 48, bottom: 24);
+      tester.view.viewPadding = insets;
+      tester.view.padding = insets;
+
+      await pumpChooser(tester, openScope(dispatcher: const AsyncDispatcher()));
+
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      expect(
+        tester.getRect(scrim()),
+        Offset.zero & screen,
+        reason:
+            'audit18.the-type-choosers-scrim-must-reach-the-screen-edges#1: '
+            '`HabitTypeDialog` runs under @style/Translucent, which is not '
+            'floating and sets windowTranslucentStatus, and inflates a '
+            'match_parent/match_parent LinearLayout with '
+            'android:background="#a0000000" — so the scrim covers every pixel, '
+            'behind the status bar and behind the navigation bar '
+            '(habit-type-dialog.select-type#2, #3). A route that insets the '
+            'dialog by MediaQuery.padding leaves those two bands bright, and '
+            'the transparent barrier paints nothing behind them.',
+      );
+    });
+
     testWidgets('#8 20sp bold titles, 1.25-spaced bodies and 6dp cards',
         (tester) async {
       await pumpChooser(tester, openScope(dispatcher: const AsyncDispatcher()));

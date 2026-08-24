@@ -448,6 +448,15 @@ extension DateNames {
         // (`audit17.ios-widgets-do-day-arithmetic-in-the-device-calendar#1`).
         formatter.locale = Locale.current
         formatter.calendar = widgetCalendar
+        // And the zone is UTC, the one the day number was written in: every
+        // `Date` here is a UTC midnight, so a formatter left on the device zone
+        // would print the previous day everywhere west of GMT. `timeZone` is a
+        // property of its own — assigning the UTC-pinned `widgetCalendar`
+        // above does not set it. Upstream states both halves outright:
+        // `DateFormat.getDateInstance(MEDIUM, locale)` then `df.timeZone =
+        // TimeZone.getTimeZone("UTC")`
+        // (`audit18.streak-date-labels-must-be-formatted-in-utc#1`).
+        formatter.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter

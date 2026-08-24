@@ -14,6 +14,7 @@
 		B3A7C2D3E4F5061728394A5C /* TargetWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A7C2D3E4F5061728394A5B /* TargetWidget.swift */; };
 		177D07231EC342B8EA07E82F /* HistoryWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC7E77A68CBA4228922BF1D /* HistoryWidget.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
+		6728BE601239B490A52AC14B /* WidgetArithmeticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3BB3C1C17AAA6618EF3588D /* WidgetArithmeticTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		54CACA47A96983002720D6FA /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAA9D8F0B6D767C10DB72EDC /* Foundation.framework */; };
 		6C2799DE5D1805718939A035 /* HabitTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25BE1B7DCA9660AA3E9097D /* HabitTimeline.swift */; };
@@ -34,6 +35,18 @@
 		E879319BC2737DBC4544B7FA /* HabitsWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB84DEE1C02FBA85C68EDBF /* HabitsWidgetBundle.swift */; };
 		F0705F8B7F9988FA92B66A6E /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20C1552914BC0CEA73FA6BF /* WidgetData.swift */; };
 		BB0E14EF0B655F80A18F85FC /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = BBB20C9705826EA0B87CE52E /* InfoPlist.strings */; };
+		792EED2BE9011DB9B3CE4CFF /* CheckmarkWidget.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = 8C6B93D8F59FB1D44081CEF0 /* CheckmarkWidget.swift */; };
+		2CD571949E7C3F40A1553622 /* DateNames.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = 2285344D75D2ECBD22A35A52 /* DateNames.swift */; };
+		E8395EB3679A7C00991B9491 /* FrequencyWidget.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = B2A7C2D3E4F5061728394A5B /* FrequencyWidget.swift */; };
+		E1D8D486DA3245EACFFE6E7E /* HabitSelection.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = 84CF314FDA924B31959F3EEA /* HabitSelection.swift */; };
+		FEB89E6DD68D7166D6969EAF /* HabitTimeline.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = A25BE1B7DCA9660AA3E9097D /* HabitTimeline.swift */; };
+		B5E60252932CC8DA6B1C34B3 /* HistoryWidget.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = 4BC7E77A68CBA4228922BF1D /* HistoryWidget.swift */; };
+		67F210DED5047B5C90482AD6 /* ScoreWidget.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = 6B66A0F434EEBE2197A87CCB /* ScoreWidget.swift */; };
+		85AAD4522D8924BE0B7E00C1 /* StreakWidget.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = B1A7C2D3E4F5061728394A5B /* StreakWidget.swift */; };
+		BD34BA79E57D1FF981AA9E4B /* TargetWidget.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = B3A7C2D3E4F5061728394A5B /* TargetWidget.swift */; };
+		DFC1376DF77BFA8F4826779A /* WidgetCard.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = 4522FE9DE3C9B2CEB7AFB9B3 /* WidgetCard.swift */; };
+		EB98B4484FEEC68861DB04F5 /* WidgetData.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = D20C1552914BC0CEA73FA6BF /* WidgetData.swift */; };
+		88B32129292A47AF8F059A6B /* WidgetTheme.swift in Sources (RunnerTests) */ = {isa = PBXBuildFile; fileRef = A9C4BB4B1CF70D7B6A0FD246 /* WidgetTheme.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -133,6 +146,7 @@
 		28C697E78CCF4E0CA2BDA28C /* HabitsWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HabitsWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2FB84DEE1C02FBA85C68EDBF /* HabitsWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HabitsWidgetBundle.swift; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
+		D3BB3C1C17AAA6618EF3588D /* WidgetArithmeticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetArithmeticTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		4162A690AEB57B3819802DD4 /* Runner.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
@@ -251,6 +265,7 @@
 			isa = PBXGroup;
 			children = (
 				331C807B294A618700263BE5 /* RunnerTests.swift */,
+				D3BB3C1C17AAA6618EF3588D /* WidgetArithmeticTests.swift */,
 			);
 			path = RunnerTests;
 			sourceTree = "<group>";
@@ -665,7 +680,20 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				792EED2BE9011DB9B3CE4CFF /* CheckmarkWidget.swift in Sources (RunnerTests) */,
+				2CD571949E7C3F40A1553622 /* DateNames.swift in Sources (RunnerTests) */,
+				E8395EB3679A7C00991B9491 /* FrequencyWidget.swift in Sources (RunnerTests) */,
+				E1D8D486DA3245EACFFE6E7E /* HabitSelection.swift in Sources (RunnerTests) */,
+				FEB89E6DD68D7166D6969EAF /* HabitTimeline.swift in Sources (RunnerTests) */,
+				B5E60252932CC8DA6B1C34B3 /* HistoryWidget.swift in Sources (RunnerTests) */,
+				67F210DED5047B5C90482AD6 /* ScoreWidget.swift in Sources (RunnerTests) */,
+				85AAD4522D8924BE0B7E00C1 /* StreakWidget.swift in Sources (RunnerTests) */,
+				BD34BA79E57D1FF981AA9E4B /* TargetWidget.swift in Sources (RunnerTests) */,
+				DFC1376DF77BFA8F4826779A /* WidgetCard.swift in Sources (RunnerTests) */,
+				EB98B4484FEEC68861DB04F5 /* WidgetData.swift in Sources (RunnerTests) */,
+				88B32129292A47AF8F059A6B /* WidgetTheme.swift in Sources (RunnerTests) */,
 				331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */,
+				6728BE601239B490A52AC14B /* WidgetArithmeticTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -904,6 +932,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 786AF70066390BD9C95655B0 /* Pods-RunnerTests.debug.xcconfig */;
 			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -922,6 +951,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = F494AC8D7F60B5870169825D /* Pods-RunnerTests.release.xcconfig */;
 			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -938,6 +968,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = B88EAC1587961CECB8B97538 /* Pods-RunnerTests.profile.xcconfig */;
 			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

@@ -16,7 +16,7 @@ import 'package:uhabits_core/src/preferences/widget_preferences.dart';
 import 'package:uhabits_core/src/reminders/reminder_scheduler.dart';
 import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/uhabits_core.dart'
-    show Habit, LocalDate, NumericalHabitType, getToday;
+    show Entry, Habit, LocalDate, NumericalHabitType;
 
 import 'flutter_notification_tray.dart';
 
@@ -83,6 +83,17 @@ class FlutterAlarmScheduler implements SystemScheduler {
   /// The tag `logReminderScheduled` writes under
   /// (`reminders.exact-alarm-scheduling#7`).
   static const String reminderHelperLoggerName = 'ReminderHelper';
+
+  /// How far [_advanceToReminderDay] looks for a day that survives both gates.
+  ///
+  /// Seven days would cover the weekday gate on its own — a reminder set for a
+  /// single weekday. Gate 1 can reject a run before that gate gets a second
+  /// look, and the longest run it can reject is the newest frequency interval:
+  /// `EntryList.buildIntervals` gives it `size` days, where `size` is the
+  /// denominator, or the calendar month's length for the 30/31 denominators —
+  /// at most 31. So 31 rejected days, then at most 6 more to the next weekday
+  /// the reminder covers.
+  static const int _daysToScan = 38;
 
   final AlarmPlugin _plugin;
 
@@ -298,8 +309,8 @@ class FlutterAlarmScheduler implements SystemScheduler {
   /// given in the class comment. The date tested is the one the alarm carries —
   /// the checkmark day the core computed — not today.
   ///
-  /// Eight days, not seven: gate 1 can reject the first one, and the next day
-  /// the weekday set covers is then a full week out.
+  /// The scan is [_daysToScan] days long, not seven: gate 1 can reject a whole
+  /// run of days before the weekday set is even consulted again.
   ///
   /// One day is one [DateUtils.dayLength] here; across a DST boundary the alarm
   /// therefore lands an hour off the habit's wall-clock reminder, which the
@@ -336,7 +347,7 @@ class FlutterAlarmScheduler implements SystemScheduler {
 
     var date = LocalDate.fromUnixTime(timestamp);
     var time = reminderTime;
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < _daysToScan; i++) {
       // notifications.show-gating#7: SUNDAY -> 1, MONDAY -> 2, ..., SATURDAY -> 0.
       final weekday = (date.dayOfWeek.daysSinceSunday + 1) % 7;
       if (days[weekday] && !_isAlreadyCompleted(habit, date)) {
@@ -365,21 +376,67 @@ class FlutterAlarmScheduler implements SystemScheduler {
   /// so a day this gate would reject has to be skipped before the alarm is
   /// filed; otherwise the OS posts a reminder Android would have suppressed.
   ///
-  /// Only the alarm's own day can be judged, and only when that day is the
-  /// current one: `isCompletedToday` reads [getToday], and what tomorrow's
-  /// entry will be is unknowable now. An alarm already armed for today is
+  /// The day judged is the one the alarm names, whether or not that day is
+  /// today. `isCompleted` is `habit.isCompletedToday()`, which reads
+  /// `computedEntries.get(getToday())` — and upstream asks the question when
+  /// the alarm fires, by which time the alarm's day *is* today. A future day's
+  /// computed entry is already known whenever the habit's own frequency has
+  /// filled it: `EntryList.buildIntervals` ends the newest interval at
+  /// `begin.plus(size - 1)` and `buildEntriesFromInterval` writes YES_AUTO
+  /// across all of it, days after today included. So an "Every 3 days" habit
+  /// ticked on Monday is YES_AUTO on Tuesday and Wednesday, a "3 times per
+  /// week" habit satisfied by Wednesday is YES_AUTO to the end of its week,
+  /// and Android posts nothing on any of those days
+  /// (`audit18.the-completion-gate-must-judge-the-alarms-own-day#1`).
+  ///
+  /// Days no interval covers stay UNKNOWN, which is not completed, so a daily
+  /// habit ticked today is still armed for tomorrow — the one case where the
+  /// answer really is unknowable in advance, and the one where upstream shows
+  /// the reminder. Nor can the answer go stale: an alarm already armed is
   /// re-armed by the tray after every entry
-  /// (`audit3.recording-a-non-completing-entry-silently`), which is what brings
-  /// this gate a fresh answer as soon as the answer changes.
+  /// (`audit3.recording-a-non-completing-entry-silently`), and every change to
+  /// the entries runs `recompute()` first.
   bool _isAlreadyCompleted(Habit habit, LocalDate date) {
-    if (date != getToday()) return false;
     // Redundant on its own — the core's isCompletedToday already answers false
     // for every AT_MOST habit (`notifications.show-gating#11`) — but it is half
     // of the Kotlin condition and states which habits this gate never touches.
     if (habit.targetType == NumericalHabitType.atMost) return false;
-    if (!habit.isCompletedToday()) return false;
+    if (!_isCompletedOn(habit, date)) return false;
     log(_loggerName, 'Habit ${habit.id} already checked. Skipping.');
     return true;
+  }
+
+  /// `Habit.isCompletedToday()` with the day named instead of assumed.
+  ///
+  /// ```kotlin
+  /// fun isCompletedToday(): Boolean {
+  ///     val today = getToday()
+  ///     val value = computedEntries.get(today).value
+  ///     return if (isNumerical) {
+  ///         when (targetType) {
+  ///             NumericalHabitType.AT_LEAST -> value / 1000.0 >= targetValue
+  ///             NumericalHabitType.AT_MOST -> false
+  ///         }
+  ///     } else {
+  ///         value != Entry.NO && value != Entry.UNKNOWN
+  ///     }
+  /// }
+  /// ```
+  ///
+  /// SKIP and YES_AUTO both count as completed for a boolean habit
+  /// (`models.habit-completed-entered#3`, `notifications.show-gating#10`), and
+  /// YES_AUTO is what the frequency fill writes.
+  static bool _isCompletedOn(Habit habit, LocalDate date) {
+    final int value = habit.computedEntries.get(date).value;
+    if (habit.isNumerical) {
+      switch (habit.targetType) {
+        case NumericalHabitType.atLeast:
+          return value / 1000.0 >= habit.targetValue;
+        case NumericalHabitType.atMost:
+          return false;
+      }
+    }
+    return value != Entry.no && value != Entry.unknown;
   }
 }
 

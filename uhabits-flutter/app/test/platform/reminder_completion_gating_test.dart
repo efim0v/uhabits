@@ -25,6 +25,7 @@ import 'package:uhabits/platform/flutter_alarm_scheduler.dart';
 import 'package:uhabits/platform/flutter_notification_tray.dart';
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/models/entry.dart';
+import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
 import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
@@ -139,6 +140,8 @@ void main() {
   // 2015-01-26 is a Monday, which is index (daysSinceSunday + 1) % 7 = 2.
   final LocalDate monday = LocalDate.ymd(2015, 1, 26);
   final LocalDate tuesday = LocalDate.ymd(2015, 1, 27);
+  final LocalDate wednesday = LocalDate.ymd(2015, 1, 28);
+  final LocalDate thursday = LocalDate.ymd(2015, 1, 29);
   final LocalDate nextMonday = LocalDate.ymd(2015, 2, 2);
 
   late MemoryModelFactory modelFactory;
@@ -276,10 +279,69 @@ void main() {
       final alarms = await armFor(habit, tuesday);
 
       expect(alarms.single.whenMillis, unixTime(2015, 1, 27, 8, 30),
-          reason: 'audit3.a-habit-already-completed-today-still#1: gate 1 asks '
-              'isCompletedToday(), and what tomorrow\'s entry will be is '
-              'unknowable now — upstream asks the question when the alarm '
-              'fires, by which time tomorrow is today');
+          reason: 'audit3.a-habit-already-completed-today-still#1: gate 1 reads '
+              'the computed entry for the day the alarm names. A daily habit '
+              'ticked on Monday builds Interval(Mon, Mon, Mon), so Tuesday is '
+              'UNKNOWN and upstream — asking the question when the alarm '
+              'fires, by which time tomorrow is today — shows the reminder');
+    });
+
+    test('a habit its own frequency has already completed skips those days',
+        () async {
+      final habit = yesNoHabit();
+      habit.frequency = Frequency(1, 3);
+      record(habit, monday, Entry.yesManual);
+
+      // buildIntervals: Interval(Mon, Mon, Mon + 3 - 1), and
+      // buildEntriesFromInterval fills every day of it — future days included.
+      expect(habit.computedEntries.get(tuesday).value, Entry.yesAuto,
+          reason: 'the precondition');
+      expect(habit.computedEntries.get(wednesday).value, Entry.yesAuto,
+          reason: 'the precondition');
+      expect(habit.computedEntries.get(thursday).value, Entry.unknown,
+          reason: 'the precondition: the interval ends on Wednesday');
+
+      final alarms = await armFor(habit, monday);
+
+      expect(alarms.single.whenMillis, unixTime(2015, 1, 29, 8, 30),
+          reason: 'audit18.the-completion-gate-must-judge-the-alarms-own-day#1: '
+              'upstream gate 1 runs at fire time and asks '
+              'isCompletedToday(), which reads computedEntries.get(getToday()) '
+              '— on Tuesday and on Wednesday that is YES_AUTO, so the Android '
+              'app posts nothing on either day and the "Every 3 days" habit is '
+              'next reminded on Thursday. Here the alarm IS the notification, '
+              'so those two days have to be skipped before it is filed');
+      expect(
+        ReminderPayload.decode(alarms.single.spec.payload)?.date,
+        thursday,
+        reason: 'audit18.the-completion-gate-must-judge-the-alarms-own-day#1: '
+            'and the notification carries the day it will actually be shown on',
+      );
+    });
+
+    test('a "3 times per week" target met by Wednesday skips the rest of the '
+        'week', () async {
+      setToday(wednesday);
+      final habit = yesNoHabit();
+      habit.frequency = Frequency.threeTimesPerWeek;
+      record(habit, monday, Entry.yesManual);
+      record(habit, tuesday, Entry.yesManual);
+      record(habit, wednesday, Entry.yesManual);
+
+      // Interval(Mon, Wed, Mon + 7 - 1): Thursday through Sunday are YES_AUTO.
+      expect(habit.computedEntries.get(LocalDate.ymd(2015, 2, 1)).value,
+          Entry.yesAuto,
+          reason: 'the precondition: the interval runs to Sunday');
+      expect(habit.computedEntries.get(nextMonday).value, Entry.unknown,
+          reason: 'the precondition: and no further');
+
+      final alarms = await armFor(habit, wednesday);
+
+      expect(alarms.single.whenMillis, unixTime(2015, 2, 2, 8, 30),
+          reason: 'audit18.the-completion-gate-must-judge-the-alarms-own-day#1: '
+              'the week\'s target is met, so every remaining day of it is '
+              'YES_AUTO and upstream\'s gate 1 drops the notification on each '
+              'of them. The next reminder is the following Monday');
     });
 
     test('a weekly reminder completed on its own day moves a week, not off the '
