@@ -84,16 +84,24 @@ class FlutterAlarmScheduler implements SystemScheduler {
   /// (`reminders.exact-alarm-scheduling#7`).
   static const String reminderHelperLoggerName = 'ReminderHelper';
 
-  /// How far [_advanceToReminderDay] looks for a day that survives both gates.
+  /// How far [_advanceToReminderDay] looks for a day that survives both gates,
+  /// for a habit whose frequency covers [denominator] days.
   ///
   /// Seven days would cover the weekday gate on its own — a reminder set for a
   /// single weekday. Gate 1 can reject a run before that gate gets a second
-  /// look, and the longest run it can reject is the newest frequency interval:
-  /// `EntryList.buildIntervals` gives it `size` days, where `size` is the
-  /// denominator, or the calendar month's length for the 30/31 denominators —
-  /// at most 31. So 31 rejected days, then at most 6 more to the next weekday
-  /// the reminder covers.
-  static const int _daysToScan = 38;
+  /// look, and that run is the newest frequency interval:
+  /// `EntryList.buildIntervals` fills `size` days with YES_AUTO, where `size`
+  /// is the denominator (the calendar month's length substitutes only for the
+  /// 30 and 31 denominators). So the scan is that run, then at most six more
+  /// days to the next weekday the reminder covers.
+  ///
+  /// It is derived from the habit rather than fixed, because the denominator
+  /// is not bounded by anything the app enforces: the picker's field takes
+  /// three digits and an imported database can carry more. A fixed bound that
+  /// the denominator outgrows does not defer the reminder — it cancels it, and
+  /// the user is never told (`audit19.a-long-frequency-must-not-cancel-the-
+  /// reminder#1`).
+  static int _daysToScan(int denominator) => denominator + 7;
 
   final AlarmPlugin _plugin;
 
@@ -347,7 +355,10 @@ class FlutterAlarmScheduler implements SystemScheduler {
 
     var date = LocalDate.fromUnixTime(timestamp);
     var time = reminderTime;
-    for (var i = 0; i < _daysToScan; i++) {
+    // The run gate 1 can reject is this habit's own interval; see
+    // [_daysToScan].
+    final int scan = _daysToScan(habit.frequency.denominator);
+    for (var i = 0; i < scan; i++) {
       // notifications.show-gating#7: SUNDAY -> 1, MONDAY -> 2, ..., SATURDAY -> 0.
       final weekday = (date.dayOfWeek.daysSinceSunday + 1) % 7;
       if (days[weekday] && !_isAlreadyCompleted(habit, date)) {

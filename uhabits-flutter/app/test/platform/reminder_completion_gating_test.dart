@@ -375,6 +375,64 @@ void main() {
   // -------------------------------------------------------------------------
   // audit3.recording-a-non-completing-entry-silently — the tray's re-arm
   // -------------------------------------------------------------------------
+  // audit19.a-long-frequency-must-not-cancel-the-reminder
+  // -------------------------------------------------------------------------
+
+  group('audit19.a-long-frequency-must-not-cancel-the-reminder', () {
+    const String rule =
+        'audit19.a-long-frequency-must-not-cancel-the-reminder#1 — gate 1 '
+        'suppresses one day at a time upstream, and the alarm chain re-arms '
+        'itself every firing, so however long the auto-completed run is the '
+        'reminder always comes back at the end of it. A port that decides at '
+        'schedule time has to look as far as that run can actually reach.';
+
+    /// "Every 60 days" — the picker takes three digits, so up to 999, and an
+    /// imported database can carry anything.
+    Future<List<_ScheduledAlarm>> armWithFrequency(int denominator) async {
+      final habit = yesNoHabit();
+      habit.frequency = Frequency(1, denominator);
+      habitList.add(habit);
+      record(habit, monday, Entry.yesManual);
+      return armFor(habit, monday);
+    }
+
+    test('a 60-day habit still has a reminder after it is ticked off',
+        () async {
+      final alarms = await armWithFrequency(60);
+
+      expect(alarms, isNotEmpty,
+          reason: '$rule Scanning 38 days and giving up cancels the alarm '
+              'outright: the user who set "Every 60 days: replace the filter" '
+              'is never reminded again, and nothing in the app says so.');
+      expect(plugin.cancelled, isEmpty, reason: rule);
+    });
+
+    test('the alarm lands on the first day the frequency leaves uncovered',
+        () async {
+      final alarms = await armWithFrequency(60);
+
+      // buildIntervals fills days 0..59 with YES_AUTO from the Monday tick, so
+      // the first day gate 1 lets through is 60 days later.
+      final LocalDate expected = LocalDate(monday.daysSince2000 + 60);
+      expect(
+        alarms.single.whenMillis,
+        unixTime(expected.year, expected.month, expected.day, 8, 30),
+        reason: '$rule …and it is that day, not merely some day.',
+      );
+    });
+
+    test('a short frequency is unaffected', () async {
+      final alarms = await armWithFrequency(3);
+      final LocalDate expected = LocalDate(monday.daysSince2000 + 3);
+      expect(
+        alarms.single.whenMillis,
+        unixTime(expected.year, expected.month, expected.day, 8, 30),
+        reason: '$rule The control: the common case does not move.',
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
 
   group('cancelling a reminder', () {
     late List<String> order;

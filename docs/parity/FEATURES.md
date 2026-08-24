@@ -8068,3 +8068,20 @@ assertion can see that a field is declared and can never see an off-by-one.
 
 1. `audit18.the-widget-extension-must-be-executable-by-tests#1` — In the Kotlin app the widget code is tested like the rest of the app. In this port it is Swift in a separate process, and `flutter test` cannot run it — so for eighteen audit passes it was guarded only by Dart tests that read the Swift as text. Those can assert that a field is declared or that a pattern is absent; they cannot see an off-by-one, a day computed in the wrong zone, or an alpha applied to the wrong colour, and each of those reached the user. The extension's sources must therefore be compiled into a unit-test bundle and its arithmetic executed: the wire format's round trip, the roll-forward's shift, the day boundary in a named time zone, and the card-colour rule. A guard that cannot fail on a logic error is not a guard.
 
+
+## Domain: Nineteenth audit pass (2026-08-24)
+
+One finding, one refuted, seven of eight lenses clean — the first pass since the
+widget extension became executable by tests. The finding was in the place the
+regression lens was pointed at: a bound the previous pass had derived from one
+reading of `buildIntervals`.
+
+#### audit19.a-long-frequency-must-not-cancel-the-reminder
+
+- [x] `audit19.a-long-frequency-must-not-cancel-the-reminder` — A frequency whose window is longer than the scan makes the reminder disappear entirely instead of being deferred
+- **Platform:** both · **Port risk:** high
+- **Source:** `uhabits-android/src/main/java/org/isoron/uhabits/receivers/ReminderController.kt:45-52 (onShowReminder ends in scheduleAll(), so the chain re-arms on every firing); uhabits-core/src/commonMain/kotlin/org/isoron/uhabits/core/models/EntryList.kt:242-267 (buildIntervals: size = den, with the month-length substitution only for den == 30 or 31); uhabits-android/.../dialogs/FrequencyPickerDialog.kt:138-178 (the free-text fields, validated only against numerator >= denominator)`
+- **Where the port should do it:** `uhabits-flutter/app/lib/platform/flutter_alarm_scheduler.dart — _daysToScan and the loop in _advanceToReminderDay`
+- **Severity:** major
+
+1. `audit19.a-long-frequency-must-not-cancel-the-reminder#1` — In the Kotlin app the alarm chain is one day deep and self-perpetuating: `ReminderScheduler.schedule` arms only the next occurrence, and `onShowReminder` ends in `scheduleAll()` whatever gate 1 did with the notification. So a boolean habit with `Frequency(1, 90)` has an alarm armed on each of the ninety auto-completed days, has its notification dropped on each, and is reminded on day 90 when the computed entry is UNKNOWN again — with no user action in between. A port that decides at schedule time instead must look as far as that run can actually reach, and the run is the habit's own denominator: `buildIntervals` sets `size = den` and substitutes the calendar month's length only for 30 and 31. A fixed bound the denominator outgrows does not defer the reminder — every scanned day is rejected, the scan falls out, and the alarm is cancelled outright, so "Every 90 days: replace the water filter" is silently never reminded again while the edit screen still shows its reminder time.
