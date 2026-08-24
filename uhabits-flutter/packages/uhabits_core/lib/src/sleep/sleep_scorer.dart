@@ -85,7 +85,12 @@ class SleepBreakdown {
   }
 }
 
-/// Scores one night against a goal, read in a given UTC offset.
+/// Scores one night against a goal, read in the goal's current frame.
+///
+/// [effectiveOffsetMinutes] is where the *goal* currently lives, which after
+/// travel is not where the person is — see `timezone_drift.dart`. This is
+/// deliberately not the offset the night was recorded in; `computeStability`
+/// uses that one, and the two must not be made to agree.
 ///
 /// Returns null when the goal carries no weight at all, so an unconfigured
 /// habit leaves its days alone instead of failing them.
