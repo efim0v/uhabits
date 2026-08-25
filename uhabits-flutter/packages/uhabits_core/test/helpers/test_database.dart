@@ -7,6 +7,7 @@
 library;
 
 import 'package:uhabits_core/src/database/database.dart';
+import 'package:uhabits_core/src/database/extension_migrations.dart';
 import 'package:uhabits_core/src/database/migrations.g.dart';
 import 'package:uhabits_core/src/database/sqlite3_database.dart';
 
@@ -27,5 +28,19 @@ Database openMigratedDatabase({int version = databaseVersion}) {
   final db = openMemoryDatabase();
   db.setVersion(8);
   db.migrateTo(version, (v) => migrationSql[v]!);
+  return db;
+}
+
+/// A fresh in-memory database at the schema this build ships, including the
+/// extension tables, with the same connection settings production uses.
+///
+/// Distinct from [openMigratedDatabase], which stops at the Kotlin schema on
+/// purpose: parity tests assert against what the original defines, and giving
+/// them tables the original never had would let a port defect hide behind one.
+Database openAppSchemaDatabase() {
+  final db = openMemoryDatabase();
+  db.setVersion(8);
+  db.migrateTo(appDatabaseVersion, (v) => migrationSqlFor(v) ?? '');
+  applyConnectionSettings(db);
   return db;
 }

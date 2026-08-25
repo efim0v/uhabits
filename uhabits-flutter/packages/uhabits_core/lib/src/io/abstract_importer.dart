@@ -27,6 +27,7 @@ library;
 import 'dart:convert';
 
 import '../database/database.dart';
+import '../database/extension_migrations.dart';
 import '../database/migrations.g.dart';
 import 'files.dart';
 import 'logging.dart';
@@ -79,7 +80,10 @@ Future<bool> loopDBCanHandle(
     logger.error(cannotHandleFileTablesNotFound);
     canHandle = false;
   }
-  if (db.getVersion() > databaseVersion) {
+  // A version this build cannot migrate from. The extension versions widen
+  // what is accepted, but the message still names the original's last version:
+  // every file the original can produce is judged exactly as it judges them.
+  if (!isKnownDatabaseVersion(db.getVersion())) {
     logger.error(incompatibleVersionMessage(db.getVersion(), databaseVersion));
     canHandle = false;
   }

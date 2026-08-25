@@ -708,3 +708,41 @@ Store у порта нет, поэтому честная замена — та 
 **Почему:** Two port-only facts force it. The port has no fire-time hook — the alarm IS the finished notification (already recorded in DEVIATIONS.md) — so the copy is written in at schedule time and only a re-arm can replace it. And flutter_local_notifications takes the channel name and the Darwin category titles once, at initialize(), where Android's own API is called before every post; re-resolving the builder's strings alone would leave the channel name in system settings and the iOS action buttons frozen until reinstall. The net user-visible behaviour is upstream's: the next reminder after a language change is in the new language.
 
 **Дата:** 2026-08-24
+
+
+## Расширения
+
+Сознательные отличия от Kotlin-оригинала, внесённые расширениями, а не ошибки
+переноса. В отличие от остальных записей этого файла, здесь не «порт ведёт себя
+иначе, чем оригинал», а «порт умеет то, чего у оригинала нет».
+
+### sleep: схема уходит выше версии 25
+
+Миграции расширений начинаются со 100; 26…99 остаются пустым промежутком.
+Оригинал, увидев `user_version` 100, вызовет `onDowngrade` и откажется работать
+с файлом.
+
+Влияние на пользователя: откат на Kotlin-версию после первого запуска этой
+сборки невозможен — база не откроется. Резервная копия, снятая до обновления,
+остаётся читаемой.
+
+Тип привычки и формат записей при этом **не** расходятся: привычка со сном
+хранится как обычная числовая, `habits.type` остаётся равным 1. Из-за этого
+расхождение сводится к одной версии схемы, а не к формату данных.
+
+### sleep: файл с версией из промежутка 26…99 отвергается
+
+Такую версию не писал ни оригинал, ни эта сборка. Файл, её несущий, пришёл от
+сборки с неизвестной схемой, и штамповать его вперёд было бы гаданием.
+Оригинал отвергает его тоже — как «новее DATABASE_VERSION», — так что поведение
+совпадает, но по другой причине.
+
+Влияние на пользователя: none. Такого файла не существует.
+
+### sleep: в архив экспорта добавляется SleepSessions.csv
+
+Файл появляется только если в базе есть хотя бы одна привычка со сном; экспорт
+базы без них остаётся побайтово прежним.
+
+Влияние на пользователя: архив с этим файлом импортируется оригиналом — лишний
+файл он проигнорирует, — но ночи при этом потеряются.

@@ -10,7 +10,11 @@ import 'package:uhabits_core/uhabits_core.dart';
 /// `HabitsDatabaseOpener.onUpgrade` throws it when `db.version < 8` — older
 /// than the first migration script, so there is nothing to bring it forward
 /// with — and `onDowngrade` throws it unconditionally, so a file newer than
-/// [databaseVersion] is refused rather than silently used.
+/// [appDatabaseVersion] is refused rather than silently used.
+///
+/// The bound is this build's version, not Kotlin's: the port ships schema the
+/// original never had, and comparing against [databaseVersion] would make the
+/// app refuse its own database.
 ///
 /// Upstream it is `class UnsupportedDatabaseVersionException : RuntimeException()`
 /// — a plain exception with no message (`persistence.android-opener#6`). The
@@ -25,7 +29,7 @@ class UnsupportedDatabaseVersionException implements Exception {
   @override
   String toString() =>
       'UnsupportedDatabaseVersionException(user_version $foundVersion, '
-      'supported 8..$databaseVersion)';
+      'supported 8..$appDatabaseVersion)';
 }
 
 /// The file exists but sqlite refuses to read it as a database: a zeroed
@@ -100,7 +104,7 @@ class AppDatabase {
     return AppDatabase._(openAndMigrate(file.path), file.path);
   }
 
-  /// Opens [path] and brings it up to [databaseVersion]. Exposed separately so
+  /// Opens [path] and brings it up to [appDatabaseVersion]. Exposed separately so
   /// tests and the importer can drive it against an arbitrary file.
   ///
   /// Throws [UnsupportedDatabaseVersionException] for a file this build cannot
@@ -129,17 +133,20 @@ class AppDatabase {
       // `onCreate` stamps 8 and lets the migrations build the schema.
       if (version == 0) {
         database.setVersion(schemaBaseVersion);
-      } else if (version < schemaBaseVersion || version > databaseVersion) {
+      } else if (version < schemaBaseVersion ||
+          !isKnownDatabaseVersion(version)) {
         // `onUpgrade`'s `if (db.version < 8) throw` and `onDowngrade`'s
         // unconditional throw. Closed first: the caller is about to rename the
         // file, and a handle held open on it is a handle on the renamed file.
         database.close();
         throw UnsupportedDatabaseVersionException(version);
       }
-      database.migrateTo(databaseVersion, (version) {
-        final sql = migrationSql[version];
+      database.migrateTo(appDatabaseVersion, (version) {
+        final sql = migrationSqlFor(version);
         if (sql == null) {
-          throw StateError('No migration script for version $version');
+          // Not an error: the versions between the last Kotlin migration and
+          // the first extension one have no script of their own.
+          return '';
         }
         return sql;
       });

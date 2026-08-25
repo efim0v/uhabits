@@ -17,6 +17,7 @@ import 'dart:typed_data';
 
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/database/habit_repository.dart';
+import 'package:uhabits_core/src/database/extension_migrations.dart';
 import 'package:uhabits_core/src/database/migrations.g.dart';
 import 'package:uhabits_core/src/database/sql_parser.dart';
 import 'package:uhabits_core/src/database/sqlite3_database.dart';
@@ -63,9 +64,11 @@ void main() {
 
       final after = const Sqlite3DatabaseOpener().open(file.pathString);
       addTearDown(after.close);
-      expect(after.getVersion(), databaseVersion,
-          reason: 'io.loop-db-migration#1 importHabitsFromFile calls '
-              'migrateTo(25) on the uploaded copy, mutating it');
+      expect(after.getVersion(), appDatabaseVersion,
+          reason: 'io.loop-db-migration#1 importHabitsFromFile migrates the '
+              'uploaded copy in place, up to the schema this build ships '
+              '(the rule says DATABASE_VERSION; for this build that is '
+              '$appDatabaseVersion, not the original\'s 25)');
       expect(
         after.querySingle<int>(
           "select count(*) from pragma_table_info('Repetitions') "
@@ -250,8 +253,25 @@ void main() {
         fileOpener: MissingResourceFileOpener(),
       ).importHabitsFromFile(LocalUserFile('/does/not/matter.db'));
 
+      final List<String> beforeReading =
+          recording.sql.takeWhile((s) => !s.startsWith('SELECT id')).toList();
+      // Everything the missing resource contributed: nothing. The statements
+      // that do appear are version stamps, plus migration 100's own script,
+      // which comes from the source rather than from a resource file.
+      final Set<String> extensionStatements =
+          SQLParser.parse(extensionMigrationSql[appDatabaseVersion]!).toSet();
       expect(
-        recording.sql.takeWhile((s) => !s.startsWith('SELECT id')).toList(),
+        beforeReading
+            .where((s) => !s.startsWith('PRAGMA user_version'))
+            .where((s) => !extensionStatements.contains(s)),
+        isEmpty,
+        reason: 'io.loop-db-migration#6 a resource with no lines yields an '
+            'empty script and SQLParser.parse produces zero statements from '
+            'it — 25.sql would otherwise have run '
+            "'alter table Repetitions add column notes text'",
+      );
+      expect(
+        beforeReading.take(2),
         <String>['PRAGMA user_version', 'PRAGMA user_version = 25'],
         reason: 'io.loop-db-migration#6 a resource with no lines yields an '
             'empty script, SQLParser.parse produces zero statements, and the '
@@ -923,7 +943,7 @@ void main() {
 
       final reopened = opener.open(path);
       addTearDown(reopened.close);
-      expect(reopened.getVersion(), 25,
+      expect(reopened.getVersion(), appDatabaseVersion,
           reason: "persistence.loop-db-import#5 the user's own file is "
               'migrated, IN PLACE, up to DATABASE_VERSION');
       expect(habitList.getByPosition(0).color.paletteIndex, 19,

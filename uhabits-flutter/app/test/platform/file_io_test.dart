@@ -508,8 +508,9 @@ void main() {
 
       // The copy is a valid Loop database that can be reopened and imported.
       final copy = AppDatabase.openAndMigrate(expected);
-      expect(copy.getVersion(), databaseVersion,
-          reason: 'io.export-db-backup#16');
+      expect(copy.getVersion(), appDatabaseVersion,
+          reason: 'io.export-db-backup#16 — the rule says the copy reopens at '
+              'the current schema; for this build that is appDatabaseVersion');
       expect(copy.queryInt('select count(*) from Habits'), 1,
           reason: 'io.export-db-backup#16');
       copy.close();

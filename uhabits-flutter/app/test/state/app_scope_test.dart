@@ -138,7 +138,7 @@ void main() {
               'listeners at launch. Steps 2, 3, 5 and 6 are here, in this '
               'order, and the ordering of 5 before 6 is the one the note calls '
               'load-bearing.');
-      expect(scope.database.getVersion(), databaseVersion,
+      expect(scope.database.getVersion(), appDatabaseVersion,
           reason: 'platform-glue.app-startup-order#1: (2) the database is '
               'opened and migrated first');
       expect(scope.habitList, isNotNull,

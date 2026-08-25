@@ -18,6 +18,7 @@ import '../commands/create_habit_command.dart';
 import '../commands/edit_habit_command.dart';
 import '../database/database.dart';
 import '../database/habit_repository.dart';
+import '../database/extension_migrations.dart';
 import '../database/migrations.g.dart';
 import '../database/sql_parser.dart';
 import '../models/entry.dart';
@@ -95,7 +96,10 @@ class LoopDBImporter {
       logger.error('Cannot handle file: tables not found');
       canHandle = false;
     }
-    if (db.getVersion() > databaseVersion) {
+    // A version this build cannot migrate from. The extension versions widen
+    // what is accepted, but the message still names the original's last
+    // version: every file the original can produce is judged as it judges it.
+    if (!isKnownDatabaseVersion(db.getVersion())) {
       logger.error('Cannot handle file: incompatible version: '
           '${db.getVersion()} > $databaseVersion');
       canHandle = false;
@@ -110,7 +114,13 @@ class LoopDBImporter {
   /// uploaded copy is modified before a single row is read.
   Future<void> importHabitsFromFile(UserFile file) async {
     final db = opener.open(file.pathString);
-    await db.migrateToAsync(databaseVersion, (version) async {
+    await db.migrateToAsync(appDatabaseVersion, (version) async {
+      // Kotlin's migrations ship as resource files and are read as such,
+      // which is what the original does. Everything else — the extension
+      // scripts and the empty gap between the two ranges — is known in the
+      // source, and asking the asset opener for a file that was never shipped
+      // would fail instead of skipping.
+      if (!isKotlinMigration(version)) return migrationSqlFor(version) ?? '';
       final filename = format('%02d.sql', version);
       return (await fileOpener.openResourceFile('migrations/$filename').lines())
           .join('\n');

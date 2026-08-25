@@ -198,6 +198,9 @@ extension DatabaseExtensions on Database {
     begin();
     try {
       for (var v = currentVersion + 1; v <= targetVersion; v++) {
+        // Versions between the last Kotlin migration and the first extension
+        // one have no script. The gap is empty, not missing: the version is
+        // stamped and the loop moves on.
         for (final cmd in parse(loadMigrationSql(v))) {
           switch (_statementKind(cmd)) {
             // A script's own transaction markers are nested markers now.

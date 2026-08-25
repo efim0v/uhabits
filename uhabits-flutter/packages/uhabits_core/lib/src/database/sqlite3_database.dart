@@ -206,7 +206,6 @@ class Sqlite3DatabaseOpener implements DatabaseOpener {
   const Sqlite3DatabaseOpener();
 
   /// The schema version at which migration 22 turned foreign keys on.
-  static const int _foreignKeysEnabledSince = 22;
 
   @override
   Database open(String path) {
@@ -216,16 +215,29 @@ class Sqlite3DatabaseOpener implements DatabaseOpener {
             sqlite.sqlite3.open(path, mode: sqlite.OpenMode.readWrite),
           );
 
-    // `pragma foreign_keys` is per-connection and defaults to OFF, so the one
-    // inside 22.sql only covers the connection that ran the upgrade. Every
-    // later connection has to set it again — see persistence.migration-v22#6.
-    //
-    // It is deliberately NOT set on databases older than 22: those still hold
-    // the orphaned rows that migration 22 exists to delete, and enforcing
-    // constraints before that cleanup would make the upgrade fail.
-    if (database.getVersion() >= _foreignKeysEnabledSince) {
-      database.run('pragma foreign_keys=ON');
-    }
+    applyConnectionSettings(database);
     return database;
+  }
+}
+
+/// The first schema version whose data satisfies the foreign keys.
+const int _foreignKeysEnabledSince = 22;
+
+/// Applies the per-connection settings a Loop database needs.
+///
+/// `pragma foreign_keys` is per-connection and defaults to OFF, so the one
+/// inside 22.sql only covers the connection that ran the upgrade. Every later
+/// connection has to set it again — see `persistence.migration-v22#6`.
+///
+/// It is deliberately NOT set on databases older than 22: those still hold the
+/// orphaned rows that migration 22 exists to delete, and enforcing constraints
+/// before that cleanup would make the upgrade fail.
+///
+/// Lives here, apart from the opener, because tests build databases without
+/// going through it and a connection that quietly skipped this would enforce
+/// nothing — including the cascades the sleep tables rely on.
+void applyConnectionSettings(Database database) {
+  if (database.getVersion() >= _foreignKeysEnabledSince) {
+    database.run('pragma foreign_keys=ON');
   }
 }

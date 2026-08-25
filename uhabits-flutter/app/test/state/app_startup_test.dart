@@ -468,7 +468,7 @@ void main() {
       expect(scope.databasePath, p.join(supportDir.path, databaseFilename),
           reason: rule);
       expect(File(scope.databasePath!).existsSync(), isTrue, reason: rule);
-      expect(scope.database.getVersion(), databaseVersion,
+      expect(scope.database.getVersion(), appDatabaseVersion,
           reason: 'platform-glue.app-startup-order#1: (2) opened AND migrated '
               '— boot returns only once the file is at the current schema');
 
@@ -631,7 +631,7 @@ void main() {
 
       // A file written by a newer build of the app.
       final Database stamped = AppDatabase.openAndMigrate(path);
-      stamped.setVersion(databaseVersion + 40);
+      stamped.setVersion(appDatabaseVersion + 40);
       stamped.close();
 
       const String opener =
@@ -670,7 +670,7 @@ void main() {
       expect(scope.habitList.size(), 0,
           reason: '$quarantine …and the app comes up on a fresh empty '
               'database.');
-      expect(scope.database.getVersion(), databaseVersion,
+      expect(scope.database.getVersion(), appDatabaseVersion,
           reason: '$quarantine …stamped at this build\'s own schema version.');
 
       // The other direction — a file older than the app — is brought forward
@@ -680,7 +680,7 @@ void main() {
       File(old).createSync();
       final Database migrated = AppDatabase.openAndMigrate(old);
       addTearDown(migrated.close);
-      expect(migrated.getVersion(), databaseVersion,
+      expect(migrated.getVersion(), appDatabaseVersion,
           reason: '$opener An older file inside the range is brought forward '
               'rather than rejected.');
 
@@ -727,7 +727,7 @@ void main() {
       expect(scope.habitList.size(), 0,
           reason: '$rule The port reaches the same outcome — an app that '
               'opens, empty — instead of throwing before runApp.');
-      expect(scope.database.getVersion(), databaseVersion,
+      expect(scope.database.getVersion(), appDatabaseVersion,
           reason: '$rule The replacement is built by onCreate plus the '
               'migrations, so it carries this build\'s schema version.');
       expect(File('$path.invalid').existsSync(), isTrue,

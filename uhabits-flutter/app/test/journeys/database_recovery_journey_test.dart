@@ -54,7 +54,12 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits_core/uhabits_core.dart'
-    show Database, DatabaseExtensions, Sqlite3DatabaseOpener, databaseVersion;
+    show
+        Database,
+        DatabaseExtensions,
+        Sqlite3DatabaseOpener,
+        appDatabaseVersion,
+        databaseVersion;
 
 import 'journey.dart';
 
@@ -125,7 +130,7 @@ void main() {
 
     // The user restores a backup taken on a phone running a newer Loop, or
     // downgrades the app. `onDowngrade` upstream always throws.
-    stampUserVersion(databaseVersion + 1);
+    stampUserVersion(appDatabaseVersion + 1);
 
     await app.launch();
 
@@ -142,7 +147,7 @@ void main() {
             'is renamed to `<absolutePath>.invalid` rather than deleted, so '
             'the habits Android would have left in place are still recoverable '
             'here.');
-    expect(storedUserVersion(), databaseVersion,
+    expect(storedUserVersion(), appDatabaseVersion,
         reason: 'audit10.the-invalid-quarantine-is-the-ports-own#1: and a '
             'fresh database takes its place, so the file the app now runs on '
             'is this build\'s schema. persistence.android-opener#5: the newer '
@@ -151,6 +156,28 @@ void main() {
     verifyDoesNotDisplayText('Wake up early',
         reason: 'the fresh database is empty; the old habits went with the '
             'file that was set aside');
+  });
+
+  testWidgets('a database in the gap between the two version ranges is '
+      'refused as well', (WidgetTester tester) async {
+    await useTheAppOnce(tester);
+
+    // Numbering for extension schema starts at 100, leaving 26..99 empty.
+    // Nothing that exists ever wrote a version in there, so a file carrying
+    // one came from a build whose schema is unknown. Stamping it forward
+    // would be a guess dressed up as an upgrade, so it is refused — which is
+    // also exactly what the original does with it.
+    stampUserVersion(databaseVersion + 1);
+
+    await app.launch();
+
+    expect(find.byType(HabitListScreen), findsOneWidget,
+        reason: 'sleep.persistence#6');
+    expect(invalidFile().existsSync(), isTrue,
+        reason: 'sleep.persistence#6 the unknown file is set aside, not used');
+    expect(storedUserVersion(), appDatabaseVersion,
+        reason: 'sleep.persistence#6 and a fresh database at this build\'s '
+            'schema takes its place');
   });
 
   testWidgets('a database older than the first migration is renamed too',
@@ -173,7 +200,7 @@ void main() {
     expect(invalidFile().existsSync(), isTrue,
         reason: 'audit10.the-invalid-quarantine-is-the-ports-own#1: renamed to '
             '`<absolutePath>.invalid` — the port\'s own recovery');
-    expect(storedUserVersion(), databaseVersion,
+    expect(storedUserVersion(), appDatabaseVersion,
         reason: 'audit10.the-invalid-quarantine-is-the-ports-own#1: and a '
             'fresh database takes its place');
   });
@@ -198,7 +225,7 @@ void main() {
         reason: 'audit10.a-corrupt-database-file-recovers#1: Android deletes '
             'the file; the port sets it aside as `<absolutePath>.invalid` '
             'instead, so the bytes are still there to be recovered.');
-    expect(storedUserVersion(), databaseVersion,
+    expect(storedUserVersion(), appDatabaseVersion,
         reason: 'audit10.a-corrupt-database-file-recovers#1: the replacement '
             "is this build's own schema, built by onCreate + the migrations.");
     verifyDoesNotDisplayText('Wake up early',

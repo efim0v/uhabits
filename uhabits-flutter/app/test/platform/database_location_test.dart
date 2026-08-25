@@ -146,7 +146,7 @@ void main() {
       final database = AppDatabase.openAndMigrate(path);
       addTearDown(database.close);
 
-      expect(database.getVersion(), databaseVersion,
+      expect(database.getVersion(), appDatabaseVersion,
           reason: 'persistence.db-file-location#5 — openDatabase() returns '
               'opener.writableDatabase, which is what actually triggers '
               'onCreate/onUpgrade');
