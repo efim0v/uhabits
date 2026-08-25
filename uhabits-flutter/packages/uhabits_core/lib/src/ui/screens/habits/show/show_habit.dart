@@ -12,6 +12,7 @@
 library;
 
 import '../../../../commands/command_runner.dart';
+import '../../../../models/entry.dart';
 import '../../../../models/habit.dart';
 import '../../../../models/habit_list.dart';
 import '../../../../models/palette_color.dart';
@@ -138,10 +139,14 @@ class ShowHabitPresenter {
   /// `ShowHabitPresenter.buildState(habit, preferences, theme)`. The whole
   /// state is rebuilt from scratch: there is no incremental refresh anywhere
   /// on this screen.
+  /// [intensityOf] is not upstream and is passed straight through to the
+  /// History card; see [HistoryCardPresenter.buildState]. Null for every habit
+  /// the original knows.
   static ShowHabitState buildState({
     required Habit habit,
     required Preferences preferences,
     required Theme theme,
+    double Function(Entry)? intensityOf,
   }) {
     return ShowHabitState(
       title: habit.name,
@@ -180,6 +185,7 @@ class ShowHabitPresenter {
         habit: habit,
         firstWeekday: preferences.firstWeekday,
         theme: theme,
+        intensityOf: intensityOf,
       ),
       bar: BarCardPresenter.buildState(
         habit: habit,

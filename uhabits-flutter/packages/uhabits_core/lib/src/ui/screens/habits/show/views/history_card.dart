@@ -32,6 +32,7 @@ class HistoryCardState {
     required this.notesIndicators,
     required this.theme,
     required this.today,
+    this.intensities = const <double>[],
   });
 
   final PaletteColor color;
@@ -46,6 +47,16 @@ class HistoryCardState {
 
   final List<bool> notesIndicators;
 
+  /// Not upstream. How strongly each day of [series] should be coloured, in
+  /// `[0, 1]`, parallel to it.
+  ///
+  /// Empty for every habit the original knows, and an empty list is read as
+  /// "paint exactly as before" — so nothing about the ported calendar changes
+  /// unless something asks it to. A sleep habit fills it, because its days are
+  /// a percentage and the original's two answers, "met the target" and "did
+  /// not", discard everything that percentage says.
+  final List<double> intensities;
+
   final Theme theme;
 
   final LocalDate today;
@@ -58,6 +69,7 @@ class HistoryCardState {
       _listEquals(other.series, series) &&
       other.defaultSquare == defaultSquare &&
       _listEquals(other.notesIndicators, notesIndicators) &&
+      _listEquals(other.intensities, intensities) &&
       other.theme == theme &&
       other.today == today;
 
@@ -68,6 +80,7 @@ class HistoryCardState {
         Object.hashAll(series),
         defaultSquare,
         Object.hashAll(notesIndicators),
+        Object.hashAll(intensities),
         theme,
         today,
       );
@@ -198,10 +211,17 @@ class HistoryCardPresenter extends OnDateClickedListener {
     screen.showHistoryEditorDialog(this);
   }
 
+  /// [intensityOf] is not upstream: given a day's entry it answers how
+  /// strongly that day should be coloured, in `[0, 1]`. Null for every habit
+  /// the original knows, which leaves [HistoryCardState.intensities] empty and
+  /// the calendar painted exactly as before. The mapping itself is deliberately
+  /// not decided here — what a value is worth is the habit's business, not the
+  /// calendar's.
   static HistoryCardState buildState({
     required Habit habit,
     required DayOfWeek firstWeekday,
     required Theme theme,
+    double Function(Entry)? intensityOf,
   }) {
     final today = getToday();
     final known = habit.computedEntries.getKnown();
@@ -246,6 +266,12 @@ class HistoryCardPresenter extends OnDateClickedListener {
     final notesIndicators =
         entries.map((Entry it) => it.notes != '').toList();
 
+    // Built from the same list, in the same order, so a cell and its shade
+    // cannot come apart.
+    final List<double> intensities = intensityOf == null
+        ? const <double>[]
+        : entries.map(intensityOf).toList();
+
     return HistoryCardState(
       color: habit.color,
       firstWeekday: firstWeekday,
@@ -254,6 +280,7 @@ class HistoryCardPresenter extends OnDateClickedListener {
       series: series,
       defaultSquare: Square.off,
       notesIndicators: notesIndicators,
+      intensities: intensities,
     );
   }
 }

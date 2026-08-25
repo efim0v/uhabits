@@ -26,6 +26,38 @@ int storedValueOf(double score) {
   return value;
 }
 
+/// The share of a night below which the calendar barely tints a cell.
+///
+/// Everything under it is a bad night, and telling one bad night from another
+/// by eye is not worth the range it would cost.
+const double dimmedBelowPercent = 50;
+
+/// How strongly a night of [storedValue] colours its calendar cell, in `[0,1]`.
+///
+/// The original paints a numerical cell with the habit's colour when the day
+/// met its target and one flat grey when it did not. For a habit whose whole
+/// value is a percentage that throws away everything it measures: a night at
+/// 95 and a night at 20 come out the same shade, and only an exact 100 is ever
+/// coloured at all.
+///
+/// The scale is deliberately not linear. Nights cluster: someone keeping a
+/// sleep goal lands between 60 and 95 almost every night, and a linear ramp
+/// would squeeze that whole range into four shades nobody can tell apart while
+/// spending half its range on scores that never occur. So the bottom half of
+/// the percentage gets a sixth of the range and the top half gets the rest —
+/// the difference between 70 and 90 becomes plain, and the difference between
+/// 10 and 30 stops mattering, which is honest, because both are bad nights.
+double cellIntensityOf(int storedValue) {
+  if (storedValue <= 0) return 0;
+  final double percent =
+      (storedValue.clamp(0, maxStoredValue) / maxStoredValue) * 100;
+  if (percent <= dimmedBelowPercent) {
+    return 0.08 + (percent / dimmedBelowPercent) * 0.17;
+  }
+  return 0.25 +
+      ((percent - dimmedBelowPercent) / (100 - dimmedBelowPercent)) * 0.75;
+}
+
 /// How a sleep habit is persisted.
 ///
 /// There is deliberately no third [HabitType]. The parity rule

@@ -277,11 +277,22 @@ class ShowHabitModel extends ChangeNotifier
     scope.widgetSync?.updateWidgets();
   }
 
+  /// Read fresh rather than cached: a habit becomes one, or stops being one,
+  /// while the screen is open.
+  bool get _isSleepHabit {
+    final int? id = habit.id;
+    return id != null && scope.sleepRepository.goalFor(id) != null;
+  }
+
   void _rebuild() {
     _state = ShowHabitPresenter.buildState(
       habit: habit,
       preferences: scope.preferences,
       theme: _theme,
+      // A sleep habit's day is a percentage, and the ported calendar has two
+      // answers for a numerical day: met the target, or did not. Given the
+      // scale, it has as many answers as there are nights.
+      intensityOf: _isSleepHabit ? (Entry e) => cellIntensityOf(e.value) : null,
     );
     _visibility.setState(_state);
   }

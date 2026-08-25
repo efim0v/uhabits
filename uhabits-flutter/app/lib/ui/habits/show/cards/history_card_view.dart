@@ -108,6 +108,7 @@ class _HistoryCardViewState extends State<HistoryCardView> {
       series: state.series,
       defaultSquare: state.defaultSquare,
       notesIndicators: state.notesIndicators,
+      intensities: state.intensities,
       firstWeekday: state.firstWeekday,
     )..dataOffset = widget.dataOffset;
 

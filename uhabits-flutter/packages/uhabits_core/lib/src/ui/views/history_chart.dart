@@ -45,6 +45,7 @@ class HistoryChart extends DataView {
     required this.notesIndicators,
     required this.theme,
     required this.today,
+    this.intensities = const <double>[],
     this.onDateClickedListener = const _NoOpOnDateClickedListener(),
     this.padding = 0.0,
   });
@@ -55,6 +56,15 @@ class HistoryChart extends DataView {
   List<Square> series;
   Square defaultSquare;
   List<bool> notesIndicators;
+
+  /// Not upstream. How strongly each day of [series] is coloured, in `[0, 1]`,
+  /// parallel to it and consulted only where a day is [Square.on] or
+  /// [Square.grey] — the two the target decides between.
+  ///
+  /// Empty means "as the original paints it", which is every habit but a sleep
+  /// habit.
+  List<double> intensities;
+
   Theme theme;
   LocalDate today;
   OnDateClickedListener onDateClickedListener;
@@ -222,6 +232,29 @@ class HistoryChart extends DataView {
     _headerOverflow = math.max(0.0, _headerOverflow - _squareSize);
   }
 
+  /// The original's five answers, plus a shade for a day that carries one.
+  ///
+  /// The shade replaces only [Square.on] and [Square.grey]: those are the two
+  /// the target decides between, and they are the pair that throws away a
+  /// percentage. Skipped, unknown and automatic days keep the appearance they
+  /// have everywhere else in the app, because their meaning is not a quantity.
+  Color _squareColor(Square value, Color color, int offset) {
+    final double? intensity =
+        offset < intensities.length ? intensities[offset] : null;
+    if (intensity != null &&
+        (value == Square.on || value == Square.grey)) {
+      return color.blendWith(theme.cardBackgroundColor, 1 - intensity);
+    }
+    return switch (value) {
+      Square.on => color,
+      Square.off => theme.lowContrastTextColor,
+      Square.grey => theme.mediumContrastTextColor,
+      Square.dimmed ||
+      Square.hatched =>
+        color.blendWith(theme.cardBackgroundColor, 0.5),
+    };
+  }
+
   void _drawSquare(
     Canvas canvas,
     double x,
@@ -235,14 +268,7 @@ class HistoryChart extends DataView {
     final hasNotes =
         offset >= notesIndicators.length ? false : notesIndicators[offset];
     final color = theme.color(paletteColor.paletteIndex);
-    final Color squareColor = switch (value) {
-      Square.on => color,
-      Square.off => theme.lowContrastTextColor,
-      Square.grey => theme.mediumContrastTextColor,
-      Square.dimmed ||
-      Square.hatched =>
-        color.blendWith(theme.cardBackgroundColor, 0.5),
-    };
+    final Color squareColor = _squareColor(value, color, offset);
 
     canvas.setColor(squareColor);
     canvas.fillRoundRect(x, y, width, height, width * 0.15);
