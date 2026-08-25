@@ -3,9 +3,10 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../l10n/app_localizations.dart';
 import '../../../platform/device_time_format.dart';
+import '../../habits/list/list_header.dart' show IntlLocalDateFormatter;
 import 'sleep_card.dart';
 
-/// A fortnight of nights, as bars against the goal.
+/// Every night on record, as bars against the goal.
 ///
 /// Days run left to right and time runs top to bottom — the orientation every
 /// other chart in the app uses. A sleep chart is more often drawn the other way
@@ -20,7 +21,7 @@ class NightsChart extends StatelessWidget {
     required this.goal,
     required this.effectiveOffsets,
     required this.lastDay,
-    this.visibleDays = 14,
+    required this.firstDay,
     super.key,
   });
 
@@ -44,7 +45,9 @@ class NightsChart extends StatelessWidget {
   final int lastDay;
 
   /// How many days fit on screen before the strip has to be scrolled.
-  final int visibleDays;
+  /// The oldest night the strip reaches. Everything from here to [lastDay] is
+  /// scrollable, so the strip is as long as the history is.
+  final int firstDay;
 
   /// Nothing is drawn outside this window of the clock.
   ///
@@ -53,9 +56,15 @@ class NightsChart extends StatelessWidget {
   static const int windowStartMinutes = 20 * 60;
   static const int windowMinutes = 15 * 60;
 
-  static const double dayWidth = 22;
+  /// Wide enough for a weekday and a date under each bar. The strip scrolls,
+  /// so the cost of the extra width is three fewer nights on screen at once,
+  /// not three fewer nights.
+  static const double dayWidth = 30;
   static const double chartHeight = 158;
   static const double gutterWidth = 44;
+
+  /// Room for the two label rows below the strip.
+  static const double labelHeight = 30;
 
   /// Where a time of day sits in the window, as a fraction of the height.
   ///
@@ -71,13 +80,15 @@ class NightsChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final L10n l10n = L10n.of(context);
-    final int firstDay = lastDay - visibleDays + 1;
+    final int dayCount = lastDay - firstDay + 1;
+    final core.LocalDateFormatter formatter =
+        IntlLocalDateFormatter.of(context);
 
     return SleepCard(
       theme: theme,
       title: l10n.sleepNights,
       child: SizedBox(
-        height: chartHeight + 22,
+        height: chartHeight + labelHeight,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -87,50 +98,63 @@ class NightsChart extends StatelessWidget {
               child: _Gutter(theme: theme, goal: goal),
             ),
             Expanded(
-              child: SingleChildScrollView(
+              // Built on demand rather than all at once: the strip is as long
+              // as the history, and a year of nights is a year of widgets.
+              // `reverse` makes index 0 the most recent night, so it opens on
+              // last night and grows backwards — which is both the order a
+              // person reads it in and the order the list wants to build it.
+              child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 reverse: true,
-                child: SizedBox(
-                  width: dayWidth * visibleDays,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      SizedBox(
-                        height: chartHeight,
-                        child: Stack(
-                          children: <Widget>[
-                            Positioned.fill(
-                              child: _TargetBand(
-                                theme: theme,
-                                goal: goal,
-                                effectiveOffsets: effectiveOffsets,
-                                firstDay: firstDay,
-                                lastDay: lastDay,
-                              ),
-                            ),
-                            Positioned.fill(
-                              child: Row(
-                                children: <Widget>[
-                                  for (int day = firstDay;
-                                      day <= lastDay;
-                                      day++)
-                                    Expanded(
-                                      child: _dayColumn(day),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                itemCount: dayCount < 1 ? 0 : dayCount,
+                itemBuilder: (BuildContext context, int index) => SizedBox(
+                  width: dayWidth,
+                  child: _dayStack(lastDay - index, formatter),
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// One night: its slice of the target band, whatever was recorded over it,
+  /// and the date it belongs to.
+  ///
+  /// Self-contained on purpose. The band used to be a single layer stretched
+  /// behind every column, which cannot be built lazily; it was always drawn a
+  /// day at a time anyway, because a goal adapting to a new timezone makes it
+  /// a staircase rather than a stripe.
+  Widget _dayStack(int day, core.LocalDateFormatter formatter) {
+    return Column(
+      children: <Widget>[
+        SizedBox(
+          height: chartHeight,
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: _TargetBandSegment(
+                  theme: theme,
+                  goal: goal,
+                  offsetMinutes:
+                      effectiveOffsets[day] ?? goal.homeUtcOffsetMinutes,
+                ),
+              ),
+              Positioned.fill(child: _dayColumn(day)),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: labelHeight,
+          child: _DayLabel(
+            theme: theme,
+            day: day,
+            formatter: formatter,
+            isLast: day == lastDay,
+          ),
+        ),
+      ],
     );
   }
 
@@ -268,37 +292,28 @@ class _HatchPainter extends CustomPainter {
 /// One rectangle per day rather than a single stripe: while the goal is
 /// catching up with a new timezone it moves an hour a night, and a straight
 /// band would quietly misrepresent what the days were judged against.
-class _TargetBand extends StatelessWidget {
-  const _TargetBand({
+/// One night's slice of the goal band.
+///
+/// A slice rather than a stripe because the goal itself moves: while it adapts
+/// to a new timezone the band is a staircase, one step per night.
+class _TargetBandSegment extends StatelessWidget {
+  const _TargetBandSegment({
     required this.theme,
     required this.goal,
-    required this.effectiveOffsets,
-    required this.firstDay,
-    required this.lastDay,
+    required this.offsetMinutes,
   });
 
   final core.Theme theme;
   final core.SleepGoal goal;
-  final Map<int, int> effectiveOffsets;
-  final int firstDay;
-  final int lastDay;
+
+  /// Where the goal was living on this night.
+  final int offsetMinutes;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        for (int day = firstDay; day <= lastDay; day++)
-          Expanded(child: _bandFor(day)),
-      ],
-    );
-  }
-
-  Widget _bandFor(int day) {
     // The band is where the goal is, which during an adaptation is not where
     // the device's clock is. The shift between the two is exactly the drift.
-    final int drift =
-        (effectiveOffsets[day] ?? goal.homeUtcOffsetMinutes) -
-            goal.homeUtcOffsetMinutes;
+    final int drift = offsetMinutes - goal.homeUtcOffsetMinutes;
     final double? top =
         NightsChart.verticalFraction((goal.bedMinutes + drift) % 1440);
     final double? bottom =
@@ -323,6 +338,59 @@ class _TargetBand extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// The date a column belongs to: weekday over day of month, as the habit list
+/// writes its own header.
+///
+/// Without it the strip is a row of bars a person has to count along to place.
+class _DayLabel extends StatelessWidget {
+  const _DayLabel({
+    required this.theme,
+    required this.day,
+    required this.formatter,
+    required this.isLast,
+  });
+
+  final core.Theme theme;
+  final int day;
+  final core.LocalDateFormatter formatter;
+
+  /// Last night is named in full contrast; the rest recede.
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final core.LocalDate date = core.LocalDate(day);
+    final core.Color colour =
+        isLast ? theme.highContrastTextColor : theme.mediumContrastTextColor;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Text(
+          formatter.shortWeekdayName(date).toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.clip,
+          style: TextStyle(
+            fontSize: 9,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
+            color: toFlutterColor(colour),
+          ),
+        ),
+        Text(
+          '${date.day}',
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1.2,
+            fontWeight: isLast ? FontWeight.w700 : FontWeight.w500,
+            color: toFlutterColor(colour),
+          ),
+        ),
+      ],
     );
   }
 }

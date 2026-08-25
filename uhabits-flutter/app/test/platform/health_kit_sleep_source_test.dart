@@ -208,11 +208,11 @@ void main() {
       });
       final HealthKitSleepSource source = HealthKitSleepSource();
       expect(source.hasHealthStore, isTrue,
-          reason: 'sleep.ui#7 — until the platform says otherwise');
+          reason: 'sleep.ui#9 — until the platform says otherwise');
 
       expect(await source.requestAuthorization(), isFalse,
-          reason: 'sleep.ui#7');
-      expect(source.hasHealthStore, isFalse, reason: 'sleep.ui#7');
+          reason: 'sleep.ui#9');
+      expect(source.hasHealthStore, isFalse, reason: 'sleep.ui#9');
     });
 
     test('an ordinary refusal leaves the offer standing', () async {
@@ -222,8 +222,8 @@ void main() {
       final HealthKitSleepSource source = HealthKitSleepSource();
 
       expect(await source.requestAuthorization(), isFalse,
-          reason: 'sleep.ui#7');
-      expect(source.hasHealthStore, isTrue, reason: 'sleep.ui#7');
+          reason: 'sleep.ui#9');
+      expect(source.hasHealthStore, isTrue, reason: 'sleep.ui#9');
     });
 
     test('an unrelated platform failure is not read as an absent store',
@@ -233,9 +233,9 @@ void main() {
       });
       final HealthKitSleepSource source = HealthKitSleepSource();
 
-      expect(await source.readSegments(0, 1), isEmpty, reason: 'sleep.ui#7');
+      expect(await source.readSegments(0, 1), isEmpty, reason: 'sleep.ui#9');
       expect(source.hasHealthStore, isTrue,
-          reason: 'sleep.ui#7 — a transient failure must not withdraw the '
+          reason: 'sleep.ui#9 — a transient failure must not withdraw the '
               'offer for the rest of the session');
     });
 

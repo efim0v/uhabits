@@ -201,15 +201,15 @@ void main() {
 
     expect(find.widgetWithText(TextButton, 'Allow access to Health'),
         findsNothing,
-        reason: 'sleep.ui#7');
+        reason: 'sleep.ui#9');
     expect(
       find.text('Without access to Health, nights have to be entered by hand.'),
       findsNothing,
-      reason: 'sleep.ui#7 — nothing refused anything',
+      reason: 'sleep.ui#9 — nothing refused anything',
     );
     expect(find.byType(LastNightCard), findsOneWidget,
-        reason: 'sleep.ui#7 — the block itself is unchanged, and its "Enter '
+        reason: 'sleep.ui#9 — the block itself is unchanged, and its "Enter '
             'night" action is the way in');
-    expect(find.text('Enter night'), findsOneWidget, reason: 'sleep.ui#7');
+    expect(find.text('Enter night'), findsOneWidget, reason: 'sleep.ui#9');
   });
 }

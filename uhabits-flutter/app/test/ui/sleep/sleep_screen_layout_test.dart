@@ -93,6 +93,7 @@ Widget section({
                 for (final int d in nights.keys) d: 0,
               },
               lastDay: today,
+              firstDay: today - 13,
             ),
             StabilityCard(theme: theme, stability: stability),
             SkipCard(

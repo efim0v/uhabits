@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
+import 'package:uhabits/ui/habits/list/list_header.dart'
+    show IntlLocalDateFormatter;
 import 'package:uhabits/ui/habits/sleep/nights_chart.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
@@ -33,6 +35,7 @@ Future<void> pumpChart(
   int visibleDays = 14,
 }) async {
   final int lastDay = days.isEmpty ? 9000 : days.reduce((a, b) => a > b ? a : b);
+  final int firstDay = lastDay - visibleDays + 1;
   final Map<int, core.SleepEpisode> resolved = nights ??
       <int, core.SleepEpisode>{for (final int d in days) d: nightOn(d)};
 
@@ -55,7 +58,7 @@ Future<void> pumpChart(
           effectiveOffsets: offsets ??
               <int, int>{for (final int d in days) d: 0},
           lastDay: lastDay,
-          visibleDays: visibleDays,
+          firstDay: firstDay,
         ),
       ),
     ),
@@ -208,6 +211,94 @@ void main() {
       await tester.drag(find.byType(NightsChart), const Offset(-200, 0));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: 'sleep.ui#3');
+    });
+
+    testWidgets('a long history really is longer than the screen',
+        (tester) async {
+      // The strip was a fixed fourteen columns of 22 points — 308 in all,
+      // narrower than any phone. It sat inside a scroll view that could never
+      // scroll, and no test noticed because none of them asked whether it did.
+      await pumpChart(
+        tester,
+        days: List<int>.generate(90, (int i) => 8911 + i),
+        visibleDays: 90,
+      );
+
+      final ScrollableState scrollable =
+          tester.state(find.byType(Scrollable).first);
+      expect(scrollable.position.maxScrollExtent, greaterThan(0),
+          reason: 'sleep.ui#8 — a strip that fits is a strip that never '
+              'scrolls, whatever it is wrapped in');
+    });
+
+    testWidgets('it opens on last night, not on the oldest', (tester) async {
+      await pumpChart(
+        tester,
+        days: List<int>.generate(90, (int i) => 8911 + i),
+        visibleDays: 90,
+      );
+
+      final ScrollableState scrollable =
+          tester.state(find.byType(Scrollable).first);
+      expect(scrollable.position.pixels, 0,
+          reason: 'sleep.ui#8 — reversed, so the resting position is the most '
+              'recent night');
+      expect(find.text('${core.LocalDate(9000).day}'), findsWidgets,
+          reason: 'sleep.ui#8 — and last night is the one on screen');
+    });
+
+    testWidgets('only a fraction of a long history is built', (tester) async {
+      // A year of nights must not be a year of widgets.
+      await pumpChart(
+        tester,
+        days: List<int>.generate(365, (int i) => 8636 + i),
+        visibleDays: 365,
+      );
+
+      expect(find.byType(NightBar, skipOffstage: false).evaluate().length,
+          lessThan(60),
+          reason: 'sleep.ui#8 — the strip is built on demand');
+    });
+  });
+
+  group('the date under each night', () {
+    testWidgets('names the weekday and the day of the month', (tester) async {
+      // Day 9000 since 2000-01-01 is Thursday 22 August 2024. One column
+      // only: a fortnight holds two of every weekday, and the point here is
+      // the wording, not which column carries it.
+      await pumpChart(tester, days: <int>[9000], visibleDays: 1);
+
+      final core.LocalDate date = core.LocalDate(9000);
+      expect(find.text('${date.day}'), findsOneWidget, reason: 'sleep.ui#7');
+      expect(
+        find.text(IntlLocalDateFormatter('en_US')
+            .shortWeekdayName(date)
+            .toUpperCase()),
+        findsOneWidget,
+        reason: 'sleep.ui#7 — the same wording the habit list header uses',
+      );
+    });
+
+    testWidgets('every night carries its own date', (tester) async {
+      await pumpChart(tester, days: <int>[8998, 8999, 9000]);
+
+      for (final int day in <int>[8998, 8999, 9000]) {
+        expect(find.text('${core.LocalDate(day).day}'), findsOneWidget,
+            reason: 'sleep.ui#7 — a bar nobody can place is a bar nobody can '
+                'read');
+      }
+    });
+
+    testWidgets('a night with nothing recorded is still dated', (tester) async {
+      // The column is empty, but the date says which night is missing.
+      await pumpChart(
+        tester,
+        days: <int>[9000],
+        nights: const <int, core.SleepEpisode>{},
+      );
+
+      expect(find.text('${core.LocalDate(9000).day}'), findsOneWidget,
+          reason: 'sleep.ui#7');
     });
 
     testWidgets('a night whose times fall outside the window is skipped',

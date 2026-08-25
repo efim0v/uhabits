@@ -46,11 +46,12 @@ List<Widget> buildSleepSection(
   final int id = habit.id!;
   final int today = scope.sleepSync.today().daysSince2000;
 
-  final Map<int, core.SleepEpisode> nights = scope.sleepRepository.range(
-    id,
-    today - stabilityWindowDays * 2,
-    today,
-  );
+  // The strip reaches back to the first night on record, so that is the window
+  // the whole section reads. Nothing else here is hurt by seeing more than it
+  // needs: the spread and the counter pick their own days out of it.
+  final int chartFirstDay = _chartFirstDay(scope, id, today);
+  final Map<int, core.SleepEpisode> nights =
+      scope.sleepRepository.range(id, chartFirstDay, today);
   final Map<int, int> offsets = core.effectiveOffsets(
     firstDay: scope.sleepRepository.firstDay(id) ?? today,
     lastDay: today,
@@ -64,7 +65,7 @@ List<Widget> buildSleepSection(
   );
 
   final Set<int> skipped = <int>{
-    for (var day = today - stabilityWindowDays + 1; day <= today; day++)
+    for (var day = chartFirstDay; day <= today; day++)
       if (habit.originalEntries.get(core.LocalDate(day)).value ==
           core.Entry.skip)
         day,
@@ -169,7 +170,7 @@ List<Widget> buildSleepSection(
       goal: goal,
       effectiveOffsets: offsets,
       lastDay: today,
-      visibleDays: stabilityWindowDays,
+      firstDay: chartFirstDay,
     ),
     StabilityCard(
       theme: theme,
@@ -203,6 +204,19 @@ List<Widget> buildSleepSection(
 void _wrote(AppScope scope, core.Habit habit, VoidCallback onChanged) {
   scope.onSleepDataChanged(habit.id!);
   onChanged();
+}
+
+/// The oldest night the strip reaches.
+///
+/// The first night on record, so the strip is as long as the history. A habit
+/// with nothing recorded yet still gets a fortnight of empty columns rather
+/// than a blank card: an empty strip with its goal band and its dates says
+/// "nothing here yet" where a void says nothing at all.
+int _chartFirstDay(AppScope scope, int habitId, int today) {
+  final int? first = scope.sleepRepository.firstDay(habitId);
+  final int fallback = today - stabilityWindowDays + 1;
+  if (first == null) return fallback;
+  return first < fallback ? first : fallback;
 }
 
 /// The nights the spread and the goal suggestion are measured from.
