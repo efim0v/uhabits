@@ -19,6 +19,8 @@ import 'dart:typed_data';
 import '../models/entry_list.dart';
 import '../models/habit.dart';
 import '../models/habit_list.dart';
+import '../sleep/sleep_episode.dart';
+import '../sleep/sleep_session_repository.dart';
 import '../tasks/task_runner.dart';
 import '../time/local_date.dart';
 import 'csv.dart';
@@ -28,11 +30,22 @@ import 'zip.dart';
 
 /// Exports the application data to CSV files inside a ZIP archive.
 class HabitsCSVExporter {
-  HabitsCSVExporter(this.allHabits, this.selectedHabits);
+  HabitsCSVExporter(
+    this.allHabits,
+    this.selectedHabits, {
+    this.sleepRepository,
+  });
 
   final HabitList allHabits;
 
   final List<Habit> selectedHabits;
+
+  /// The nights, when this build has any to export.
+  ///
+  /// Optional so that a database with no sleep habit produces exactly the
+  /// archive the original produces, byte for byte: a file the original never
+  /// writes must not appear in an archive that has nothing to put in it.
+  final SleepSessionRepository? sleepRepository;
 
   final String _delimiter = ',';
 
@@ -48,7 +61,62 @@ class HabitsCSVExporter {
     }
     zip.addEntry('Scores.csv', _writeMultipleHabitsScores());
     zip.addEntry('Checkmarks.csv', _writeMultipleHabitsCheckmarks());
+    final String? sessions = _writeSleepSessions();
+    if (sessions != null) zip.addEntry('SleepSessions.csv', sessions);
     return zip.toBytes();
+  }
+
+  /// The nights of every selected sleep habit, or null when there are none.
+  ///
+  /// The percentages themselves are already in Checkmarks.csv, where they read
+  /// as an ordinary numerical habit. This file is what those percentages were
+  /// computed from, which is the part that cannot be reconstructed.
+  String? _writeSleepSessions() {
+    final SleepSessionRepository? repository = sleepRepository;
+    if (repository == null) return null;
+
+    final rows = StringBuffer();
+    var any = false;
+    for (final Habit habit in selectedHabits) {
+      final int? id = habit.id;
+      if (id == null || repository.goalFor(id) == null) continue;
+      final int? from = repository.firstDay(id);
+      final int? to = repository.lastDay(id);
+      if (from == null || to == null) continue;
+
+      final Map<int, SleepEpisode> nights = repository.range(id, from, to);
+      for (final int day in nights.keys.toList()..sort()) {
+        final SleepEpisode night = nights[day]!;
+        any = true;
+        rows.write(<String>[
+          habit.name,
+          LocalDate(day).toString(),
+          '${night.bedStartMillis}',
+          '${night.wakeEndMillis}',
+          '${night.asleepMinutes}',
+          '${night.utcOffsetMinutes}',
+          night.derivedFromAsleep ? '1' : '0',
+          night.sourceId,
+        ].join(_delimiter));
+        rows.write('\n');
+      }
+    }
+    if (!any) return null;
+
+    return <String>[
+      <String>[
+        'Habit',
+        'Day',
+        'BedStart',
+        'WakeEnd',
+        'AsleepMinutes',
+        'UtcOffset',
+        'DerivedFromAsleep',
+        'Source',
+      ].join(_delimiter),
+      '\n',
+      rows.toString(),
+    ].join();
   }
 
   /// `format("%03d", allHabits.indexOf(h) + 1) + " " + sane.trim() + "/"`.
@@ -189,20 +257,29 @@ class ExportCSVTask implements Task {
     this._habitList,
     this._selectedHabits,
     this._outputDir,
-    this._listener,
-  );
+    this._listener, {
+    SleepSessionRepository? sleepRepository,
+  }) : _sleepRepository = sleepRepository;
 
   final HabitList _habitList;
   final List<Habit> _selectedHabits;
   final UserFile _outputDir;
   final ExportCSVListener _listener;
 
+  /// Optional, so that a caller with nothing to add produces exactly the
+  /// archive the original produces.
+  final SleepSessionRepository? _sleepRepository;
+
   String? _archiveFilename;
 
   @override
   Future<void> doInBackground() async {
     try {
-      final exporter = HabitsCSVExporter(_habitList, _selectedHabits);
+      final exporter = HabitsCSVExporter(
+        _habitList,
+        _selectedHabits,
+        sleepRepository: _sleepRepository,
+      );
       final bytes = await exporter.writeArchive();
       final date = getToday().toCSVString();
       final zipFile = _outputDir.resolve('Loop Habits CSV $date.zip');

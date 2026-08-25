@@ -2,7 +2,6 @@ import 'package:test/test.dart';
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/database/extension_migrations.dart';
 import 'package:uhabits_core/src/database/migrations.g.dart';
-import 'package:uhabits_core/src/database/sqlite3_database.dart';
 
 import '../helpers/test_database.dart';
 

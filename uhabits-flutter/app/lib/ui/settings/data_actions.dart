@@ -295,6 +295,9 @@ class DataActions {
         scope.habitList,
         selected,
         outputDir,
+        // The nights themselves, which the percentages in Checkmarks.csv
+        // cannot be turned back into.
+        sleepRepository: scope.sleepRepository,
         _ExportCsvListener((String? filename) {
           if (filename != null) {
             followUp = showSendFileScreen(filename);
