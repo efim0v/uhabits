@@ -697,19 +697,41 @@ class _ShowHabitViewState extends State<_ShowHabitView>
             // `show-habit.card-order-and-visibility#1`: the column follows
             // ShowHabitCard's declaration order, and #2/#3/#4 decide which of
             // them survive.
-            children: <Widget>[
-              // Above the ported column rather than inside it: that column
-              // follows `ShowHabitCard`'s declaration order, a parity rule
-              // closed by tests, and adding entries to the enum would make
-              // those tests assert something the ledger does not say.
-                ..._buildSleepCards(context, model),
-                ..._buildCards(context, model),
-              ],
+              children: _buildColumn(context, model),
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// The ported cards a sleep habit shows *above* its own blocks.
+  ///
+  /// A sleep habit is still a habit, and the first things a person looks for
+  /// are the same: what it asks and how often, whether it reminds, the ring,
+  /// and the score over time. Below four full-width sleep cards they were
+  /// effectively missing — the screen opened on machinery instead of on the
+  /// habit. Everything else keeps its ported place below.
+  static const Set<ShowHabitCard> _sleepLeadingCards = <ShowHabitCard>{
+    ShowHabitCard.subtitle,
+    ShowHabitCard.notes,
+    ShowHabitCard.overview,
+    ShowHabitCard.score,
+  };
+
+  /// The whole column, ported cards and sleep blocks together.
+  ///
+  /// For every habit the original knows this is exactly `ShowHabitCard`'s
+  /// declaration order (`show-habit.card-order-and-visibility#1`). A sleep
+  /// habit splits that order in two and puts its own blocks in the seam.
+  List<Widget> _buildColumn(BuildContext context, ShowHabitModel model) {
+    final List<Widget> sleep = _buildSleepCards(context, model);
+    if (sleep.isEmpty) return _buildCards(context, model);
+    return <Widget>[
+      ..._buildCards(context, model, only: _sleepLeadingCards),
+      ...sleep,
+      ..._buildCards(context, model, except: _sleepLeadingCards),
+    ];
   }
 
   /// Pull to refresh, for a sleep habit only.
@@ -761,22 +783,46 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   }
 
   /// `ShowHabitView.setState` walking show_habit.xml top to bottom.
-  List<Widget> _buildCards(BuildContext context, ShowHabitModel model) {
+  List<Widget> _buildCards(
+    BuildContext context,
+    ShowHabitModel model, {
+    Set<ShowHabitCard>? only,
+    Set<ShowHabitCard>? except,
+  }) {
     final int? habitId = widget.habit.id;
     final bool isSleep = habitId != null &&
         widget.scope.sleepRepository.goalFor(habitId) != null;
 
     final widgets = <Widget>[];
     for (final card in model.cards) {
-      if (!model.isVisible(card)) continue;
-      // The target card adds a habit's values up over a week and a month. A
-      // percentage of a night does not add up: seven good nights are not
-      // "700% per week", they are seven nights. Hidden for a sleep habit
-      // rather than reworded, because there is no period total to state.
-      if (isSleep && card == ShowHabitCard.target) continue;
+      if (only != null && !only.contains(card)) continue;
+      if (except != null && except.contains(card)) continue;
+      if (!_isVisible(model, card, isSleep: isSleep)) continue;
       widgets.add(_buildCard(context, model: model, card: card));
     }
     return widgets;
+  }
+
+  /// Whether [card] belongs on the screen.
+  ///
+  /// The original hides exactly one of the overview and target pair, by habit
+  /// type, and never shows either back
+  /// (`show-habit.card-order-and-visibility#2`). A sleep habit is numerical,
+  /// so it was given the target — and the target adds a habit's values up over
+  /// a week and a month, which a percentage of a night does not do: seven good
+  /// nights are not "700% per week", they are seven nights. Hiding it left the
+  /// habit with neither, so the pair is swapped rather than emptied: a sleep
+  /// habit gets the overview a boolean habit gets, because a ring showing how
+  /// well the habit is kept is exactly what a nightly percentage supports.
+  bool _isVisible(
+    ShowHabitModel model,
+    ShowHabitCard card, {
+    required bool isSleep,
+  }) {
+    if (!isSleep) return model.isVisible(card);
+    if (card == ShowHabitCard.target) return false;
+    if (card == ShowHabitCard.overview) return true;
+    return model.isVisible(card);
   }
 
   Widget _buildCard(

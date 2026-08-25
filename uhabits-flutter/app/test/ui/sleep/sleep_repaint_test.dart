@@ -139,6 +139,10 @@ void main() {
     final Finder button = find.widgetWithText(TextButton, 'Allow access to Health');
     expect(button, findsOneWidget, reason: 'sleep.freshness#6');
 
+    // The sleep blocks now sit below the ported subtitle, ring and score, so
+    // the offer is not on screen when the habit opens.
+    await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
     await tester.tap(button);
     await tester.pumpAndSettle();
 
@@ -168,7 +172,11 @@ void main() {
     expect(find.byType(NightBar), findsNothing,
         reason: 'sleep.freshness#6 — and the strip has nothing to draw');
 
-    await tester.tap(find.widgetWithText(TextButton, 'Allow access to Health'));
+    final Finder offer =
+        find.widgetWithText(TextButton, 'Allow access to Health');
+    await tester.ensureVisible(offer);
+    await tester.pumpAndSettle();
+    await tester.tap(offer);
     await tester.pumpAndSettle();
 
     expect(find.text(denied), findsNothing, reason: 'sleep.freshness#6');

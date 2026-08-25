@@ -49,12 +49,6 @@ class NightsChart extends StatelessWidget {
   /// scrollable, so the strip is as long as the history is.
   final int firstDay;
 
-  /// Nothing is drawn outside this window of the clock.
-  ///
-  /// Bedtimes cluster in the evening and wake times in the morning, so a full
-  /// twenty-four hours would spend two thirds of the height on emptiness.
-  static const int windowStartMinutes = 20 * 60;
-  static const int windowMinutes = 15 * 60;
 
   /// Wide enough for a weekday and a date under each bar. The strip scrolls,
   /// so the cost of the extra width is three fewer nights on screen at once,
@@ -66,21 +60,15 @@ class NightsChart extends StatelessWidget {
   /// Room for the two label rows below the strip.
   static const double labelHeight = 30;
 
-  /// Where a time of day sits in the window, as a fraction of the height.
-  ///
-  /// Times before the window's start belong to the following evening, so they
-  /// wrap forward rather than clamping to the top.
-  static double? verticalFraction(int minuteOfDay) {
-    int offset = minuteOfDay - windowStartMinutes;
-    if (offset < 0) offset += 1440;
-    if (offset > windowMinutes) return null;
-    return offset / windowMinutes;
-  }
+  /// The slice of the clock this strip draws, wide enough for every night in
+  /// it.
+  SleepWindow get window => SleepWindow.covering(goal: goal, nights: nights);
 
   @override
   Widget build(BuildContext context) {
     final L10n l10n = L10n.of(context);
     final int dayCount = lastDay - firstDay + 1;
+    final SleepWindow visible = window;
     final core.LocalDateFormatter formatter =
         IntlLocalDateFormatter.of(context);
 
@@ -95,7 +83,7 @@ class NightsChart extends StatelessWidget {
             SizedBox(
               width: gutterWidth,
               height: chartHeight,
-              child: _Gutter(theme: theme, goal: goal),
+              child: _Gutter(theme: theme, goal: goal, window: visible),
             ),
             Expanded(
               // Built on demand rather than all at once: the strip is as long
@@ -109,7 +97,7 @@ class NightsChart extends StatelessWidget {
                 itemCount: dayCount < 1 ? 0 : dayCount,
                 itemBuilder: (BuildContext context, int index) => SizedBox(
                   width: dayWidth,
-                  child: _dayStack(lastDay - index, formatter),
+                  child: _dayStack(lastDay - index, formatter, visible),
                 ),
               ),
             ),
@@ -126,7 +114,8 @@ class NightsChart extends StatelessWidget {
   /// behind every column, which cannot be built lazily; it was always drawn a
   /// day at a time anyway, because a goal adapting to a new timezone makes it
   /// a staircase rather than a stripe.
-  Widget _dayStack(int day, core.LocalDateFormatter formatter) {
+  Widget _dayStack(
+      int day, core.LocalDateFormatter formatter, SleepWindow visible) {
     return Column(
       children: <Widget>[
         SizedBox(
@@ -139,9 +128,10 @@ class NightsChart extends StatelessWidget {
                   goal: goal,
                   offsetMinutes:
                       effectiveOffsets[day] ?? goal.homeUtcOffsetMinutes,
+                  window: visible,
                 ),
               ),
-              Positioned.fill(child: _dayColumn(day)),
+              Positioned.fill(child: _dayColumn(day, visible)),
             ],
           ),
         ),
@@ -158,7 +148,7 @@ class NightsChart extends StatelessWidget {
     );
   }
 
-  Widget _dayColumn(int day) {
+  Widget _dayColumn(int day, SleepWindow visible) {
     if (skippedDays.contains(day)) {
       return SkippedDayMark(theme: theme, day: day);
     }
@@ -169,8 +159,8 @@ class NightsChart extends StatelessWidget {
     final core.SleepBreakdown? breakdown = core.scoreNight(episode, goal, offset);
     if (breakdown == null) return const SizedBox.shrink();
 
-    final double? top = verticalFraction(breakdown.bedMinutes);
-    final double? bottom = verticalFraction(breakdown.wakeMinutes);
+    final double? top = visible.fractionOf(breakdown.bedMinutes);
+    final double? bottom = visible.fractionOf(breakdown.wakeMinutes);
     if (top == null || bottom == null || bottom <= top) {
       return const SizedBox.shrink();
     }
@@ -301,6 +291,7 @@ class _TargetBandSegment extends StatelessWidget {
     required this.theme,
     required this.goal,
     required this.offsetMinutes,
+    required this.window,
   });
 
   final core.Theme theme;
@@ -309,15 +300,15 @@ class _TargetBandSegment extends StatelessWidget {
   /// Where the goal was living on this night.
   final int offsetMinutes;
 
+  final SleepWindow window;
+
   @override
   Widget build(BuildContext context) {
     // The band is where the goal is, which during an adaptation is not where
     // the device's clock is. The shift between the two is exactly the drift.
     final int drift = offsetMinutes - goal.homeUtcOffsetMinutes;
-    final double? top =
-        NightsChart.verticalFraction((goal.bedMinutes + drift) % 1440);
-    final double? bottom =
-        NightsChart.verticalFraction((goal.wakeMinutes + drift) % 1440);
+    final double? top = window.fractionOf((goal.bedMinutes + drift) % 1440);
+    final double? bottom = window.fractionOf((goal.wakeMinutes + drift) % 1440);
     if (top == null || bottom == null || bottom <= top) {
       return const SizedBox.shrink();
     }
@@ -397,15 +388,20 @@ class _DayLabel extends StatelessWidget {
 
 /// The two goal times, written down the left edge.
 class _Gutter extends StatelessWidget {
-  const _Gutter({required this.theme, required this.goal});
+  const _Gutter({
+    required this.theme,
+    required this.goal,
+    required this.window,
+  });
 
   final core.Theme theme;
   final core.SleepGoal goal;
+  final SleepWindow window;
 
   @override
   Widget build(BuildContext context) {
-    final double? bed = NightsChart.verticalFraction(goal.bedMinutes);
-    final double? wake = NightsChart.verticalFraction(goal.wakeMinutes);
+    final double? bed = window.fractionOf(goal.bedMinutes);
+    final double? wake = window.fractionOf(goal.wakeMinutes);
     final TextStyle style = TextStyle(
       fontSize: 10,
       color: toFlutterColor(theme.mediumContrastTextColor),
@@ -439,4 +435,97 @@ class _Gutter extends StatelessWidget {
       },
     );
   }
+}
+
+/// The slice of the clock a strip of nights is drawn against.
+///
+/// Was a constant — eight in the evening plus fifteen hours — on the reasoning
+/// that bedtimes cluster in the evening and wake times in the morning, so a
+/// full day would spend two thirds of the height on emptiness. True of most
+/// people and false of some, and for those it did not merely crop: a night
+/// falling outside the window was dropped without trace, so a person who wakes
+/// at noon saw an empty strip and no reason for it.
+///
+/// So the window is measured from what is there. It always contains the goal,
+/// so the target band is never cropped either, and it never exceeds a day.
+class SleepWindow {
+  const SleepWindow({required this.startMinutes, required this.spanMinutes});
+
+  /// Minute of day at the top edge.
+  final int startMinutes;
+
+  /// How much of the clock the height covers, in minutes.
+  final int spanMinutes;
+
+  /// Breathing room above the earliest bedtime and below the latest waking.
+  static const int padMinutes = 60;
+
+  /// The shortest window holding [goal] and every night of [nights].
+  ///
+  /// Measured as signed offsets from the goal's bedtime, so the arithmetic
+  /// never has to care that midnight is in the middle of a night. A night is
+  /// an arc from bed forwards to waking, which keeps a night contiguous even
+  /// when it crosses the top of the clock.
+  static SleepWindow covering({
+    required core.SleepGoal goal,
+    required Map<int, core.SleepEpisode> nights,
+  }) {
+    int earliest = -padMinutes;
+    int latest = _forward(goal.bedMinutes, goal.wakeMinutes) + padMinutes;
+
+    for (final core.SleepEpisode episode in nights.values) {
+      final int bed = core.localMinutesOf(
+          episode.bedStartMillis, episode.utcOffsetMinutes);
+      final int wake = core.localMinutesOf(
+          episode.wakeEndMillis, episode.utcOffsetMinutes);
+      final int relBed = _signedFrom(goal.bedMinutes, bed);
+      final int relWake = relBed + _forward(bed, wake);
+      if (relBed - padMinutes < earliest) earliest = relBed - padMinutes;
+      if (relWake + padMinutes > latest) latest = relWake + padMinutes;
+
+    }
+
+    final int span = latest - earliest;
+    if (span >= 1440) {
+      // Everything at once. Nothing can fall outside a whole day, which is the
+      // property that matters more than the wasted height.
+      return SleepWindow(startMinutes: goal.bedMinutes % 1440, spanMinutes: 1440);
+    }
+    return SleepWindow(
+      startMinutes: (goal.bedMinutes + earliest) % 1440,
+      spanMinutes: span,
+    );
+  }
+
+  /// Where a time of day sits in the window, as a fraction of the height, or
+  /// null when it falls outside.
+  double? fractionOf(int minuteOfDay) {
+    final int offset = _forward(startMinutes, minuteOfDay);
+    if (offset > spanMinutes) return null;
+    return offset / spanMinutes;
+  }
+
+  /// Minutes from [from] forwards to [to], going the way a clock goes.
+  static int _forward(int from, int to) {
+    final int d = (to - from) % 1440;
+    return d < 0 ? d + 1440 : d;
+  }
+
+  /// Minutes from [origin] to [m], signed, in `(-720, 720]`.
+  static int _signedFrom(int origin, int m) {
+    final int d = _forward(origin, m);
+    return d > 720 ? d - 1440 : d;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is SleepWindow &&
+      other.startMinutes == startMinutes &&
+      other.spanMinutes == spanMinutes;
+
+  @override
+  int get hashCode => Object.hash(startMinutes, spanMinutes);
+
+  @override
+  String toString() => 'SleepWindow($startMinutes, +$spanMinutes)';
 }

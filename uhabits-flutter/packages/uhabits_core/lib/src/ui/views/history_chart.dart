@@ -232,6 +232,13 @@ class HistoryChart extends DataView {
     _headerOverflow = math.max(0.0, _headerOverflow - _squareSize);
   }
 
+  /// How far towards the habit's colour a day with the worst possible value
+  /// still travels.
+  ///
+  /// Not zero: the person recorded that day, and a day that reads as untouched
+  /// hides the very thing the shade was added to show.
+  static const double recordedFloor = 0.3;
+
   /// The original's five answers, plus a shade for a day that carries one.
   ///
   /// The shade replaces only [Square.on] and [Square.grey]: those are the two
@@ -243,7 +250,17 @@ class HistoryChart extends DataView {
         offset < intensities.length ? intensities[offset] : null;
     if (intensity != null &&
         (value == Square.on || value == Square.grey)) {
-      return color.blendWith(theme.cardBackgroundColor, 1 - intensity);
+      // From the colour of a day with nothing in it towards the habit's own,
+      // never the other way. Blending towards the card background reads as
+      // "no data" on a dark theme, where the background is darker than the
+      // empty-day grey — so a badly kept day came out fainter than a day the
+      // person never touched, which is exactly backwards. A recorded day
+      // starts at [recordedFloor] of the way to the habit colour, so the worst
+      // of them is still plainly the habit's colour and plainly recorded.
+      return theme.lowContrastTextColor.blendWith(
+        color,
+        recordedFloor + (1 - recordedFloor) * intensity,
+      );
     }
     return switch (value) {
       Square.on => color,

@@ -91,6 +91,18 @@ void main() {
       expect(find.byType(SkipCard), findsOneWidget, reason: 'sleep.skip#3');
     });
 
+    testWidgets('shows the overview the target displaced', (tester) async {
+      // A numerical habit is given the target instead of the overview. Hiding
+      // the target for sleep left it with neither, so the ring and the
+      // month/year figures — the first thing a person looks at — were gone.
+      final Habit habit = addHabit(name: 'Sleep', sleep: true);
+      await tester.pumpWidget(wrap(habit));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.overview)),
+          findsOneWidget, reason: 'sleep.ui#6');
+    });
+
     testWidgets('does not show the target card', (tester) async {
       // The target card adds a habit's values up over a week and a month.
       // Seven good nights are not "700% per week"; they are seven nights.
@@ -129,9 +141,17 @@ void main() {
       expect(ordinary, contains(ShowHabitCard.target),
           reason: 'sleep.ui#6 — the comparison is only worth making if the '
               'ordinary habit does show the card');
-      expect(withGoal, ordinary.difference(<ShowHabitCard>{
-        ShowHabitCard.target,
-      }), reason: 'sleep.ui#6');
+      expect(ordinary, isNot(contains(ShowHabitCard.overview)),
+          reason: 'sleep.ui#6 — and only if it does NOT show the other half '
+              'of the pair, which is the whole point of the swap');
+      expect(
+        withGoal,
+        ordinary
+            .difference(<ShowHabitCard>{ShowHabitCard.target})
+            .union(<ShowHabitCard>{ShowHabitCard.overview}),
+        reason: 'sleep.ui#6 — the pair is swapped, not emptied: a nightly '
+            'percentage has no period total but does have a ring',
+      );
     });
   });
 

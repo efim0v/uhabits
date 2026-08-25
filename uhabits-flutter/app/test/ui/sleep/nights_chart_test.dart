@@ -114,17 +114,101 @@ void main() {
     testWidgets('the window wraps around midnight', (tester) async {
       // 23:00 is early in the window and 01:00 is later, even though one is a
       // larger number of minutes than the other.
-      final double? evening = NightsChart.verticalFraction(1380);
-      final double? afterMidnight = NightsChart.verticalFraction(60);
+      final SleepWindow window =
+          SleepWindow.covering(goal: goal, nights: const <int, core.SleepEpisode>{});
+      final double? evening = window.fractionOf(1380);
+      final double? afterMidnight = window.fractionOf(60);
       expect(evening, isNotNull, reason: 'sleep.ui#3');
       expect(afterMidnight, isNotNull, reason: 'sleep.ui#3');
       expect(afterMidnight!, greaterThan(evening!), reason: 'sleep.ui#3');
     });
 
-    testWidgets('a time outside the window is not drawn', (tester) async {
-      // Midday is neither a bedtime nor a wake time worth a row of its own.
-      expect(NightsChart.verticalFraction(12 * 60), isNull,
-          reason: 'sleep.ui#3');
+    testWidgets('a time far from any night is not drawn', (tester) async {
+      // With nothing recorded the window is the goal and an hour either side,
+      // so midday is outside it.
+      final SleepWindow window =
+          SleepWindow.covering(goal: goal, nights: const <int, core.SleepEpisode>{});
+      expect(window.fractionOf(12 * 60), isNull, reason: 'sleep.ui#3');
+    });
+  });
+
+  group('the window is measured from the nights it has to hold', () {
+    // It used to be a constant — 20:00 plus fifteen hours — and a night
+    // outside it was dropped without trace. Someone who wakes at noon saw an
+    // empty strip and no reason for it.
+    core.SleepEpisode at(int day, {required int bed, required int wake}) {
+      final int startOfDay = (day + 10957) * 86400000;
+      return core.SleepEpisode(
+        bedStartMillis: startOfDay - 86400000 + bed * 60000,
+        wakeEndMillis: startOfDay + wake * 60000,
+        asleepMinutes: 400,
+        utcOffsetMinutes: 0,
+      );
+    }
+
+    test('a night the old window would have dropped is inside this one', () {
+      // Bed 05:28, up 13:31 — one of the real nights that vanished.
+      final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
+        9000: at(9000, bed: 24 * 60 + 5 * 60 + 28, wake: 13 * 60 + 31),
+      };
+      final SleepWindow window =
+          SleepWindow.covering(goal: goal, nights: nights);
+
+      expect(window.fractionOf(5 * 60 + 28), isNotNull, reason: 'sleep.ui#10');
+      expect(window.fractionOf(13 * 60 + 31), isNotNull, reason: 'sleep.ui#10');
+    });
+
+    test('the goal is always inside it, whatever the nights say', () {
+      final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
+        9000: at(9000, bed: 24 * 60 + 5 * 60, wake: 13 * 60),
+      };
+      final SleepWindow window =
+          SleepWindow.covering(goal: goal, nights: nights);
+
+      expect(window.fractionOf(goal.bedMinutes), isNotNull,
+          reason: 'sleep.ui#10 — or the target band is cropped instead');
+      expect(window.fractionOf(goal.wakeMinutes), isNotNull,
+          reason: 'sleep.ui#10');
+    });
+
+    test('with nothing recorded it stays tight around the goal', () {
+      final SleepWindow window = SleepWindow.covering(
+          goal: goal, nights: const <int, core.SleepEpisode>{});
+      // The goal is 23:00 to 07:00 — eight hours — plus an hour either side.
+      expect(window.spanMinutes, 10 * 60, reason: 'sleep.ui#10');
+      expect(window.startMinutes, 22 * 60, reason: 'sleep.ui#10');
+    });
+
+    test('it never runs past a whole day', () {
+      final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
+        9000: at(9000, bed: 24 * 60 + 11 * 60, wake: 10 * 60),
+      };
+      final SleepWindow window =
+          SleepWindow.covering(goal: goal, nights: nights);
+
+      expect(window.spanMinutes, lessThanOrEqualTo(1440), reason: 'sleep.ui#10');
+      // And at a whole day nothing at all can fall outside it.
+      for (int m = 0; m < 1440; m += 30) {
+        expect(window.fractionOf(m), isNotNull, reason: 'sleep.ui#10 — at $m');
+      }
+    });
+
+    test('every night given to the strip really is drawable', () {
+      // The property that matters, stated as a property rather than a case.
+      final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
+        8998: at(8998, bed: 24 * 60 + 2 * 60, wake: 11 * 60 + 54),
+        8999: at(8999, bed: 21 * 60 + 33, wake: 6 * 60 + 54),
+        9000: at(9000, bed: 24 * 60 + 5 * 60 + 28, wake: 13 * 60 + 31),
+      };
+      final SleepWindow window =
+          SleepWindow.covering(goal: goal, nights: nights);
+
+      for (final core.SleepEpisode e in nights.values) {
+        expect(window.fractionOf(core.localMinutesOf(e.bedStartMillis, 0)),
+            isNotNull, reason: 'sleep.ui#10');
+        expect(window.fractionOf(core.localMinutesOf(e.wakeEndMillis, 0)),
+            isNotNull, reason: 'sleep.ui#10');
+      }
     });
   });
 

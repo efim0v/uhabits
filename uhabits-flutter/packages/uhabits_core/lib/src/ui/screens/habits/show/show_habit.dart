@@ -147,6 +147,7 @@ class ShowHabitPresenter {
     required Preferences preferences,
     required Theme theme,
     double Function(Entry)? intensityOf,
+    bool Function(Entry)? countsTowardsTotal,
   }) {
     return ShowHabitState(
       title: habit.name,
@@ -158,6 +159,7 @@ class ShowHabitPresenter {
         theme: theme,
       ),
       overview: OverviewCardPresenter.buildState(
+        counts: countsTowardsTotal,
         habit: habit,
         theme: theme,
       ),

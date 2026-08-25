@@ -121,9 +121,16 @@ class OverviewCardState {
 class OverviewCardPresenter {
   OverviewCardPresenter._();
 
+  /// [counts] is not upstream: given a day's entry it answers whether that day
+  /// belongs in the total. Null for every habit the original knows, which
+  /// leaves the count exactly as it was — the days marked done by hand.
+  ///
+  /// A habit whose days carry a measurement has no such value: nothing it ever
+  /// stores equals [Entry.yesManual], so the total would read zero for ever.
   static OverviewCardState buildState({
     required Habit habit,
     required Theme theme,
+    bool Function(Entry)? counts,
   }) {
     final today = getToday();
     final lastMonth = today.minus(30);
@@ -138,7 +145,7 @@ class OverviewCardPresenter {
     // for non-daily habits are not counted.
     final totalCount = habit.originalEntries
         .getKnown()
-        .where((it) => it.value == Entry.yesManual)
+        .where(counts ?? (Entry it) => it.value == Entry.yesManual)
         .length;
     return OverviewCardState(
       color: habit.color,

@@ -293,6 +293,11 @@ class ShowHabitModel extends ChangeNotifier
       // answers for a numerical day: met the target, or did not. Given the
       // scale, it has as many answers as there are nights.
       intensityOf: _isSleepHabit ? (Entry e) => cellIntensityOf(e.value) : null,
+      // Nothing a sleep habit stores ever equals `yesManual`, so the ported
+      // total would read zero for ever. A perfect night is the thing worth
+      // counting: the goal met on every one of its three parts.
+      countsTowardsTotal:
+          _isSleepHabit ? (Entry e) => e.value >= maxStoredValue : null,
     );
     _visibility.setState(_state);
   }
