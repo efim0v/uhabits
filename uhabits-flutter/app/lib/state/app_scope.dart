@@ -815,7 +815,7 @@ class AppScope {
       sleepRepository: sleepRepository,
       sleepSync: SleepSync(
         repository: sleepRepository,
-        source: sleepSource ?? defaultSleepDataSource(),
+        source: sleepSource ?? defaultSleepDataSource(logging: logging),
       ),
       database: database,
       databasePath: databasePath,

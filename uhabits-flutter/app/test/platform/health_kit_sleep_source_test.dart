@@ -1,6 +1,8 @@
+// ignore_for_file: implementation_imports
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/health_kit_sleep_source.dart';
+import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
 void main() {
@@ -170,6 +172,39 @@ void main() {
       await source.enableBackgroundDelivery(() async {});
     });
 
+    test('and the reason is written down', () async {
+      // Background delivery needs an entitlement a provisioning profile can
+      // lack, and a refusal is indistinguishable in the app from a watch that
+      // recorded nothing: nights simply do not appear until the app is opened.
+      // The log is the only place the difference exists.
+      answerWith((MethodCall call) async {
+        throw PlatformException(code: 'missing-entitlement');
+      });
+      final _RecordingLogging logging = _RecordingLogging();
+      final HealthKitSleepSource source =
+          HealthKitSleepSource(logging: logging);
+
+      await source.enableBackgroundDelivery(() async {});
+
+      expect(
+        logging.lines.where((String l) =>
+            l.contains('enableBackgroundDelivery') &&
+            l.contains('missing-entitlement')),
+        isNotEmpty,
+        reason: 'sleep.sync#6',
+      );
+    });
+
+    test('a platform that is simply absent is not worth a line', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+      final _RecordingLogging logging = _RecordingLogging();
+      await HealthKitSleepSource(logging: logging).readSegments(0, 1);
+      expect(logging.lines, isEmpty,
+          reason: 'sleep.sync#6 — every widget test and every platform but '
+              'iOS is in this state, and none of them has a problem');
+    });
+
     test('a platform with no plugin at all behaves the same', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null);
@@ -233,4 +268,29 @@ void main() {
       await source.enableBackgroundDelivery(() async {});
     });
   });
+}
+
+/// Keeps what the source logged.
+class _RecordingLogging implements Logging {
+  final List<String> lines = <String>[];
+
+  @override
+  Logger getLogger(String name) => _RecordingLogger(name, lines);
+}
+
+class _RecordingLogger implements Logger {
+  _RecordingLogger(this.name, this.lines);
+
+  final String name;
+  final List<String> lines;
+
+  @override
+  void debug(String message) => lines.add('$name: $message');
+
+  @override
+  void error(Object msgOrException, [StackTrace? stackTrace]) =>
+      lines.add('$name: $msgOrException');
+
+  @override
+  void info(String message) => lines.add('$name: $message');
 }

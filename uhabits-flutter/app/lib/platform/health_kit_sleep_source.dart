@@ -1,4 +1,9 @@
+// The core logging layer is reached by its `src` path, exactly as
+// lib/platform/auto_backup.dart reaches it.
+// ignore_for_file: implementation_imports
+
 import 'package:flutter/services.dart';
+import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
 /// Apple Health, as a [SleepDataSource].
@@ -9,9 +14,12 @@ import 'package:uhabits_core/uhabits_core.dart';
 class HealthKitSleepSource implements SleepDataSource {
   HealthKitSleepSource({
     this.channel = const MethodChannel(methodChannelName),
-  });
+    Logging? logging,
+  }) : _logger = (logging ?? StandardLogging()).getLogger('HealthKitSleep');
 
   final MethodChannel channel;
+
+  final Logger _logger;
 
   /// Called when the platform reports that new sleep was recorded.
   Future<void> Function()? _onDataChanged;
@@ -76,6 +84,15 @@ class HealthKitSleepSource implements SleepDataSource {
         <String, Object?>{'start': startMillis, 'end': endMillis},
       );
 
+  /// Asks the platform to wake the app when new sleep is recorded.
+  ///
+  /// Needs the `com.apple.developer.healthkit.background-delivery`
+  /// entitlement, which a provisioning profile without it does not carry. The
+  /// habit works without it — every return to the foreground re-reads the last
+  /// fortnight — so a refusal is not fatal, but it is not nothing either: the
+  /// difference is whether last night appears while the app sits in the
+  /// background or only when it is next opened. Refusing silently would leave
+  /// that indistinguishable from a watch that recorded nothing.
   @override
   Future<void> enableBackgroundDelivery(
       Future<void> Function() onChanged) async {
@@ -92,12 +109,20 @@ class HealthKitSleepSource implements SleepDataSource {
   /// Every call goes through here, because every one of them has the same
   /// answer to failure: the platform declining, or not being there at all, is
   /// something the habit carries on without.
+  ///
+  /// Carrying on is not the same as saying nothing. Each of these failures has
+  /// a cause a person can act on — an entitlement the profile does not carry,
+  /// a permission withdrawn in Settings — and none of them is visible in the
+  /// app, which simply shows nights that are not there.
   Future<T?> _ask<T>(String method, [Object? arguments]) async {
     try {
       return await channel.invokeMethod<T>(method, arguments);
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      _logger.error('$method refused by the platform: $e');
       return null;
     } on MissingPluginException {
+      // Not a failure: a host with no plugin at all, which is every widget
+      // test and every platform but iOS.
       return null;
     }
   }
