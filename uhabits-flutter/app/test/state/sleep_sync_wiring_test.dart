@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/health_kit_sleep_source.dart';
 import 'package:uhabits/platform/sleep_data_source_factory.dart';
 import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/state/edit_habit_model.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/uhabits_core.dart';
@@ -103,6 +104,23 @@ void main() {
     scope.habitList.add(habit);
     return habit;
   }
+
+  group('a habit that has just been made a sleep habit', () {
+    test('is read from the platform without waiting for a resume', () async {
+      // The editor is what creates one, and until it does the habit has no
+      // goal, so no sync has ever had anything to look for. Left to the
+      // foreground sync, the screen a person opens straight after saving
+      // shows an empty fortnight until they switch away and back.
+      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      model.nameController.text = 'Sleep';
+      expect(source.reads, 0, reason: 'sleep.sync#7');
+
+      expect(model.save(), isTrue, reason: 'sleep.sync#7');
+      await pumpEventQueue();
+
+      expect(source.reads, greaterThan(0), reason: 'sleep.sync#7');
+    });
+  });
 
   group('which habits are synced', () {
     test('one read per sleep habit, and none for the others', () async {
