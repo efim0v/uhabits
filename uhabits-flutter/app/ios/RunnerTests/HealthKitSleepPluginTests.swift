@@ -17,6 +17,15 @@ final class HealthKitSleepPluginTests: XCTestCase {
     XCTAssertEqual(HealthKitSleepPlugin.dataChangedMethod, "healthDataChanged")
   }
 
+  /// The code that tells Dart there is no store to ask, as opposed to a
+  /// refusal by someone who could say yes later. Dart latches on this exact
+  /// string and stops offering access; a rename on one side alone would leave
+  /// a build with no HealthKit entitlement offering a button that does
+  /// nothing.
+  func testTheNoStoreCodeMatchesTheDartSide() {
+    XCTAssertEqual(HealthKitSleepPlugin.noStoreCode, "no-health-store")
+  }
+
   /// Raw values, not symbols: they are the wire format, they are fixed, and
   /// naming them this way lets the pre-iOS-16 cases be checked on any runtime.
   private let expectedNames: [(Int, String)] = [

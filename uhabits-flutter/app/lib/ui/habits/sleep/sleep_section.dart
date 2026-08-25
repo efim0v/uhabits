@@ -314,5 +314,6 @@ void _applyGoalSuggestion({
   scope.sleepRepository.saveGoal(habit.id!, moved);
   // A different goal makes every past night worth something different.
   scope.sleepSync.recomputeAll(habit);
-  scope.onSleepDataChanged(habit.id!);
+  // Announcing it is the caller's, through [_wrote]: one seam, or the rule
+  // has two homes and they will disagree.
 }

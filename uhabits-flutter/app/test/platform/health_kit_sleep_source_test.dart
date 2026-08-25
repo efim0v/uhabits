@@ -195,6 +195,50 @@ void main() {
       );
     });
 
+    test('an absent store is not a refusal, and is remembered as such',
+        () async {
+      // A refusal is reconsidered by asking again; there being nothing to ask
+      // is not. The card offers access only while there is something behind
+      // the offer.
+      answerWith((MethodCall call) async {
+        throw PlatformException(
+          code: HealthKitSleepSource.noStoreCode,
+          message: 'No health data on this device.',
+        );
+      });
+      final HealthKitSleepSource source = HealthKitSleepSource();
+      expect(source.hasHealthStore, isTrue,
+          reason: 'sleep.ui#7 — until the platform says otherwise');
+
+      expect(await source.requestAuthorization(), isFalse,
+          reason: 'sleep.ui#7');
+      expect(source.hasHealthStore, isFalse, reason: 'sleep.ui#7');
+    });
+
+    test('an ordinary refusal leaves the offer standing', () async {
+      // The person said no. They can say yes later, and the card has to keep
+      // asking.
+      answerWith((MethodCall call) async => false);
+      final HealthKitSleepSource source = HealthKitSleepSource();
+
+      expect(await source.requestAuthorization(), isFalse,
+          reason: 'sleep.ui#7');
+      expect(source.hasHealthStore, isTrue, reason: 'sleep.ui#7');
+    });
+
+    test('an unrelated platform failure is not read as an absent store',
+        () async {
+      answerWith((MethodCall call) async {
+        throw PlatformException(code: 'busy');
+      });
+      final HealthKitSleepSource source = HealthKitSleepSource();
+
+      expect(await source.readSegments(0, 1), isEmpty, reason: 'sleep.ui#7');
+      expect(source.hasHealthStore, isTrue,
+          reason: 'sleep.ui#7 — a transient failure must not withdraw the '
+              'offer for the rest of the session');
+    });
+
     test('a platform that is simply absent is not worth a line', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null);

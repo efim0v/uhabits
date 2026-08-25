@@ -30,6 +30,9 @@ class HealthKitSleepSource implements SleepDataSource {
   /// The call the native side makes when background delivery fires.
   static const String dataChangedMethod = 'healthDataChanged';
 
+  /// Must match `HealthKitSleepPlugin.noStoreCode`.
+  static const String noStoreCode = 'no-health-store';
+
   /// How the native side names each stretch.
   ///
   /// Apple adds values to `HKCategoryValueSleepAnalysis` between releases, so
@@ -45,8 +48,16 @@ class HealthKitSleepSource implements SleepDataSource {
   };
 
 
+  /// Set the first time the platform says there is nothing to ask.
+  ///
+  /// Not asked for up front: on the device that has a store — which is nearly
+  /// every iPhone — asking would be a round trip before the first paint, and
+  /// the answer only ever changes in one direction. The first call that meets
+  /// the absence records it, and the screen stops offering from then on.
+  bool _noStore = false;
+
   @override
-  bool get hasHealthStore => true;
+  bool get hasHealthStore => !_noStore;
 
   @override
   Future<bool> isAuthorized() =>
@@ -121,7 +132,14 @@ class HealthKitSleepSource implements SleepDataSource {
     try {
       return await channel.invokeMethod<T>(method, arguments);
     } on PlatformException catch (e) {
-      _logger.error('$method refused by the platform: $e');
+      if (e.code == noStoreCode) {
+        // Distinct from a refusal, and the distinction is the whole point: a
+        // refusal is reconsidered by asking again, and this is not.
+        _noStore = true;
+        _logger.info('$method: no health store to ask (${e.message})');
+      } else {
+        _logger.error('$method refused by the platform: $e');
+      }
       return null;
     } on MissingPluginException {
       // Not a failure: a host with no plugin at all, which is every widget

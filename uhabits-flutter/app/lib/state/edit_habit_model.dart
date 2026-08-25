@@ -417,6 +417,10 @@ class _SleepGoalWriter implements CommandRunnerListener {
     // this would mutate.
     scheduleMicrotask(() => scope.commandRunner.removeListener(this));
 
+    // The command runs on a task runner, so this can arrive after the screen
+    // and the scope behind it are gone.
+    if (scope.isClosed) return;
+
     final Habit? saved =
         habitId >= 0 ? scope.habitList.getById(habitId) : _byUuid();
     if (saved?.id == null) return;

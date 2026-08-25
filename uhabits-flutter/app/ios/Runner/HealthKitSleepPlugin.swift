@@ -16,6 +16,14 @@ final class HealthKitSleepPlugin: NSObject {
   /// Must match `HealthKitSleepSource.dataChangedMethod`.
   static let dataChangedMethod = "healthDataChanged"
 
+  /// Must match `HealthKitSleepSource.noStoreCode`.
+  ///
+  /// Reported when there is no health store to ask — an iPad, or a build whose
+  /// provisioning profile carries no HealthKit entitlement. Deliberately not
+  /// the same answer as a refusal: a refusal can be reconsidered by asking
+  /// again, and this cannot, so the app must stop offering to.
+  static let noStoreCode = "no-health-store"
+
   private let store = HKHealthStore()
   private var channel: FlutterMethodChannel?
   private var observerQuery: HKObserverQuery?
@@ -49,10 +57,20 @@ final class HealthKitSleepPlugin: NSObject {
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard HKHealthStore.isHealthDataAvailable(), let sleepType else {
-      // No health data on this device at all. Not an error: the habit works
-      // on hand-entered nights, and Dart reads a false the same way it reads
-      // a refusal.
-      result(call.method == "readSegments" ? [] : false)
+      // No health data on this device at all. The habit works on hand-entered
+      // nights, so reading nothing is the right answer for a query — but the
+      // questions about access are answered with the code, because "you were
+      // refused" and "there is nobody to ask" lead to different offers on
+      // screen.
+      if call.method == "readSegments" {
+        result([])
+      } else {
+        result(
+          FlutterError(
+            code: Self.noStoreCode,
+            message: "No health data on this device.",
+            details: nil))
+      }
       return
     }
 
@@ -61,8 +79,24 @@ final class HealthKitSleepPlugin: NSObject {
       result(store.authorizationStatus(for: sleepType) == .sharingAuthorized)
 
     case "requestAuthorization":
-      store.requestAuthorization(toShare: [sleepType], read: [sleepType]) { granted, _ in
-        DispatchQueue.main.async { result(granted) }
+      store.requestAuthorization(toShare: [sleepType], read: [sleepType]) {
+        granted, error in
+        DispatchQueue.main.async {
+          // An error is not a refusal. HealthKit reports a decline as
+          // `granted == false` with no error at all; an error means the
+          // request could not be put — most often a build whose profile
+          // carries no HealthKit entitlement, which no amount of asking again
+          // will change.
+          if let error {
+            result(
+              FlutterError(
+                code: Self.noStoreCode,
+                message: error.localizedDescription,
+                details: nil))
+          } else {
+            result(granted)
+          }
+        }
       }
 
     case "readSegments":
