@@ -263,6 +263,7 @@ class _HabitListViewState extends State<_HabitListView>
       ..onShowAboutScreen = _openAbout
       ..onShowFAQScreen = _openFAQ
       ..onShowSettingsScreen = _openSettings
+      ..onEnterSleepNight = _enterSleepNight
       ..onShowSelectHabitTypeDialog = _createHabit
       // `ListHabitsSelectionMenu` as the controller's ActionMode.Callback, and
       // as `ListHabitsSelectionMenuBehavior.Screen`.
@@ -539,6 +540,7 @@ class _HabitListViewState extends State<_HabitListView>
       ..onShowAboutScreen = null
       ..onShowFAQScreen = null
       ..onShowSettingsScreen = null
+      ..onEnterSleepNight = null
       ..onShowSelectHabitTypeDialog = null
       ..onSelectionStarted = null
       ..onSelectionChanged = null
@@ -1161,6 +1163,21 @@ class _HabitListViewState extends State<_HabitListView>
         ),
       ),
     );
+  }
+
+  /// Opens a night for a sleep habit, from a reminder's "Enter".
+  void _enterSleepNight(core.Habit habit, core.LocalDate date) {
+    final core.SleepGoal? goal =
+        _model.scope.sleepRepository.goalFor(habit.id!);
+    if (goal == null) return;
+    unawaited(enterNightByHand(
+      context,
+      scope: _model.scope,
+      habit: habit,
+      goal: goal,
+      day: date.daysSince2000,
+      theme: _coreThemeOf(context),
+    ));
   }
 
   /// `ListHabitsScreen.showNumberPopup(value, notes, callback)`.

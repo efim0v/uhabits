@@ -165,7 +165,13 @@ class HabitListModel extends ChangeNotifier
         final timestampMillis = intent.getLongExtra('timestamp', 0);
         final habit = scope.habitList.getById(habitId)!;
         final date = LocalDate.fromUnixTime(timestampMillis);
-        _behavior.onEdit(habit, date, 0, 0);
+        // A sleep habit answers "Enter" with its night, not with a number.
+        // No parity rule covers it: the original has no such habit.
+        if (scope.sleepRepository.goalFor(habitId) != null) {
+          onEnterSleepNight?.call(habit, date);
+        } else {
+          _behavior.onEdit(habit, date, 0, 0);
+        }
       }
     }
     pendingIntent = null;
@@ -280,6 +286,14 @@ class HabitListModel extends ChangeNotifier
   void Function()? onShowFAQScreen;
   void Function()? onShowSettingsScreen;
   void Function()? onShowSelectHabitTypeDialog;
+
+  /// Opens a night for a sleep habit, for the day a reminder pointed at.
+  ///
+  /// A sleep habit's value is computed from a night rather than typed in, so
+  /// the numeric popup an ACTION_EDIT normally raises would take a percentage
+  /// the next recompute overwrites. Set by the screen, which is what can show
+  /// a sheet.
+  void Function(Habit habit, LocalDate date)? onEnterSleepNight;
 
   /// The `ThemeSwitcher` slice the menu needs. Installed by the widget layer,
   /// which is where the app's [ThemeModel] lives.
