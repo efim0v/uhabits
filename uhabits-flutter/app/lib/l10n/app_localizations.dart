@@ -1345,6 +1345,186 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, one {The habit will be permanently deleted. This action cannot be undone.} other {The habits will be permanently deleted. This action cannot be undone.}}'**
   String deleteHabitsMessage(num count);
+
+  /// No description provided for @sleepLastNight.
+  ///
+  /// In en, this message translates to:
+  /// **'Last night'**
+  String get sleepLastNight;
+
+  /// No description provided for @sleepBedtime.
+  ///
+  /// In en, this message translates to:
+  /// **'Bedtime'**
+  String get sleepBedtime;
+
+  /// No description provided for @sleepWakeTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Wake time'**
+  String get sleepWakeTime;
+
+  /// No description provided for @sleepDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep'**
+  String get sleepDuration;
+
+  /// No description provided for @sleepNights.
+  ///
+  /// In en, this message translates to:
+  /// **'Nights'**
+  String get sleepNights;
+
+  /// No description provided for @sleepStability.
+  ///
+  /// In en, this message translates to:
+  /// **'Stability'**
+  String get sleepStability;
+
+  /// No description provided for @sleepNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'No data yet'**
+  String get sleepNoData;
+
+  /// No description provided for @sleepSpreadMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'±{minutes} min'**
+  String sleepSpreadMinutes(String minutes);
+
+  /// No description provided for @sleepSkippedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{skipped} of {days} days skipped'**
+  String sleepSkippedCount(int skipped, int days);
+
+  /// No description provided for @sleepMarkSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark'**
+  String get sleepMarkSkipped;
+
+  /// No description provided for @sleepLastSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Last: {date}'**
+  String sleepLastSkipped(String date);
+
+  /// No description provided for @sleepWeakestSleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Went to bed and got up on time, but slept less than the goal.'**
+  String get sleepWeakestSleep;
+
+  /// No description provided for @sleepWeakestBed.
+  ///
+  /// In en, this message translates to:
+  /// **'Slept enough and got up on time, but went to bed off schedule.'**
+  String get sleepWeakestBed;
+
+  /// No description provided for @sleepWeakestWake.
+  ///
+  /// In en, this message translates to:
+  /// **'Slept enough and went to bed on time, but got up off schedule.'**
+  String get sleepWeakestWake;
+
+  /// No description provided for @sleepPerfectNight.
+  ///
+  /// In en, this message translates to:
+  /// **'On schedule and slept enough.'**
+  String get sleepPerfectNight;
+
+  /// No description provided for @sleepTargetBedtime.
+  ///
+  /// In en, this message translates to:
+  /// **'Target bedtime'**
+  String get sleepTargetBedtime;
+
+  /// No description provided for @sleepTargetWakeTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Target wake time'**
+  String get sleepTargetWakeTime;
+
+  /// No description provided for @sleepMinimumSleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum sleep'**
+  String get sleepMinimumSleep;
+
+  /// No description provided for @sleepHomeTimezone.
+  ///
+  /// In en, this message translates to:
+  /// **'Home time zone'**
+  String get sleepHomeTimezone;
+
+  /// No description provided for @sleepAdaptationRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptation'**
+  String get sleepAdaptationRate;
+
+  /// No description provided for @sleepAdaptationPerDay.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min per day'**
+  String sleepAdaptationPerDay(int minutes);
+
+  /// No description provided for @sleepEnterNight.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter night'**
+  String get sleepEnterNight;
+
+  /// No description provided for @sleepActuallyAsleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Actually asleep'**
+  String get sleepActuallyAsleep;
+
+  /// No description provided for @sleepHealthAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow access to Health'**
+  String get sleepHealthAccess;
+
+  /// No description provided for @sleepHealthDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Without access to Health, nights have to be entered by hand.'**
+  String get sleepHealthDenied;
+
+  /// No description provided for @sleepSuggestGoalBed.
+  ///
+  /// In en, this message translates to:
+  /// **'You have been going to bed around {time}. Move the goal?'**
+  String sleepSuggestGoalBed(String time);
+
+  /// No description provided for @sleepSuggestGoalWake.
+  ///
+  /// In en, this message translates to:
+  /// **'You have been getting up around {time}. Move the goal?'**
+  String sleepSuggestGoalWake(String time);
+
+  /// No description provided for @sleepSuggestSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Your time zone changed. Mark these days as skipped?'**
+  String get sleepSuggestSkip;
+
+  /// No description provided for @sleepSuggestApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Move'**
+  String get sleepSuggestApply;
+
+  /// No description provided for @sleepSuggestDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get sleepSuggestDismiss;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

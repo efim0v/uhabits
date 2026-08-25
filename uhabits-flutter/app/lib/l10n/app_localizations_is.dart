@@ -671,4 +671,111 @@ class L10nIs extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get sleepLastNight => 'Last night';
+
+  @override
+  String get sleepBedtime => 'Bedtime';
+
+  @override
+  String get sleepWakeTime => 'Wake time';
+
+  @override
+  String get sleepDuration => 'Sleep';
+
+  @override
+  String get sleepNights => 'Nights';
+
+  @override
+  String get sleepStability => 'Stability';
+
+  @override
+  String get sleepNoData => 'No data yet';
+
+  @override
+  String sleepSpreadMinutes(String minutes) {
+    return '±$minutes min';
+  }
+
+  @override
+  String sleepSkippedCount(int skipped, int days) {
+    return '$skipped of $days days skipped';
+  }
+
+  @override
+  String get sleepMarkSkipped => 'Mark';
+
+  @override
+  String sleepLastSkipped(String date) {
+    return 'Last: $date';
+  }
+
+  @override
+  String get sleepWeakestSleep =>
+      'Went to bed and got up on time, but slept less than the goal.';
+
+  @override
+  String get sleepWeakestBed =>
+      'Slept enough and got up on time, but went to bed off schedule.';
+
+  @override
+  String get sleepWeakestWake =>
+      'Slept enough and went to bed on time, but got up off schedule.';
+
+  @override
+  String get sleepPerfectNight => 'On schedule and slept enough.';
+
+  @override
+  String get sleepTargetBedtime => 'Target bedtime';
+
+  @override
+  String get sleepTargetWakeTime => 'Target wake time';
+
+  @override
+  String get sleepMinimumSleep => 'Minimum sleep';
+
+  @override
+  String get sleepHomeTimezone => 'Home time zone';
+
+  @override
+  String get sleepAdaptationRate => 'Adaptation';
+
+  @override
+  String sleepAdaptationPerDay(int minutes) {
+    return '$minutes min per day';
+  }
+
+  @override
+  String get sleepEnterNight => 'Enter night';
+
+  @override
+  String get sleepActuallyAsleep => 'Actually asleep';
+
+  @override
+  String get sleepHealthAccess => 'Allow access to Health';
+
+  @override
+  String get sleepHealthDenied =>
+      'Without access to Health, nights have to be entered by hand.';
+
+  @override
+  String sleepSuggestGoalBed(String time) {
+    return 'You have been going to bed around $time. Move the goal?';
+  }
+
+  @override
+  String sleepSuggestGoalWake(String time) {
+    return 'You have been getting up around $time. Move the goal?';
+  }
+
+  @override
+  String get sleepSuggestSkip =>
+      'Your time zone changed. Mark these days as skipped?';
+
+  @override
+  String get sleepSuggestApply => 'Move';
+
+  @override
+  String get sleepSuggestDismiss => 'Not now';
 }

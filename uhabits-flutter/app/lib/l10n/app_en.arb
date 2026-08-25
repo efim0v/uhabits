@@ -279,5 +279,80 @@
         "type": "num"
       }
     }
-  }
+  },
+  "sleepLastNight": "Last night",
+  "sleepBedtime": "Bedtime",
+  "sleepWakeTime": "Wake time",
+  "sleepDuration": "Sleep",
+  "sleepNights": "Nights",
+  "sleepStability": "Stability",
+  "sleepNoData": "No data yet",
+  "sleepSpreadMinutes": "±{minutes} min",
+  "@sleepSpreadMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepSkippedCount": "{skipped} of {days} days skipped",
+  "@sleepSkippedCount": {
+    "placeholders": {
+      "skipped": {
+        "type": "int"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "sleepMarkSkipped": "Mark",
+  "sleepLastSkipped": "Last: {date}",
+  "@sleepLastSkipped": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepWeakestSleep": "Went to bed and got up on time, but slept less than the goal.",
+  "sleepWeakestBed": "Slept enough and got up on time, but went to bed off schedule.",
+  "sleepWeakestWake": "Slept enough and went to bed on time, but got up off schedule.",
+  "sleepPerfectNight": "On schedule and slept enough.",
+  "sleepTargetBedtime": "Target bedtime",
+  "sleepTargetWakeTime": "Target wake time",
+  "sleepMinimumSleep": "Minimum sleep",
+  "sleepHomeTimezone": "Home time zone",
+  "sleepAdaptationRate": "Adaptation",
+  "sleepAdaptationPerDay": "{minutes} min per day",
+  "@sleepAdaptationPerDay": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "sleepEnterNight": "Enter night",
+  "sleepActuallyAsleep": "Actually asleep",
+  "sleepHealthAccess": "Allow access to Health",
+  "sleepHealthDenied": "Without access to Health, nights have to be entered by hand.",
+  "sleepSuggestGoalBed": "You have been going to bed around {time}. Move the goal?",
+  "@sleepSuggestGoalBed": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepSuggestGoalWake": "You have been getting up around {time}. Move the goal?",
+  "@sleepSuggestGoalWake": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepSuggestSkip": "Your time zone changed. Mark these days as skipped?",
+  "sleepSuggestApply": "Move",
+  "sleepSuggestDismiss": "Not now"
 }
