@@ -134,6 +134,16 @@ class SleepSync {
         repository.range(habit.id!, fromDay, toDay);
     var wrote = false;
     for (final MapEntry<int, SleepEpisode> night in nights.entries) {
+      // A day the person marked as not applicable stays that way, even though
+      // a night is on record for it. Scoring it would quietly erase the
+      // judgement they made about their own week — and would do it on the
+      // next sync after the trip, nowhere near the moment they marked it.
+      //
+      // Clearing the mark leaves the day empty rather than zero, so the very
+      // next recompute scores it from the night that is still stored.
+      if (habit.originalEntries.get(LocalDate(night.key)).value == Entry.skip) {
+        continue;
+      }
       final SleepBreakdown? breakdown = scoreNight(
         night.value,
         goal,

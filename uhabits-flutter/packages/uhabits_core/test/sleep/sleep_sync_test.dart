@@ -270,6 +270,35 @@ void main() {
     });
   });
 
+  group('a day the person marked as skipped', () {
+    test('survives a recompute that has a night for it', () async {
+      // Marking a trip and then opening the app must not quietly un-mark it:
+      // the night is still on record, and scoring it would erase the judgement
+      // the person made about their own week.
+      source.segments = nightOn(today, bedMinutes: 1560, asleepMinutes: 300);
+      await sync.syncRecent(habit);
+      expect(writtenEntries()[today], isNotNull, reason: 'sleep.skip#1');
+
+      habit.originalEntries.add(Entry(LocalDate(today), Entry.skip));
+      habit.recompute();
+
+      await sync.syncRecent(habit);
+
+      expect(writtenEntries()[today], Entry.skip, reason: 'sleep.skip#6');
+    });
+
+    test('a day that is not skipped is still scored', () async {
+      source.segments = nightOn(today);
+      habit.originalEntries.add(Entry(LocalDate(today - 1), Entry.skip));
+      habit.recompute();
+
+      await sync.syncRecent(habit);
+
+      expect(writtenEntries()[today], greaterThan(0), reason: 'sleep.skip#6');
+      expect(writtenEntries()[today - 1], Entry.skip, reason: 'sleep.skip#6');
+    });
+  });
+
   group('the day a night belongs to', () {
     test('is the day the person woke up', () async {
       // Asleep at 23:00 on day 8999, awake at 07:00 on day 9000.
