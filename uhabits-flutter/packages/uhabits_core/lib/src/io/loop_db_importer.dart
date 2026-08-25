@@ -25,6 +25,7 @@ import '../models/entry.dart';
 import '../models/habit_list.dart';
 import '../models/model_factory.dart';
 import '../models/sqlite/sqlite_habit_list.dart';
+import '../sleep/sleep_importer.dart';
 import '../time/local_date.dart';
 import 'files.dart';
 import 'logging.dart';
@@ -66,6 +67,7 @@ class LoopDBImporter {
     required this.runner,
     required Logging logging,
     required this.fileOpener,
+    this.sleepImporter,
   }) : logger = logging.getLogger('LoopDBImporter');
 
   final HabitList habitList;
@@ -82,6 +84,12 @@ class LoopDBImporter {
   final FileOpener fileOpener;
 
   final Logger logger;
+
+  /// Not upstream: this port stores a sleep habit's goal and its recorded
+  /// nights in tables of its own, keyed by habit id, and the ids here are not
+  /// the ids the file was written with. Null wherever there is no sleep
+  /// database to write to, which is every importer test that predates it.
+  final SleepImporter? sleepImporter;
 
   Future<bool> canHandle(UserFile file) async {
     if (!await _isSQLite3File(file)) return false;
@@ -169,6 +177,11 @@ class LoopDBImporter {
         },
       );
       habit.recompute();
+
+      // The habit's own rows are re-keyed by the commands above; the sleep
+      // rows are not, and are lost unless they are carried across explicitly.
+      sleepImporter?.importFor(db, habitData.id, habit.id!);
+
     }
     habitList.resort();
     db.close();

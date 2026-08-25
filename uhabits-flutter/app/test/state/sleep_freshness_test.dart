@@ -124,8 +124,8 @@ void main() {
       reason: 'the sync is only worth announcing if it wrote something',
     );
     expect(listener.changes, greaterThan(0),
-        reason: 'sleep.sync#1 — a night nothing is told about is a night the '
-            'list goes on showing as a zero');
+        reason: 'sleep.freshness#1 — a night nothing is told about is a '
+            'night the list goes on showing as a zero');
   });
 
   test('a night entered by hand is announced the same way', () async {
@@ -145,7 +145,7 @@ void main() {
     scope.sleepSync.recomputeDays(habit, day, day);
     scope.onSleepDataChanged(habit.id!);
 
-    expect(listener.changes, greaterThan(0), reason: 'sleep.manual#1');
+    expect(listener.changes, greaterThan(0), reason: 'sleep.freshness#1');
   });
 
   test('a closed scope announces nothing', () async {
@@ -156,8 +156,8 @@ void main() {
     scope.onSleepDataChanged(habit.id!);
 
     expect(listener.changes, 0,
-        reason: 'refreshing a cache whose database is gone is a crash, not a '
-            'redraw');
+        reason: 'sleep.freshness#2 — refreshing a cache whose database is '
+            'gone is a crash, not a redraw');
   });
 
   test('a sync interrupted by a teardown writes nothing', () async {
@@ -171,6 +171,6 @@ void main() {
     // What AppScope does at this point, and the reason the halves are apart:
     // it checks, finds the scope closed, and does not write. Were it to write,
     // this would throw "database has already been closed".
-    expect(scope.isClosed, isTrue, reason: 'sleep.sync#1');
+    expect(scope.isClosed, isTrue, reason: 'sleep.freshness#3');
   });
 }

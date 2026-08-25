@@ -48,7 +48,7 @@ import 'package:uhabits_core/src/io/tickmate_db_importer.dart'
     show TickmateDBImporter;
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/uhabits_core.dart'
-    show HabitList, Sqlite3DatabaseOpener;
+    show HabitList, SleepImporter, Sqlite3DatabaseOpener;
 
 import '../../l10n/app_localizations.dart';
 import '../../platform/bug_reporter.dart';
@@ -549,6 +549,9 @@ GenericImporter buildGenericImporter({
     runner: scope.commandRunner,
     logging: scope.logging,
     fileOpener: fileOpener,
+    // A restored backup carries a sleep habit's goal and every night it ever
+    // recorded; nothing else in the import re-keys those onto this device.
+    sleepImporter: SleepImporter(scope.sleepRepository),
   );
   final rewire =
       RewireDBImporter(scope.habitList, scope.modelFactory, opener);

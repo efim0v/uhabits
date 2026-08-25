@@ -84,7 +84,8 @@ void main() {
     test('is not the habit\'s own reminder id', () {
       final Habit habit = habitWith();
       expect(sleepPromptNotificationId(habit),
-          isNot(reminderNotificationId(habit)));
+          isNot(reminderNotificationId(habit)),
+          reason: 'sleep.freshness#4');
     });
 
     test('never collides with another habit\'s reminder id', () {
@@ -92,8 +93,11 @@ void main() {
       // question outside that range for any id the app can produce.
       for (final int id in <int>[1, 2, 7, 1000, 0x3FFFFFFF]) {
         final Habit habit = habitWith(id: id);
-        expect(sleepPromptNotificationId(habit), greaterThanOrEqualTo(0x40000000));
-        expect(sleepPromptNotificationId(habit), isNot(id));
+        expect(sleepPromptNotificationId(habit),
+            greaterThanOrEqualTo(0x40000000),
+            reason: 'sleep.freshness#4');
+        expect(sleepPromptNotificationId(habit), isNot(id),
+            reason: 'sleep.freshness#4');
       }
     });
 
@@ -116,15 +120,16 @@ void main() {
       final Habit habit = habitWith(reminder: null);
       await prompts.schedule(habit, LocalDate(9000), 1756108800000);
 
-      expect(alarms.scheduled, hasLength(1));
-      expect(alarms.cancelled, isEmpty);
+      expect(alarms.scheduled, hasLength(1), reason: 'sleep.freshness#4');
+      expect(alarms.cancelled, isEmpty, reason: 'sleep.freshness#4');
       expect(alarms.scheduled.single.$2, 1756108800000);
     });
 
     test('files it under its own id', () async {
       final Habit habit = habitWith();
       await prompts.schedule(habit, LocalDate(9000), 1756108800000);
-      expect(alarms.scheduled.single.$1.id, sleepPromptNotificationId(habit));
+      expect(alarms.scheduled.single.$1.id, sleepPromptNotificationId(habit),
+          reason: 'sleep.freshness#4');
       expect(alarms.scheduled.single.$1.id, isNot(reminderNotificationId(habit)));
     });
 
