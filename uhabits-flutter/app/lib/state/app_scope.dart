@@ -819,7 +819,12 @@ class AppScope {
       sleepRepository: sleepRepository,
       sleepSync: SleepSync(
         repository: sleepRepository,
-        source: sleepSource ?? defaultSleepDataSource(logging: logging),
+        // The resolved one, not the parameter: a bare StandardLogging writes
+        // to a stdout that nothing on a phone reads, and these lines are the
+        // only account of why Health went quiet. They belong in the buffer the
+        // bug report carries.
+        source:
+            sleepSource ?? defaultSleepDataSource(logging: resolvedLogging),
       ),
       database: database,
       databasePath: databasePath,
