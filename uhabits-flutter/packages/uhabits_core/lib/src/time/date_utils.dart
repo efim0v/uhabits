@@ -141,6 +141,14 @@ class DateUtils {
 
   static TimeZone get _defaultTimeZone => _fixedTimeZone ?? getDefaultTimeZone();
 
+  /// The zone in force: the pinned one when a test set it, the host's
+  /// otherwise.
+  ///
+  /// Exposed so that callers outside this class resolve the zone the same way
+  /// it does. Reaching for [getDefaultTimeZone] directly skips
+  /// [setFixedTimeZone], which is the hook every test in the port uses.
+  static TimeZone get currentTimeZone => _defaultTimeZone;
+
   /// Local wall-clock millis back to a UTC instant. The offset is looked up
   /// twice on purpose, so that the DST boundaries resolve correctly.
   static int applyTimezone(int localTimestamp, [TimeZone? timeZone]) {

@@ -10,18 +10,55 @@ SleepEpisode? mergeSegments(
   required int mergeGapMinutes,
   required int utcOffsetMinutes,
 }) {
-  if (segments.isEmpty) return null;
+  final List<SleepEpisode> episodes = splitIntoEpisodes(
+    segments,
+    mergeGapMinutes: mergeGapMinutes,
+    utcOffsetAt: (_) => utcOffsetMinutes,
+  );
+  if (episodes.isEmpty) return null;
+  return episodes
+      .reduce((a, b) => b.asleepMinutes > a.asleepMinutes ? b : a);
+}
+
+/// Every night in a window, one episode per chain of sleep.
+///
+/// The same rules as [mergeSegments] — one source, chains across short
+/// awakenings, in-bed boundaries where there are any — applied across a span
+/// of days rather than a single night. Sharing the implementation is the point:
+/// a second copy of these rules would be carried forward in one place and not
+/// the other.
+///
+/// [utcOffsetAt] gives the offset in force at an instant, so a window that
+/// crosses a flight or a daylight saving change describes each night in the
+/// offset that night actually had.
+List<SleepEpisode> splitIntoEpisodes(
+  List<SleepSegment> segments, {
+  required int mergeGapMinutes,
+  required int Function(int instantMillis) utcOffsetAt,
+}) {
+  if (segments.isEmpty) return const <SleepEpisode>[];
 
   final _SourceGroup? group = _bestSource(segments);
-  if (group == null) return null;
+  if (group == null) return const <SleepEpisode>[];
 
   final List<SleepSegment> asleep =
       group.segments.where((s) => s.kind.isAsleep).toList()
         ..sort((a, b) => a.startMillis.compareTo(b.startMillis));
-  if (asleep.isEmpty) return null;
+  if (asleep.isEmpty) return const <SleepEpisode>[];
 
-  final _Chain chain = _bestChain(asleep, mergeGapMinutes);
+  return <SleepEpisode>[
+    for (final _Chain chain in _chains(asleep, mergeGapMinutes))
+      _episodeFrom(chain, group, utcOffsetAt),
+  ];
+}
 
+/// Builds the episode a chain describes, taking its boundaries from the in-bed
+/// stretches that overlap it when there are any.
+SleepEpisode _episodeFrom(
+  _Chain chain,
+  _SourceGroup group,
+  int Function(int) utcOffsetAt,
+) {
   // Only in-bed stretches that overlap the sleep describe this night. An
   // afternoon lie-down must not become the night's bedtime.
   final Iterable<SleepSegment> inBed = group.segments
@@ -39,7 +76,9 @@ SleepEpisode? mergeSegments(
     bedStartMillis: bedStart,
     wakeEndMillis: wakeEnd,
     asleepMinutes: chain.asleepMinutes,
-    utcOffsetMinutes: utcOffsetMinutes,
+    // The offset of the moment the person woke, which is the moment that
+    // decides which day the night belongs to.
+    utcOffsetMinutes: utcOffsetAt(wakeEnd),
     derivedFromAsleep: inBed.isEmpty,
     sourceId: group.sourceId,
   );
@@ -129,13 +168,13 @@ class _Chain {
   }
 }
 
-/// Groups sleep into chains across short awakenings and returns the one
-/// holding the most sleep.
+/// Groups sleep into chains across short awakenings.
 ///
-/// Most, not widest: three scattered half hours spanning four hours are not a
-/// better night than five unbroken ones, and a daytime nap must never win over
-/// the night.
-_Chain _bestChain(List<SleepSegment> asleep, int mergeGapMinutes) {
+/// Chains are what nights are made of. Which chain wins, where there has to be
+/// a winner, is decided by how much sleep it holds — not how wide it is: three
+/// scattered half hours spanning four hours are not a better night than five
+/// unbroken ones, and a daytime nap must never win over the night.
+List<_Chain> _chains(List<SleepSegment> asleep, int mergeGapMinutes) {
   final chains = <_Chain>[_Chain(asleep.first)];
   for (final segment in asleep.skip(1)) {
     final int gapMinutes = (segment.startMillis - chains.last.end) ~/ 60000;
@@ -145,5 +184,5 @@ _Chain _bestChain(List<SleepSegment> asleep, int mergeGapMinutes) {
       chains.add(_Chain(segment));
     }
   }
-  return chains.reduce((a, b) => b.asleepMinutes > a.asleepMinutes ? b : a);
+  return chains;
 }
