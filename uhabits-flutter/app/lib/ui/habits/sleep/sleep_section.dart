@@ -46,13 +46,19 @@ List<Widget> buildSleepSection(
   final int id = habit.id!;
   final int today = scope.sleepSync.today().daysSince2000;
 
-  final Map<int, core.SleepEpisode> nights = scope.sleepRepository
-      .range(id, today - stabilityWindowDays * 2, today);
+  final Map<int, core.SleepEpisode> nights = scope.sleepRepository.range(
+    id,
+    today - stabilityWindowDays * 2,
+    today,
+  );
   final Map<int, int> offsets = core.effectiveOffsets(
     firstDay: scope.sleepRepository.firstDay(id) ?? today,
     lastDay: today,
     observedByDay: scope.sleepRepository.observedOffsets(
-        id, scope.sleepRepository.firstDay(id) ?? today, today),
+      id,
+      scope.sleepRepository.firstDay(id) ?? today,
+      today,
+    ),
     homeOffsetMinutes: goal.homeUtcOffsetMinutes,
     ratePerDayMinutes: goal.adaptationMinutesPerDay,
   );
@@ -71,14 +77,21 @@ List<Widget> buildSleepSection(
       : nights.keys.reduce((int a, int b) => a > b ? a : b);
   final core.SleepBreakdown? lastNight = latestDay == null
       ? null
-      : core.scoreNight(nights[latestDay]!, goal,
-          offsets[latestDay] ?? goal.homeUtcOffsetMinutes);
+      : core.scoreNight(
+          nights[latestDay]!,
+          goal,
+          offsets[latestDay] ?? goal.homeUtcOffsetMinutes,
+        );
 
-  final int? lastSkipped =
-      lastSkippedDay(habit, today: today, windowDays: skipWindowDays);
+  final int? lastSkipped = lastSkippedDay(
+    habit,
+    today: today,
+    windowDays: skipWindowDays,
+  );
 
-  final core.TimezoneSkipSuggestion? travel =
-      core.suggestSkipForTimezone(nights);
+  final core.TimezoneSkipSuggestion? travel = core.suggestSkipForTimezone(
+    nights,
+  );
   final core.GoalSuggestion? suggestedGoal = core.suggestGoal(
     stabilityNights(nights, skipped, today),
     goal,
@@ -121,15 +134,23 @@ List<Widget> buildSleepSection(
       streakDays: _currentStreakDays(habit, today),
       // Always for today, which is the night most likely to be missing or
       // wrong. An older night is edited from the history like any other.
-      healthDenied: !scope.sleepSourceAuthorized,
-      onRequestAccess: () async {
-        await scope.sleepSync.source.requestAuthorization();
-        // The sync is what re-reads the answer into `sleepSourceAuthorized`,
-        // and it also brings in the nights the refusal was hiding. Without
-        // the repaint the card goes on offering access that has been granted.
-        await scope.syncSleepHabits();
-        onChanged();
-      },
+      //
+      // Only where there is a store to be refused by. On a platform with none
+      // the card would otherwise blame a refusal that never happened, and
+      // offer to ask again — an offer that does nothing when taken up.
+      healthDenied:
+          scope.sleepSync.source.hasHealthStore && !scope.sleepSourceAuthorized,
+      onRequestAccess: !scope.sleepSync.source.hasHealthStore
+          ? null
+          : () async {
+              await scope.sleepSync.source.requestAuthorization();
+              // The sync is what re-reads the answer into
+              // `sleepSourceAuthorized`, and it also brings in the nights the
+              // refusal was hiding. Without the repaint the card goes on
+              // offering access that has been granted.
+              await scope.syncSleepHabits();
+              onChanged();
+            },
       onEnterByHand: () => enterNightByHand(
         context,
         scope: scope,
@@ -159,11 +180,15 @@ List<Widget> buildSleepSection(
     ),
     SkipCard(
       theme: theme,
-      skippedDays:
-          skippedDayCount(habit, today: today, windowDays: skipWindowDays),
+      skippedDays: skippedDayCount(
+        habit,
+        today: today,
+        windowDays: skipWindowDays,
+      ),
       windowDays: skipWindowDays,
-      lastSkippedLabel:
-          lastSkipped == null ? null : _formatDay(context, lastSkipped),
+      lastSkippedLabel: lastSkipped == null
+          ? null
+          : _formatDay(context, lastSkipped),
       onMark: () =>
           _markRange(context, scope: scope, habit: habit, onChanged: onChanged),
     ),
@@ -210,8 +235,9 @@ int _currentStreakDays(core.Habit habit, int today) {
 
 String _formatDay(BuildContext context, int day) {
   final DateTime date = DateTime.utc(2000, 1, 1).add(Duration(days: day));
-  return intl.DateFormat.MMMd(resolveDateLocaleName(DeviceLocale.nameOf(context)))
-      .format(date);
+  return intl.DateFormat.MMMd(
+    resolveDateLocaleName(DeviceLocale.nameOf(context)),
+  ).format(date);
 }
 
 Future<void> _markRange(
@@ -266,10 +292,11 @@ Future<void> enterNightByHand(
   _wrote(scope, habit, onChanged);
   // Also written back to the platform, so a night typed in here shows up in
   // the health app the rest of the data comes from.
-  await scope.sleepSync.source
-      .writeSession(episode.bedStartMillis, episode.wakeEndMillis);
+  await scope.sleepSync.source.writeSession(
+    episode.bedStartMillis,
+    episode.wakeEndMillis,
+  );
 }
-
 
 /// Moves the goal to what the recent nights suggest, and rescores everything.
 ///

@@ -528,9 +528,14 @@ class _EditHabitViewState extends State<_EditHabitView> {
         key: EditHabitScreen.questionFieldKey,
         controller: model.questionController,
         theme: theme,
-        hintText: model.isNumerical
-            ? l10n.measurableQuestionExample
-            : l10n.exampleQuestionBoolean,
+        // A sleep habit is a numerical habit underneath, and the numerical
+        // hint asks about miles run. Its own hint, because the placeholder is
+        // the only thing on the form that says what the question is for.
+        hintText: model.isSleep
+            ? l10n.sleepQuestionExample
+            : model.isNumerical
+                ? l10n.measurableQuestionExample
+                : l10n.exampleQuestionBoolean,
         // No maxLines cap and no maxLength (`edit-habit.form-layout#4`).
         maxLines: null,
         keyboardType: TextInputType.multiline,

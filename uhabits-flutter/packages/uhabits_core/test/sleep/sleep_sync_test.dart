@@ -25,6 +25,9 @@ class RecordingSource implements SleepDataSource {
   bool authorized = true;
 
   @override
+  bool get hasHealthStore => true;
+
+  @override
   Future<bool> isAuthorized() async => authorized;
 
   @override

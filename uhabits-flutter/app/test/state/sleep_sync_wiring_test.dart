@@ -23,6 +23,9 @@ class CountingSource implements SleepDataSource {
   Future<void> Function()? onChanged;
 
   @override
+  bool get hasHealthStore => true;
+
+  @override
   Future<bool> isAuthorized() async => true;
 
   @override

@@ -319,6 +319,10 @@
   "sleepWeakestBed": "Slept enough and got up on time, but went to bed off schedule.",
   "sleepWeakestWake": "Slept enough and went to bed on time, but got up off schedule.",
   "sleepPerfectNight": "On schedule and slept enough.",
+  "sleepQuestionExample": "e.g. How did you sleep last night?",
+  "@sleepQuestionExample": {
+    "description": "Placeholder for the question a sleep habit asks in the morning."
+  },
   "sleepTargetBedtime": "Target bedtime",
   "sleepTargetWakeTime": "Target wake time",
   "sleepMinimumSleep": "Minimum sleep",

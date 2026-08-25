@@ -8,6 +8,15 @@ import 'sleep_segment.dart';
 /// written and tested as plain Dart, with the platform reduced to handing over
 /// raw stretches.
 abstract class SleepDataSource {
+  /// Whether this platform has a health store to ask at all.
+  ///
+  /// Distinct from [isAuthorized], which answers whether access was granted.
+  /// A platform that has no store answers no to both, and the two look alike
+  /// from a distance — but only one of them can be changed by asking. Offering
+  /// to ask where there is nothing to ask is an offer that does nothing when
+  /// taken up.
+  bool get hasHealthStore;
+
   /// Whether the person has already granted access.
   Future<bool> isAuthorized();
 
@@ -41,6 +50,9 @@ abstract class SleepDataSource {
 /// that every caller would have to remember to check.
 class NoSleepDataSource implements SleepDataSource {
   const NoSleepDataSource();
+
+  @override
+  bool get hasHealthStore => false;
 
   @override
   Future<bool> isAuthorized() async => false;

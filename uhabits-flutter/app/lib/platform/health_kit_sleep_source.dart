@@ -46,6 +46,9 @@ class HealthKitSleepSource implements SleepDataSource {
 
 
   @override
+  bool get hasHealthStore => true;
+
+  @override
   Future<bool> isAuthorized() =>
       _ask<bool>('authorizationStatus').then((bool? v) => v ?? false);
 

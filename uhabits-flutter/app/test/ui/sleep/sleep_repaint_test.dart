@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
+import 'package:uhabits/ui/habits/sleep/last_night_card.dart';
 import 'package:uhabits/ui/habits/sleep/nights_chart.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/time/date_utils.dart' as core_time;
@@ -29,6 +30,9 @@ class _AskableSource implements SleepDataSource {
   final int nightEnd;
   bool granted = false;
   int asked = 0;
+
+  @override
+  bool get hasHealthStore => true;
 
   @override
   Future<bool> isAuthorized() async => granted;
@@ -171,5 +175,41 @@ void main() {
     expect(find.byType(NightBar), findsWidgets,
         reason: 'sleep.freshness#6 — every block reads the same database, so '
             'the repaint has to reach all of them, not only the one tapped');
+  });
+
+  testWidgets('a platform with no health store offers nothing to allow',
+      (tester) async {
+    // Android has no health integration in this work. The card used to read a
+    // refusal into that absence — blaming a permission that was never asked
+    // for, and offering to ask again, which did nothing when tapped.
+    scope.close();
+    database = Sqlite3Database.memory();
+    database.setVersion(8);
+    database.migrateTo(appDatabaseVersion, (int v) => migrationSqlFor(v) ?? '');
+    applyConnectionSettings(database);
+    scope = AppScope.open(
+      database,
+      sleepSource: const NoSleepDataSource(),
+      mainDispatcher: const UnconfinedTestDispatcher(),
+      ioDispatcher: const UnconfinedTestDispatcher(),
+    );
+
+    final Habit habit = addSleepHabit();
+    await scope.syncSleepHabits();
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(TextButton, 'Allow access to Health'),
+        findsNothing,
+        reason: 'sleep.ui#7');
+    expect(
+      find.text('Without access to Health, nights have to be entered by hand.'),
+      findsNothing,
+      reason: 'sleep.ui#7 — nothing refused anything',
+    );
+    expect(find.byType(LastNightCard), findsOneWidget,
+        reason: 'sleep.ui#7 — the block itself is unchanged, and its "Enter '
+            'night" action is the way in');
+    expect(find.text('Enter night'), findsOneWidget, reason: 'sleep.ui#7');
   });
 }

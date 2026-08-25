@@ -733,6 +733,9 @@ class L10nFr extends L10n {
   String get sleepPerfectNight => 'On schedule and slept enough.';
 
   @override
+  String get sleepQuestionExample => 'e.g. How did you sleep last night?';
+
+  @override
   String get sleepTargetBedtime => 'Target bedtime';
 
   @override

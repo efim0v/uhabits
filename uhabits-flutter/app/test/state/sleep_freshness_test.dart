@@ -23,6 +23,9 @@ class OneNightSource implements SleepDataSource {
   final int endMillis;
 
   @override
+  bool get hasHealthStore => true;
+
+  @override
   Future<bool> isAuthorized() async => true;
 
   @override

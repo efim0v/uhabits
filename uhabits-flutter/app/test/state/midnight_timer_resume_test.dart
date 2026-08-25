@@ -39,6 +39,11 @@ class _RecordingLogger implements Logger {
 /// A health store that never answers, which is what a system permission sheet
 /// left standing on screen looks like from Dart.
 class _NeverAnswers implements SleepDataSource {
+  // A store that exists and is simply not answering — which is what a
+  // permission sheet left standing looks like.
+  @override
+  bool get hasHealthStore => true;
+
   @override
   Future<bool> isAuthorized() => Completer<bool>().future;
 

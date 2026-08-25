@@ -1436,6 +1436,12 @@ abstract class L10n {
   /// **'On schedule and slept enough.'**
   String get sleepPerfectNight;
 
+  /// Placeholder for the question a sleep habit asks in the morning.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. How did you sleep last night?'**
+  String get sleepQuestionExample;
+
   /// No description provided for @sleepTargetBedtime.
   ///
   /// In en, this message translates to:
