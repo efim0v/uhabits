@@ -56,11 +56,28 @@ class SleepSync {
 
   /// Reads the recent window and brings those days up to date.
   ///
-  /// Does nothing for a habit with no goal: that is simply a habit that is not
-  /// about sleep.
+  /// The two halves are also available separately — see [readRecent] — for a
+  /// caller that has to check, between the reading and the writing, that the
+  /// database it is about to write to is still there.
   Future<void> syncRecent(Habit habit) async {
+    final RecentNights? nights = await readRecent(habit);
+    if (nights != null) applyRecent(nights);
+  }
+
+  /// Asks the platform what it has for [habit], writing nothing.
+  ///
+  /// Answers null for a habit with no goal: that is simply a habit that is not
+  /// about sleep.
+  ///
+  /// Split from [applyRecent] because everything slow lives here and
+  /// everything that touches the database lives there. A sync spans a
+  /// permission sheet and a fortnight of platform reads, and the app can be
+  /// torn down while it waits; with the halves apart, the caller gets one seam
+  /// to check, and past it there is no await left for a teardown to slip
+  /// through.
+  Future<RecentNights?> readRecent(Habit habit) async {
     final SleepGoal? goal = repository.goalFor(habit.id!);
-    if (goal == null) return;
+    if (goal == null) return null;
 
     // Without this the platform never asks, `readSegments` answers with
     // nothing for ever, and the automatic half of the feature is dead while
@@ -82,8 +99,19 @@ class SleepSync {
       _startOfDayMillis(toDay + 1),
     );
 
-    _store(habit, goal, segments);
-    recomputeDays(habit, fromDay, toDay);
+    return RecentNights(
+      habit: habit,
+      goal: goal,
+      segments: segments,
+      fromDay: fromDay,
+      toDay: toDay,
+    );
+  }
+
+  /// Writes down what [readRecent] found. Synchronous from end to end.
+  void applyRecent(RecentNights nights) {
+    _store(nights.habit, nights.goal, nights.segments);
+    recomputeDays(nights.habit, nights.fromDay, nights.toDay);
   }
 
   /// Stores the nights found in [segments], newest wins on a tie.
@@ -198,4 +226,21 @@ class SleepSync {
     final int q = a ~/ b;
     return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q;
   }
+}
+
+/// What the platform had, before any of it was written down.
+class RecentNights {
+  const RecentNights({
+    required this.habit,
+    required this.goal,
+    required this.segments,
+    required this.fromDay,
+    required this.toDay,
+  });
+
+  final Habit habit;
+  final SleepGoal goal;
+  final List<SleepSegment> segments;
+  final int fromDay;
+  final int toDay;
 }

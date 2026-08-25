@@ -38,12 +38,15 @@ import flutter_local_notifications
     // (`audit21.ios-must-own-the-notification-centre-delegate#1`).
     UNUserNotificationCenter.current().delegate =
       self as? UNUserNotificationCenterDelegate
-    // Sleep data. The plugin is held for the life of the app because its
-    // observer query and its channel are: dropped, background delivery would
-    // fire into nothing.
-    if let controller = window?.rootViewController as? FlutterViewController {
-      healthKitSleepPlugin = HealthKitSleepPlugin.register(
-        with: controller.binaryMessenger)
+    // Sleep data. Registered through the registrar rather than through
+    // `window?.rootViewController`, which is still nil at this point under the
+    // scene lifecycle: a registration written that way registers nothing at
+    // all, and every call from Dart comes back as a missing plugin.
+    //
+    // The plugin is held for the life of the app because its observer query
+    // and its channel are: dropped, background delivery fires into nothing.
+    if let registrar = self.registrar(forPlugin: "HealthKitSleepPlugin") {
+      healthKitSleepPlugin = HealthKitSleepPlugin.register(with: registrar)
     }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

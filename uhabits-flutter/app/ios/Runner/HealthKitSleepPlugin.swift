@@ -24,14 +24,26 @@ final class HealthKitSleepPlugin: NSObject {
     HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)
   }
 
-  /// Wires the plugin to an engine.
-  static func register(with messenger: FlutterBinaryMessenger) -> HealthKitSleepPlugin {
+  /// Wires the plugin to an engine, through the registrar.
+  ///
+  /// Deliberately not through `window?.rootViewController`: under the scene
+  /// lifecycle the window is still nil while `didFinishLaunchingWithOptions`
+  /// runs, so a registration written that way silently registers nothing and
+  /// every call from Dart comes back as a missing plugin — which the Dart side
+  /// reads, correctly but uselessly, as "no health data".
+  ///
+  /// The registrar is available from the application delegate itself and does
+  /// not depend on the window existing.
+  @discardableResult
+  static func register(with registrar: FlutterPluginRegistrar) -> HealthKitSleepPlugin {
     let plugin = HealthKitSleepPlugin()
-    let channel = FlutterMethodChannel(name: channelName, binaryMessenger: messenger)
+    let channel = FlutterMethodChannel(
+      name: channelName, binaryMessenger: registrar.messenger())
     plugin.channel = channel
     channel.setMethodCallHandler { [weak plugin] call, result in
       plugin?.handle(call, result: result)
     }
+    registrar.publish(plugin)
     return plugin
   }
 

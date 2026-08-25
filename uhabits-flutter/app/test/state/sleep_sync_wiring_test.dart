@@ -73,11 +73,13 @@ void main() {
   });
 
   tearDown(() {
-    try {
-      database.close();
-    } on Object {
-      // Some tests close the scope, which closes the database with it.
-    }
+    // The scope owns the database, and closing it is how a scope is told to
+    // stop: a sleep sync can still be waiting on the platform, and it checks
+    // before it writes. Closing the database behind the scope's back leaves
+    // that check answering yes to a database that is gone. Closing twice is
+    // allowed, which is why the tests that close it themselves need nothing
+    // here.
+    scope.close();
     DateUtils.setFixedTimeZone(null);
     DateUtils.setFixedLocalTime(null);
     resetToday();

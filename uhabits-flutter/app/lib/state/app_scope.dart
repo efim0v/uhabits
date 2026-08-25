@@ -33,6 +33,7 @@ import '../platform/home_widget_bridge.dart';
 import 'app_preferences.dart';
 import 'intent_router.dart';
 import '../platform/sleep_data_source_factory.dart';
+import '../platform/sleep_prompt_scheduler.dart';
 import 'reminder_link.dart';
 import 'reminder_permission_gate.dart';
 import 'widget_sync.dart';
@@ -100,6 +101,24 @@ class AppScope {
   ///
   /// Which habits those are is asked of the repository each time rather than
   /// cached: a habit can become one, or stop being one, while the app runs.
+  /// Announces that a sleep habit's stored values changed.
+  ///
+  /// Sleep writes do not go through a Command: the values are computed from a
+  /// night rather than chosen, so there is nothing to undo and no command to
+  /// carry. But everything that shows those values refreshes on a command —
+  /// the habit list holds its own copy of every checkmark and score, and the
+  /// home-screen widgets are republished from the same signal. Without this
+  /// the list keeps showing the value it had before the sync, and re-entering
+  /// the screen does not help.
+  ///
+  /// One place rather than one call per write site: a rule spread across five
+  /// call sites is a rule that will be carried to four of them.
+  void onSleepDataChanged(int habitId) {
+    if (_closed) return;
+    cache.refreshHabit(habitId);
+    unawaited(_started?.sync.updateWidgets(habitId) ?? Future<void>.value());
+  }
+
   /// Whether the platform last said yes to reading sleep.
   ///
   /// Cached because the screen needs the answer while it builds and asking is
@@ -116,10 +135,15 @@ class AppScope {
     for (final int id in sleepRepository.sleepHabitIds()) {
       final Habit? habit = habitList.getById(id);
       if (habit == null) continue;
-      await sleepSync.syncRecent(habit);
-      // Reading the platform is asynchronous, and the scope can be torn down
-      // between two habits.
+      // Read first, then check, then write. A sync waits on a permission
+      // sheet and a fortnight of platform reads, and the person can leave the
+      // app at any point during that; past this check there is no await left
+      // for the teardown to slip through, so the writes cannot land on a
+      // database that has been closed.
+      final RecentNights? nights = await sleepSync.readRecent(habit);
       if (_closed) return;
+      if (nights != null) sleepSync.applyRecent(nights);
+      onSleepDataChanged(id);
       scheduleSleepPrompt(habit);
     }
   }
@@ -130,10 +154,38 @@ class AppScope {
   /// here and handed to the alarm scheduler directly; the reminder scheduler
   /// computes times from `habit.reminder`, which a drifting goal is not.
   void scheduleSleepPrompt(Habit habit) {
-    final SystemScheduler? alarms = _started?.alarms;
+    final SleepPromptScheduler? prompts = _started?.sleepPrompts;
     final int? at = sleepPromptInstant(habit);
-    if (alarms == null || at == null) return;
-    alarms.scheduleShowReminder(at, habit, at);
+    if (prompts == null || at == null) return;
+    // The day the question is about, given rather than derived: the builder
+    // reads a local wall-clock day out of that slot, and east of UTC+8 the
+    // instant lands on the day before.
+    unawaited(
+        prompts.schedule(habit, sleepPromptDay(habit) ?? LocalDate(0), at));
+  }
+
+  /// The day the morning question is about: the day the person wakes on.
+  LocalDate? sleepPromptDay(Habit habit) {
+    final int? at = sleepPromptInstant(habit);
+    if (at == null) return null;
+    final SleepGoal? goal = sleepRepository.goalFor(habit.id!);
+    if (goal == null) return null;
+    final int offset = _effectiveOffsetToday(habit, goal);
+    return LocalDate.fromUnixTime(at + offset * 60000);
+  }
+
+  int _effectiveOffsetToday(Habit habit, SleepGoal goal) {
+    final int today = sleepSync.today().daysSince2000;
+    final int? firstNight = sleepRepository.firstDay(habit.id!);
+    final Map<int, int> offsets = effectiveOffsets(
+      firstDay: firstNight ?? today,
+      lastDay: today,
+      observedByDay: sleepRepository.observedOffsets(
+          habit.id!, firstNight ?? today, today),
+      homeOffsetMinutes: goal.homeUtcOffsetMinutes,
+      ratePerDayMinutes: goal.adaptationMinutesPerDay,
+    );
+    return offsets[today] ?? goal.homeUtcOffsetMinutes;
   }
 
   /// When the morning question for [habit] should next be asked, or null when
@@ -146,17 +198,7 @@ class AppScope {
     if (goal == null) return null;
 
     final int today = sleepSync.today().daysSince2000;
-    final int? firstNight = sleepRepository.firstDay(habit.id!);
-    final Map<int, int> offsets = effectiveOffsets(
-      firstDay: firstNight ?? today,
-      lastDay: today,
-      observedByDay: sleepRepository.observedOffsets(
-          habit.id!, firstNight ?? today, today),
-      homeOffsetMinutes: goal.homeUtcOffsetMinutes,
-      ratePerDayMinutes: goal.adaptationMinutesPerDay,
-    );
-
-    final int offset = offsets[today] ?? goal.homeUtcOffsetMinutes;
+    final int offset = _effectiveOffsetToday(habit, goal);
     return nextSleepPromptMillis(
       goal: goal,
       effectiveOffsetMinutes: offset,
@@ -415,9 +457,13 @@ class AppScope {
     // (`audit3.recording-a-non-completing-entry-silently#1`). Upstream the two
     // are independent and `AndroidNotificationTray` knows nothing of the
     // scheduler.
+    // Named, because two schedulers post through it: the reminder machinery
+    // below, and the sleep habit's morning question, which cannot go through
+    // that machinery at all.
+    final alarmPlugin =
+        LocalNotificationsAlarmPlugin(plugin: plugin, presenter: presenter);
     final alarms = FlutterAlarmScheduler(
-      plugin:
-          LocalNotificationsAlarmPlugin(plugin: plugin, presenter: presenter),
+      plugin: alarmPlugin,
       builder: builder,
       logging: logging,
     );
@@ -525,7 +571,7 @@ class AppScope {
     startServices(
       tray: tray,
       scheduler: scheduler,
-      alarms: alarms,
+      sleepPrompts: SleepPromptScheduler(alarms: alarmPlugin, builder: builder),
       sync: sync,
       // The two registrations the OS keeps a copy of — the Android channel
       // name and the Darwin category titles — which [onLocalesChanged] has to
@@ -560,7 +606,7 @@ class AppScope {
     required NotificationTray tray,
     required ReminderScheduler scheduler,
     required WidgetSync sync,
-    SystemScheduler? alarms,
+    SleepPromptScheduler? sleepPrompts,
     NotificationPermissions? permissions,
     LocalizedNotificationRegistrations? registrations,
   }) {
@@ -584,7 +630,7 @@ class AppScope {
     _started = _Started(
       tray: tray,
       scheduler: scheduler,
-      alarms: alarms,
+      sleepPrompts: sleepPrompts,
       sync: sync,
       registrations: registrations,
     );
@@ -794,7 +840,16 @@ class AppScope {
   /// check this before touching a database that may be gone.
   bool _closed = false;
 
+  /// Whether [close] has been called. Read by anything holding the result of a
+  /// slow platform read, to find out whether there is still a database to
+  /// write it to.
+  bool get isClosed => _closed;
+
   void close() {
+    // Idempotent: a scope is closed from wherever ownership ends, and two
+    // owners agreeing to close it is not an error worth throwing over — the
+    // second `database.close()` would.
+    if (_closed) return;
     _closed = true;
     // `HabitsApplication.onTerminate`, in its exact order:
     // reminderScheduler.stopListening(), widgetUpdater.stopListening(),
@@ -836,7 +891,7 @@ class _Started {
   _Started({
     required this.tray,
     required this.scheduler,
-    required this.alarms,
+    required this.sleepPrompts,
     required this.sync,
     this.registrations,
   });
@@ -844,10 +899,10 @@ class _Started {
   final NotificationTray tray;
   final ReminderScheduler scheduler;
 
-  /// The alarm scheduler itself, which the sleep prompt uses directly: its
-  /// moment is derived from a drifting goal rather than from the habit's own
-  /// reminder, so the reminder scheduler has nothing to compute it from.
-  final SystemScheduler? alarms;
+  /// The morning question a sleep habit asks. Not the reminder scheduler and
+  /// not the raw alarm scheduler: its moment comes from a drifting goal rather
+  /// than from `habit.reminder`, and it needs an id namespace of its own.
+  final SleepPromptScheduler? sleepPrompts;
 
   final WidgetSync sync;
 

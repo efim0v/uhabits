@@ -83,7 +83,10 @@ List<Widget> buildSleepSection(
         theme: theme,
         message: L10n.of(context).sleepSuggestSkip,
         applyLabel: L10n.of(context).sleepMarkSkipped,
-        onApply: () => SkipRange(travel.fromDay, travel.toDay).applyTo(habit),
+        onApply: () {
+          SkipRange(travel.fromDay, travel.toDay).applyTo(habit);
+          scope.onSleepDataChanged(habit.id!);
+        },
         onDismiss: () {},
       )
     else if (suggestedGoal != null)
@@ -202,6 +205,7 @@ Future<void> _markRange(
     picked.start.difference(origin).inDays,
     picked.end.difference(origin).inDays,
   ).applyTo(habit);
+  scope.onSleepDataChanged(habit.id!);
 }
 
 /// Opens the sheet for a night and stores what comes back.
@@ -229,6 +233,7 @@ Future<void> enterNightByHand(
   final core.SleepEpisode episode = night.toEpisode();
   scope.sleepRepository.upsert(habit.id!, day, episode, manual: true);
   scope.sleepSync.recomputeDays(habit, day, day);
+  scope.onSleepDataChanged(habit.id!);
   // Also written back to the platform, so a night typed in here shows up in
   // the health app the rest of the data comes from.
   await scope.sleepSync.source
@@ -252,4 +257,5 @@ void _applyGoalSuggestion({
   scope.sleepRepository.saveGoal(habit.id!, moved);
   // A different goal makes every past night worth something different.
   scope.sleepSync.recomputeAll(habit);
+  scope.onSleepDataChanged(habit.id!);
 }

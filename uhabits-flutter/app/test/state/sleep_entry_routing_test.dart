@@ -35,7 +35,11 @@ void main() {
   });
 
   tearDown(() {
-    database.close();
+    // The scope owns the database, and closing it is how a scope is told to
+    // stop: a sleep sync can still be waiting on the platform, and it checks
+    // before it writes. Closing the database behind the scope's back leaves
+    // that check answering yes to a database that is gone.
+    scope.close();
     DateUtils.setFixedTimeZone(null);
     resetToday();
   });
