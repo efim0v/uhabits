@@ -685,11 +685,14 @@ class _ShowHabitViewState extends State<_ShowHabitView>
       // That is why [BottomInset] is inside the scroll view here and outside it
       // on the About screen, whose layout applies the same helper to the view
       // that scrolls.
-      body: SingleChildScrollView(
-        child: BottomInset(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
+      body: _wrapWithRefresh(
+        context,
+        SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: BottomInset(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
             // `show-habit.card-order-and-visibility#1`: the column follows
             // ShowHabitCard's declaration order, and #2/#3/#4 decide which of
             // them survive.
@@ -698,12 +701,33 @@ class _ShowHabitViewState extends State<_ShowHabitView>
               // follows `ShowHabitCard`'s declaration order, a parity rule
               // closed by tests, and adding entries to the enum would make
               // those tests assert something the ledger does not say.
-              ..._buildSleepCards(context, model),
-              ..._buildCards(context, model),
-            ],
+                ..._buildSleepCards(context, model),
+                ..._buildCards(context, model),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Pull to refresh, for a sleep habit only.
+  ///
+  /// Sleep arrives from outside the app, on the platform's schedule; every
+  /// other habit's data is only ever written here, so there is nothing for the
+  /// gesture to fetch and the ported screen must not grow one
+  /// (`show-habit.screen-scaffold#1`).
+  Widget _wrapWithRefresh(BuildContext context, Widget child) {
+    final int? id = widget.habit.id;
+    if (id == null || widget.scope.sleepRepository.goalFor(id) == null) {
+      return child;
+    }
+    return RefreshIndicator(
+      onRefresh: () async {
+        await widget.scope.syncSleepHabits();
+        if (mounted) setState(() {});
+      },
+      child: child,
     );
   }
 

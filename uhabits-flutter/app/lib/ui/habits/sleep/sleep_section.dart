@@ -71,7 +71,7 @@ List<Widget> buildSleepSection(
   final core.TimezoneSkipSuggestion? travel =
       core.suggestSkipForTimezone(nights);
   final core.GoalSuggestion? suggestedGoal = core.suggestGoal(
-    _stabilityNights(nights, skipped, today),
+    stabilityNights(nights, skipped, today),
     goal,
   );
 
@@ -128,7 +128,7 @@ List<Widget> buildSleepSection(
     StabilityCard(
       theme: theme,
       stability: core.computeStability(
-        _stabilityNights(nights, skipped, today),
+        stabilityNights(nights, skipped, today),
         minNights: stabilityMinNights,
       ),
     ),
@@ -144,18 +144,23 @@ List<Widget> buildSleepSection(
   ];
 }
 
-/// The nights the spread is measured from.
+/// The nights the spread and the goal suggestion are measured from.
 ///
 /// Skips are left out on purpose: one week of travel would otherwise inflate
 /// the spread for a fortnight after it, and say the person is erratic when
-/// what they were was away.
-List<core.SleepEpisode> _stabilityNights(
+/// what they were was away. The same list feeds the goal suggestion, so a
+/// trip cannot drag the suggested bedtime after it either.
+///
+/// Public so that the exclusion is testable. It was a rule with nowhere to
+/// assert it, which is how a rule quietly stops holding.
+List<core.SleepEpisode> stabilityNights(
   Map<int, core.SleepEpisode> nights,
   Set<int> skipped,
-  int today,
-) {
+  int today, {
+  int windowDays = stabilityWindowDays,
+}) {
   return <core.SleepEpisode>[
-    for (var day = today - stabilityWindowDays + 1; day <= today; day++)
+    for (var day = today - windowDays + 1; day <= today; day++)
       if (!skipped.contains(day) && nights.containsKey(day)) nights[day]!,
   ];
 }

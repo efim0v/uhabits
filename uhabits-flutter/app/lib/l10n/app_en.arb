@@ -357,5 +357,33 @@
   "sleepSuggestDismiss": "Not now",
   "sleepSkipped": "Skipped",
   "sleepHabitType": "Sleep",
-  "sleepHabitTypeExample": "e.g. Go to bed at 23:00, get up at 07:00, and sleep at least 7:30 — scored from Health or entered by hand."
+  "sleepHabitTypeExample": "e.g. Go to bed at 23:00, get up at 07:00, and sleep at least 7:30 — scored from Health or entered by hand.",
+  "sleepAdvanced": "Advanced",
+  "sleepWeightSleep": "Weight: sleep",
+  "sleepWeightBed": "Weight: bedtime",
+  "sleepWeightWake": "Weight: wake time",
+  "sleepHalfCreditTime": "Half credit at (times)",
+  "sleepHalfCreditSleep": "Half credit at (sleep)",
+  "sleepMinutesShort": "{minutes} min",
+  "@sleepMinutesShort": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "sleepTimezoneOffset": "UTC{sign}{hours}:{minutes}",
+  "@sleepTimezoneOffset": {
+    "placeholders": {
+      "sign": {
+        "type": "String"
+      },
+      "hours": {
+        "type": "String"
+      },
+      "minutes": {
+        "type": "String"
+      }
+    }
+  }
 }

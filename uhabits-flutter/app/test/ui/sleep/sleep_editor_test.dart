@@ -185,6 +185,104 @@ void main() {
     });
   });
 
+  group('the fields the editor offers', () {
+    test('a new goal starts in the timezone the device is in', () {
+      // Not zero: a person in Vladivostok whose goal thinks it is in London
+      // would be judged eleven hours off from the first night.
+      DateUtils.setFixedTimeZone(const FixedTimeZone(5 * 3600000));
+      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      expect(model.sleepGoal!.homeUtcOffsetMinutes, 300,
+          reason: 'sleep.goal#1');
+    });
+
+    test('the home timezone is part of the goal and survives a save', () {
+      final EditHabitModel creating =
+          EditHabitModel(scope: scope, sleep: true);
+      creating.nameController.text = 'Sleep';
+      creating.setSleepGoal(
+          creating.sleepGoal!.copyWith(homeUtcOffsetMinutes: -480));
+      creating.save();
+
+      final int id = scope.habitList.getByPosition(0).id!;
+      expect(scope.sleepRepository.goalFor(id)!.homeUtcOffsetMinutes, -480,
+          reason: 'sleep.ui#6');
+    });
+
+    test('the weights are part of the goal and survive a save', () {
+      // The person asked for three weighted parts; a goal whose weights
+      // cannot be said is not a goal they set.
+      final EditHabitModel creating =
+          EditHabitModel(scope: scope, sleep: true);
+      creating.nameController.text = 'Sleep';
+      creating.setSleepGoal(creating.sleepGoal!.copyWith(
+        weightSleep: 0.6,
+        weightBed: 0.3,
+        weightWake: 0.1,
+      ));
+      creating.save();
+
+      final int id = scope.habitList.getByPosition(0).id!;
+      final SleepGoal saved = scope.sleepRepository.goalFor(id)!;
+      expect(saved.weightSleep, closeTo(0.6, 1e-9), reason: 'sleep.ui#6');
+      expect(saved.weightBed, closeTo(0.3, 1e-9), reason: 'sleep.ui#6');
+      expect(saved.weightWake, closeTo(0.1, 1e-9), reason: 'sleep.ui#6');
+    });
+
+    test('the half credit points are part of the goal too', () {
+      final EditHabitModel creating =
+          EditHabitModel(scope: scope, sleep: true);
+      creating.nameController.text = 'Sleep';
+      creating.setSleepGoal(creating.sleepGoal!.copyWith(
+        halfCreditTimeMinutes: 45,
+        halfCreditSleepMinutes: 30,
+      ));
+      creating.save();
+
+      final int id = scope.habitList.getByPosition(0).id!;
+      final SleepGoal saved = scope.sleepRepository.goalFor(id)!;
+      expect(saved.halfCreditTimeMinutes, 45, reason: 'sleep.ui#6');
+      expect(saved.halfCreditSleepMinutes, 30, reason: 'sleep.ui#6');
+    });
+
+    test('changed weights change what a night is worth', () {
+      final EditHabitModel creating =
+          EditHabitModel(scope: scope, sleep: true);
+      creating.nameController.text = 'Sleep';
+      creating.save();
+      final int id = scope.habitList.getByPosition(0).id!;
+
+      const SleepEpisode episode = SleepEpisode(
+        bedStartMillis: (8998 + 10957) * 86400000 + 1500 * 60000,
+        wakeEndMillis: (8999 + 10957) * 86400000 + 420 * 60000,
+        asleepMinutes: 480,
+        utcOffsetMinutes: 0,
+      );
+      scope.sleepRepository.upsert(id, 8999, episode, manual: false);
+      scope.sleepSync.recomputeAll(scope.habitList.getById(id)!);
+      final int before = scope.habitList
+          .getById(id)!
+          .originalEntries
+          .get(LocalDate(8999))
+          .value;
+
+      final EditHabitModel editing =
+          EditHabitModel(scope: scope, habitId: id);
+      editing.setSleepGoal(editing.sleepGoal!.copyWith(
+        weightSleep: 0.1,
+        weightBed: 0.8,
+        weightWake: 0.1,
+      ));
+      editing.save();
+
+      final int after = scope.habitList
+          .getById(id)!
+          .originalEntries
+          .get(LocalDate(8999))
+          .value;
+      expect(after, isNot(before), reason: 'sleep.ui#6');
+    });
+  });
+
   group('the day cell in the list', () {
     test('is the ordinary numerical cell, showing a percentage', () {
       // Nothing new is drawn in the list: the value is a number and the unit

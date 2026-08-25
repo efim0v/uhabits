@@ -804,4 +804,32 @@ class L10nSk extends L10n {
   @override
   String get sleepHabitTypeExample =>
       'e.g. Go to bed at 23:00, get up at 07:00, and sleep at least 7:30 — scored from Health or entered by hand.';
+
+  @override
+  String get sleepAdvanced => 'Advanced';
+
+  @override
+  String get sleepWeightSleep => 'Weight: sleep';
+
+  @override
+  String get sleepWeightBed => 'Weight: bedtime';
+
+  @override
+  String get sleepWeightWake => 'Weight: wake time';
+
+  @override
+  String get sleepHalfCreditTime => 'Half credit at (times)';
+
+  @override
+  String get sleepHalfCreditSleep => 'Half credit at (sleep)';
+
+  @override
+  String sleepMinutesShort(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String sleepTimezoneOffset(String sign, String hours, String minutes) {
+    return 'UTC$sign$hours:$minutes';
+  }
 }

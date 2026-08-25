@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/ui/habits/sleep/skip_range.dart';
+import 'package:uhabits/ui/habits/sleep/sleep_section.dart';
 import 'package:uhabits/ui/habits/sleep/stability_card.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
@@ -192,6 +193,59 @@ void main() {
       const SkipRange(8990, 8992).clearFrom(habit);
       expect(habit.originalEntries.get(core.LocalDate(8991)).value, 87000,
           reason: 'sleep.skip#1');
+    });
+  });
+
+  group('which nights the spread is measured from', () {
+    core.SleepEpisode night(int day) => core.SleepEpisode(
+          bedStartMillis: (day - 1 + 10957) * 86400000 + 1380 * 60000,
+          wakeEndMillis: (day + 10957) * 86400000 + 420 * 60000,
+          asleepMinutes: 480,
+          utcOffsetMinutes: 0,
+        );
+
+    Map<int, core.SleepEpisode> fortnight() => <int, core.SleepEpisode>{
+          for (var i = 0; i < 14; i++) 9000 - i: night(9000 - i),
+        };
+
+    test('a skipped day is left out', () {
+      // One week of travel would otherwise inflate the spread for a fortnight
+      // after it, and call the person erratic when what they were was away.
+      final List<core.SleepEpisode> all =
+          stabilityNights(fortnight(), const <int>{}, 9000);
+      final List<core.SleepEpisode> withoutTrip =
+          stabilityNights(fortnight(), <int>{8996, 8995, 8994}, 9000);
+
+      expect(all, hasLength(14), reason: 'sleep.stability#2');
+      expect(withoutTrip, hasLength(11), reason: 'sleep.stability#2');
+    });
+
+    test('a day with no night is left out too', () {
+      final Map<int, core.SleepEpisode> gaps = fortnight()
+        ..remove(8998)
+        ..remove(8997);
+      expect(stabilityNights(gaps, const <int>{}, 9000), hasLength(12),
+          reason: 'sleep.stability#2');
+    });
+
+    test('nothing outside the window is counted', () {
+      final Map<int, core.SleepEpisode> wide = <int, core.SleepEpisode>{
+        for (var i = 0; i < 40; i++) 9000 - i: night(9000 - i),
+      };
+      expect(stabilityNights(wide, const <int>{}, 9000), hasLength(14),
+          reason: 'sleep.stability#2');
+    });
+
+    test('the same list is what the goal suggestion sees', () {
+      // A trip must not drag the suggested bedtime after it either, which it
+      // would if the two measures were fed from different lists.
+      final Map<int, core.SleepEpisode> nights = fortnight();
+      final Set<int> skipped = <int>{8996, 8995, 8994};
+      expect(
+        stabilityNights(nights, skipped, 9000).length,
+        lessThan(stabilityNights(nights, const <int>{}, 9000).length),
+        reason: 'sleep.suggest-goal#1',
+      );
     });
   });
 

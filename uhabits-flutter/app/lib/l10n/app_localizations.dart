@@ -1543,6 +1543,54 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'e.g. Go to bed at 23:00, get up at 07:00, and sleep at least 7:30 — scored from Health or entered by hand.'**
   String get sleepHabitTypeExample;
+
+  /// No description provided for @sleepAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get sleepAdvanced;
+
+  /// No description provided for @sleepWeightSleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight: sleep'**
+  String get sleepWeightSleep;
+
+  /// No description provided for @sleepWeightBed.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight: bedtime'**
+  String get sleepWeightBed;
+
+  /// No description provided for @sleepWeightWake.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight: wake time'**
+  String get sleepWeightWake;
+
+  /// No description provided for @sleepHalfCreditTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Half credit at (times)'**
+  String get sleepHalfCreditTime;
+
+  /// No description provided for @sleepHalfCreditSleep.
+  ///
+  /// In en, this message translates to:
+  /// **'Half credit at (sleep)'**
+  String get sleepHalfCreditSleep;
+
+  /// No description provided for @sleepMinutesShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String sleepMinutesShort(int minutes);
+
+  /// No description provided for @sleepTimezoneOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'UTC{sign}{hours}:{minutes}'**
+  String sleepTimezoneOffset(String sign, String hours, String minutes);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

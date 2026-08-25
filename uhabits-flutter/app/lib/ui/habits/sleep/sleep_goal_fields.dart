@@ -7,11 +7,13 @@ import 'sleep_card.dart';
 
 /// The goal, as the editor asks for it.
 ///
-/// Three fields, and nothing else. The weights and the half credit points are
-/// part of the model rather than part of the goal: a person who moved them
-/// would be scored against a different question from the one they set, and
-/// their own history would stop comparing with itself.
-class SleepGoalFields extends StatelessWidget {
+/// Five plain fields, and the model's own shape behind a fold. The weights and
+/// the half credit points decide what the percentage means, so moving them
+/// makes today's number incomparable with last month's — which is why they are
+/// not on the first screen. They are offered all the same: a goal made of
+/// three weighted parts is not a goal until the person can say what the parts
+/// are worth to them.
+class SleepGoalFields extends StatefulWidget {
   const SleepGoalFields({
     required this.theme,
     required this.goal,
@@ -22,6 +24,17 @@ class SleepGoalFields extends StatelessWidget {
   final core.Theme theme;
   final core.SleepGoal goal;
   final ValueChanged<core.SleepGoal> onChanged;
+
+  @override
+  State<SleepGoalFields> createState() => _SleepGoalFieldsState();
+}
+
+class _SleepGoalFieldsState extends State<SleepGoalFields> {
+  bool _advancedOpen = false;
+
+  core.Theme get theme => widget.theme;
+  core.SleepGoal get goal => widget.goal;
+  ValueChanged<core.SleepGoal> get onChanged => widget.onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -71,8 +84,138 @@ class SleepGoalFields extends StatelessWidget {
                 onChanged(goal.copyWith(adaptationMinutesPerDay: m)),
           ),
         ),
+        _Row(
+          theme: theme,
+          label: l10n.sleepHomeTimezone,
+          value: _formatOffset(context, goal.homeUtcOffsetMinutes),
+          onTap: _pickHomeOffset,
+        ),
+        // The model's own shape. Behind a fold because changing it changes
+        // what every past percentage meant, not because it is unimportant.
+        ExpansionTile(
+          key: const Key('sleep.advanced'),
+          title: Text(
+            l10n.sleepAdvanced,
+            style: TextStyle(
+              fontSize: 14,
+              color: toFlutterColor(theme.mediumContrastTextColor),
+            ),
+          ),
+          initiallyExpanded: _advancedOpen,
+          onExpansionChanged: (bool open) =>
+              setState(() => _advancedOpen = open),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          shape: const Border(),
+          collapsedShape: const Border(),
+          children: <Widget>[
+            _weight(context, l10n.sleepWeightSleep, goal.weightSleep,
+                (double v) => onChanged(goal.copyWith(weightSleep: v))),
+            _weight(context, l10n.sleepWeightBed, goal.weightBed,
+                (double v) => onChanged(goal.copyWith(weightBed: v))),
+            _weight(context, l10n.sleepWeightWake, goal.weightWake,
+                (double v) => onChanged(goal.copyWith(weightWake: v))),
+            _Row(
+              theme: theme,
+              label: l10n.sleepHalfCreditTime,
+              value: l10n.sleepMinutesShort(goal.halfCreditTimeMinutes),
+              onTap: () => _pickDuration(
+                context,
+                current: goal.halfCreditTimeMinutes,
+                apply: (int m) =>
+                    onChanged(goal.copyWith(halfCreditTimeMinutes: m)),
+              ),
+            ),
+            _Row(
+              theme: theme,
+              label: l10n.sleepHalfCreditSleep,
+              value: l10n.sleepMinutesShort(goal.halfCreditSleepMinutes),
+              onTap: () => _pickDuration(
+                context,
+                current: goal.halfCreditSleepMinutes,
+                apply: (int m) =>
+                    onChanged(goal.copyWith(halfCreditSleepMinutes: m)),
+              ),
+            ),
+          ],
+        ),
       ],
     );
+  }
+
+  /// A weight, as a slider from nothing to everything.
+  ///
+  /// Only the ratios matter — the goal rescales them — so the scale is
+  /// deliberately unlabelled beyond its own number.
+  Widget _weight(
+    BuildContext context,
+    String label,
+    double value,
+    ValueChanged<double> apply,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: toFlutterColor(theme.mediumContrastTextColor),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Slider(
+              value: value.clamp(0.0, 1.0),
+              divisions: 20,
+              label: value.toStringAsFixed(2),
+              onChanged: apply,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatOffset(BuildContext context, int minutes) {
+    final L10n l10n = L10n.of(context);
+    final int abs = minutes.abs();
+    return l10n.sleepTimezoneOffset(
+      minutes < 0 ? '-' : '+',
+      (abs ~/ 60).toString().padLeft(2, '0'),
+      (abs % 60).toString().padLeft(2, '0'),
+    );
+  }
+
+  /// The home zone is offered as a list of the offsets that exist, rather than
+  /// as a free number: an offset of seventeen minutes is not a place.
+  Future<void> _pickHomeOffset() async {
+    const List<int> offsets = <int>[
+      -720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210, -180,
+      -120, -60, 0, 60, 120, 180, 210, 240, 270, 300, 330, 345, 360, 390, 420,
+      480, 525, 540, 570, 600, 630, 660, 720, 765, 780, 840,
+    ];
+    final int? picked = await showModalBottomSheet<int>(
+      context: context,
+      builder: (BuildContext context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            for (final int offset in offsets)
+              ListTile(
+                title: Text(_formatOffset(context, offset)),
+                selected: offset == goal.homeUtcOffsetMinutes,
+                onTap: () => Navigator.of(context).pop(offset),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) onChanged(goal.copyWith(homeUtcOffsetMinutes: picked));
   }
 
   Future<void> _pickTime(
