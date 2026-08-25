@@ -202,10 +202,10 @@ class AppScope {
     return nextSleepPromptMillis(
       goal: goal,
       effectiveOffsetMinutes: offset,
-      // getLocalTime is already shifted into the device's frame; the prompt
-      // works in UTC, so the shift is taken back out.
-      nowMillis: DateUtils.getLocalTime() -
-          DateUtils.currentTimeZone.getOffset(DateUtils.getLocalTime()),
+      // The prompt works in UTC, and the clock the app reads is local. Taking
+      // the shift back out is not a subtraction: the offset has to be looked
+      // up at the instant, not at its local reading.
+      nowMillis: sleepSync.nowMillis(),
       todaysNightRecorded: sleepRepository.forDay(habit.id!, today) != null,
     );
   }

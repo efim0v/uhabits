@@ -5,6 +5,7 @@ import '../time/local_date.dart';
 import 'sleep_data_source.dart';
 import 'sleep_episode.dart';
 import 'sleep_episode_merger.dart';
+import 'local_instant.dart';
 import 'sleep_goal.dart';
 import 'sleep_scorer.dart';
 import 'sleep_segment.dart';
@@ -208,8 +209,13 @@ class SleepSync {
   }
 
   /// The offset in force right now, for a night being typed in.
-  int currentOffsetMinutes() =>
-      _utcOffsetMinutesAt(DateUtils.getLocalTime());
+  int currentOffsetMinutes() => _utcOffsetMinutesAt(nowMillis());
+
+  /// Now, as a UTC instant.
+  ///
+  /// The clock a test pins is a local one, and the two differ by an offset
+  /// that cannot be looked up at a local value — see [utcInstantOfLocal].
+  int nowMillis() => utcInstantOfLocal(DateUtils.getLocalTime(), _timeZone());
 
   int _utcOffsetMinutesAt(int instantMillis) =>
       _timeZone().getOffset(instantMillis) ~/ 60000;
@@ -219,7 +225,7 @@ class SleepSync {
         (daysSince2000 + _daysSince2000ToEpoch) * DateUtils.dayLength;
     // Converted through the offset in force at that moment, so a window across
     // a daylight saving change still starts where the day did.
-    return localMillis - _timeZone().getOffset(localMillis);
+    return utcInstantOfLocal(localMillis, _timeZone());
   }
 
   static int _floorDiv(int a, int b) {

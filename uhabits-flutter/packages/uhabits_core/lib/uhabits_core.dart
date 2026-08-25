@@ -48,6 +48,7 @@ export 'src/gui/view.dart';
 export 'src/sleep/sleep_data_source.dart';
 export 'src/sleep/sleep_episode.dart';
 export 'src/sleep/sleep_episode_merger.dart';
+export 'src/sleep/local_instant.dart';
 export 'src/sleep/sleep_goal.dart';
 export 'src/sleep/sleep_importer.dart';
 export 'src/sleep/sleep_scorer.dart';
