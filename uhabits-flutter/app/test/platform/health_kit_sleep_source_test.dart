@@ -167,7 +167,7 @@ void main() {
       expect(await source.isAuthorized(), isFalse, reason: 'sleep.sync#5');
       expect(await source.readSegments(0, 1), isEmpty, reason: 'sleep.sync#5');
       await source.writeSession(0, 1);
-      await source.enableBackgroundDelivery();
+      await source.enableBackgroundDelivery(() async {});
     });
 
     test('a platform with no plugin at all behaves the same', () async {
@@ -188,9 +188,8 @@ void main() {
   group('background delivery', () {
     test('a change notification reaches the callback', () async {
       var calls = 0;
-      final HealthKitSleepSource source =
-          HealthKitSleepSource(onDataChanged: () async => calls++);
-      source.listen();
+      final HealthKitSleepSource source = HealthKitSleepSource();
+      await source.enableBackgroundDelivery(() async => calls++);
 
       await TestDefaultBinaryMessengerBinding
           .instance.defaultBinaryMessenger
@@ -207,9 +206,8 @@ void main() {
 
     test('an unrelated call does not trigger it', () async {
       var calls = 0;
-      final HealthKitSleepSource source =
-          HealthKitSleepSource(onDataChanged: () async => calls++);
-      source.listen();
+      final HealthKitSleepSource source = HealthKitSleepSource();
+      await source.enableBackgroundDelivery(() async => calls++);
 
       await TestDefaultBinaryMessengerBinding
           .instance.defaultBinaryMessenger
@@ -232,7 +230,7 @@ void main() {
           reason: 'sleep.sync#5');
       expect(await source.readSegments(0, 1), isEmpty, reason: 'sleep.sync#5');
       await source.writeSession(0, 1);
-      await source.enableBackgroundDelivery();
+      await source.enableBackgroundDelivery(() async {});
     });
   });
 }

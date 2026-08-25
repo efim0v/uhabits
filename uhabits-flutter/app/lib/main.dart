@@ -305,6 +305,11 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     // here, at the first moment after them at which Dart is running again.
     await scope.reminderResponses?.onResumed();
     if (!mounted) return;
+    // Whatever the watch uploaded while the app was away. Reading here rather
+    // than only on the sleep screen means the list is right the moment it is
+    // looked at, and the day heals even if that screen is never opened.
+    await scope.syncSleepHabits();
+    if (!mounted) return;
     // `ListHabitsActivity.onResume` arms the timer as its fourth statement,
     // before the reminder block and independently of it: the day boundary has
     // to move even on a run where the notification subsystem failed to start,

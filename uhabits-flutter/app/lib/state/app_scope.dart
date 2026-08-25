@@ -32,6 +32,7 @@ import '../platform/flutter_notification_tray.dart';
 import '../platform/home_widget_bridge.dart';
 import 'app_preferences.dart';
 import 'intent_router.dart';
+import '../platform/sleep_data_source_factory.dart';
 import 'reminder_link.dart';
 import 'reminder_permission_gate.dart';
 import 'widget_sync.dart';
@@ -80,9 +81,32 @@ class AppScope {
     required this.logging,
     required this.cache,
     required this.adapter,
+    required this.sleepRepository,
+    required this.sleepSync,
   });
 
   final Database database;
+
+  /// The nights and the goals.
+  ///
+  /// A habit is a sleep habit exactly when it has a goal here; nothing else in
+  /// the model records that fact.
+  final SleepSessionRepository sleepRepository;
+
+  /// Reads sleep from the platform and turns it into scored days.
+  final SleepSync sleepSync;
+
+  /// Brings every sleep habit up to date from the platform.
+  ///
+  /// Which habits those are is asked of the repository each time rather than
+  /// cached: a habit can become one, or stop being one, while the app runs.
+  Future<void> syncSleepHabits() async {
+    for (final int id in sleepRepository.sleepHabitIds()) {
+      final Habit? habit = habitList.getById(id);
+      if (habit == null) continue;
+      await sleepSync.syncRecent(habit);
+    }
+  }
 
   /// Null when the database was opened from something other than a file, which
   /// only happens in tests.
@@ -279,6 +303,12 @@ class AppScope {
 
   Future<void> _startPlatformServices() async {
     await LocalNotificationsAlarmPlugin.ensureTimeZones();
+
+    // Sleep arrives on the platform's schedule rather than the app's: a watch
+    // uploads a night some time after the person got up. Asking to be woken
+    // means the morning prompt finds the night already there instead of asking
+    // for something the phone is holding.
+    await sleepSync.source.enableBackgroundDelivery(syncSleepHabits);
 
     // Notification copy has to come from somewhere before any widget exists,
     // so it is looked up by locale rather than by BuildContext. It goes through
@@ -600,6 +630,7 @@ class AppScope {
     Dispatcher mainDispatcher = const AsyncDispatcher(),
     Dispatcher ioDispatcher = const AsyncDispatcher(),
     Logging? logging,
+    SleepDataSource? sleepSource,
   }) {
     // `Logging = AndroidLogging`, whose loggers write to `android.util.Log` —
     // which is exactly what `AndroidBugReporter.getLogcat()` reads back out of
@@ -660,7 +691,14 @@ class AppScope {
       ),
     );
 
+    final sleepRepository = SleepSessionRepository(
+        database, () => DateTime.now().millisecondsSinceEpoch);
     return AppScope._(
+      sleepRepository: sleepRepository,
+      sleepSync: SleepSync(
+        repository: sleepRepository,
+        source: sleepSource ?? defaultSleepDataSource(),
+      ),
       database: database,
       databasePath: databasePath,
       modelFactory: modelFactory,

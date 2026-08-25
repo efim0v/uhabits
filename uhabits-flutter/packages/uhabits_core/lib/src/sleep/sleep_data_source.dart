@@ -26,8 +26,12 @@ abstract class SleepDataSource {
   /// own health app.
   Future<void> writeSession(int startMillis, int endMillis);
 
-  /// Asks the platform to wake the app when new sleep is recorded.
-  Future<void> enableBackgroundDelivery();
+  /// Asks the platform to wake the app when new sleep is recorded, and says
+  /// what to do when it does.
+  ///
+  /// Enabling and answering are one call because they are one decision: a
+  /// platform woken with nowhere to report is worse than one never woken.
+  Future<void> enableBackgroundDelivery(Future<void> Function() onChanged);
 }
 
 /// The source on a platform that has none.
@@ -52,5 +56,6 @@ class NoSleepDataSource implements SleepDataSource {
   Future<void> writeSession(int startMillis, int endMillis) async {}
 
   @override
-  Future<void> enableBackgroundDelivery() async {}
+  Future<void> enableBackgroundDelivery(
+      Future<void> Function() onChanged) async {}
 }

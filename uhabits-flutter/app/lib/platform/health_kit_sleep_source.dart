@@ -9,13 +9,12 @@ import 'package:uhabits_core/uhabits_core.dart';
 class HealthKitSleepSource implements SleepDataSource {
   HealthKitSleepSource({
     this.channel = const MethodChannel(methodChannelName),
-    this.onDataChanged,
   });
 
   final MethodChannel channel;
 
   /// Called when the platform reports that new sleep was recorded.
-  final Future<void> Function()? onDataChanged;
+  Future<void> Function()? _onDataChanged;
 
   /// Must match the constant in `ios/Runner/HealthKitSleepPlugin.swift`.
   static const String methodChannelName = 'org.isoron.uhabits/health_sleep';
@@ -37,15 +36,6 @@ class HealthKitSleepSource implements SleepDataSource {
     'awake': SleepSegmentKind.awake,
   };
 
-  /// Starts listening for the native side's change notifications.
-  void listen() {
-    channel.setMethodCallHandler((MethodCall call) async {
-      if (call.method == dataChangedMethod) {
-        await onDataChanged?.call();
-      }
-      return null;
-    });
-  }
 
   @override
   Future<bool> isAuthorized() =>
@@ -87,9 +77,17 @@ class HealthKitSleepSource implements SleepDataSource {
       );
 
   @override
-  Future<void> enableBackgroundDelivery() => _ask<void>(
-        'enableBackgroundDelivery',
-      );
+  Future<void> enableBackgroundDelivery(
+      Future<void> Function() onChanged) async {
+    _onDataChanged = onChanged;
+    channel.setMethodCallHandler((MethodCall call) async {
+      if (call.method == dataChangedMethod) {
+        await _onDataChanged?.call();
+      }
+      return null;
+    });
+    await _ask<void>('enableBackgroundDelivery');
+  }
 
   /// Every call goes through here, because every one of them has the same
   /// answer to failure: the platform declining, or not being there at all, is
