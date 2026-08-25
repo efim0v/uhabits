@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/sleep/sleep_episode.dart';
 import 'package:uhabits_core/src/sleep/sleep_episode_merger.dart';
 import 'package:uhabits_core/src/sleep/sleep_segment.dart';
 
@@ -25,6 +26,26 @@ const SleepSegmentKind unspecified = SleepSegmentKind.asleepUnspecified;
 const SleepSegmentKind inBed = SleepSegmentKind.inBed;
 const SleepSegmentKind awake = SleepSegmentKind.awake;
 
+
+/// The night, out of everything the window holds.
+///
+/// Production does not ask for "the night" — `SleepSync` splits a window into
+/// episodes and decides per day which one wins. This is the same measure,
+/// spelled out here so the tests below can talk about one night at a time.
+SleepEpisode? mainEpisode(
+  List<SleepSegment> segments, {
+  required int mergeGapMinutes,
+  required int utcOffsetMinutes,
+}) {
+  final List<SleepEpisode> episodes = splitIntoEpisodes(
+    segments,
+    mergeGapMinutes: mergeGapMinutes,
+    utcOffsetAt: (_) => utcOffsetMinutes,
+  );
+  if (episodes.isEmpty) return null;
+  return episodes.reduce((a, b) => b.asleepMinutes > a.asleepMinutes ? b : a);
+}
+
 void main() {
   group('segment kinds', () {
     test('every asleep kind counts as sleep and nothing else does', () {
@@ -40,7 +61,7 @@ void main() {
     test('the source with the most sleep wins', () {
       // A watch and a third party app both record the night; only one of them
       // may describe it.
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 60, core, source: 'phone'),
           seg(0, 420, core, source: 'watch'),
@@ -53,7 +74,7 @@ void main() {
     });
 
     test('the loser contributes nothing at all', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 420, core, source: 'watch'),
           seg(0, 600, inBed, source: 'phone'),
@@ -74,7 +95,7 @@ void main() {
         <String>['bbb', 'aaa'],
         <String>['aaa', 'bbb'],
       ]) {
-        final episode = mergeSegments(
+        final episode = mainEpisode(
           <SleepSegment>[
             seg(0, 60, core, source: order[0]),
             seg(0, 60, core, source: order[1]),
@@ -89,7 +110,7 @@ void main() {
 
   group('chaining', () {
     test('a gap at the threshold merges', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 120, core),
           seg(180, 420, core), // exactly sixty minutes apart
@@ -101,7 +122,7 @@ void main() {
     });
 
     test('one minute more splits', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 120, core),
           seg(181, 420, core), // sixty one minutes apart
@@ -116,7 +137,7 @@ void main() {
       // The two measures are made to disagree on purpose. The broken night
       // spans 295 minutes but holds only 120 of sleep; the solid one spans
       // 200 and holds all 200. Choosing by span would pick the broken night.
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 30, core),
           seg(85, 115, core),
@@ -134,7 +155,7 @@ void main() {
     });
 
     test('a daytime nap loses to the night', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 400, core), // the night
           seg(840, 900, core), // an hour in the afternoon
@@ -146,7 +167,7 @@ void main() {
     });
 
     test('asleep minutes measure the sleep, not the span it covers', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 120, core),
           seg(150, 300, deep),
@@ -161,7 +182,7 @@ void main() {
     });
 
     test('an awake stretch never counts as sleep', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 120, core),
           seg(120, 150, awake),
@@ -174,7 +195,7 @@ void main() {
     });
 
     test('all four asleep kinds add up together', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 60, core),
           seg(60, 120, deep),
@@ -188,7 +209,7 @@ void main() {
     });
 
     test('segments arriving out of order are handled', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(150, 300, core),
           seg(0, 120, core),
@@ -204,7 +225,7 @@ void main() {
       // The chain end must track the furthest end reached, not the end of the
       // segment that happened to come last. Otherwise the chain would appear
       // to stop at 120 and the 340 stretch would start a second night.
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 300, core),
           seg(60, 120, deep),
@@ -221,7 +242,7 @@ void main() {
     test('overlapping sleep counts each minute once', () {
       // A whole-night sample beside a stage breakdown would otherwise add up
       // to more sleep than the night is long.
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 420, unspecified),
           seg(60, 120, deep),
@@ -236,7 +257,7 @@ void main() {
     });
 
     test('sleep never exceeds the time in bed', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 480, inBed),
           seg(0, 300, core),
@@ -255,7 +276,7 @@ void main() {
   group('boundaries', () {
     test('in-bed boundaries win over the asleep chain', () {
       // In bed at midnight, asleep at 03:00, up at 08:00.
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 480, inBed),
           seg(180, 480, core),
@@ -271,7 +292,7 @@ void main() {
     });
 
     test('without in-bed data the chain provides the boundaries', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[seg(180, 480, core)],
         mergeGapMinutes: 60,
         utcOffsetMinutes: 0,
@@ -285,7 +306,7 @@ void main() {
 
     test('an in-bed span that misses the chain is ignored', () {
       // An afternoon lie-down must not become the night's bedtime.
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 400, core),
           seg(800, 900, inBed),
@@ -298,7 +319,7 @@ void main() {
     });
 
     test('several in-bed spans give the outermost boundaries', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[
           seg(0, 200, inBed),
           seg(200, 480, inBed),
@@ -316,7 +337,7 @@ void main() {
   group('nothing to merge', () {
     test('no segments at all', () {
       expect(
-        mergeSegments(const <SleepSegment>[],
+        mainEpisode(const <SleepSegment>[],
             mergeGapMinutes: 60, utcOffsetMinutes: 0),
         isNull,
         reason: 'sleep.merge#4',
@@ -325,7 +346,7 @@ void main() {
 
     test('in-bed without sleep is not a night', () {
       expect(
-        mergeSegments(<SleepSegment>[seg(0, 480, inBed)],
+        mainEpisode(<SleepSegment>[seg(0, 480, inBed)],
             mergeGapMinutes: 60, utcOffsetMinutes: 0),
         isNull,
         reason: 'sleep.merge#4',
@@ -334,7 +355,7 @@ void main() {
 
     test('awake only is not a night', () {
       expect(
-        mergeSegments(<SleepSegment>[seg(0, 480, awake)],
+        mainEpisode(<SleepSegment>[seg(0, 480, awake)],
             mergeGapMinutes: 60, utcOffsetMinutes: 0),
         isNull,
         reason: 'sleep.merge#4',
@@ -344,7 +365,7 @@ void main() {
 
   group('the offset travels with the night', () {
     test('is carried onto the episode', () {
-      final episode = mergeSegments(
+      final episode = mainEpisode(
         <SleepSegment>[seg(0, 420, core)],
         mergeGapMinutes: 60,
         utcOffsetMinutes: -240,

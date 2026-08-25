@@ -1,25 +1,6 @@
 import 'sleep_episode.dart';
 import 'sleep_segment.dart';
 
-/// Reduces the raw stretches recorded for one night to a single episode.
-///
-/// Returns null when there is no sleep among them: a night with nothing but
-/// time in bed is not a night that can be scored.
-SleepEpisode? mergeSegments(
-  List<SleepSegment> segments, {
-  required int mergeGapMinutes,
-  required int utcOffsetMinutes,
-}) {
-  final List<SleepEpisode> episodes = splitIntoEpisodes(
-    segments,
-    mergeGapMinutes: mergeGapMinutes,
-    utcOffsetAt: (_) => utcOffsetMinutes,
-  );
-  if (episodes.isEmpty) return null;
-  return episodes
-      .reduce((a, b) => b.asleepMinutes > a.asleepMinutes ? b : a);
-}
-
 /// Every night in a window, one episode per chain of sleep.
 ///
 /// The same rules as [mergeSegments] — one source, chains across short
