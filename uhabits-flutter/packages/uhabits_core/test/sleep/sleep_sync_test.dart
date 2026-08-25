@@ -20,6 +20,7 @@ class RecordingSource implements SleepDataSource {
 
   List<SleepSegment> segments;
   final List<List<int>> windows = <List<int>>[];
+  int authorizationRequests = 0;
   final List<List<int>> written = <List<int>>[];
   bool authorized = true;
 
@@ -27,7 +28,10 @@ class RecordingSource implements SleepDataSource {
   Future<bool> isAuthorized() async => authorized;
 
   @override
-  Future<bool> requestAuthorization() async => authorized;
+  Future<bool> requestAuthorization() async {
+    authorizationRequests++;
+    return authorized;
+  }
 
   @override
   Future<List<SleepSegment>> readSegments(int fromMillis, int toMillis) async {
@@ -106,6 +110,26 @@ void main() {
         for (final Entry e in habit.originalEntries.getKnown())
           e.date.daysSince2000: e.value,
       };
+
+  group('asking the platform for access', () {
+    test('is asked before the first read', () async {
+      source.authorized = false;
+      await sync.syncRecent(habit);
+      expect(source.authorizationRequests, 1, reason: 'sleep.sync#5');
+    });
+
+    test('is not asked again once granted', () async {
+      source.authorized = true;
+      await sync.syncRecent(habit);
+      expect(source.authorizationRequests, 0, reason: 'sleep.sync#5');
+    });
+
+    test('a refusal still lets the sync finish', () async {
+      source.authorized = false;
+      await sync.syncRecent(habit);
+      expect(writtenEntries(), isEmpty, reason: 'sleep.sync#5');
+    });
+  });
 
   group('the window', () {
     test('covers a fortnight, not yesterday', () async {

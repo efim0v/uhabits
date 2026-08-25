@@ -62,6 +62,16 @@ class SleepSync {
     final SleepGoal? goal = repository.goalFor(habit.id!);
     if (goal == null) return;
 
+    // Without this the platform never asks, `readSegments` answers with
+    // nothing for ever, and the automatic half of the feature is dead while
+    // looking like a person who simply has no nights recorded.
+    //
+    // Safe to call on every sync: the system shows its sheet once and answers
+    // silently afterwards, and a refusal is an answer the habit works with.
+    if (!await source.isAuthorized()) {
+      await source.requestAuthorization();
+    }
+
     final int toDay = today().daysSince2000;
     final int fromDay = toDay - recentWindowDays + 1;
 
