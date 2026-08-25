@@ -266,7 +266,10 @@ class EditHabitModel extends ChangeNotifier {
       nameError = EditHabitFieldError.blank;
       isValid = false;
     }
-    if (isNumerical) {
+    // A sleep habit is numerical, but its target is settled by the model and
+    // the field that would carry it is never shown. Validating it would refuse
+    // to save a form the person was never given a chance to fill in.
+    if (isNumerical && !isSleep) {
       if (targetController.text.isEmpty) {
         targetError = EditHabitFieldError.blank;
         isValid = false;
@@ -314,7 +317,9 @@ class EditHabitModel extends ChangeNotifier {
     // Only numerical habits write these three, so switching an existing
     // numerical habit to yes/no leaves the copied target and unit intact
     // (`edit-habit.save#6`, `#16`).
-    if (habitType == HabitType.numerical) {
+    // Same reason as in validate(): the sleep form never shows these, so
+    // there is nothing here to parse.
+    if (habitType == HabitType.numerical && !isSleep) {
       habit.targetValue = double.parse(targetController.text);
       habit.targetType = targetType;
       habit.unit = unitController.text.trim();
@@ -342,17 +347,29 @@ class EditHabitModel extends ChangeNotifier {
 
     final SleepGoal? goal = sleepGoal;
     if (goal != null) {
-      // The habit only has an id once the command has run.
-      final int id = habitId >= 0 ? habitId : (habit.id ?? -1);
-      if (id >= 0) {
-        scope.sleepRepository.saveGoal(id, goal);
+      // CreateHabitCommand keeps the form's habit as a template and builds its
+      // own, so the object above never gets an id. The uuid is copied across,
+      // which is what identifies the one that did enter the list.
+      final Habit? saved = habitId >= 0
+          ? scope.habitList.getById(habitId)
+          : _findByUuid(habit.uuid);
+      if (saved?.id != null) {
+        scope.sleepRepository.saveGoal(saved!.id!, goal);
         // Changing a goal changes what every past night was worth. Rescoring
         // only from today would leave the history a mixture of two scales.
-        final Habit? saved = scope.habitList.getById(id);
-        if (saved != null) scope.sleepSync.recomputeAll(saved);
+        scope.sleepSync.recomputeAll(saved);
       }
     }
     return true;
+  }
+
+  /// The habit in the list carrying [uuid], or null when there is none.
+  Habit? _findByUuid(String? uuid) {
+    if (uuid == null) return null;
+    for (final Habit habit in scope.habitList.toList()) {
+      if (habit.uuid == uuid) return habit;
+    }
+    return null;
   }
 
   @override
