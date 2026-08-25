@@ -73,7 +73,11 @@ void main() {
   });
 
   tearDown(() {
-    database.close();
+    try {
+      database.close();
+    } on Object {
+      // Some tests close the scope, which closes the database with it.
+    }
     DateUtils.setFixedTimeZone(null);
     DateUtils.setFixedLocalTime(null);
     resetToday();
@@ -225,6 +229,27 @@ void main() {
 
       final int drifted = scope.sleepPromptInstant(habit)!;
       expect(drifted, isNot(home), reason: 'sleep.reminder#2');
+    });
+  });
+
+  group('a scope that is torn down mid-sync', () {
+    test('stops rather than reaching a closed database', () async {
+      // The startup sync is deliberately not awaited, so it can still be in
+      // flight when the app is closed — in a test that closes at once, and in
+      // an app the person leaves the moment it opens.
+      addSleepHabit(name: 'Sleep');
+      final Future<void> inFlight = scope.syncSleepHabits();
+      scope.close();
+      await inFlight;
+      expect(true, isTrue, reason: 'sleep.sync#1 — it did not throw');
+    });
+
+    test('a sync started after close does nothing at all', () async {
+      addSleepHabit(name: 'Sleep');
+      final int before = source.reads;
+      scope.close();
+      await scope.syncSleepHabits();
+      expect(source.reads, before, reason: 'sleep.sync#1');
     });
   });
 

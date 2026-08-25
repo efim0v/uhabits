@@ -106,6 +106,11 @@ List<Widget> buildSleepSection(
       streakDays: _currentStreakDays(habit, today),
       // Always for today, which is the night most likely to be missing or
       // wrong. An older night is edited from the history like any other.
+      healthDenied: !scope.sleepSourceAuthorized,
+      onRequestAccess: () async {
+        await scope.sleepSync.source.requestAuthorization();
+        await scope.syncSleepHabits();
+      },
       onEnterByHand: () => enterNightByHand(
         context,
         scope: scope,

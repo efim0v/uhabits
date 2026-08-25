@@ -17,6 +17,8 @@ class LastNightCard extends StatelessWidget {
     required this.habitScore,
     required this.streakDays,
     required this.onEnterByHand,
+    this.healthDenied = false,
+    this.onRequestAccess,
     super.key,
   });
 
@@ -37,6 +39,16 @@ class LastNightCard extends StatelessWidget {
   /// needs somewhere to say so.
   final VoidCallback onEnterByHand;
 
+  /// The platform has not granted access to its health data.
+  ///
+  /// Said out loud rather than left as an empty card: a person who refused
+  /// once, or who never saw the sheet, otherwise has no way to tell an app
+  /// that cannot read from a night they did not have.
+  final bool healthDenied;
+
+  /// Asks the platform again. Null where there is nothing to ask.
+  final VoidCallback? onRequestAccess;
+
   @override
   Widget build(BuildContext context) {
     final L10n l10n = L10n.of(context);
@@ -50,12 +62,24 @@ class LastNightCard extends StatelessWidget {
         child: Text(l10n.sleepEnterNight),
       ),
       child: night == null
-          ? Text(
-              l10n.sleepNoData,
-              style: TextStyle(
-                fontSize: 15,
-                color: toFlutterColor(theme.mediumContrastTextColor),
-              ),
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  healthDenied ? l10n.sleepHealthDenied : l10n.sleepNoData,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.35,
+                    color: toFlutterColor(theme.mediumContrastTextColor),
+                  ),
+                ),
+                if (healthDenied && onRequestAccess != null)
+                  TextButton(
+                    onPressed: onRequestAccess,
+                    child: Text(l10n.sleepHealthAccess),
+                  ),
+              ],
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

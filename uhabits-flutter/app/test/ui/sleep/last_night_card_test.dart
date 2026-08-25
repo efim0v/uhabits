@@ -207,6 +207,54 @@ void main() {
       expect(find.textContaining('No data'), findsOneWidget,
           reason: 'sleep.ui#5');
     });
+
+    testWidgets('a refused permission is said out loud, not left blank',
+        (tester) async {
+      // Otherwise a person who refused once cannot tell an app that cannot
+      // read from a night they did not have.
+      var asked = 0;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
+          L10n.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: L10n.supportedLocales,
+        home: MediaQuery(
+          data: const MediaQueryData(alwaysUse24HourFormat: true),
+          child: Scaffold(
+            body: LastNightCard(
+              theme: core.LightTheme(),
+              breakdown: null,
+              habitScore: 0,
+              streakDays: 0,
+              onEnterByHand: () {},
+              healthDenied: true,
+              onRequestAccess: () => asked++,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Without access to Health'), findsOneWidget,
+          reason: 'sleep.ui#5');
+      expect(find.textContaining('No data'), findsNothing,
+          reason: 'sleep.ui#5');
+
+      await tester.tap(find.text('Allow access to Health'));
+      await tester.pumpAndSettle();
+      expect(asked, 1, reason: 'sleep.sync#5');
+    });
+
+    testWidgets('a granted permission with no nights just says no data',
+        (tester) async {
+      await pumpCard(tester, breakdown: null, habitScore: 0, streakDays: 0);
+      expect(find.textContaining('Without access'), findsNothing,
+          reason: 'sleep.ui#5');
+      expect(find.textContaining('No data'), findsOneWidget,
+          reason: 'sleep.ui#5');
+    });
   });
 
   group('themes', () {

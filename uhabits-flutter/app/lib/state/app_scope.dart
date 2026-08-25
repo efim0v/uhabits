@@ -100,11 +100,26 @@ class AppScope {
   ///
   /// Which habits those are is asked of the repository each time rather than
   /// cached: a habit can become one, or stop being one, while the app runs.
+  /// Whether the platform last said yes to reading sleep.
+  ///
+  /// Cached because the screen needs the answer while it builds and asking is
+  /// asynchronous. Refreshed on every sync, so a permission granted in the
+  /// system settings is picked up on the next return to the app.
+  bool sleepSourceAuthorized = false;
+
   Future<void> syncSleepHabits() async {
+    if (_closed) return;
+    final bool authorized = await sleepSync.source.isAuthorized();
+    if (_closed) return;
+    sleepSourceAuthorized = authorized;
+
     for (final int id in sleepRepository.sleepHabitIds()) {
       final Habit? habit = habitList.getById(id);
       if (habit == null) continue;
       await sleepSync.syncRecent(habit);
+      // Reading the platform is asynchronous, and the scope can be torn down
+      // between two habits.
+      if (_closed) return;
       scheduleSleepPrompt(habit);
     }
   }
@@ -771,7 +786,16 @@ class AppScope {
     );
   }
 
+  /// Whether [close] has run.
+  ///
+  /// The startup sleep sync is deliberately not awaited, so it can still be in
+  /// flight when the scope is torn down — in a test that closes immediately,
+  /// and in an app the person leaves the moment it opens. Its continuations
+  /// check this before touching a database that may be gone.
+  bool _closed = false;
+
   void close() {
+    _closed = true;
     // `HabitsApplication.onTerminate`, in its exact order:
     // reminderScheduler.stopListening(), widgetUpdater.stopListening(),
     // notificationTray.stopListening() (`commands.command-runner-listeners#8`).
