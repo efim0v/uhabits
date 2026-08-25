@@ -57,3 +57,4 @@ export 'src/sleep/stored_value.dart';
 export 'src/sleep/timezone_drift.dart';
 export 'src/sleep/sleep_sync.dart';
 export 'src/sleep/sleep_reminder.dart';
+export 'src/sleep/sleep_suggestions.dart';

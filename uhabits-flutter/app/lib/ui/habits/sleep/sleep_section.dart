@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
+import '../../../l10n/app_localizations.dart';
 import '../../../platform/device_locale.dart';
 import '../../../state/app_scope.dart';
 import 'last_night_card.dart';
@@ -10,6 +11,7 @@ import 'manual_entry_sheet.dart';
 import 'nights_chart.dart';
 import 'skip_range.dart';
 import 'stability_card.dart';
+import 'suggestion_card.dart';
 
 /// How many days the skip counter looks back over.
 const int skipWindowDays = 30;
@@ -66,7 +68,37 @@ List<Widget> buildSleepSection(
   final int? lastSkipped =
       lastSkippedDay(habit, today: today, windowDays: skipWindowDays);
 
+  final core.TimezoneSkipSuggestion? travel =
+      core.suggestSkipForTimezone(nights);
+  final core.GoalSuggestion? suggestedGoal = core.suggestGoal(
+    _stabilityNights(nights, skipped, today),
+    goal,
+  );
+
   return <Widget>[
+    // Suggestions come first, because a person who is about to read a bad
+    // fortnight should see the offer to set a trip aside before they read it.
+    if (travel != null)
+      SuggestionCard(
+        theme: theme,
+        message: L10n.of(context).sleepSuggestSkip,
+        applyLabel: L10n.of(context).sleepMarkSkipped,
+        onApply: () => SkipRange(travel.fromDay, travel.toDay).applyTo(habit),
+        onDismiss: () {},
+      )
+    else if (suggestedGoal != null)
+      SuggestionCard(
+        theme: theme,
+        message: goalSuggestionMessage(context, suggestedGoal),
+        applyLabel: L10n.of(context).sleepSuggestApply,
+        onApply: () => _applyGoalSuggestion(
+          scope: scope,
+          habit: habit,
+          goal: goal,
+          suggestion: suggestedGoal,
+        ),
+        onDismiss: () {},
+      ),
     LastNightCard(
       theme: theme,
       breakdown: lastNight,
@@ -181,4 +213,23 @@ Future<void> enterNightByHand(
   // the health app the rest of the data comes from.
   await scope.sleepSync.source
       .writeSession(episode.bedStartMillis, episode.wakeEndMillis);
+}
+
+
+/// Moves the goal to what the recent nights suggest, and rescores everything.
+///
+/// Only ever reached from a tap: the suggestion itself changes nothing.
+void _applyGoalSuggestion({
+  required AppScope scope,
+  required core.Habit habit,
+  required core.SleepGoal goal,
+  required core.GoalSuggestion suggestion,
+}) {
+  final core.SleepGoal moved = goal.copyWith(
+    bedMinutes: suggestion.bedMinutes,
+    wakeMinutes: suggestion.wakeMinutes,
+  );
+  scope.sleepRepository.saveGoal(habit.id!, moved);
+  // A different goal makes every past night worth something different.
+  scope.sleepSync.recomputeAll(habit);
 }
