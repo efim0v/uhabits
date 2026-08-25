@@ -54,6 +54,10 @@ void main() {
 
   setUp(() {
     DateUtils.setFixedTimeZone(const FixedTimeZone(0));
+    // SleepSync deliberately does not read getToday(), which carries the
+    // midnight-delay preference, so pinning that alone would leave the sleep
+    // side on the real clock.
+    DateUtils.setFixedLocalTime((9000 + 10957) * 86400000 + 3 * 3600000);
     setToday(LocalDate(9000));
     database = Sqlite3Database.memory();
     database.setVersion(8);
@@ -71,6 +75,7 @@ void main() {
   tearDown(() {
     database.close();
     DateUtils.setFixedTimeZone(null);
+    DateUtils.setFixedLocalTime(null);
     resetToday();
   });
 
@@ -159,6 +164,67 @@ void main() {
       await source.enableBackgroundDelivery(() async => synced++);
       await source.onChanged!();
       expect(synced, 1, reason: 'sleep.sync#1');
+    });
+  });
+
+  group('the morning question', () {
+    test('is an hour after the goal wake time', () {
+      final Habit habit = addSleepHabit(name: 'Sleep');
+      final int? at = scope.sleepPromptInstant(habit);
+      expect(at, isNotNull, reason: 'sleep.reminder#1');
+
+      final int minuteOfDay = localMinutesOf(at!, 0);
+      expect(minuteOfDay, 8 * 60, reason: 'sleep.reminder#1');
+    });
+
+    test('a habit that is not about sleep has none', () {
+      final Habit habit = addOrdinaryHabit(name: 'Run');
+      expect(scope.sleepPromptInstant(habit), isNull,
+          reason: 'sleep.reminder#3');
+    });
+
+    test('moves to tomorrow once the night is on record', () {
+      final Habit habit = addSleepHabit(name: 'Sleep');
+      final int before = scope.sleepPromptInstant(habit)!;
+
+      scope.sleepRepository.upsert(
+        habit.id!,
+        9000,
+        const SleepEpisode(
+          bedStartMillis: 0,
+          wakeEndMillis: 1,
+          asleepMinutes: 480,
+          utcOffsetMinutes: 0,
+        ),
+        manual: false,
+      );
+
+      final int after = scope.sleepPromptInstant(habit)!;
+      expect(after, greaterThan(before), reason: 'sleep.reminder#3');
+      expect(after - before, 86400000, reason: 'sleep.reminder#3');
+    });
+
+    test('follows the goal rather than the device clock', () {
+      final Habit habit = addSleepHabit(name: 'Sleep');
+      final int home = scope.sleepPromptInstant(habit)!;
+
+      // Two nights recorded three hours east start the goal drifting.
+      for (final int day in <int>[8998, 8999]) {
+        scope.sleepRepository.upsert(
+          habit.id!,
+          day,
+          const SleepEpisode(
+            bedStartMillis: 0,
+            wakeEndMillis: 1,
+            asleepMinutes: 480,
+            utcOffsetMinutes: 180,
+          ),
+          manual: false,
+        );
+      }
+
+      final int drifted = scope.sleepPromptInstant(habit)!;
+      expect(drifted, isNot(home), reason: 'sleep.reminder#2');
     });
   });
 

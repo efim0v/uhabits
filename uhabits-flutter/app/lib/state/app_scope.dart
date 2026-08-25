@@ -105,7 +105,52 @@ class AppScope {
       final Habit? habit = habitList.getById(id);
       if (habit == null) continue;
       await sleepSync.syncRecent(habit);
+      scheduleSleepPrompt(habit);
     }
+  }
+
+  /// Arms the morning question for one sleep habit.
+  ///
+  /// Its moment follows the goal rather than the clock, so it is worked out
+  /// here and handed to the alarm scheduler directly; the reminder scheduler
+  /// computes times from `habit.reminder`, which a drifting goal is not.
+  void scheduleSleepPrompt(Habit habit) {
+    final SystemScheduler? alarms = _started?.alarms;
+    final int? at = sleepPromptInstant(habit);
+    if (alarms == null || at == null) return;
+    alarms.scheduleShowReminder(at, habit, at);
+  }
+
+  /// When the morning question for [habit] should next be asked, or null when
+  /// the habit is not a sleep habit.
+  ///
+  /// A query, kept apart from the arming above so the moment can be checked
+  /// without a platform to arm anything on.
+  int? sleepPromptInstant(Habit habit) {
+    final SleepGoal? goal = sleepRepository.goalFor(habit.id!);
+    if (goal == null) return null;
+
+    final int today = sleepSync.today().daysSince2000;
+    final int? firstNight = sleepRepository.firstDay(habit.id!);
+    final Map<int, int> offsets = effectiveOffsets(
+      firstDay: firstNight ?? today,
+      lastDay: today,
+      observedByDay: sleepRepository.observedOffsets(
+          habit.id!, firstNight ?? today, today),
+      homeOffsetMinutes: goal.homeUtcOffsetMinutes,
+      ratePerDayMinutes: goal.adaptationMinutesPerDay,
+    );
+
+    final int offset = offsets[today] ?? goal.homeUtcOffsetMinutes;
+    return nextSleepPromptMillis(
+      goal: goal,
+      effectiveOffsetMinutes: offset,
+      // getLocalTime is already shifted into the device's frame; the prompt
+      // works in UTC, so the shift is taken back out.
+      nowMillis: DateUtils.getLocalTime() -
+          DateUtils.currentTimeZone.getOffset(DateUtils.getLocalTime()),
+      todaysNightRecorded: sleepRepository.forDay(habit.id!, today) != null,
+    );
   }
 
   /// Null when the database was opened from something other than a file, which
@@ -465,6 +510,7 @@ class AppScope {
     startServices(
       tray: tray,
       scheduler: scheduler,
+      alarms: alarms,
       sync: sync,
       // The two registrations the OS keeps a copy of — the Android channel
       // name and the Darwin category titles — which [onLocalesChanged] has to
@@ -499,6 +545,7 @@ class AppScope {
     required NotificationTray tray,
     required ReminderScheduler scheduler,
     required WidgetSync sync,
+    SystemScheduler? alarms,
     NotificationPermissions? permissions,
     LocalizedNotificationRegistrations? registrations,
   }) {
@@ -522,6 +569,7 @@ class AppScope {
     _started = _Started(
       tray: tray,
       scheduler: scheduler,
+      alarms: alarms,
       sync: sync,
       registrations: registrations,
     );
@@ -755,12 +803,19 @@ class _Started {
   _Started({
     required this.tray,
     required this.scheduler,
+    required this.alarms,
     required this.sync,
     this.registrations,
   });
 
   final NotificationTray tray;
   final ReminderScheduler scheduler;
+
+  /// The alarm scheduler itself, which the sleep prompt uses directly: its
+  /// moment is derived from a drifting goal rather than from the habit's own
+  /// reminder, so the reminder scheduler has nothing to compute it from.
+  final SystemScheduler? alarms;
+
   final WidgetSync sync;
 
   /// Null on a host with no plugin, and in every test that starts the services
