@@ -86,7 +86,9 @@ class SleepSync {
     //
     // Safe to call on every sync: the system shows its sheet once and answers
     // silently afterwards, and a refusal is an answer the habit works with.
-    if (!await source.isAuthorized()) {
+    // Not safe to call where there is no store — that is not a question that
+    // gets a different answer the tenth time it is put.
+    if (source.hasHealthStore && !await source.isAuthorized()) {
       await source.requestAuthorization();
     }
 

@@ -24,8 +24,10 @@ class RecordingSource implements SleepDataSource {
   final List<List<int>> written = <List<int>>[];
   bool authorized = true;
 
+  bool storePresent = true;
+
   @override
-  bool get hasHealthStore => true;
+  bool get hasHealthStore => storePresent;
 
   @override
   Future<bool> isAuthorized() async => authorized;
@@ -113,6 +115,40 @@ void main() {
         for (final Entry e in habit.originalEntries.getKnown())
           e.date.daysSince2000: e.value,
       };
+
+  group('where there is no health store', () {
+    test('the sync does not ask for access it cannot be granted', () async {
+      // A refusal is worth putting again — the person may say yes next time.
+      // The absence of a store is not: it is the same answer for ever, and
+      // asking is a round trip to the platform on every return to the app.
+      source.storePresent = false;
+      source.authorized = false;
+
+      await sync.syncRecent(habit);
+      await sync.syncRecent(habit);
+
+      expect(source.authorizationRequests, 0, reason: 'sleep.sync#8');
+    });
+
+    test('a refusal by a store that is there is still worth putting again',
+        () async {
+      source.authorized = false;
+
+      await sync.syncRecent(habit);
+      await sync.syncRecent(habit);
+
+      expect(source.authorizationRequests, 2, reason: 'sleep.sync#8');
+    });
+
+    test('the nights already recorded are still read', () async {
+      // Nothing about an absent store stops the rest of the sync.
+      source.storePresent = false;
+
+      await sync.syncRecent(habit);
+
+      expect(source.windows, hasLength(1), reason: 'sleep.sync#8');
+    });
+  });
 
   group('asking the platform for access', () {
     test('is asked before the first read', () async {
