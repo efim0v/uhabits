@@ -155,23 +155,27 @@ class AppScope {
   /// computes times from `habit.reminder`, which a drifting goal is not.
   void scheduleSleepPrompt(Habit habit) {
     final SleepPromptScheduler? prompts = _started?.sleepPrompts;
+    if (prompts == null) return;
     final int? at = sleepPromptInstant(habit);
-    if (prompts == null || at == null) return;
-    // The day the question is about, given rather than derived: the builder
-    // reads a local wall-clock day out of that slot, and east of UTC+8 the
-    // instant lands on the day before.
-    unawaited(
-        prompts.schedule(habit, sleepPromptDay(habit) ?? LocalDate(0), at));
+    if (at == null) return;
+    unawaited(prompts.schedule(habit, sleepPromptDayOf(habit, at)!, at));
   }
 
-  /// The day the morning question is about: the day the person wakes on.
-  LocalDate? sleepPromptDay(Habit habit) {
-    final int? at = sleepPromptInstant(habit);
-    if (at == null) return null;
+  /// The day a question posted at [at] is about: the day the person wakes on.
+  ///
+  /// Handed to the scheduler rather than left to be derived there. The
+  /// notification carries a day, and the night the person types in when they
+  /// answer is filed against it; deriving it from the instant would put a
+  /// question asked at 08:00 in Auckland on the day before, and the night with
+  /// it.
+  ///
+  /// Null only for a habit with no goal, which is a habit that has no question
+  /// to ask either.
+  LocalDate? sleepPromptDayOf(Habit habit, int at) {
     final SleepGoal? goal = sleepRepository.goalFor(habit.id!);
     if (goal == null) return null;
-    final int offset = _effectiveOffsetToday(habit, goal);
-    return LocalDate.fromUnixTime(at + offset * 60000);
+    return LocalDate.fromUnixTime(
+        at + _effectiveOffsetToday(habit, goal) * 60000);
   }
 
   int _effectiveOffsetToday(Habit habit, SleepGoal goal) {
