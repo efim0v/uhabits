@@ -81,6 +81,7 @@ Widget section({
                       goal, 0),
               habitScore: 0.78,
               streakDays: 12,
+              onEnterByHand: () {},
             ),
             NightsChart(
               theme: theme,

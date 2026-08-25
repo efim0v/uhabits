@@ -41,6 +41,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../platform/external_links.dart';
 import '../../../platform/flutter_files.dart';
 import '../../../state/app_scope.dart';
+import '../sleep/sleep_section.dart';
 import '../../../state/habit_list_model.dart';
 import '../../../state/intent_router.dart' as intents;
 import '../../../state/settings_model.dart' show SettingsResult;
@@ -1010,6 +1011,23 @@ class _HabitListViewState extends State<_HabitListView>
         model.onToggle(habit, date, value, notes, origin.dx, origin.dy);
       },
       onEdit: (date) {
+        // A sleep habit's value is computed from a night, not typed in. The
+        // number popup would take a percentage the next recompute overwrites,
+        // so the gesture opens the night instead. No parity rule covers this:
+        // the original has no habit that works this way.
+        final core.SleepGoal? sleepGoal =
+            _model.scope.sleepRepository.goalFor(habit.id!);
+        if (sleepGoal != null) {
+          unawaited(enterNightByHand(
+            context,
+            scope: _model.scope,
+            habit: habit,
+            goal: sleepGoal,
+            day: date.daysSince2000,
+            theme: _coreThemeOf(context),
+          ));
+          return;
+        }
         final origin = _confettiOrigin();
         model.onEdit(habit, date, origin.dx, origin.dy);
       },

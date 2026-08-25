@@ -99,12 +99,23 @@ class HistoryChart extends DataView {
     if (x - padding < 0 || row == 0 || row > 7 || col == _nColumns) return;
     final clickedDate = _topLeftDate.plus(offset);
     if (clickedDate.isNewerThan(today)) return;
+    _lastClickedDate = clickedDate;
     if (isLongClick) {
       onDateClickedListener.onDateLongPress(clickedDate);
     } else {
       onDateClickedListener.onDateShortPress(clickedDate);
     }
   }
+
+  LocalDate? _lastClickedDate;
+
+  /// The square the person last pressed, or null before any press.
+  ///
+  /// Recorded because a caller can need the date after the press has been
+  /// dispatched: `onDateClickedListener` is a fixed object that a port must not
+  /// substitute, and the presenter it leads to passes a value onwards without
+  /// the day it belongs to.
+  LocalDate? get lastClickedDate => _lastClickedDate;
 
   @override
   void draw(Canvas canvas) {

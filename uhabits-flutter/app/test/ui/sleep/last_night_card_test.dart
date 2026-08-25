@@ -45,6 +45,7 @@ Future<void> pumpCard(
           breakdown: breakdown,
           habitScore: habitScore,
           streakDays: streakDays,
+          onEnterByHand: () {},
         ),
       ),
     ),
@@ -134,6 +135,68 @@ void main() {
       await pumpCard(tester, breakdown: night(1380, 420, 480));
       expect(find.textContaining('On schedule'), findsOneWidget,
           reason: 'sleep.scoring#8');
+    });
+  });
+
+  group('typing a night in', () {
+    testWidgets('is offered even when a night was recorded', (tester) async {
+      // The watch can record a night and get it wrong; somewhere to say so is
+      // not only for the nights it missed.
+      var entered = 0;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
+          L10n.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: L10n.supportedLocales,
+        home: MediaQuery(
+          data: const MediaQueryData(alwaysUse24HourFormat: true),
+          child: Scaffold(
+            body: LastNightCard(
+              theme: core.LightTheme(),
+              breakdown: night(1421, 432, 408),
+              habitScore: 0.78,
+              streakDays: 12,
+              onEnterByHand: () => entered++,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Enter night'));
+      await tester.pumpAndSettle();
+      expect(entered, 1, reason: 'sleep.ui#5');
+    });
+
+    testWidgets('is offered when there is no night at all', (tester) async {
+      var entered = 0;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
+          L10n.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: L10n.supportedLocales,
+        home: MediaQuery(
+          data: const MediaQueryData(alwaysUse24HourFormat: true),
+          child: Scaffold(
+            body: LastNightCard(
+              theme: core.LightTheme(),
+              breakdown: null,
+              habitScore: 0,
+              streakDays: 0,
+              onEnterByHand: () => entered++,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Enter night'));
+      await tester.pumpAndSettle();
+      expect(entered, 1, reason: 'sleep.ui#5');
     });
   });
 

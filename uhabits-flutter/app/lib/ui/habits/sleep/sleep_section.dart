@@ -104,6 +104,16 @@ List<Widget> buildSleepSection(
       breakdown: lastNight,
       habitScore: habit.scores[core.LocalDate(today)].value,
       streakDays: _currentStreakDays(habit, today),
+      // Always for today, which is the night most likely to be missing or
+      // wrong. An older night is edited from the history like any other.
+      onEnterByHand: () => enterNightByHand(
+        context,
+        scope: scope,
+        habit: habit,
+        goal: goal,
+        day: today,
+        theme: theme,
+      ),
     ),
     NightsChart(
       theme: theme,

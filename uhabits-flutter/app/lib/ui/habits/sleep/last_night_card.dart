@@ -16,6 +16,7 @@ class LastNightCard extends StatelessWidget {
     required this.breakdown,
     required this.habitScore,
     required this.streakDays,
+    required this.onEnterByHand,
     super.key,
   });
 
@@ -29,6 +30,13 @@ class LastNightCard extends StatelessWidget {
 
   final int streakDays;
 
+  /// Opens the sheet for typing a night in.
+  ///
+  /// Always offered, not only when a night is missing: the watch can record a
+  /// night and get it wrong, and a person who knows they were awake until two
+  /// needs somewhere to say so.
+  final VoidCallback onEnterByHand;
+
   @override
   Widget build(BuildContext context) {
     final L10n l10n = L10n.of(context);
@@ -37,6 +45,10 @@ class LastNightCard extends StatelessWidget {
     return SleepCard(
       theme: theme,
       title: l10n.sleepLastNight,
+      trailing: TextButton(
+        onPressed: onEnterByHand,
+        child: Text(l10n.sleepEnterNight),
+      ),
       child: night == null
           ? Text(
               l10n.sleepNoData,

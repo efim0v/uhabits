@@ -434,12 +434,42 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     HapticFeedback.lightImpact();
   }
 
+  /// The day the history editor last reported.
+  ///
+  /// The presenter's `showNumberPopup` carries a value but not a date, and a
+  /// sleep habit needs the date to know which night is being edited.
+  ///
+  /// Read from the chart rather than by substituting the listener: parity rule
+  /// `history-editor.dialog#17` requires the dialog's listener to be the very
+  /// same object as the card's presenter, and a wrapper — however transparent
+  /// — is a different object.
+  core.LocalDate? get _lastClickedDate =>
+      editor.HistoryEditorDialog.current?.chart?.lastClickedDate;
+
   @override
   Future<void> showNumberPopup(
     double value,
     String notes,
     NumberPickerCallback callback,
   ) async {
+    // A sleep habit's value is a night, not a number. The popup would take a
+    // percentage the next recompute overwrites.
+    final core.SleepGoal? sleepGoal =
+        widget.scope.sleepRepository.goalFor(widget.habit.id!);
+    final core.LocalDate? date = _lastClickedDate;
+    if (sleepGoal != null && date != null) {
+      callback.onNumberPickerDismissed();
+      await enterNightByHand(
+        context,
+        scope: widget.scope,
+        habit: widget.habit,
+        goal: sleepGoal,
+        day: date.daysSince2000,
+        theme: coreThemeOf(context),
+      );
+      return;
+    }
+
     final theme = coreThemeOf(context);
     final result = await _dismissCurrentAndShow<NumberDialogResult>(
       () => showNumberDialog(
