@@ -24,6 +24,10 @@
 ///    happen; the ledger says not to reproduce it.
 library;
 
+import 'dart:async';
+import 'package:uhabits_core/src/commands/command_runner.dart';
+import 'package:uhabits_core/src/commands/command.dart';
+
 // The commands are not re-exported from uhabits_core.dart yet; see
 // app_scope.dart, which reaches for them the same way.
 // ignore_for_file: implementation_imports
@@ -343,33 +347,28 @@ class EditHabitModel extends ChangeNotifier {
     final command = habitId >= 0
         ? EditHabitCommand(scope.habitList, habitId, habit)
         : CreateHabitCommand(scope.modelFactory, scope.habitList, habit);
-    scope.commandRunner.run(command);
 
+    // The goal is written once the command has actually run, not on the next
+    // line. `CommandRunner.run` hands the command to a task runner; the
+    // dispatcher a test uses executes it at once, the one a device uses does
+    // not. Reading the result immediately worked in every test and silently
+    // did nothing on a phone — the habit was created and the goal that makes
+    // it a sleep habit was never stored.
     final SleepGoal? goal = sleepGoal;
     if (goal != null) {
-      // CreateHabitCommand keeps the form's habit as a template and builds its
-      // own, so the object above never gets an id. The uuid is copied across,
-      // which is what identifies the one that did enter the list.
-      final Habit? saved = habitId >= 0
-          ? scope.habitList.getById(habitId)
-          : _findByUuid(habit.uuid);
-      if (saved?.id != null) {
-        scope.sleepRepository.saveGoal(saved!.id!, goal);
-        // Changing a goal changes what every past night was worth. Rescoring
-        // only from today would leave the history a mixture of two scales.
-        scope.sleepSync.recomputeAll(saved);
-      }
+      scope.commandRunner.addListener(
+        _SleepGoalWriter(
+          scope: scope,
+          command: command,
+          habitId: habitId,
+          uuid: habit.uuid,
+          goal: goal,
+        ),
+      );
     }
-    return true;
-  }
 
-  /// The habit in the list carrying [uuid], or null when there is none.
-  Habit? _findByUuid(String? uuid) {
-    if (uuid == null) return null;
-    for (final Habit habit in scope.habitList.toList()) {
-      if (habit.uuid == uuid) return habit;
-    }
-    return null;
+    scope.commandRunner.run(command);
+    return true;
   }
 
   @override
@@ -380,5 +379,60 @@ class EditHabitModel extends ChangeNotifier {
     unitController.dispose();
     targetController.dispose();
     super.dispose();
+  }
+}
+
+/// Stores a sleep goal once the command that creates or edits its habit has
+/// finished.
+///
+/// A listener rather than a line after `run`: the command goes through a task
+/// runner, so on a device the habit is not in the list yet when `save` returns.
+class _SleepGoalWriter implements CommandRunnerListener {
+  _SleepGoalWriter({
+    required this.scope,
+    required this.command,
+    required this.habitId,
+    required this.uuid,
+    required this.goal,
+  });
+
+  final AppScope scope;
+  final Command command;
+  final int habitId;
+
+  /// `CreateHabitCommand` keeps the form's habit as a template and builds its
+  /// own, so that object never gets an id. The uuid is copied across, and is
+  /// what identifies the one that did enter the list.
+  final String? uuid;
+
+  final SleepGoal goal;
+
+  bool _done = false;
+
+  @override
+  void onCommandFinished(Command finished) {
+    if (_done || !identical(finished, command)) return;
+    _done = true;
+    // Removed on a microtask: `notifyListeners` is iterating the very list
+    // this would mutate.
+    scheduleMicrotask(() => scope.commandRunner.removeListener(this));
+
+    final Habit? saved =
+        habitId >= 0 ? scope.habitList.getById(habitId) : _byUuid();
+    if (saved?.id == null) return;
+
+    scope.sleepRepository.saveGoal(saved!.id!, goal);
+    // Changing a goal changes what every past night was worth. Rescoring only
+    // from today would leave the history a mixture of two scales.
+    scope.sleepSync.recomputeAll(saved);
+  }
+
+  Habit? _byUuid() {
+    final String? id = uuid;
+    if (id == null) return null;
+    for (final Habit habit in scope.habitList.toList()) {
+      if (habit.uuid == id) return habit;
+    }
+    return null;
   }
 }

@@ -38,6 +38,72 @@ void main() {
     resetToday();
   });
 
+  group('creating one on a device, not in a harness', () {
+    /// A scope on the dispatchers production uses.
+    ///
+    /// Every other test here runs on UnconfinedTestDispatcher, which executes a
+    /// command the instant it is handed over. The real one does not, and code
+    /// that reads the command's result on the next line is code that works only
+    /// in the harness.
+    AppScope asyncScope() {
+      final AppScope s = AppScope.open(database);
+      addTearDown(s.close);
+      return s;
+    }
+
+    test('the goal is stored even though the command has not run yet',
+        () async {
+      final AppScope real = asyncScope();
+      final EditHabitModel model =
+          EditHabitModel(scope: real, sleep: true);
+      model.nameController.text = 'Sleep';
+      expect(model.save(), isTrue, reason: 'sleep.habit-type#4');
+
+      // Nothing has happened yet: the command is on a task runner.
+      await pumpEventQueue(times: 20);
+
+      expect(real.habitList.size(), 1, reason: 'sleep.habit-type#4');
+      final Habit habit = real.habitList.getByPosition(0);
+      expect(real.sleepRepository.goalFor(habit.id!), isNotNull,
+          reason: 'sleep.habit-type#4 — without the goal the habit is not a '
+              'sleep habit at all, and its screen shows none of its blocks');
+      expect(real.sleepRepository.sleepHabitIds(), <int>[habit.id!],
+          reason: 'sleep.habit-type#4');
+    });
+
+    test('the goal that is stored is the one the person set', () async {
+      final AppScope real = asyncScope();
+      final EditHabitModel model =
+          EditHabitModel(scope: real, sleep: true);
+      model.nameController.text = 'Sleep';
+      model.setSleepGoal(model.sleepGoal!.copyWith(
+        bedMinutes: 1320,
+        wakeMinutes: 360,
+        minSleepMinutes: 480,
+      ));
+      model.save();
+      await pumpEventQueue(times: 20);
+
+      final SleepGoal saved =
+          real.sleepRepository.goalFor(real.habitList.getByPosition(0).id!)!;
+      expect(saved.bedMinutes, 1320, reason: 'sleep.ui#6');
+      expect(saved.wakeMinutes, 360, reason: 'sleep.ui#6');
+      expect(saved.minSleepMinutes, 480, reason: 'sleep.ui#6');
+    });
+
+    test('an ordinary habit stores no goal on this path either', () async {
+      final AppScope real = asyncScope();
+      final EditHabitModel model =
+          EditHabitModel(scope: real, habitType: HabitType.yesNo);
+      model.nameController.text = 'Run';
+      model.save();
+      await pumpEventQueue(times: 20);
+
+      expect(real.sleepRepository.sleepHabitIds(), isEmpty,
+          reason: 'sleep.habit-type#4');
+    });
+  });
+
   group('creating one', () {
     test('starts with a goal, so the form has something to edit', () {
       final EditHabitModel model =
