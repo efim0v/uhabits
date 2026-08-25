@@ -752,6 +752,9 @@ class L10nZh extends L10n {
 
   @override
   String get sleepSuggestDismiss => 'Not now';
+
+  @override
+  String get sleepSkipped => 'Skipped';
 }
 
 /// The translations for Chinese, as used in China (`zh_CN`).

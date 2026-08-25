@@ -1525,6 +1525,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Not now'**
   String get sleepSuggestDismiss;
+
+  /// No description provided for @sleepSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get sleepSkipped;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

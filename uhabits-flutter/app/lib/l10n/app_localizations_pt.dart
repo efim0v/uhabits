@@ -779,6 +779,9 @@ class L10nPt extends L10n {
 
   @override
   String get sleepSuggestDismiss => 'Not now';
+
+  @override
+  String get sleepSkipped => 'Skipped';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).

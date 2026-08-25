@@ -354,5 +354,6 @@
   },
   "sleepSuggestSkip": "Your time zone changed. Mark these days as skipped?",
   "sleepSuggestApply": "Move",
-  "sleepSuggestDismiss": "Not now"
+  "sleepSuggestDismiss": "Not now",
+  "sleepSkipped": "Skipped"
 }

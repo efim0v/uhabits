@@ -779,6 +779,9 @@ class L10nSr extends L10n {
 
   @override
   String get sleepSuggestDismiss => 'Not now';
+
+  @override
+  String get sleepSkipped => 'Skipped';
 }
 
 /// The translations for Serbian, using the Latin script (`sr_Latn`).

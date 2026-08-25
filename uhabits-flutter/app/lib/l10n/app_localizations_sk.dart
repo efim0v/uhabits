@@ -794,4 +794,7 @@ class L10nSk extends L10n {
 
   @override
   String get sleepSuggestDismiss => 'Not now';
+
+  @override
+  String get sleepSkipped => 'Skipped';
 }

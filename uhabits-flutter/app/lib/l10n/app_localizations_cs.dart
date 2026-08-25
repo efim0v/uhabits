@@ -787,4 +787,7 @@ class L10nCs extends L10n {
 
   @override
   String get sleepSuggestDismiss => 'Not now';
+
+  @override
+  String get sleepSkipped => 'Skipped';
 }
