@@ -126,7 +126,31 @@ class AppScope {
   /// system settings is picked up on the next return to the app.
   bool sleepSourceAuthorized = false;
 
-  Future<void> syncSleepHabits() async {
+  /// The sync currently running, so a second caller joins it rather than
+  /// starting another.
+  Future<void>? _sleepSyncInFlight;
+
+  /// Brings every sleep habit up to date, one sync at a time.
+  ///
+  /// A cold start arms one and a return to the foreground arms another, and
+  /// they overlap: the app was reading the same window two and three times
+  /// over. On the first run of a habit's life that window is the whole
+  /// history, because neither run has recorded how deep it got before the
+  /// next begins.
+  ///
+  /// A caller that joins the one in flight loses nothing: it wanted the
+  /// platform read, and the platform read is happening.
+  Future<void> syncSleepHabits() {
+    final Future<void>? running = _sleepSyncInFlight;
+    if (running != null) return running;
+
+    final Future<void> next =
+        _syncSleepHabits().whenComplete(() => _sleepSyncInFlight = null);
+    _sleepSyncInFlight = next;
+    return next;
+  }
+
+  Future<void> _syncSleepHabits() async {
     if (_closed) return;
     final bool authorized = await sleepSync.source.isAuthorized();
     if (_closed) return;

@@ -328,6 +328,32 @@ void main() {
           reason: 'sleep.history#2 — because the depth was written down');
     });
 
+    test('two syncs at once are one sync', () async {
+      // A cold start arms one and a return to the foreground arms another.
+      // Overlapping, they read the same window twice — and on the first run of
+      // a habit's life that window is the whole history, because neither has
+      // recorded how deep it got before the other begins.
+      addSleepHabit(name: 'Sleep');
+
+      await Future.wait<void>(<Future<void>>[
+        scope.syncSleepHabits(),
+        scope.syncSleepHabits(),
+        scope.syncSleepHabits(),
+      ]);
+
+      expect(source.reads, 1, reason: 'sleep.history#6');
+    });
+
+    test('but one after another still reads again', () async {
+      // Joining is for overlap, not for caching: a sync that has finished
+      // tells the next one nothing.
+      addSleepHabit(name: 'Sleep');
+      await scope.syncSleepHabits();
+      await scope.syncSleepHabits();
+
+      expect(source.reads, 2, reason: 'sleep.history#6');
+    });
+
     test('a second sync reads again rather than trusting a cache', () async {
       addSleepHabit(name: 'Sleep');
       await scope.syncSleepHabits();
