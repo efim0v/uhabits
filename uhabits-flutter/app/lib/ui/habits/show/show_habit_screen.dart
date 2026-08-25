@@ -753,9 +753,18 @@ class _ShowHabitViewState extends State<_ShowHabitView>
 
   /// `ShowHabitView.setState` walking show_habit.xml top to bottom.
   List<Widget> _buildCards(BuildContext context, ShowHabitModel model) {
+    final int? habitId = widget.habit.id;
+    final bool isSleep = habitId != null &&
+        widget.scope.sleepRepository.goalFor(habitId) != null;
+
     final widgets = <Widget>[];
     for (final card in model.cards) {
       if (!model.isVisible(card)) continue;
+      // The target card adds a habit's values up over a week and a month. A
+      // percentage of a night does not add up: seven good nights are not
+      // "700% per week", they are seven nights. Hidden for a sleep habit
+      // rather than reworded, because there is no period total to state.
+      if (isSleep && card == ShowHabitCard.target) continue;
       widgets.add(_buildCard(context, model: model, card: card));
     }
     return widgets;
