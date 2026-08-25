@@ -25,7 +25,7 @@ const SleepEpisode byHand = SleepEpisode(
 void main() {
   late Database db;
   late SleepSessionRepository repo;
-  var now = 1000;
+  const int now = 1000;
 
   setUp(() {
     db = openAppSchemaDatabase();
