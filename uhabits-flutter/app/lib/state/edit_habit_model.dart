@@ -29,6 +29,7 @@ library;
 // ignore_for_file: implementation_imports
 
 import 'package:flutter/widgets.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/src/commands/create_habit_command.dart';
 import 'package:uhabits_core/src/commands/edit_habit_command.dart';
 import 'package:uhabits_core/uhabits_core.dart';
@@ -63,10 +64,23 @@ class EditHabitModel extends ChangeNotifier {
     required this.scope,
     int? habitId,
     HabitType habitType = HabitType.yesNo,
+    bool sleep = false,
   }) {
     final id = habitId;
     if (id == null) {
-      this.habitType = habitType;
+      this.habitType = sleep ? sleepHabitType : habitType;
+      if (sleep) {
+        // A goal has to exist before the form can edit one. The defaults are
+        // the model's, so a person who changes nothing is still measured
+        // against something sensible.
+        sleepGoal = SleepGoal(
+          bedMinutes: 23 * 60,
+          wakeMinutes: 7 * 60,
+          homeUtcOffsetMinutes:
+              DateUtils.currentTimeZone.getOffset(DateUtils.getLocalTime()) ~/
+                  60000,
+        );
+      }
       return;
     }
 
@@ -89,6 +103,7 @@ class EditHabitModel extends ChangeNotifier {
     unitController.text = habit.unit;
     // `habit.targetValue.toString()`, so 15.0 shows as the literal "15.0".
     targetController.text = habit.targetValue.toString();
+    sleepGoal = scope.sleepRepository.goalFor(id);
   }
 
   final AppScope scope;
@@ -151,6 +166,22 @@ class EditHabitModel extends ChangeNotifier {
   bool get isEditing => habitId >= 0;
 
   bool get isNumerical => habitType == HabitType.numerical;
+
+  /// The sleep goal being edited, or null when this is not a sleep habit.
+  ///
+  /// There is no third [HabitType]: a habit is a sleep habit exactly when it
+  /// has one of these. Holding it here rather than deriving it lets the editor
+  /// build a goal for a habit that does not have one yet.
+  SleepGoal? sleepGoal;
+
+  /// Whether the form should show the sleep fields in place of the numerical
+  /// ones.
+  bool get isSleep => sleepGoal != null;
+
+  void setSleepGoal(SleepGoal value) {
+    sleepGoal = value;
+    notifyListeners();
+  }
 
   /// `reminderHour >= 0`: the whole reminder section is on or off together,
   /// there is no partial state (`edit-habit.reminder-time#1`, `#9`).
@@ -289,6 +320,18 @@ class EditHabitModel extends ChangeNotifier {
       habit.unit = unitController.text.trim();
     }
 
+    // A sleep habit is a numerical habit with these four settled for it. They
+    // are not offered in the form: a percentage out of a hundred, scored daily,
+    // is what the model measures, and a person who changed the target to fifty
+    // would silently be scored against something else.
+    if (isSleep) {
+      habit.type = sleepHabitType;
+      habit.targetValue = sleepTargetValue;
+      habit.targetType = NumericalHabitType.atLeast;
+      habit.unit = sleepUnit;
+      habit.frequency = Frequency(1, 1);
+    }
+
     // Last, as in Kotlin (`edit-habit.save#7`).
     habit.type = habitType;
 
@@ -296,6 +339,19 @@ class EditHabitModel extends ChangeNotifier {
         ? EditHabitCommand(scope.habitList, habitId, habit)
         : CreateHabitCommand(scope.modelFactory, scope.habitList, habit);
     scope.commandRunner.run(command);
+
+    final SleepGoal? goal = sleepGoal;
+    if (goal != null) {
+      // The habit only has an id once the command has run.
+      final int id = habitId >= 0 ? habitId : (habit.id ?? -1);
+      if (id >= 0) {
+        scope.sleepRepository.saveGoal(id, goal);
+        // Changing a goal changes what every past night was worth. Rescoring
+        // only from today would leave the history a mixture of two scales.
+        final Habit? saved = scope.habitList.getById(id);
+        if (saved != null) scope.sleepSync.recomputeAll(saved);
+      }
+    }
     return true;
   }
 

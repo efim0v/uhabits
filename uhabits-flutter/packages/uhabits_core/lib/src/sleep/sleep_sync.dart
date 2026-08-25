@@ -159,6 +159,10 @@ class SleepSync {
     recomputeDays(habit, first, last);
   }
 
+  /// The offset in force right now, for a night being typed in.
+  int currentOffsetMinutes() =>
+      _utcOffsetMinutesAt(DateUtils.getLocalTime());
+
   int _utcOffsetMinutesAt(int instantMillis) =>
       _timeZone().getOffset(instantMillis) ~/ 60000;
 

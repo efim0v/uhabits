@@ -3024,14 +3024,24 @@ void main() {
           reason: 'habit-type-dialog.select-type#3 — the dialog is '
               'full-screen; #2 — under a translucent status bar');
 
-      // The two cards are one vertically centred column.
+      // The ported cards are one column, in the order the rule gives.
       final first = tester.getRect(find.byKey(EditHabitScreen.yesNoTypeCardKey));
-      final last =
+      final second =
           tester.getRect(find.byKey(EditHabitScreen.measurableTypeCardKey));
-      expect(last.top, greaterThan(first.top),
+      expect(second.top, greaterThan(first.top),
           reason: 'habit-type-dialog.select-type#3 — a column, in order');
+
+      // The port adds a third card of its own, below those two, for a goal the
+      // original cannot express. That is a deliberate departure from
+      // `habit-type-dialog.select-type#4`, which says exactly two, and it is
+      // recorded in DEVIATIONS.md. The centring below therefore measures the
+      // column the port actually shows.
+      final third = tester.getRect(find.byKey(EditHabitScreen.sleepTypeCardKey));
+      expect(third.top, greaterThan(second.top),
+          reason: 'sleep.ui#6 — the port\'s own card comes last, so the two '
+              'ported cards keep the positions the rule gives them');
       expect(
-        (first.top + last.bottom) / 2,
+        (first.top + third.bottom) / 2,
         moreOrLessEquals(screen.height / 2, epsilon: 0.5),
         reason: 'habit-type-dialog.select-type#3 — vertically centred',
       );

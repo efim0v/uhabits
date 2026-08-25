@@ -779,4 +779,11 @@ class L10nId extends L10n {
 
   @override
   String get sleepSkipped => 'Skipped';
+
+  @override
+  String get sleepHabitType => 'Sleep';
+
+  @override
+  String get sleepHabitTypeExample =>
+      'e.g. Go to bed at 23:00, get up at 07:00, and sleep at least 7:30 — scored from Health or entered by hand.';
 }

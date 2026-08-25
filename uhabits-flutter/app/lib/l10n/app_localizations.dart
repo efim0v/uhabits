@@ -1531,6 +1531,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Skipped'**
   String get sleepSkipped;
+
+  /// No description provided for @sleepHabitType.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep'**
+  String get sleepHabitType;
+
+  /// No description provided for @sleepHabitTypeExample.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Go to bed at 23:00, get up at 07:00, and sleep at least 7:30 — scored from Health or entered by hand.'**
+  String get sleepHabitTypeExample;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

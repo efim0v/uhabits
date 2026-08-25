@@ -37,6 +37,7 @@ import 'package:provider/provider.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../l10n/app_localizations.dart';
+import '../sleep/sleep_goal_fields.dart';
 import '../../../platform/device_time_format.dart';
 import '../../../state/app_scope.dart';
 import '../../../state/edit_habit_model.dart';
@@ -203,16 +204,24 @@ class EditHabitScreen extends StatelessWidget {
     super.key,
     this.habitId,
     this.habitType = core.HabitType.yesNo,
+    this.sleep = false,
   });
 
   final int? habitId;
 
   final core.HabitType habitType;
 
+  /// Start the form as a sleep goal.
+  ///
+  /// Only ever true for a new habit: an existing one is a sleep habit exactly
+  /// when a goal is already stored for it.
+  final bool sleep;
+
   static const Key nameFieldKey = Key('editHabit.nameInput');
   static const Key questionFieldKey = Key('editHabit.questionInput');
   static const Key notesFieldKey = Key('editHabit.notesInput');
   static const Key unitFieldKey = Key('editHabit.unitInput');
+  static const Key sleepTypeCardKey = Key('habitType.sleepCard');
   static const Key targetFieldKey = Key('editHabit.targetInput');
   static const Key colorButtonKey = Key('editHabit.colorButton');
   static const Key frequencyBoxKey = Key('editHabit.frequencyOuterBox');
@@ -252,12 +261,17 @@ class EditHabitScreen extends StatelessWidget {
     required AppScope scope,
     int? habitId,
     core.HabitType habitType = core.HabitType.yesNo,
+    bool sleep = false,
   }) {
     return MaterialPageRoute<void>(
       settings: const RouteSettings(name: 'editHabit'),
       builder: (context) => Provider<AppScope>.value(
         value: scope,
-        child: EditHabitScreen(habitId: habitId, habitType: habitType),
+        child: EditHabitScreen(
+          habitId: habitId,
+          habitType: habitType,
+          sleep: sleep,
+        ),
       ),
     );
   }
@@ -295,7 +309,7 @@ class EditHabitScreen extends StatelessWidget {
   static Future<void> selectTypeAndOpen(BuildContext context) async {
     final scope = context.read<AppScope>();
     final navigator = Navigator.of(context);
-    final habitType = await showDialog<core.HabitType>(
+    final selection = await showDialog<HabitTypeSelection>(
       context: context,
       // The scrim belongs to the dialog's own layout here
       // (`habit-type-dialog.select-type#3`).
@@ -310,8 +324,12 @@ class EditHabitScreen extends StatelessWidget {
       useSafeArea: false,
       builder: (context) => const HabitTypeDialog(),
     );
-    if (habitType == null) return;
-    await navigator.push(route(scope: scope, habitType: habitType));
+    if (selection == null) return;
+    await navigator.push(route(
+      scope: scope,
+      habitType: selection.type,
+      sleep: selection.sleep,
+    ));
   }
 
   @override
@@ -321,6 +339,7 @@ class EditHabitScreen extends StatelessWidget {
         scope: context.read<AppScope>(),
         habitId: habitId,
         habitType: habitType,
+        sleep: sleep,
       ),
       child: const _EditHabitView(),
     );
@@ -421,7 +440,17 @@ class _EditHabitViewState extends State<_EditHabitView> {
       _buildNameAndColorRow(model, theme, l10n),
       _buildQuestionBox(model, theme, l10n),
       if (!model.isNumerical) _buildFrequencyBox(model, theme, l10n),
-      if (model.isNumerical) ...<Widget>[
+      // A sleep habit is stored as a numerical one, but its unit, target and
+      // target type are settled by the model rather than offered here: what is
+      // being measured is a percentage out of a hundred, scored daily, and a
+      // person who edited that would be scored against a different question.
+      if (model.isSleep)
+        SleepGoalFields(
+          theme: theme,
+          goal: model.sleepGoal!,
+          onChanged: model.setSleepGoal,
+        )
+      else if (model.isNumerical) ...<Widget>[
         _buildUnitBox(model, theme, l10n),
         _buildTargetRow(model, theme, l10n),
         _buildTargetTypeBox(model, theme, l10n),
@@ -1081,6 +1110,24 @@ class _FormDivider extends StatelessWidget {
 // HabitTypeDialog
 // ---------------------------------------------------------------------------
 
+/// What the type chooser came back with.
+///
+/// A pair rather than a bare [core.HabitType] because a sleep goal is stored
+/// as a numerical habit: the type alone cannot tell the two apart.
+class HabitTypeSelection {
+  const HabitTypeSelection(this.type, {this.sleep = false});
+
+  final core.HabitType type;
+  final bool sleep;
+
+  @override
+  bool operator ==(Object other) =>
+      other is HabitTypeSelection && other.type == type && other.sleep == sleep;
+
+  @override
+  int get hashCode => Object.hash(type, sleep);
+}
+
 /// Port of `HabitTypeDialog` and res/layout/select_habit_type.xml.
 ///
 /// A full-screen, vertically centred column of two cards over a #a0000000
@@ -1146,16 +1193,31 @@ class HabitTypeDialog extends StatelessWidget {
                   key: EditHabitScreen.yesNoTypeCardKey,
                   title: l10n.yesOrNo,
                   body: l10n.yesOrNoExample,
-                  onTap: () =>
-                      Navigator.of(context).pop(core.HabitType.yesNo),
+                  onTap: () => Navigator.of(context)
+                      .pop(const HabitTypeSelection(core.HabitType.yesNo)),
                 ),
                 const SizedBox(height: 16),
                 _HabitTypeCard(
                   key: EditHabitScreen.measurableTypeCardKey,
                   title: l10n.measurable,
                   body: l10n.measurableExample,
-                  onTap: () =>
-                      Navigator.of(context).pop(core.HabitType.numerical),
+                  onTap: () => Navigator.of(context)
+                      .pop(const HabitTypeSelection(core.HabitType.numerical)),
+                ),
+                const SizedBox(height: 16),
+                // The port's own third card, and a deliberate departure from
+                // `habit-type-dialog.select-type#4`, which says exactly two.
+                // A sleep goal is something the original cannot express, and
+                // every other surface that could offer it is specified just as
+                // precisely; the divergence is recorded in DEVIATIONS.md
+                // rather than hidden somewhere less visible.
+                _HabitTypeCard(
+                  key: EditHabitScreen.sleepTypeCardKey,
+                  title: l10n.sleepHabitType,
+                  body: l10n.sleepHabitTypeExample,
+                  onTap: () => Navigator.of(context).pop(
+                      const HabitTypeSelection(core.HabitType.numerical,
+                          sleep: true)),
                 ),
               ],
             ),

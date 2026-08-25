@@ -61,6 +61,7 @@ import '../../common/window_insets.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
 import '../edit/edit_habit_screen.dart';
 import 'cards/bar_card_view.dart';
+import '../sleep/sleep_section.dart';
 import 'cards/frequency_card_view.dart';
 import 'cards/history_card_view.dart';
 import 'cards/notes_card_view.dart';
@@ -662,10 +663,37 @@ class _ShowHabitViewState extends State<_ShowHabitView>
             // `show-habit.card-order-and-visibility#1`: the column follows
             // ShowHabitCard's declaration order, and #2/#3/#4 decide which of
             // them survive.
-            children: _buildCards(context, model),
+            children: <Widget>[
+              // Above the ported column rather than inside it: that column
+              // follows `ShowHabitCard`'s declaration order, a parity rule
+              // closed by tests, and adding entries to the enum would make
+              // those tests assert something the ledger does not say.
+              ..._buildSleepCards(context, model),
+              ..._buildCards(context, model),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  /// The blocks a sleep habit gets, and no other habit does.
+  ///
+  /// Empty for every habit without a sleep goal, which is the same test that
+  /// decides everywhere else what a sleep habit is.
+  List<Widget> _buildSleepCards(BuildContext context, ShowHabitModel model) {
+    final AppScope scope = widget.scope;
+    final int? id = widget.habit.id;
+    if (id == null) return const <Widget>[];
+    final core.SleepGoal? goal = scope.sleepRepository.goalFor(id);
+    if (goal == null) return const <Widget>[];
+
+    return buildSleepSection(
+      context,
+      scope: scope,
+      habit: widget.habit,
+      goal: goal,
+      theme: model.state.theme,
     );
   }
 

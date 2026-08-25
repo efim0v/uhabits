@@ -90,8 +90,23 @@ final Map<String, Object?> template = arbs['en']!;
 Set<String> messagesOf(Map<String, Object?> arb) =>
     arb.keys.where((String k) => !k.startsWith('@')).toSet();
 
+/// The prefix every message belonging to an extension carries.
+///
+/// The sleep goal has no counterpart in the original, so its copy has none in
+/// `strings.xml` either. The inventory rules below are about how faithfully
+/// the original's copy was carried over, and counting messages the original
+/// never had would turn an exact claim into an approximate one.
+const String extensionPrefix = 'sleep';
+
+/// Whether [key] is a message the original defines.
+bool isPorted(String key) => !key.startsWith(extensionPrefix);
+
+/// The ported half of an ARB's messages.
+Set<String> portedMessagesOf(Map<String, Object?> arb) =>
+    messagesOf(arb).where(isPorted).toSet();
+
 /// The message ids the template declares as ICU plurals.
-final Set<String> pluralKeys = messagesOf(template)
+final Set<String> pluralKeys = portedMessagesOf(template)
     .where((String k) => '${template[k]}'.contains(', plural,'))
     .toSet();
 
@@ -109,11 +124,11 @@ Set<String> pluralCategoriesOf(Map<String, Object?> arb) {
 /// How many plain (non-plural) messages a locale translates. This is what
 /// upstream counted as `<string>` entries in that locale's `strings.xml`.
 int stringCountOf(String locale) =>
-    messagesOf(arbs[locale]!).difference(pluralKeys).length;
+    portedMessagesOf(arbs[locale]!).difference(pluralKeys).length;
 
 /// How many of the six plurals a locale translates — upstream's plural count.
 int pluralCountOf(String locale) =>
-    messagesOf(arbs[locale]!).intersection(pluralKeys).length;
+    portedMessagesOf(arbs[locale]!).intersection(pluralKeys).length;
 
 
 // ---------------------------------------------------------------------------
@@ -282,7 +297,7 @@ void main() {
 
     test('#2 the template is the whole inventory, and no translation defines '
         'a key it does not have', () {
-      final Set<String> messages = messagesOf(template);
+      final Set<String> messages = portedMessagesOf(template);
 
       expect(messages.length - pluralKeys.length, 187,
           reason: 'platform-glue.localization-inventory#2 — The default '
@@ -304,7 +319,7 @@ void main() {
       // strength". The template was repaired; see the slice notes.
       for (final MapEntry<String, Map<String, Object?>> arb in arbs.entries) {
         expect(
-          messagesOf(arb.value).difference(messages),
+          portedMessagesOf(arb.value).difference(messages),
           isEmpty,
           reason: 'platform-glue.localization-inventory#2: ${arb.key} defines '
               'no key the template does not have',
@@ -345,7 +360,7 @@ void main() {
 
       for (final String locale in <String>['ru', 'de', 'fr', 'ja', 'zh_CN']) {
         expect(
-          messagesOf(template)
+          portedMessagesOf(template)
               .difference(pluralKeys)
               .difference(messagesOf(arbs[locale]!)),
           untranslated,
@@ -363,7 +378,7 @@ void main() {
       }
 
       // 187 template messages minus the nine leaves exactly 178.
-      expect(messagesOf(template).difference(pluralKeys).length - 9, 178,
+      expect(portedMessagesOf(template).difference(pluralKeys).length - 9, 178,
           reason: 'platform-glue.localization-inventory#4');
     });
 
@@ -446,7 +461,8 @@ void main() {
           .toSet();
 
       final Map<String, Set<String>> formatted = <String, Set<String>>{
-        for (final String key in messagesOf(template).difference(pluralKeys))
+        for (final String key
+            in portedMessagesOf(template).difference(pluralKeys))
           if (placeholdersOf(key).isNotEmpty) key: placeholdersOf(key),
       };
 
