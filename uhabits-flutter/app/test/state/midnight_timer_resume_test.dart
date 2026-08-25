@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits_core/src/io/logging.dart';
 import 'package:uhabits_core/src/preferences/memory_storage.dart';
+import 'package:uhabits_core/uhabits_core.dart';
 
 /// Records what the app logs, so the timer can be observed through the seam it
 /// already has rather than by adding one to the core.
@@ -32,6 +34,27 @@ class _RecordingLogger implements Logger {
 
   @override
   void info(String message) => lines.add('$name: $message');
+}
+
+/// A health store that never answers, which is what a system permission sheet
+/// left standing on screen looks like from Dart.
+class _NeverAnswers implements SleepDataSource {
+  @override
+  Future<bool> isAuthorized() => Completer<bool>().future;
+
+  @override
+  Future<bool> requestAuthorization() => Completer<bool>().future;
+
+  @override
+  Future<List<SleepSegment>> readSegments(int from, int to) =>
+      Completer<List<SleepSegment>>().future;
+
+  @override
+  Future<void> writeSession(int start, int end) async {}
+
+  @override
+  Future<void> enableBackgroundDelivery(
+      Future<void> Function() onChanged) async {}
 }
 
 /// `ListHabitsActivity.onResume` arms the midnight timer as its fourth
@@ -78,6 +101,50 @@ void main() {
       reason: 'audit4.the-midnight-day-rollover-timer-is#1 — arming the timer '
           'and scheduling reminders are two independent steps upstream, so a '
           'missing scheduler must not freeze the day boundary',
+    );
+  });
+
+  testWidgets('the day boundary still moves while Health has not answered',
+      (tester) async {
+    // The sleep sync is not upstream, and it can wait on a modal system sheet
+    // for as long as the person leaves it standing. Anything ordered behind it
+    // in onResume is ordered behind that sheet — including the timer whose
+    // whole point is that nothing else can freeze the day boundary.
+    final logging = _RecordingLogging();
+    final directory = Directory.systemTemp.createTempSync('uhabits_midnight');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final scope = AppScope.open(
+      AppDatabase.openAndMigrate('${directory.path}/uhabits.db'),
+      preferencesStorage: MemoryStorage(),
+      logging: logging,
+      sleepSource: _NeverAnswers(),
+    );
+    addTearDown(scope.close);
+
+    // A sleep habit, so the sync has something to do and reaches the source.
+    final Habit habit = scope.modelFactory.buildHabit()
+      ..name = 'Sleep'
+      ..type = sleepHabitType
+      ..targetValue = sleepTargetValue
+      ..unit = sleepUnit;
+    scope.habitList.add(habit);
+    scope.sleepRepository
+        .saveGoal(habit.id!, const SleepGoal(bedMinutes: 1380, wakeMinutes: 420));
+
+    await tester.pumpWidget(UhabitsApp(scope: scope));
+    await tester.pumpAndSettle();
+
+    logging.lines.clear();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(
+      logging.lines.where((l) => l.startsWith('MidnightTimer: Scheduling')),
+      isNotEmpty,
+      reason: 'sleep.freshness#5 — a sheet the person has not dismissed must '
+          'not freeze the day boundary behind it',
     );
   });
 }

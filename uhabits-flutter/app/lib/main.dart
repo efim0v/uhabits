@@ -305,11 +305,6 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     // here, at the first moment after them at which Dart is running again.
     await scope.reminderResponses?.onResumed();
     if (!mounted) return;
-    // Whatever the watch uploaded while the app was away. Reading here rather
-    // than only on the sleep screen means the list is right the moment it is
-    // looked at, and the day heals even if that screen is never opened.
-    await scope.syncSleepHabits();
-    if (!mounted) return;
     // `ListHabitsActivity.onResume` arms the timer as its fourth statement,
     // before the reminder block and independently of it: the day boundary has
     // to move even on a run where the notification subsystem failed to start,
@@ -325,6 +320,18 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
     // Outside the branch above, exactly as upstream: the background block is a
     // sibling of the `hasHabitsWithReminders()` test, not a continuation of it.
     await _runResumeTasks(scope);
+
+    // Whatever the watch uploaded while the app was away. Reading here rather
+    // than only on the sleep screen means the list is right the moment it is
+    // looked at, and the day heals even if that screen is never opened.
+    //
+    // Last, and after everything with an ordering rule of its own. The first
+    // sync of a run can raise the system's Health sheet, and a modal sheet is
+    // waited on for as long as the person leaves it standing — ahead of the
+    // midnight timer that would have frozen `getToday()`, and ahead of the
+    // notification prompt it would have been stacked on top of.
+    if (!mounted) return;
+    await scope.syncSleepHabits();
   }
 
   /// The task-runner block `ListHabitsActivity.onResume` ends with:

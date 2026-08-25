@@ -466,6 +466,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         goal: sleepGoal,
         day: date.daysSince2000,
         theme: coreThemeOf(context),
+        onChanged: _repaintSleep,
       );
       return;
     }
@@ -725,7 +726,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     return RefreshIndicator(
       onRefresh: () async {
         await widget.scope.syncSleepHabits();
-        if (mounted) setState(() {});
+        _repaintSleep();
       },
       child: child,
     );
@@ -748,7 +749,15 @@ class _ShowHabitViewState extends State<_ShowHabitView>
       habit: widget.habit,
       goal: goal,
       theme: model.state.theme,
+      onChanged: _repaintSleep,
     );
+  }
+
+  /// The sleep blocks read straight from the database rather than from the
+  /// model, so nothing rebuilds them on its own. Everything that writes a
+  /// night, a goal or a skip calls this.
+  void _repaintSleep() {
+    if (mounted) setState(() {});
   }
 
   /// `ShowHabitView.setState` walking show_habit.xml top to bottom.

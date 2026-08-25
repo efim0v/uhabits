@@ -1027,6 +1027,9 @@ class _HabitListViewState extends State<_HabitListView>
             goal: sleepGoal,
             day: date.daysSince2000,
             theme: _coreThemeOf(context),
+            // Nothing to repaint here: the list draws from the cache, and
+            // the write announces itself to it.
+            onChanged: () {},
           ));
           return;
         }
@@ -1177,6 +1180,9 @@ class _HabitListViewState extends State<_HabitListView>
       goal: goal,
       day: date.daysSince2000,
       theme: _coreThemeOf(context),
+      // Nothing to repaint here: the list draws from the cache, and the write
+      // announces itself to it.
+      onChanged: () {},
     ));
   }
 

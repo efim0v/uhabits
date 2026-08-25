@@ -27,12 +27,21 @@ const int stabilityMinNights = 4;
 /// A function rather than a widget: it produces the same list of cards the
 /// ported column produces, and wrapping them in a container of its own would
 /// put a seam between the two halves of one screen.
+///
+/// [onChanged] is how the screen that owns these cards learns it has to
+/// repaint. A function has no `setState` of its own, and every block here can
+/// change what the others show: marking a range of nights as skipped moves the
+/// spread, applying a suggested goal rescores the whole strip, and granting
+/// access to the health store fills in nights that were not there a moment
+/// ago. Required rather than optional, so that a block added later cannot
+/// quietly write and leave the screen showing what was true before.
 List<Widget> buildSleepSection(
   BuildContext context, {
   required AppScope scope,
   required core.Habit habit,
   required core.SleepGoal goal,
   required core.Theme theme,
+  required VoidCallback onChanged,
 }) {
   final int id = habit.id!;
   final int today = scope.sleepSync.today().daysSince2000;
@@ -85,7 +94,7 @@ List<Widget> buildSleepSection(
         applyLabel: L10n.of(context).sleepMarkSkipped,
         onApply: () {
           SkipRange(travel.fromDay, travel.toDay).applyTo(habit);
-          scope.onSleepDataChanged(habit.id!);
+          _wrote(scope, habit, onChanged);
         },
         onDismiss: () {},
       )
@@ -94,12 +103,15 @@ List<Widget> buildSleepSection(
         theme: theme,
         message: goalSuggestionMessage(context, suggestedGoal),
         applyLabel: L10n.of(context).sleepSuggestApply,
-        onApply: () => _applyGoalSuggestion(
-          scope: scope,
-          habit: habit,
-          goal: goal,
-          suggestion: suggestedGoal,
-        ),
+        onApply: () {
+          _applyGoalSuggestion(
+            scope: scope,
+            habit: habit,
+            goal: goal,
+            suggestion: suggestedGoal,
+          );
+          _wrote(scope, habit, onChanged);
+        },
         onDismiss: () {},
       ),
     LastNightCard(
@@ -112,7 +124,11 @@ List<Widget> buildSleepSection(
       healthDenied: !scope.sleepSourceAuthorized,
       onRequestAccess: () async {
         await scope.sleepSync.source.requestAuthorization();
+        // The sync is what re-reads the answer into `sleepSourceAuthorized`,
+        // and it also brings in the nights the refusal was hiding. Without
+        // the repaint the card goes on offering access that has been granted.
         await scope.syncSleepHabits();
+        onChanged();
       },
       onEnterByHand: () => enterNightByHand(
         context,
@@ -121,6 +137,7 @@ List<Widget> buildSleepSection(
         goal: goal,
         day: today,
         theme: theme,
+        onChanged: onChanged,
       ),
     ),
     NightsChart(
@@ -147,9 +164,20 @@ List<Widget> buildSleepSection(
       windowDays: skipWindowDays,
       lastSkippedLabel:
           lastSkipped == null ? null : _formatDay(context, lastSkipped),
-      onMark: () => _markRange(context, scope: scope, habit: habit),
+      onMark: () =>
+          _markRange(context, scope: scope, habit: habit, onChanged: onChanged),
     ),
   ];
+}
+
+/// Everything in this file that writes sleep data ends here.
+///
+/// Two things always follow a write, and neither is optional: the rest of the
+/// app is told — the habit list keeps its own copy of every value — and the
+/// screen that made the change repaints.
+void _wrote(AppScope scope, core.Habit habit, VoidCallback onChanged) {
+  scope.onSleepDataChanged(habit.id!);
+  onChanged();
 }
 
 /// The nights the spread and the goal suggestion are measured from.
@@ -190,6 +218,7 @@ Future<void> _markRange(
   BuildContext context, {
   required AppScope scope,
   required core.Habit habit,
+  required VoidCallback onChanged,
 }) async {
   final int today = scope.sleepSync.today().daysSince2000;
   final DateTime origin = DateTime.utc(2000, 1, 1);
@@ -205,7 +234,7 @@ Future<void> _markRange(
     picked.start.difference(origin).inDays,
     picked.end.difference(origin).inDays,
   ).applyTo(habit);
-  scope.onSleepDataChanged(habit.id!);
+  _wrote(scope, habit, onChanged);
 }
 
 /// Opens the sheet for a night and stores what comes back.
@@ -219,6 +248,7 @@ Future<void> enterNightByHand(
   required core.SleepGoal goal,
   required int day,
   required core.Theme theme,
+  required VoidCallback onChanged,
 }) async {
   final int offset = scope.sleepSync.currentOffsetMinutes();
   final ManualNight? night = await showManualEntrySheet(
@@ -233,7 +263,7 @@ Future<void> enterNightByHand(
   final core.SleepEpisode episode = night.toEpisode();
   scope.sleepRepository.upsert(habit.id!, day, episode, manual: true);
   scope.sleepSync.recomputeDays(habit, day, day);
-  scope.onSleepDataChanged(habit.id!);
+  _wrote(scope, habit, onChanged);
   // Also written back to the platform, so a night typed in here shows up in
   // the health app the rest of the data comes from.
   await scope.sleepSync.source
