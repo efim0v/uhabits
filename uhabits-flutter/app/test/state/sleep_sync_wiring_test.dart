@@ -228,6 +228,35 @@ void main() {
     });
   });
 
+  group('a cold start', () {
+    test('syncs without waiting for a return to the foreground', () async {
+      // Opening the app for the first time that day is not a resume, so a
+      // habit that only caught up on resume would show yesterday's nights as
+      // zeros until the person happened to switch away and back.
+      addSleepHabit(name: 'Sleep');
+      scope.sleepRepository.upsert(
+        1,
+        8999,
+        SleepEpisode(
+          bedStartMillis: (8998 + 10957) * 86400000 + 1380 * 60000,
+          wakeEndMillis: (8999 + 10957) * 86400000 + 420 * 60000,
+          asleepMinutes: 480,
+          utcOffsetMinutes: 0,
+        ),
+        manual: false,
+      );
+
+      final Habit habit = scope.habitList.getById(1)!;
+      expect(habit.originalEntries.get(LocalDate(8999)).value, Entry.unknown,
+          reason: 'sleep.sync#1');
+
+      await scope.syncSleepHabits();
+
+      expect(habit.originalEntries.get(LocalDate(8999)).value,
+          greaterThan(0), reason: 'sleep.sync#1');
+    });
+  });
+
   group('what a sync actually asks for', () {
     test('the window is a fortnight of days', () async {
       addSleepHabit(name: 'Sleep');

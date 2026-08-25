@@ -578,6 +578,15 @@ class AppScope {
     // DEVIATIONS.md), so this scheduleAll at startup, plus the one after every
     // command, is what keeps alarms armed.
     taskRunner.execute(_StartupRefreshTask(scheduler, sync));
+
+    // And the sleep habits, which otherwise only catch up on a return to the
+    // foreground. A cold start is not a return: opening the app for the first
+    // time that day would show yesterday's nights as zeros until the person
+    // happened to switch away and back.
+    //
+    // Deliberately not awaited: reading a fortnight out of the platform is
+    // slower than a first paint, and boot() runs before runApp.
+    unawaited(syncSleepHabits());
   }
 
   _Started? _started;
