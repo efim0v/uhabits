@@ -62,7 +62,7 @@ void main() {
             "wire format's round trip, the roll-forward's shift, the day "
             'boundary, the card colour — is what these have to cover.');
 
-    final File runner = File('../tool/swift_widget_tests.sh');
+    final File runner = File('../tool/swift_tests.sh');
     expect(runner.existsSync(), isTrue,
         reason: '$targetRule It needs a booted simulator, which is why it is '
             'its own script rather than part of close_features.sh.');

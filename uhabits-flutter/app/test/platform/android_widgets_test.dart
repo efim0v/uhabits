@@ -1428,7 +1428,7 @@ void main() {
     //
     // The Android widget host has no test target — no Robolectric, no
     // instrumentation — so unlike the iOS extension, whose sources compile into
-    // RunnerTests and are executed by tool/swift_widget_tests.sh, this half can
+    // RunnerTests and are executed by tool/swift_tests.sh, this half can
     // only be read as source text from here.
     test('only the History chart reads the core theme; every other widget view '
         'reads the style attributes', () {

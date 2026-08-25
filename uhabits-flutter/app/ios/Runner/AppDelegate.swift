@@ -38,8 +38,18 @@ import flutter_local_notifications
     // (`audit21.ios-must-own-the-notification-centre-delegate#1`).
     UNUserNotificationCenter.current().delegate =
       self as? UNUserNotificationCenterDelegate
+    // Sleep data. The plugin is held for the life of the app because its
+    // observer query and its channel are: dropped, background delivery would
+    // fire into nothing.
+    if let controller = window?.rootViewController as? FlutterViewController {
+      healthKitSleepPlugin = HealthKitSleepPlugin.register(
+        with: controller.binaryMessenger)
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
+
+  /// Retained deliberately — see the registration above.
+  private var healthKitSleepPlugin: HealthKitSleepPlugin?
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)

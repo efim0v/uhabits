@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Runs the iOS widget extension's own XCTest cases.
+# Runs the iOS target's XCTest cases: the widget extension's arithmetic and
+# the HealthKit plugin's conversions.
 #
 # `flutter test` cannot run Swift, so for a long time the widget extension was
 # guarded only by Dart tests that read its source as text — which can see that
 # a field is declared or that a pattern is absent, and cannot see an off-by-one.
 # Eight audit findings came out of that gap, the last two of them logic errors.
 #
-# The widget sources are compiled into the RunnerTests bundle (see
-# ios/Runner.xcodeproj/project.pbxproj), so these cases execute the real code.
+# The widget sources and the plugin are compiled into the RunnerTests bundle
+# (see ios/Runner.xcodeproj/project.pbxproj), so these cases execute the real
+# code rather than reading it as text.
 # It needs a booted simulator, which is why it is a separate script rather than
 # part of close_features.sh.
 set -euo pipefail
