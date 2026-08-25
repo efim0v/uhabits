@@ -226,12 +226,43 @@ final class HealthKitSleepPlugin: NSObject {
   }
 
   /// One stretch, in the shape the Dart side decodes.
+  ///
+  /// The offset is carried over because a night belongs to the clock the
+  /// person was living by, not to the clock of whichever device happens to
+  /// read it afterwards. Without it a fortnight slept in Tokyo is re-dated in
+  /// Berlin the moment the plane lands, and the history rewrites itself.
+  ///
+  /// Absent for a sample whose recording device did not say — an entry typed
+  /// into the Health app by hand, most often — and the key is simply left out
+  /// rather than sent as null, which a Swift dictionary literal cannot hold.
   static func encode(_ sample: HKCategorySample) -> [String: Any] {
-    [
+    var encoded: [String: Any] = [
       "start": millis(from: sample.startDate),
       "end": millis(from: sample.endDate),
       "kind": kindName(for: sample.value),
       "source": sample.sourceRevision.source.bundleIdentifier,
     ]
+    if let offset = offsetMinutes(of: sample) {
+      encoded["utcOffsetMinutes"] = offset
+    }
+    return encoded
+  }
+
+  /// The offset from UTC, in minutes, that the recording device was keeping
+  /// when the sample was taken.
+  ///
+  /// `HKMetadataKeyTimeZone` holds an IANA name — "Asia/Tokyo" — rather than a
+  /// number, so it is resolved against the sample's own start date: a zone's
+  /// offset depends on when you ask it, and asking at the wrong moment is the
+  /// same mistake one layer up.
+  ///
+  /// The name is checked all the same, though HealthKit rejects an invalid one
+  /// when the sample is created — a sample carrying "Middle/Earth" cannot be
+  /// constructed, which is why no test covers that branch.
+  static func offsetMinutes(of sample: HKSample) -> Int? {
+    guard let name = sample.metadata?[HKMetadataKeyTimeZone] as? String,
+      let zone = TimeZone(identifier: name)
+    else { return nil }
+    return zone.secondsFromGMT(for: sample.startDate) / 60
   }
 }

@@ -57,12 +57,41 @@ SleepEpisode _episodeFrom(
     bedStartMillis: bedStart,
     wakeEndMillis: wakeEnd,
     asleepMinutes: chain.asleepMinutes,
-    // The offset of the moment the person woke, which is the moment that
-    // decides which day the night belongs to.
-    utcOffsetMinutes: utcOffsetAt(wakeEnd),
+    // What the recording device was keeping, when it said. Falling back to
+    // [utcOffsetAt] — the reading device's own clock — re-dates a night slept
+    // elsewhere, so it is the answer of last resort rather than the first.
+    //
+    // Taken from the stretch the person woke in, because waking is the moment
+    // that decides which day the night belongs to.
+    utcOffsetMinutes:
+        _recordedOffset(chain, group, wakeEnd) ?? utcOffsetAt(wakeEnd),
     derivedFromAsleep: inBed.isEmpty,
     sourceId: group.sourceId,
   );
+}
+
+/// The offset the source recorded for the stretch containing [instant], or the
+/// last stretch before it, or null when no stretch of this night carries one.
+///
+/// Nearest rather than any: a night that crosses a change — a flight, or the
+/// hour the clocks move — has stretches on both sides of it, and the one the
+/// person woke in is the one that names the day.
+int? _recordedOffset(_Chain chain, _SourceGroup group, int instant) {
+  int? best;
+  int? bestDistance;
+  for (final SleepSegment segment in group.segments) {
+    final int? offset = segment.utcOffsetMinutes;
+    if (offset == null) continue;
+    final int distance = segment.startMillis <= instant &&
+            instant <= segment.endMillis
+        ? 0
+        : (instant - segment.endMillis).abs();
+    if (bestDistance == null || distance < bestDistance) {
+      best = offset;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
 class _SourceGroup {

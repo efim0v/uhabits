@@ -25,6 +25,7 @@ class SleepSegment {
     required this.endMillis,
     required this.kind,
     required this.sourceId,
+    this.utcOffsetMinutes,
   });
 
   final int startMillis;
@@ -34,6 +35,15 @@ class SleepSegment {
   /// Bundle id of the app that recorded it. Several apps commonly record the
   /// same night, so the segments have to say which one they came from.
   final String sourceId;
+
+  /// The offset from UTC the recording device was keeping at the time, in
+  /// minutes, or null when the source did not say.
+  ///
+  /// A night belongs to the clock the person was living by. Reading it later
+  /// from a device in another zone must not re-date it: that is not a
+  /// correction, it is a fortnight of history rewriting itself the moment a
+  /// plane lands.
+  final int? utcOffsetMinutes;
 
   int get durationMinutes => (endMillis - startMillis) ~/ 60000;
 

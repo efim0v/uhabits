@@ -26,6 +26,49 @@ final class HealthKitSleepPluginTests: XCTestCase {
     XCTAssertEqual(HealthKitSleepPlugin.noStoreCode, "no-health-store")
   }
 
+  /// The zone a night was recorded in travels as minutes, resolved against the
+  /// sample's own start date.
+  ///
+  /// HKMetadataKeyTimeZone holds an IANA name, and a zone's offset depends on
+  /// when you ask it: asking at the wrong moment is the same mistake the Dart
+  /// side makes one layer up when it converts a wall-clock reading.
+  func testTheZoneIsResolvedAtTheSampleSOwnMoment() {
+    guard let tokyo = TimeZone(identifier: "Asia/Tokyo"),
+      let london = TimeZone(identifier: "Europe/London")
+    else { return XCTFail("zones missing from this runtime") }
+
+    // 2026-01-15, deep in the northern winter: London is on GMT.
+    let winter = Date(timeIntervalSince1970: 1_768_435_200)
+    // 2026-07-15: London is an hour ahead of itself.
+    let summer = Date(timeIntervalSince1970: 1_784_246_400)
+
+    XCTAssertEqual(tokyo.secondsFromGMT(for: winter) / 60, 540)
+    XCTAssertEqual(tokyo.secondsFromGMT(for: summer) / 60, 540)
+    XCTAssertEqual(london.secondsFromGMT(for: winter) / 60, 0)
+    XCTAssertEqual(london.secondsFromGMT(for: summer) / 60, 60)
+  }
+
+  /// A sample whose recorder said nothing must not be given a zone anyway.
+  func testASampleWithNoZoneMetadataYieldsNothing() {
+    let sample = HKCategorySample(
+      type: HKCategoryType(.sleepAnalysis),
+      value: HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+      start: Date(timeIntervalSince1970: 0),
+      end: Date(timeIntervalSince1970: 3600))
+    XCTAssertNil(HealthKitSleepPlugin.offsetMinutes(of: sample))
+  }
+
+  /// And one that did is read back as minutes.
+  func testASampleWithZoneMetadataYieldsItsOffset() {
+    let sample = HKCategorySample(
+      type: HKCategoryType(.sleepAnalysis),
+      value: HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+      start: Date(timeIntervalSince1970: 1_768_435_200),
+      end: Date(timeIntervalSince1970: 1_768_464_000),
+      metadata: [HKMetadataKeyTimeZone: "Asia/Tokyo"])
+    XCTAssertEqual(HealthKitSleepPlugin.offsetMinutes(of: sample), 540)
+  }
+
   /// Raw values, not symbols: they are the wire format, they are fixed, and
   /// naming them this way lets the pre-iOS-16 cases be checked on any runtime.
   private let expectedNames: [(Int, String)] = [

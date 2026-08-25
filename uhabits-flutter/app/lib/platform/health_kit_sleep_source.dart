@@ -87,6 +87,10 @@ class HealthKitSleepSource implements SleepDataSource {
         endMillis: end,
         kind: kind,
         sourceId: item['source'] is String ? item['source'] as String : '',
+        // Absent whenever the recording device did not say — a night typed
+        // into the Health app by hand, most often.
+        utcOffsetMinutes:
+            item['utcOffsetMinutes'] is int ? item['utcOffsetMinutes'] as int : null,
       ));
     }
     return result;

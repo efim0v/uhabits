@@ -148,6 +148,50 @@ void main() {
           reason: 'sleep.sync#5');
     });
 
+    test('the zone the night was recorded in comes across', () async {
+      // Without it a fortnight slept in Tokyo is re-dated the moment the plane
+      // lands in Berlin, and the history rewrites itself.
+      answerWith((MethodCall call) async => <Object?>[
+            <Object?, Object?>{
+              'start': 0,
+              'end': 1,
+              'kind': 'asleepCore',
+              'utcOffsetMinutes': 540,
+            },
+          ]);
+      final List<SleepSegment> segments =
+          await HealthKitSleepSource().readSegments(0, 1);
+      expect(segments.single.utcOffsetMinutes, 540,
+          reason: 'sleep.timezone#7');
+    });
+
+    test('a sample that does not say leaves it unanswered', () async {
+      // A night typed into the Health app by hand carries no zone, and
+      // inventing one would be worse than admitting there is none.
+      answerWith((MethodCall call) async => <Object?>[
+            <Object?, Object?>{'start': 0, 'end': 1, 'kind': 'asleepCore'},
+          ]);
+      final List<SleepSegment> segments =
+          await HealthKitSleepSource().readSegments(0, 1);
+      expect(segments.single.utcOffsetMinutes, isNull,
+          reason: 'sleep.timezone#7');
+    });
+
+    test('a malformed zone is treated as none at all', () async {
+      answerWith((MethodCall call) async => <Object?>[
+            <Object?, Object?>{
+              'start': 0,
+              'end': 1,
+              'kind': 'asleepCore',
+              'utcOffsetMinutes': 'Asia/Tokyo',
+            },
+          ]);
+      final List<SleepSegment> segments =
+          await HealthKitSleepSource().readSegments(0, 1);
+      expect(segments.single.utcOffsetMinutes, isNull,
+          reason: 'sleep.timezone#7');
+    });
+
     test('a missing source id becomes empty, not null', () async {
       answerWith((MethodCall call) async => <Object?>[
             <Object?, Object?>{'start': 0, 'end': 1, 'kind': 'asleepCore'},
