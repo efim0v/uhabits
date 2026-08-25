@@ -172,6 +172,10 @@ void main() {
 
   group('the window', () {
     test('covers a fortnight, not yesterday', () async {
+      // Once the history has been read, which the first sync of a habit's
+      // life does. From then on the window is the healing one.
+      repo.widenCoverage(1, today - historyHorizonDays + 1);
+
       await sync.syncRecent(habit);
       final List<int> window = source.windows.single;
       final int days =
@@ -182,6 +186,7 @@ void main() {
 
     test('starts a day early, because a night begins the evening before',
         () async {
+      repo.widenCoverage(1, today - historyHorizonDays + 1);
       await sync.syncRecent(habit);
       expect(source.windows.single.first,
           startOfDay(today - recentWindowDays), reason: 'sleep.sync#1');
@@ -323,6 +328,9 @@ void main() {
       sync.recomputeAll(habit);
       final int before = writtenEntries()[old]!;
 
+      // The history has already been read, so this sync is the healing one —
+      // which is the case the rule is about.
+      repo.widenCoverage(1, today - historyHorizonDays + 1);
       repo.saveGoal(1, goal.copyWith(bedMinutes: 1200, wakeMinutes: 300));
       await sync.syncRecent(habit);
       expect(writtenEntries()[old], before,

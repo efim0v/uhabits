@@ -258,8 +258,12 @@ void main() {
       // Everything the missing resource contributed: nothing. The statements
       // that do appear are version stamps, plus migration 100's own script,
       // which comes from the source rather than from a resource file.
-      final Set<String> extensionStatements =
-          SQLParser.parse(extensionMigrationSql[appDatabaseVersion]!).toSet();
+      // Every extension script, not just the newest: the file is migrated all
+      // the way to the version this build ships, so each of them runs.
+      final Set<String> extensionStatements = <String>{
+        for (final String script in extensionMigrationSql.values)
+          ...SQLParser.parse(script),
+      };
       expect(
         beforeReading
             .where((s) => !s.startsWith('PRAGMA user_version'))

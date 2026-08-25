@@ -53,6 +53,8 @@ create table SleepGoals (
     merge_gap_minutes integer not null,
     prompt_after_wake_minutes integer not null
 );""",
+  101: r"""
+alter table SleepGoals add column covered_from_day integer;""",
 };
 
 /// The schema version this build ships.
@@ -62,7 +64,7 @@ create table SleepGoals (
 /// asks "is this file newer than we understand" or "bring this file up to
 /// date" means this one; anything still asking [databaseVersion] would refuse
 /// our own database.
-const int appDatabaseVersion = 100;
+const int appDatabaseVersion = 101;
 
 /// Whether a database at [version] is one this build can bring up to date.
 ///

@@ -43,12 +43,22 @@ import '../../edit/edit_habit_screen.dart' show formatFrequency;
 
 class SubtitleCardView extends StatelessWidget {
   const SubtitleCardView({
+    this.targetOverride,
     required this.state,
     this.use24HourFormat,
     super.key,
   });
 
   final SubtitleCardState state;
+
+  /// Shown in place of the target, when there is something better to say.
+  ///
+  /// The target line restates the habit's own goal — "at least 100 %" — which
+  /// for a habit whose target is 100 by construction says nothing at all, and
+  /// worse, reads as a score: an up arrow beside a round hundred, directly
+  /// under the question, on a screen full of percentages. A sleep habit puts
+  /// its real goal there instead.
+  final String? targetOverride;
 
   /// Stands in for `DateFormat.getTimeFormat(context)`, which follows the
   /// system 12h/24h setting. Defaults to
@@ -122,7 +132,7 @@ class SubtitleCardView extends StatelessWidget {
                     maxWidth: targetMaxEms * smallFontSize,
                   ),
                   child: Text(
-                    state.targetText,
+                    targetOverride ?? state.targetText,
                     key: targetTextKey,
                     style: captionStyle,
                     maxLines: 1,

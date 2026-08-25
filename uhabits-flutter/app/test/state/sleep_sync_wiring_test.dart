@@ -306,12 +306,26 @@ void main() {
   });
 
   group('what a sync actually asks for', () {
-    test('the window is a fortnight of days', () async {
+    test('the first sync reaches back through the history', () async {
+      // A habit nothing has ever been read for. The fortnight below is the
+      // healing window, which is a different job.
       addSleepHabit(name: 'Sleep');
       await scope.syncSleepHabits();
       expect(source.windows.single.last - source.windows.single.first,
+          (historyHorizonDays + 1) * DateUtils.dayLength,
+          reason: 'sleep.history#1');
+    });
+
+    test('and every one after it is a fortnight of days', () async {
+      final Habit habit = addSleepHabit(name: 'Sleep');
+      await scope.syncSleepHabits();
+      await scope.syncSleepHabits();
+
+      expect(source.windows.last.last - source.windows.last.first,
           (recentWindowDays + 1) * DateUtils.dayLength,
-          reason: 'sleep.sync#1');
+          reason: 'sleep.history#3');
+      expect(scope.sleepRepository.coveredFromDay(habit.id!), isNotNull,
+          reason: 'sleep.history#2 — because the depth was written down');
     });
 
     test('a second sync reads again rather than trusting a cache', () async {

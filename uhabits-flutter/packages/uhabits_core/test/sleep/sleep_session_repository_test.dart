@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:uhabits_core/src/database/database.dart';
+import 'package:uhabits_core/src/database/extension_migrations.dart';
 import 'package:uhabits_core/src/database/sqlite3_database.dart';
 import 'package:uhabits_core/src/sleep/sleep_episode.dart';
 import 'package:uhabits_core/src/sleep/sleep_goal.dart';
@@ -44,7 +45,13 @@ void main() {
 
   group('the schema', () {
     test('migration 100 creates both tables', () {
-      expect(db.getVersion(), 100, reason: 'sleep.persistence#1');
+      // The schema has moved past 100 since; what this pins is that migrating
+      // to whatever this build ships passes through 100 and leaves the tables
+      // it creates behind.
+      expect(db.getVersion(), appDatabaseVersion,
+          reason: 'sleep.persistence#1');
+      expect(appDatabaseVersion, greaterThanOrEqualTo(100),
+          reason: 'sleep.persistence#1');
       for (final table in <String>['SleepSessions', 'SleepGoals']) {
         expect(
           db.queryInt("select count(*) from sqlite_master "

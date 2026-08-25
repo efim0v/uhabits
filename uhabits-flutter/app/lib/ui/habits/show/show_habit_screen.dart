@@ -46,6 +46,7 @@ import 'package:uhabits_core/src/ui/views/history_chart.dart'
     show OnDateClickedListener;
 
 import '../../../l10n/app_localizations.dart';
+import '../../../platform/device_time_format.dart';
 import '../../../platform/flutter_files.dart'
     show AppDirectories, FileSharer, HabitsDirFinder, PlatformFileSharer;
 import '../../../state/app_scope.dart';
@@ -705,6 +706,19 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     );
   }
 
+  /// The goal a sleep habit puts where the target figure would go.
+  ///
+  /// "23:00 → 07:00", which is what the person set and what every night is
+  /// judged against. Null for every other habit, which keeps its own.
+  String? _sleepTargetText(BuildContext context) {
+    final int? id = widget.habit.id;
+    if (id == null) return null;
+    final core.SleepGoal? goal = widget.scope.sleepRepository.goalFor(id);
+    if (goal == null) return null;
+    return '${formatDeviceTime(context, minuteOfDay: goal.bedMinutes)}'
+        ' → ${formatDeviceTime(context, minuteOfDay: goal.wakeMinutes)}';
+  }
+
   /// The ported cards a sleep habit shows *above* its own blocks.
   ///
   /// A sleep habit is still a habit, and the first things a person looks for
@@ -837,7 +851,10 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         return _SubtitleCard(
           key: key,
           theme: state.theme,
-          child: SubtitleCardView(state: state.subtitle),
+          child: SubtitleCardView(
+            state: state.subtitle,
+            targetOverride: _sleepTargetText(context),
+          ),
         );
       case ShowHabitCard.notes:
         return _Card(

@@ -19,6 +19,17 @@ import 'timezone_drift.dart';
 /// at once. Reading a fortnight every time is what lets a day heal itself.
 const int recentWindowDays = 14;
 
+/// How far back a history is read the first time.
+///
+/// The fortnight above is for healing, not for history: without this the app
+/// simply never asked about anything older, so a person with years of nights
+/// in their health store saw a fortnight and no reason for it.
+///
+/// Two years rather than everything, because a query with no floor is a
+/// question with no answer — and because a night from four years ago changes
+/// nothing anyone is looking at.
+const int historyHorizonDays = 730;
+
 /// Days without data are counted from the day the habit started, but a habit
 /// created years ago with two nights recorded should not fold over a decade of
 /// nothing. A full recompute starts at the first night on record.
@@ -65,6 +76,28 @@ class SleepSync {
     if (nights != null) applyRecent(nights);
   }
 
+  /// The oldest day this sync should ask the platform about.
+  ///
+  /// Two jobs in one range. The recent window is re-read every time, because
+  /// that is what lets a day heal: a watch uploads a night hours late, and a
+  /// record in the health store can be edited after the fact. Everything older
+  /// is read exactly once — the first sync that reaches back that far records
+  /// how deep it went, and no later sync asks again.
+  ///
+  /// So a habit that has never been read reaches back [historyHorizonDays],
+  /// and one already read to that depth asks only for the fortnight. The
+  /// difference is worked out from what is recorded rather than from an event,
+  /// so it does not matter whether the habit was made a minute ago or a year
+  /// ago, nor whether the app was opened in between: whatever has not been
+  /// asked about is what gets asked about.
+  int _readFromDay(int habitId, int toDay) {
+    final int recent = toDay - recentWindowDays + 1;
+    final int horizon = toDay - historyHorizonDays + 1;
+    final int? covered = repository.coveredFromDay(habitId);
+    if (covered != null && covered <= horizon) return recent;
+    return horizon;
+  }
+
   /// Asks the platform what it has for [habit], writing nothing.
   ///
   /// Answers null for a habit with no goal: that is simply a habit that is not
@@ -93,7 +126,7 @@ class SleepSync {
     }
 
     final int toDay = today().daysSince2000;
-    final int fromDay = toDay - recentWindowDays + 1;
+    final int fromDay = _readFromDay(habit.id!, toDay);
 
     // The window starts a day early: the night that closes `fromDay` began the
     // evening before.
@@ -115,6 +148,10 @@ class SleepSync {
   void applyRecent(RecentNights nights) {
     _store(nights.habit, nights.goal, nights.segments);
     recomputeDays(nights.habit, nights.fromDay, nights.toDay);
+    // Recorded only once the nights are stored: a read that was thrown away
+    // between the two halves must not count as covered, or the days it would
+    // have brought are never asked for again.
+    repository.widenCoverage(nights.habit.id!, nights.fromDay);
   }
 
   /// Stores the nights found in [segments], newest wins on a tie.

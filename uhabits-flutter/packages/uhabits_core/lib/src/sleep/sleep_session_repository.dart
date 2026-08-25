@@ -139,6 +139,35 @@ class SleepSessionRepository {
     return result;
   }
 
+  /// The oldest day this habit's history has ever been read for, or null when
+  /// nothing has been read at all.
+  ///
+  /// Separate from the oldest night on record, which says only where the data
+  /// happens to start. This says how far back the question has been *put* —
+  /// so a stretch of nights the person simply did not sleep through is not
+  /// asked for again for ever, and a stretch never asked about is.
+  int? coveredFromDay(int habitId) => _db.querySingle<int?>(
+        'select covered_from_day from SleepGoals where habit = ?',
+        <String>['$habitId'],
+        (stmt) => stmt.getIntOrNull(0),
+      );
+
+  /// Records that the history has now been read back to [day].
+  ///
+  /// Never moves forward: coverage only ever deepens. A caller that has read
+  /// less than what is already recorded leaves it alone.
+  void widenCoverage(int habitId, int day) {
+    final int? current = coveredFromDay(habitId);
+    if (current != null && current <= day) return;
+    _db.run(
+      'update SleepGoals set covered_from_day = ? where habit = ?',
+      (stmt) {
+        stmt.bindInt(1, day);
+        stmt.bindInt(2, habitId);
+      },
+    );
+  }
+
   SleepGoal? goalFor(int habitId) => _db.querySingle<SleepGoal>(
         'select bed_minutes, wake_minutes, min_sleep_minutes, weight_sleep, '
         ' weight_bed, weight_wake, half_credit_time_minutes, '

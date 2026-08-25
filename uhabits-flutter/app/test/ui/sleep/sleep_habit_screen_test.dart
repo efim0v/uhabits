@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/ui/habits/show/cards/subtitle_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
 import 'package:uhabits/ui/habits/sleep/last_night_card.dart';
 import 'package:uhabits/ui/habits/sleep/nights_chart.dart';
@@ -91,6 +92,21 @@ void main() {
       expect(find.byType(SkipCard), findsOneWidget, reason: 'sleep.skip#3');
     });
 
+    testWidgets('says what the goal is where the target figure would go',
+        (tester) async {
+      // "at least 100 %" says nothing about a habit whose target is 100 by
+      // construction, and reads as a score: an up arrow beside a round
+      // hundred, under the question, on a screen full of percentages.
+      final Habit habit = addHabit(name: 'Sleep', sleep: true);
+      await tester.pumpWidget(wrap(habit));
+      await tester.pumpAndSettle();
+
+      final Text target =
+          tester.widget<Text>(find.byKey(SubtitleCardView.targetTextKey));
+      expect(target.data, isNot(contains('100')), reason: 'sleep.ui#11');
+      expect(target.data, contains('→'), reason: 'sleep.ui#11');
+    });
+
     testWidgets('shows the overview the target displaced', (tester) async {
       // A numerical habit is given the target instead of the overview. Hiding
       // the target for sleep left it with neither, so the ring and the
@@ -169,6 +185,18 @@ void main() {
           reason: 'sleep.habit-type#4');
       expect(find.byType(SkipCard), findsNothing,
           reason: 'sleep.habit-type#4');
+    });
+
+    testWidgets('keeps the target figure it was given', (tester) async {
+      final Habit habit = addHabit(name: 'Pages', sleep: false);
+      await tester.pumpWidget(wrap(habit));
+      await tester.pumpAndSettle();
+
+      final Text target =
+          tester.widget<Text>(find.byKey(SubtitleCardView.targetTextKey));
+      expect(target.data, contains('30'),
+          reason: 'sleep.ui#11 — nothing changes for a habit that is not '
+              'about sleep');
     });
 
     testWidgets('still shows the target card the rule gives it',
