@@ -93,6 +93,13 @@ class HealthKitSleepSource implements SleepDataSource {
             item['utcOffsetMinutes'] is int ? item['utcOffsetMinutes'] as int : null,
       ));
     }
+    // Said once per sync, because the difference is invisible in the data and
+    // decides how a whole history is dated: a stretch that names its zone is
+    // dated by the clock the person was living by, and one that does not falls
+    // back to this device's clock, wherever it happens to be.
+    final int withZone =
+        result.where((SleepSegment s) => s.utcOffsetMinutes != null).length;
+    _logger.info('read ${result.length} stretches, $withZone naming a zone');
     return result;
   }
 
