@@ -40,7 +40,8 @@ class RecordingSource implements SleepDataSource {
       written.add(<int>[startMillis, endMillis]);
 
   @override
-  Future<void> enableBackgroundDelivery() async {}
+  Future<void> enableBackgroundDelivery(
+      Future<void> Function() onChanged) async {}
 }
 
 const SleepGoal goal = SleepGoal(bedMinutes: 1380, wakeMinutes: 420);
