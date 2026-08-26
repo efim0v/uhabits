@@ -325,12 +325,36 @@ class _ShowHabitViewState extends State<_ShowHabitView>
 
     final L10n l10n = L10n.of(context);
     final int? habitId = widget.habit.id;
-    final ScaffoldFeatureController<SnackBar, SnackBarClosedReason> shown =
-        ScaffoldMessenger.of(context).showSnackBar(
+
+    if (habitId == null) return;
+    // Recorded when it is shown, not when it goes away.
+    //
+    // Waiting on the closing meant the offer was answered by whatever closed
+    // it, and a snackbar is closed by the next snackbar: any unrelated message
+    // — a toggle undone, an export finished — swallowed the offer and marked
+    // it answered, on a screen the person never looked at. Worse, the future
+    // never completes at all if the messenger goes away with the screen, so
+    // leaving the screen recorded nothing and the offer came back for ever.
+    //
+    // Shown once is answered once. That is the whole promise.
+    widget.scope.dismissTravelPrompt(habitId, travel.fromDay);
+
+
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    // Cleared first, so the offer is not queued behind a message already up —
+    // which would surface it minutes later, on whatever screen the person had
+    // moved to by then.
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         key: ShowHabitScreen.travelToastKey,
         content: Text(l10n.sleepSuggestSkip),
-        duration: const Duration(seconds: 8),
+        // Long enough to read and answer, short enough that it does not hold
+        // the floor against whatever the app says next. With a screen reader
+        // running, Flutter drops the timer for any snackbar carrying an
+        // action, so it waits for the person instead — which is why being
+        // recorded as shown does not depend on it ever closing.
+        duration: const Duration(seconds: 10),
         action: SnackBarAction(
           label: l10n.sleepMarkSkipped,
           onPressed: () => applyTravelSuggestion(
@@ -342,15 +366,6 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         ),
       ),
     );
-    // Answered however it goes away — taken up, swiped off, or left to time
-    // out. All three mean the person has seen it, and an offer seen is an
-    // offer answered: asking again tomorrow about the same trip is what made
-    // the old card unbearable.
-    unawaited(shown.closed.then((SnackBarClosedReason _) {
-      if (habitId != null) {
-        widget.scope.dismissTravelPrompt(habitId, travel.fromDay);
-      }
-    }));
   }
 
   /// `ShowHabitActivity.onResume` / `onPause` for the transitions that are not

@@ -117,6 +117,32 @@ class AppScope {
   static String _travelPromptKey(int habitId) =>
       'sleep.travelPromptDismissed.$habitId';
 
+  /// Whether the offer to move the goal to [bedMinutes]/[wakeMinutes] has been
+  /// turned down.
+  ///
+  /// Keyed by the goal being offered rather than by the habit, so declining
+  /// one suggestion says nothing about the next: a month later the nights say
+  /// something different, and that is a new offer.
+  bool goalSuggestionDismissed(int habitId, int? bedMinutes, int? wakeMinutes) =>
+      preferencesStorage.getInt(_goalSuggestionKey(habitId), -1) ==
+      _goalSuggestionValue(bedMinutes, wakeMinutes);
+
+  /// Remembers that it was turned down.
+  void dismissGoalSuggestion(int habitId, int? bedMinutes, int? wakeMinutes) =>
+      preferencesStorage.putInt(
+        _goalSuggestionKey(habitId),
+        _goalSuggestionValue(bedMinutes, wakeMinutes),
+      );
+
+  static String _goalSuggestionKey(int habitId) =>
+      'sleep.goalSuggestionDismissed.$habitId';
+
+  /// The two times as one number, because preferences hold numbers. A time the
+  /// suggestion leaves alone is null, which is a third value the pair has to be
+  /// able to carry.
+  static int _goalSuggestionValue(int? bedMinutes, int? wakeMinutes) =>
+      (bedMinutes ?? 1441) * 2000 + (wakeMinutes ?? 1441);
+
   /// Announces that a sleep habit's stored values changed.
   ///
   /// Sleep writes do not go through a Command: the values are computed from a
@@ -160,8 +186,9 @@ class AppScope {
     final Future<void>? running = _sleepSyncInFlight;
     if (running != null) return running;
 
-    final Future<void> next =
-        _syncSleepHabits().whenComplete(() => _sleepSyncInFlight = null);
+    final Future<void> next = _syncSleepHabits().whenComplete(
+      () => _sleepSyncInFlight = null,
+    );
     _sleepSyncInFlight = next;
     return next;
   }
@@ -215,7 +242,8 @@ class AppScope {
     final SleepGoal? goal = sleepRepository.goalFor(habit.id!);
     if (goal == null) return null;
     return LocalDate.fromUnixTime(
-        at + _effectiveOffsetToday(habit, goal) * 60000);
+      at + _effectiveOffsetToday(habit, goal) * 60000,
+    );
   }
 
   int _effectiveOffsetToday(Habit habit, SleepGoal goal) {
@@ -225,7 +253,10 @@ class AppScope {
       firstDay: firstNight ?? today,
       lastDay: today,
       observedByDay: sleepRepository.observedOffsets(
-          habit.id!, firstNight ?? today, today),
+        habit.id!,
+        firstNight ?? today,
+        today,
+      ),
       homeOffsetMinutes: goal.homeUtcOffsetMinutes,
       ratePerDayMinutes: goal.adaptationMinutesPerDay,
     );
@@ -297,9 +328,9 @@ class AppScope {
   /// the dump catches and prints, which keeps the crash path's collaborator
   /// non-null without inventing a directory.
   FlutterBugReporter get bugReporter => _bugReporter ??= FlutterBugReporter(
-        dirFinder: HabitsDirFinder(const <String>[]),
-        deviceInfo: DeviceInfo.current(),
-      );
+    dirFinder: HabitsDirFinder(const <String>[]),
+    deviceInfo: DeviceInfo.current(),
+  );
 
   FlutterBugReporter? _bugReporter;
 
@@ -504,8 +535,10 @@ class AppScope {
     // Named, because two schedulers post through it: the reminder machinery
     // below, and the sleep habit's morning question, which cannot go through
     // that machinery at all.
-    final alarmPlugin =
-        LocalNotificationsAlarmPlugin(plugin: plugin, presenter: presenter);
+    final alarmPlugin = LocalNotificationsAlarmPlugin(
+      plugin: plugin,
+      presenter: presenter,
+    );
     final alarms = FlutterAlarmScheduler(
       plugin: alarmPlugin,
       builder: builder,
@@ -755,7 +788,8 @@ class AppScope {
     if (scheduler == null) return null;
     return _permissionGate ??= ReminderPermissionGate(
       scheduler: scheduler,
-      permissions: _permissions ??
+      permissions:
+          _permissions ??
           LocalNotificationsPermissions(
             plugin: FlutterLocalNotificationsPlugin(),
           ),
@@ -854,7 +888,9 @@ class AppScope {
     );
 
     final sleepRepository = SleepSessionRepository(
-        database, () => DateTime.now().millisecondsSinceEpoch);
+      database,
+      () => DateTime.now().millisecondsSinceEpoch,
+    );
     return AppScope._(
       sleepRepository: sleepRepository,
       sleepSync: SleepSync(
@@ -863,8 +899,7 @@ class AppScope {
         // to a stdout that nothing on a phone reads, and these lines are the
         // only account of why Health went quiet. They belong in the buffer the
         // bug report carries.
-        source:
-            sleepSource ?? defaultSleepDataSource(logging: resolvedLogging),
+        source: sleepSource ?? defaultSleepDataSource(logging: resolvedLogging),
       ),
       database: database,
       databasePath: databasePath,
@@ -916,7 +951,6 @@ class AppScope {
     database.close();
   }
 }
-
 
 /// `taskRunner.execute { reminderScheduler.scheduleAll(); widgetUpdater
 /// .updateWidgets() }` — the last step of `HabitsApplication.onCreate`, in that

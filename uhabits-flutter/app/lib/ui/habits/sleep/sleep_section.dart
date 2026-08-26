@@ -82,10 +82,18 @@ List<Widget> buildSleepSection(
           offsets[latestDay] ?? goal.homeUtcOffsetMinutes,
         );
 
-  final core.GoalSuggestion? suggestedGoal = core.suggestGoal(
+  final core.GoalSuggestion? proposed = core.suggestGoal(
     stabilityNights(nights, skipped, today),
     goal,
   );
+  // Turned down stays turned down. "Not now" used to be a button with an empty
+  // body, so the same offer stood on the screen until it was accepted — which
+  // is not a choice, it is a wait.
+  final core.GoalSuggestion? suggestedGoal = proposed == null ||
+          scope.goalSuggestionDismissed(
+              id, proposed.bedMinutes, proposed.wakeMinutes)
+      ? null
+      : proposed;
 
   return <Widget>[
     // The offer to move the goal stays on the screen, because it is about the
@@ -108,7 +116,11 @@ List<Widget> buildSleepSection(
           );
           _wrote(scope, habit, onChanged);
         },
-        onDismiss: () {},
+        onDismiss: () {
+          scope.dismissGoalSuggestion(
+              id, suggestedGoal.bedMinutes, suggestedGoal.wakeMinutes);
+          onChanged();
+        },
       ),
     LastNightCard(
       theme: theme,

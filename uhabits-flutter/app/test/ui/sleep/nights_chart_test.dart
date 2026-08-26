@@ -7,8 +7,7 @@ import 'package:uhabits/ui/habits/list/list_header.dart'
 import 'package:uhabits/ui/habits/sleep/nights_chart.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
-const core.SleepGoal goal =
-    core.SleepGoal(bedMinutes: 1380, wakeMinutes: 420);
+const core.SleepGoal goal = core.SleepGoal(bedMinutes: 1380, wakeMinutes: 420);
 
 /// Day 9000 since 2000 begins at this UTC instant.
 int startOfDay(int day) => (day + 10957) * 86400000;
@@ -18,13 +17,12 @@ core.SleepEpisode nightOn(
   int bedMinutes = 1380,
   int wakeMinutes = 420,
   int asleepMinutes = 480,
-}) =>
-    core.SleepEpisode(
-      bedStartMillis: startOfDay(day - 1) + bedMinutes * 60000,
-      wakeEndMillis: startOfDay(day) + wakeMinutes * 60000,
-      asleepMinutes: asleepMinutes,
-      utcOffsetMinutes: 0,
-    );
+}) => core.SleepEpisode(
+  bedStartMillis: startOfDay(day - 1) + bedMinutes * 60000,
+  wakeEndMillis: startOfDay(day) + wakeMinutes * 60000,
+  asleepMinutes: asleepMinutes,
+  utcOffsetMinutes: 0,
+);
 
 Future<void> pumpChart(
   WidgetTester tester, {
@@ -35,52 +33,67 @@ Future<void> pumpChart(
   int visibleDays = 14,
   bool use24HourFormat = true,
 }) async {
-  final int lastDay = days.isEmpty ? 9000 : days.reduce((a, b) => a > b ? a : b);
+  final int lastDay = days.isEmpty
+      ? 9000
+      : days.reduce((a, b) => a > b ? a : b);
   final int firstDay = lastDay - visibleDays + 1;
-  final Map<int, core.SleepEpisode> resolved = nights ??
+  final Map<int, core.SleepEpisode> resolved =
+      nights ??
       <int, core.SleepEpisode>{for (final int d in days) d: nightOn(d)};
 
-  await tester.pumpWidget(MaterialApp(
-    localizationsDelegates: const <LocalizationsDelegate<Object>>[
-      L10n.delegate,
-      GlobalMaterialLocalizations.delegate,
-      GlobalWidgetsLocalizations.delegate,
-    ],
-    supportedLocales: L10n.supportedLocales,
-    home: MediaQuery(
-      data: MediaQueryData(alwaysUse24HourFormat: use24HourFormat),
-      child: Scaffold(
-        body: NightsChart(
-          theme: core.LightTheme(),
-          color: const core.Color.fromRgb(0x2196F3),
-          nights: resolved,
-          skippedDays: skipped,
-          goal: goal,
-          effectiveOffsets: offsets ??
-              <int, int>{for (final int d in days) d: 0},
-          lastDay: lastDay,
-          firstDay: firstDay,
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: const <LocalizationsDelegate<Object>>[
+        L10n.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: L10n.supportedLocales,
+      home: MediaQuery(
+        data: MediaQueryData(alwaysUse24HourFormat: use24HourFormat),
+        child: Scaffold(
+          body: NightsChart(
+            theme: core.LightTheme(),
+            color: const core.Color.fromRgb(0x2196F3),
+            nights: resolved,
+            skippedDays: skipped,
+            goal: goal,
+            effectiveOffsets:
+                offsets ?? <int, int>{for (final int d in days) d: 0},
+            lastDay: lastDay,
+            firstDay: firstDay,
+          ),
         ),
       ),
     ),
-  ));
+  );
   await tester.pumpAndSettle();
 }
+
+/// Every night read in UTC, which is the frame these fixtures are built in.
+Map<int, int> zeroOffsets(Map<int, core.SleepEpisode> nights) => <int, int>{
+  for (final int d in nights.keys) d: 0,
+};
 
 void main() {
   group('orientation', () {
     testWidgets('days run left to right, newest on the right', (tester) async {
       await pumpChart(tester, days: <int>[8998, 8999, 9000]);
-      final List<NightBar> bars =
-          tester.widgetList<NightBar>(find.byType(NightBar)).toList();
+      final List<NightBar> bars = tester
+          .widgetList<NightBar>(find.byType(NightBar))
+          .toList();
       expect(bars.length, 3, reason: 'sleep.ui#3');
 
-      final double oldestX = tester.getCenter(
-        find.byWidgetPredicate((w) => w is NightBar && w.day == 8998),
-      ).dx;
-      final double newestX = tester.getCenter(
-        find.byWidgetPredicate((w) => w is NightBar && w.day == 9000),
-      ).dx;
+      final double oldestX = tester
+          .getCenter(
+            find.byWidgetPredicate((w) => w is NightBar && w.day == 8998),
+          )
+          .dx;
+      final double newestX = tester
+          .getCenter(
+            find.byWidgetPredicate((w) => w is NightBar && w.day == 9000),
+          )
+          .dx;
       expect(newestX, greaterThan(oldestX), reason: 'sleep.ui#3');
     });
 
@@ -106,8 +119,11 @@ void main() {
       final NightBar lateBar = tester.widget<NightBar>(
         find.byWidgetPredicate((w) => w is NightBar && w.day == 9000),
       );
-      expect(lateBar.topFraction, greaterThan(earlyBar.topFraction),
-          reason: 'sleep.ui#3');
+      expect(
+        lateBar.topFraction,
+        greaterThan(earlyBar.topFraction),
+        reason: 'sleep.ui#3',
+      );
       expect(early.height, greaterThan(0), reason: 'sleep.ui#3');
       expect(late.height, greaterThan(0), reason: 'sleep.ui#3');
     });
@@ -115,8 +131,11 @@ void main() {
     testWidgets('the window wraps around midnight', (tester) async {
       // 23:00 is early in the window and 01:00 is later, even though one is a
       // larger number of minutes than the other.
-      final SleepWindow window =
-          SleepWindow.covering(goal: goal, nights: const <int, core.SleepEpisode>{});
+      final SleepWindow window = SleepWindow.covering(
+        goal: goal,
+        nights: const <int, core.SleepEpisode>{},
+        effectiveOffsets: const <int, int>{},
+      );
       final double? evening = window.fractionOf(1380);
       final double? afterMidnight = window.fractionOf(60);
       expect(evening, isNotNull, reason: 'sleep.ui#3');
@@ -127,8 +146,11 @@ void main() {
     testWidgets('a time far from any night is not drawn', (tester) async {
       // With nothing recorded the window is the goal and an hour either side,
       // so midday is outside it.
-      final SleepWindow window =
-          SleepWindow.covering(goal: goal, nights: const <int, core.SleepEpisode>{});
+      final SleepWindow window = SleepWindow.covering(
+        goal: goal,
+        nights: const <int, core.SleepEpisode>{},
+        effectiveOffsets: const <int, int>{},
+      );
       expect(window.fractionOf(12 * 60), isNull, reason: 'sleep.ui#3');
     });
   });
@@ -152,8 +174,11 @@ void main() {
       final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
         9000: at(9000, bed: 24 * 60 + 5 * 60 + 28, wake: 13 * 60 + 31),
       };
-      final SleepWindow window =
-          SleepWindow.covering(goal: goal, nights: nights);
+      final SleepWindow window = SleepWindow.covering(
+        goal: goal,
+        nights: nights,
+        effectiveOffsets: zeroOffsets(nights),
+      );
 
       expect(window.fractionOf(5 * 60 + 28), isNotNull, reason: 'sleep.ui#10');
       expect(window.fractionOf(13 * 60 + 31), isNotNull, reason: 'sleep.ui#10');
@@ -163,18 +188,30 @@ void main() {
       final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
         9000: at(9000, bed: 24 * 60 + 5 * 60, wake: 13 * 60),
       };
-      final SleepWindow window =
-          SleepWindow.covering(goal: goal, nights: nights);
+      final SleepWindow window = SleepWindow.covering(
+        goal: goal,
+        nights: nights,
+        effectiveOffsets: zeroOffsets(nights),
+      );
 
-      expect(window.fractionOf(goal.bedMinutes), isNotNull,
-          reason: 'sleep.ui#10 — or the target band is cropped instead');
-      expect(window.fractionOf(goal.wakeMinutes), isNotNull,
-          reason: 'sleep.ui#10');
+      expect(
+        window.fractionOf(goal.bedMinutes),
+        isNotNull,
+        reason: 'sleep.ui#10 — or the target band is cropped instead',
+      );
+      expect(
+        window.fractionOf(goal.wakeMinutes),
+        isNotNull,
+        reason: 'sleep.ui#10',
+      );
     });
 
     test('with nothing recorded it stays tight around the goal', () {
       final SleepWindow window = SleepWindow.covering(
-          goal: goal, nights: const <int, core.SleepEpisode>{});
+        goal: goal,
+        nights: const <int, core.SleepEpisode>{},
+        effectiveOffsets: const <int, int>{},
+      );
       // The goal is 23:00 to 07:00 — eight hours — plus an hour either side.
       expect(window.spanMinutes, 10 * 60, reason: 'sleep.ui#10');
       expect(window.startMinutes, 22 * 60, reason: 'sleep.ui#10');
@@ -184,14 +221,52 @@ void main() {
       final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
         9000: at(9000, bed: 24 * 60 + 11 * 60, wake: 10 * 60),
       };
-      final SleepWindow window =
-          SleepWindow.covering(goal: goal, nights: nights);
+      final SleepWindow window = SleepWindow.covering(
+        goal: goal,
+        nights: nights,
+        effectiveOffsets: zeroOffsets(nights),
+      );
 
-      expect(window.spanMinutes, lessThanOrEqualTo(1440), reason: 'sleep.ui#10');
+      expect(
+        window.spanMinutes,
+        lessThanOrEqualTo(1440),
+        reason: 'sleep.ui#10',
+      );
       // And at a whole day nothing at all can fall outside it.
       for (int m = 0; m < 1440; m += 30) {
         expect(window.fractionOf(m), isNotNull, reason: 'sleep.ui#10 — at $m');
       }
+    });
+
+    test('a night stays drawable while the goal is still adapting', () {
+      // The bars are drawn in the frame the goal is living in — scoreNight
+      // reads every night through the effective offset — and the window used
+      // to be measured in the episode's own. During an adaptation the two are
+      // apart by as much as the whole trip, and a bar that landed outside was
+      // dropped without trace.
+      final Map<int, core.SleepEpisode> nights = <int, core.SleepEpisode>{
+        9000: at(9000, bed: 23 * 60, wake: 7 * 60),
+      };
+      // The night was recorded eight hours away; the goal has moved three
+      // hours of the way there so far. Three, not one: the two frames have to
+      // be far enough apart that the bar lands outside a window measured in
+      // the wrong one, or the test passes whatever the code does.
+      final Map<int, int> adapting = <int, int>{9000: 180};
+
+      final SleepWindow window = SleepWindow.covering(
+        goal: goal,
+        nights: nights,
+        effectiveOffsets: adapting,
+      );
+
+      final core.SleepBreakdown? night =
+          core.scoreNight(nights[9000]!, goal, adapting[9000]!);
+      expect(night, isNotNull, reason: 'sleep.ui#10');
+      expect(window.fractionOf(night!.bedMinutes), isNotNull,
+          reason: 'sleep.ui#10 — the bar is drawn in this frame, so the '
+              'window has to be measured in it');
+      expect(window.fractionOf(night.wakeMinutes), isNotNull,
+          reason: 'sleep.ui#10');
     });
 
     test('every night given to the strip really is drawable', () {
@@ -201,27 +276,31 @@ void main() {
         8999: at(8999, bed: 21 * 60 + 33, wake: 6 * 60 + 54),
         9000: at(9000, bed: 24 * 60 + 5 * 60 + 28, wake: 13 * 60 + 31),
       };
-      final SleepWindow window =
-          SleepWindow.covering(goal: goal, nights: nights);
+      final SleepWindow window = SleepWindow.covering(
+        goal: goal,
+        nights: nights,
+        effectiveOffsets: zeroOffsets(nights),
+      );
 
       for (final core.SleepEpisode e in nights.values) {
-        expect(window.fractionOf(core.localMinutesOf(e.bedStartMillis, 0)),
-            isNotNull, reason: 'sleep.ui#10');
-        expect(window.fractionOf(core.localMinutesOf(e.wakeEndMillis, 0)),
-            isNotNull, reason: 'sleep.ui#10');
+        expect(
+          window.fractionOf(core.localMinutesOf(e.bedStartMillis, 0)),
+          isNotNull,
+          reason: 'sleep.ui#10',
+        );
+        expect(
+          window.fractionOf(core.localMinutesOf(e.wakeEndMillis, 0)),
+          isNotNull,
+          reason: 'sleep.ui#10',
+        );
       }
     });
   });
 
   group('what is drawn', () {
     testWidgets('a skipped day is marked on its own column', (tester) async {
-      await pumpChart(
-        tester,
-        days: <int>[8999, 9000],
-        skipped: <int>{9000},
-      );
-      expect(find.byType(SkippedDayMark), findsOneWidget,
-          reason: 'sleep.ui#4');
+      await pumpChart(tester, days: <int>[8999, 9000], skipped: <int>{9000});
+      expect(find.byType(SkippedDayMark), findsOneWidget, reason: 'sleep.ui#4');
     });
 
     testWidgets('the mark covers exactly one day, no more', (tester) async {
@@ -237,31 +316,37 @@ void main() {
 
       final Rect mark = tester.getRect(find.byType(SkippedDayMark));
       final Rect chart = tester.getRect(find.byType(NightsChart));
-      expect(mark.width, lessThan(chart.width / 3),
-          reason: 'sleep.ui#4 — one column of four, gutter and all');
+      expect(
+        mark.width,
+        lessThan(chart.width / 3),
+        reason: 'sleep.ui#4 — one column of four, gutter and all',
+      );
     });
 
-    testWidgets('a night recorded on a skipped day is still shown',
-        (tester) async {
+    testWidgets('a night recorded on a skipped day is still shown', (
+      tester,
+    ) async {
       // Skipping says the day does not count, not that nothing happened. The
       // mark used to replace the bar, so a night on a plane vanished the
       // moment it was excused.
       await pumpChart(tester, days: <int>[9000], skipped: <int>{9000});
       expect(find.byType(NightBar), findsOneWidget, reason: 'sleep.ui#4');
-      expect(find.byType(SkippedDayMark), findsOneWidget,
-          reason: 'sleep.ui#4');
+      expect(find.byType(SkippedDayMark), findsOneWidget, reason: 'sleep.ui#4');
     });
 
-    testWidgets('a night below half is warned about in colour',
-        (tester) async {
+    testWidgets('a night below half is warned about in colour', (tester) async {
       await pumpChart(
         tester,
         days: <int>[8999, 9000],
         nights: <int, core.SleepEpisode>{
           8999: nightOn(8999),
           // 02:00 to 09:00, seven hours: the spec's worst control vector.
-          9000: nightOn(9000,
-              bedMinutes: 1560, wakeMinutes: 540, asleepMinutes: 420),
+          9000: nightOn(
+            9000,
+            bedMinutes: 1560,
+            wakeMinutes: 540,
+            asleepMinutes: 420,
+          ),
         },
       );
       final NightBar good = tester.widget<NightBar>(
@@ -286,8 +371,9 @@ void main() {
       expect(older.isLast, isFalse, reason: 'sleep.ui#3');
     });
 
-    testWidgets('a day with neither night nor skip draws nothing',
-        (tester) async {
+    testWidgets('a day with neither night nor skip draws nothing', (
+      tester,
+    ) async {
       await pumpChart(
         tester,
         days: <int>[8998, 9000],
@@ -317,8 +403,9 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'sleep.ui#3');
     });
 
-    testWidgets('a long history really is longer than the screen',
-        (tester) async {
+    testWidgets('a long history really is longer than the screen', (
+      tester,
+    ) async {
       // The strip was a fixed fourteen columns of 22 points — 308 in all,
       // narrower than any phone. It sat inside a scroll view that could never
       // scroll, and no test noticed because none of them asked whether it did.
@@ -328,11 +415,16 @@ void main() {
         visibleDays: 90,
       );
 
-      final ScrollableState scrollable =
-          tester.state(find.byType(Scrollable).first);
-      expect(scrollable.position.maxScrollExtent, greaterThan(0),
-          reason: 'sleep.ui#8 — a strip that fits is a strip that never '
-              'scrolls, whatever it is wrapped in');
+      final ScrollableState scrollable = tester.state(
+        find.byType(Scrollable).first,
+      );
+      expect(
+        scrollable.position.maxScrollExtent,
+        greaterThan(0),
+        reason:
+            'sleep.ui#8 — a strip that fits is a strip that never '
+            'scrolls, whatever it is wrapped in',
+      );
     });
 
     testWidgets('it opens on last night, not on the oldest', (tester) async {
@@ -342,13 +434,21 @@ void main() {
         visibleDays: 90,
       );
 
-      final ScrollableState scrollable =
-          tester.state(find.byType(Scrollable).first);
-      expect(scrollable.position.pixels, 0,
-          reason: 'sleep.ui#8 — reversed, so the resting position is the most '
-              'recent night');
-      expect(find.text('${core.LocalDate(9000).day}'), findsWidgets,
-          reason: 'sleep.ui#8 — and last night is the one on screen');
+      final ScrollableState scrollable = tester.state(
+        find.byType(Scrollable).first,
+      );
+      expect(
+        scrollable.position.pixels,
+        0,
+        reason:
+            'sleep.ui#8 — reversed, so the resting position is the most '
+            'recent night',
+      );
+      expect(
+        find.text('${core.LocalDate(9000).day}'),
+        findsWidgets,
+        reason: 'sleep.ui#8 — and last night is the one on screen',
+      );
     });
 
     testWidgets('only a fraction of a long history is built', (tester) async {
@@ -359,15 +459,18 @@ void main() {
         visibleDays: 365,
       );
 
-      expect(find.byType(NightBar, skipOffstage: false).evaluate().length,
-          lessThan(60),
-          reason: 'sleep.ui#8 — the strip is built on demand');
+      expect(
+        find.byType(NightBar, skipOffstage: false).evaluate().length,
+        lessThan(60),
+        reason: 'sleep.ui#8 — the strip is built on demand',
+      );
     });
   });
 
   group('the clock down the side', () {
-    testWidgets('prints the hour it means, not a truncation of it',
-        (tester) async {
+    testWidgets('prints the hour it means, not a truncation of it', (
+      tester,
+    ) async {
       // The gutter was narrower than "11:00 PM" at its own font size, so the
       // label overflowed to the left and was clipped — always in the same
       // place, the leading digit — and eleven at night was drawn as "1:00 PM".
@@ -383,12 +486,16 @@ void main() {
 
       // The goal is 23:00 to 07:00, so the window runs 22:00 to 08:00.
       expect(find.text('10:00 PM'), findsOneWidget, reason: 'sleep.ui#12');
-      expect(find.text('0:00 PM'), findsNothing,
-          reason: 'sleep.ui#12 — what the clipping used to produce');
+      expect(
+        find.text('0:00 PM'),
+        findsNothing,
+        reason: 'sleep.ui#12 — what the clipping used to produce',
+      );
     });
 
-    testWidgets('the gutter is wide enough for the reading it holds',
-        (tester) async {
+    testWidgets('the gutter is wide enough for the reading it holds', (
+      tester,
+    ) async {
       // Measured, not eyeballed. Bounding the label to the gutter stops it
       // overflowing but not being cut: the widget still reports the right
       // string while the screen shows half of it. The only honest question is
@@ -403,7 +510,7 @@ void main() {
 
       final double available =
           tester.getSize(find.byKey(NightsChart.gutterKey)).width -
-              NightsChart.gutterMargin;
+          NightsChart.gutterMargin;
       for (final Element element in find.byType(Text).evaluate()) {
         final Text text = element.widget as Text;
         final String? data = text.data;
@@ -413,14 +520,17 @@ void main() {
           text: TextSpan(text: data, style: text.style),
           textDirection: TextDirection.ltr,
         )..layout();
-        expect(painter.width, lessThanOrEqualTo(available),
-            reason: 'sleep.ui#12 — "$data" needs ${painter.width.round()} of '
-                '${available.round()} and will be cut');
+        expect(
+          painter.width,
+          lessThanOrEqualTo(available),
+          reason:
+              'sleep.ui#12 — "$data" needs ${painter.width.round()} of '
+              '${available.round()} and will be cut',
+        );
       }
     });
 
-    testWidgets('no label is wider than the gutter it sits in',
-        (tester) async {
+    testWidgets('no label is wider than the gutter it sits in', (tester) async {
       await pumpChart(
         tester,
         days: <int>[9000],
@@ -432,10 +542,13 @@ void main() {
         final Text text = element.widget as Text;
         final String? data = text.data;
         if (data == null || !data.contains(':')) continue;
-        expect(tester.getSize(find.byWidget(text)).width,
-            lessThanOrEqualTo(
-                tester.getSize(find.byKey(NightsChart.gutterKey)).width),
-            reason: 'sleep.ui#12 — "\$data" does not fit and will be cut');
+        expect(
+          tester.getSize(find.byWidget(text)).width,
+          lessThanOrEqualTo(
+            tester.getSize(find.byKey(NightsChart.gutterKey)).width,
+          ),
+          reason: 'sleep.ui#12 — "\$data" does not fit and will be cut',
+        );
       }
     });
   });
@@ -450,9 +563,9 @@ void main() {
       final core.LocalDate date = core.LocalDate(9000);
       expect(find.text('${date.day}'), findsOneWidget, reason: 'sleep.ui#7');
       expect(
-        find.text(IntlLocalDateFormatter('en_US')
-            .shortWeekdayName(date)
-            .toUpperCase()),
+        find.text(
+          IntlLocalDateFormatter('en_US').shortWeekdayName(date).toUpperCase(),
+        ),
         findsOneWidget,
         reason: 'sleep.ui#7 — the same wording the habit list header uses',
       );
@@ -462,9 +575,13 @@ void main() {
       await pumpChart(tester, days: <int>[8998, 8999, 9000]);
 
       for (final int day in <int>[8998, 8999, 9000]) {
-        expect(find.text('${core.LocalDate(day).day}'), findsOneWidget,
-            reason: 'sleep.ui#7 — a bar nobody can place is a bar nobody can '
-                'read');
+        expect(
+          find.text('${core.LocalDate(day).day}'),
+          findsOneWidget,
+          reason:
+              'sleep.ui#7 — a bar nobody can place is a bar nobody can '
+              'read',
+        );
       }
     });
 
@@ -476,19 +593,27 @@ void main() {
         nights: const <int, core.SleepEpisode>{},
       );
 
-      expect(find.text('${core.LocalDate(9000).day}'), findsOneWidget,
-          reason: 'sleep.ui#7');
+      expect(
+        find.text('${core.LocalDate(9000).day}'),
+        findsOneWidget,
+        reason: 'sleep.ui#7',
+      );
     });
 
-    testWidgets('a night whose times fall outside the window is skipped',
-        (tester) async {
+    testWidgets('a night whose times fall outside the window is skipped', (
+      tester,
+    ) async {
       await pumpChart(
         tester,
         days: <int>[9000],
         nights: <int, core.SleepEpisode>{
           // Asleep from noon to two, which no window of the evening covers.
-          9000: nightOn(9000,
-              bedMinutes: 720 + 1440, wakeMinutes: 840, asleepMinutes: 120),
+          9000: nightOn(
+            9000,
+            bedMinutes: 720 + 1440,
+            wakeMinutes: 840,
+            asleepMinutes: 120,
+          ),
         },
       );
       expect(tester.takeException(), isNull, reason: 'sleep.ui#5');
@@ -496,8 +621,9 @@ void main() {
   });
 
   group('the target band', () {
-    testWidgets('follows the goal as it adapts, rather than staying straight',
-        (tester) async {
+    testWidgets('follows the goal as it adapts, rather than staying straight', (
+      tester,
+    ) async {
       // Two days of a seven hour flight: the goal has moved an hour between
       // them, so the band cannot be one straight stripe.
       await pumpChart(

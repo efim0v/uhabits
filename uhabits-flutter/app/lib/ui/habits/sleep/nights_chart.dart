@@ -103,7 +103,11 @@ class NightsChart extends StatelessWidget {
 
   /// The slice of the clock this strip draws, wide enough for every night in
   /// it.
-  SleepWindow get window => SleepWindow.covering(goal: goal, nights: nights);
+  SleepWindow get window => SleepWindow.covering(
+        goal: goal,
+        nights: nights,
+        effectiveOffsets: effectiveOffsets,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -507,18 +511,25 @@ class SleepWindow {
   /// never has to care that midnight is in the middle of a night. A night is
   /// an arc from bed forwards to waking, which keeps a night contiguous even
   /// when it crosses the top of the clock.
+  /// [effectiveOffsets] is where the goal was living on each night, and it is
+  /// the frame the bars are drawn in — [core.scoreNight] reads every night
+  /// through it. Measuring the window in the episode's own offset instead put
+  /// the two out of step during an adaptation, by as much as the whole trip,
+  /// and a bar that landed outside was dropped without trace.
   static SleepWindow covering({
     required core.SleepGoal goal,
     required Map<int, core.SleepEpisode> nights,
+    required Map<int, int> effectiveOffsets,
   }) {
     int earliest = -padMinutes;
     int latest = _forward(goal.bedMinutes, goal.wakeMinutes) + padMinutes;
 
-    for (final core.SleepEpisode episode in nights.values) {
-      final int bed = core.localMinutesOf(
-          episode.bedStartMillis, episode.utcOffsetMinutes);
-      final int wake = core.localMinutesOf(
-          episode.wakeEndMillis, episode.utcOffsetMinutes);
+    for (final MapEntry<int, core.SleepEpisode> entry in nights.entries) {
+      final core.SleepEpisode episode = entry.value;
+      final int frame =
+          effectiveOffsets[entry.key] ?? goal.homeUtcOffsetMinutes;
+      final int bed = core.localMinutesOf(episode.bedStartMillis, frame);
+      final int wake = core.localMinutesOf(episode.wakeEndMillis, frame);
       final int relBed = _signedFrom(goal.bedMinutes, bed);
       final int relWake = relBed + _forward(bed, wake);
       if (relBed - padMinutes < earliest) earliest = relBed - padMinutes;

@@ -125,6 +125,43 @@ void main() {
       }
     });
 
+    testWidgets('an unrelated message cannot answer it', (tester) async {
+      // A snackbar is closed by the next snackbar. Recording the answer when
+      // the offer closed meant any other message — a toggle undone, an export
+      // finished — swallowed it and marked it answered, on a screen the person
+      // never looked at.
+      recordTrip(jumpDay: today - 2);
+      await openScreen(tester);
+      expect(find.byKey(ShowHabitScreen.travelToastKey), findsOneWidget,
+          reason: 'sleep.skip#8');
+
+      ScaffoldMessenger.of(tester.element(find.byType(ShowHabitScreen)))
+          .showSnackBar(const SnackBar(content: Text('something else')));
+      await tester.pumpAndSettle();
+
+      expect(
+        scope.travelPromptDismissed(habit.id!, today - 2),
+        isTrue,
+        reason: 'sleep.skip#8 — and the offer counts as shown, because it was '
+            'shown: it must not be raised again by the next visit either way',
+      );
+    });
+
+    testWidgets('leaving the screen still counts as having seen it',
+        (tester) async {
+      // The record used to wait on the snackbar closing, and that future never
+      // completes when the messenger goes away with the screen — so leaving
+      // recorded nothing and the offer came back for ever.
+      recordTrip(jumpDay: today - 2);
+      await openScreen(tester);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+
+      expect(scope.travelPromptDismissed(habit.id!, today - 2), isTrue,
+          reason: 'sleep.skip#8');
+    });
+
     testWidgets('once it has gone, it does not come back', (tester) async {
       // The fault that started this: "Not now" had an empty body, so the same
       // offer stood on the screen every time the habit was opened.
@@ -145,6 +182,53 @@ void main() {
       await openScreen(tester);
 
       expect(find.byType(SnackBar), findsNothing, reason: 'sleep.skip#8');
+    });
+  });
+
+  group('the offer to move the goal', () {
+    /// A fortnight of nights an hour later than the goal, which is what makes
+    /// the app suggest moving it.
+    void recordLateNights() {
+      for (int d = today - 13; d <= today; d++) {
+        final int wake = (d + 10957) * 86400000 + 8 * 3600000;
+        scope.sleepRepository.upsert(
+          habit.id!,
+          d,
+          SleepEpisode(
+            bedStartMillis: wake - 450 * 60000,
+            wakeEndMillis: wake,
+            asleepMinutes: 450,
+            utcOffsetMinutes: 0,
+          ),
+          manual: false,
+        );
+      }
+      habit.recompute();
+    }
+
+    testWidgets('can be turned down, and stays turned down', (tester) async {
+      // "Not now" was a button with an empty body: the same offer stood on the
+      // screen until it was accepted, which is not a choice but a wait.
+      recordLateNights();
+      await openScreen(tester);
+
+      final Finder notNow = find.widgetWithText(TextButton, 'Not now');
+      expect(notNow, findsOneWidget, reason: 'sleep.suggest-goal#5');
+
+      await tester.ensureVisible(notNow);
+      await tester.pumpAndSettle();
+      await tester.tap(notNow);
+      await tester.pumpAndSettle();
+
+      expect(notNow, findsNothing, reason: 'sleep.suggest-goal#5');
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await openScreen(tester);
+
+      expect(find.widgetWithText(TextButton, 'Not now'), findsNothing,
+          reason: 'sleep.suggest-goal#5 — and it does not return on the next '
+              'visit either');
     });
   });
 
