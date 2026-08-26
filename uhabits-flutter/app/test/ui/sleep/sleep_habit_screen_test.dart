@@ -79,7 +79,7 @@ void main() {
       );
 
   group('a habit with a sleep goal', () {
-    testWidgets('gets the four blocks above the ported cards', (tester) async {
+    testWidgets('gets its own blocks among the ported cards', (tester) async {
       final Habit habit = addHabit(name: 'Sleep', sleep: true);
       await tester.pumpWidget(wrap(habit));
       await tester.pumpAndSettle();
@@ -89,7 +89,6 @@ void main() {
       expect(find.byType(NightsChart), findsOneWidget, reason: 'sleep.ui#3');
       expect(find.byType(StabilityCard), findsOneWidget,
           reason: 'sleep.stability#1');
-      expect(find.byType(SkipCard), findsOneWidget, reason: 'sleep.skip#3');
     });
 
     testWidgets('says what the goal is where the target figure would go',
@@ -182,8 +181,6 @@ void main() {
       expect(find.byType(NightsChart), findsNothing,
           reason: 'sleep.habit-type#4');
       expect(find.byType(StabilityCard), findsNothing,
-          reason: 'sleep.habit-type#4');
-      expect(find.byType(SkipCard), findsNothing,
           reason: 'sleep.habit-type#4');
     });
 

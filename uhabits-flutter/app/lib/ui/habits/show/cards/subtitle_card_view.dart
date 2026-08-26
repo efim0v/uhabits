@@ -127,9 +127,16 @@ class SubtitleCardView extends StatelessWidget {
                 ),
                 // `android:layout_marginStart="4dp"`
                 const SizedBox(width: 4),
+                // The seven-em cap is `android:maxEms="7"` on the ported
+                // field, where the text is a number and a short unit. An
+                // override is neither — "23:00 → 07:00" is thirteen
+                // characters, and capping it printed "23:00 → 0…", which is
+                // the one part a person reads it for.
                 ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: targetMaxEms * smallFontSize,
+                  constraints: BoxConstraints(
+                    maxWidth: targetOverride == null
+                        ? targetMaxEms * smallFontSize
+                        : double.infinity,
                   ),
                   child: Text(
                     targetOverride ?? state.targetText,

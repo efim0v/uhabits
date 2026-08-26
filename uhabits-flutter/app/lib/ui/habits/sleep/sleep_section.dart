@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' as intl;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../l10n/app_localizations.dart';
-import '../../../platform/device_locale.dart';
 import '../../../state/app_scope.dart';
 import 'last_night_card.dart';
 import 'manual_entry.dart';
@@ -84,35 +82,19 @@ List<Widget> buildSleepSection(
           offsets[latestDay] ?? goal.homeUtcOffsetMinutes,
         );
 
-  final int? lastSkipped = lastSkippedDay(
-    habit,
-    today: today,
-    windowDays: skipWindowDays,
-  );
-
-  final core.TimezoneSkipSuggestion? travel = core.suggestSkipForTimezone(
-    nights,
-  );
   final core.GoalSuggestion? suggestedGoal = core.suggestGoal(
     stabilityNights(nights, skipped, today),
     goal,
   );
 
   return <Widget>[
-    // Suggestions come first, because a person who is about to read a bad
-    // fortnight should see the offer to set a trip aside before they read it.
-    if (travel != null)
-      SuggestionCard(
-        theme: theme,
-        message: L10n.of(context).sleepSuggestSkip,
-        applyLabel: L10n.of(context).sleepMarkSkipped,
-        onApply: () {
-          SkipRange(travel.fromDay, travel.toDay).applyTo(habit);
-          _wrote(scope, habit, onChanged);
-        },
-        onDismiss: () {},
-      )
-    else if (suggestedGoal != null)
+    // The offer to move the goal stays on the screen, because it is about the
+    // habit rather than about a moment: it will still be true tomorrow, and
+    // reading it next to the fortnight it was drawn from is the point.
+    //
+    // The offer to excuse a trip is not — see [travelSuggestionFor], which
+    // hands it to a toast instead.
+    if (suggestedGoal != null)
       SuggestionCard(
         theme: theme,
         message: goalSuggestionMessage(context, suggestedGoal),
@@ -179,21 +161,42 @@ List<Widget> buildSleepSection(
         minNights: stabilityMinNights,
       ),
     ),
-    SkipCard(
-      theme: theme,
-      skippedDays: skippedDayCount(
-        habit,
-        today: today,
-        windowDays: skipWindowDays,
-      ),
-      windowDays: skipWindowDays,
-      lastSkippedLabel: lastSkipped == null
-          ? null
-          : _formatDay(context, lastSkipped),
-      onMark: () =>
-          _markRange(context, scope: scope, habit: habit, onChanged: onChanged),
-    ),
   ];
+}
+
+/// The trip worth offering to excuse, or null when there is none to offer.
+///
+/// Null also once the offer has been turned down, which is the whole reason
+/// this is asked rather than merely drawn: "not now" used to be a button with
+/// an empty body, so the same offer stood on the screen for ever and the only
+/// way to be rid of it was to accept it.
+core.TimezoneSkipSuggestion? travelSuggestionFor(
+  AppScope scope,
+  core.Habit habit,
+) {
+  final int? id = habit.id;
+  if (id == null) return null;
+  if (scope.sleepRepository.goalFor(id) == null) return null;
+
+  final int today = scope.sleepSync.today().daysSince2000;
+  final core.TimezoneSkipSuggestion? travel = core.suggestSkipForTimezone(
+    scope.sleepRepository.range(id, today - stabilityWindowDays * 2, today),
+    today: today,
+  );
+  if (travel == null) return null;
+  if (scope.travelPromptDismissed(id, travel.fromDay)) return null;
+  return travel;
+}
+
+/// Marks the trip's days as not counting, at the person's word.
+void applyTravelSuggestion(
+  AppScope scope,
+  core.Habit habit,
+  core.TimezoneSkipSuggestion travel, {
+  required VoidCallback onChanged,
+}) {
+  SkipRange(travel.fromDay, travel.toDay).applyTo(habit);
+  _wrote(scope, habit, onChanged);
 }
 
 /// Everything in this file that writes sleep data ends here.
@@ -247,40 +250,6 @@ int _currentStreakDays(core.Habit habit, int today) {
   return last.end.daysSince2000 >= today - 1 ? last.length : 0;
 }
 
-String _formatDay(BuildContext context, int day) {
-  final DateTime date = DateTime.utc(2000, 1, 1).add(Duration(days: day));
-  return intl.DateFormat.MMMd(
-    resolveDateLocaleName(DeviceLocale.nameOf(context)),
-  ).format(date);
-}
-
-Future<void> _markRange(
-  BuildContext context, {
-  required AppScope scope,
-  required core.Habit habit,
-  required VoidCallback onChanged,
-}) async {
-  final int today = scope.sleepSync.today().daysSince2000;
-  final DateTime origin = DateTime.utc(2000, 1, 1);
-  final DateTimeRange? picked = await showDateRangePicker(
-    context: context,
-    firstDate: origin,
-    lastDate: origin.add(Duration(days: today)),
-    currentDate: origin.add(Duration(days: today)),
-  );
-  if (picked == null) return;
-
-  SkipRange(
-    picked.start.difference(origin).inDays,
-    picked.end.difference(origin).inDays,
-  ).applyTo(habit);
-  _wrote(scope, habit, onChanged);
-}
-
-/// Opens the sheet for a night and stores what comes back.
-///
-/// The night is stored as a manual one, which the repository then protects
-/// from being overwritten by a later read from the platform.
 Future<void> enterNightByHand(
   BuildContext context, {
   required AppScope scope,
@@ -291,18 +260,42 @@ Future<void> enterNightByHand(
   required VoidCallback onChanged,
 }) async {
   final int offset = scope.sleepSync.currentOffsetMinutes();
+  final core.SleepEpisode? recorded =
+      scope.sleepRepository.forDay(habit.id!, day);
+  final bool wasSkipped = isDaySkipped(habit, day);
+
   final ManualNight? night = await showManualEntrySheet(
     context,
     theme: theme,
     day: day,
     goal: goal,
     utcOffsetMinutes: offset,
+    // What is already known about this day, so opening it to change one thing
+    // does not silently discard the rest. Null only when there is nothing:
+    // then the sheet opens on the goal, which is the likeliest answer.
+    initial: recorded != null
+        ? ManualNight.fromEpisode(recorded, day: day, skipped: wasSkipped)
+        : wasSkipped
+            ? ManualNight(
+                day: day,
+                bedMinutes: goal.bedMinutes,
+                wakeMinutes: goal.wakeMinutes,
+                utcOffsetMinutes: offset,
+                skipped: true,
+              )
+            : null,
   );
   if (night == null) return;
 
   final core.SleepEpisode episode = night.toEpisode();
   scope.sleepRepository.upsert(habit.id!, day, episode, manual: true);
+  // The skip is cleared before the recompute and set after it, because a
+  // recompute deliberately leaves a skipped day alone (`sleep.skip#6`): with
+  // the order the other way round, un-skipping a day would leave it holding
+  // the skip it was supposed to lose.
+  if (!night.skipped) SkipRange(day, day).clearFrom(habit);
   scope.sleepSync.recomputeDays(habit, day, day);
+  if (night.skipped) SkipRange(day, day).applyTo(habit);
   _wrote(scope, habit, onChanged);
   // Also written back to the platform, so a night typed in here shows up in
   // the health app the rest of the data comes from.

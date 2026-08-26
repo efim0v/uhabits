@@ -15,6 +15,7 @@ class ManualNight {
     required this.wakeMinutes,
     this.asleepMinutes,
     this.utcOffsetMinutes = 0,
+    this.skipped = false,
   });
 
   /// The day the night closes, as `daysSince2000`: the day they woke up.
@@ -33,6 +34,14 @@ class ManualNight {
 
   final int utcOffsetMinutes;
 
+  /// Whether this day should be left out of the reckoning.
+  ///
+  /// Independent of the times, and deliberately so: a night spent on a plane
+  /// has a bedtime and a waking, and both are worth recording — what it does
+  /// not have is any bearing on whether the person is keeping their goal.
+  /// Saying "skip" is a judgement about the day, not a refusal to describe it.
+  final bool skipped;
+
   /// How long the person was in bed, going forward from bedtime to wake time.
   ///
   /// A bedtime later in the clock than the wake time means the night crossed
@@ -40,6 +49,35 @@ class ManualNight {
   int get inBedMinutes {
     final int span = wakeMinutes - bedMinutes;
     return span > 0 ? span : span + 1440;
+  }
+
+  /// The night [episode] describes, as the sheet asks for it.
+  ///
+  /// The inverse of [toEpisode], and it has to exist: without it the sheet
+  /// opens on the goal every time, so a person who opens a recorded night only
+  /// to mark the day skipped would overwrite what the watch measured with the
+  /// times they were aiming for.
+  factory ManualNight.fromEpisode(
+    core.SleepEpisode episode, {
+    required int day,
+    bool skipped = false,
+  }) {
+    final int bed =
+        core.localMinutesOf(episode.bedStartMillis, episode.utcOffsetMinutes);
+    final int wake =
+        core.localMinutesOf(episode.wakeEndMillis, episode.utcOffsetMinutes);
+    final int inBed = (wake - bed) > 0 ? wake - bed : wake - bed + 1440;
+    return ManualNight(
+      day: day,
+      bedMinutes: bed,
+      wakeMinutes: wake,
+      // Left unsaid when it adds nothing: the sheet shows the time in bed by
+      // default, and repeating it as an override would make an ordinary night
+      // look like one that had been corrected.
+      asleepMinutes: episode.asleepMinutes == inBed ? null : episode.asleepMinutes,
+      utcOffsetMinutes: episode.utcOffsetMinutes,
+      skipped: skipped,
+    );
   }
 
   /// The night as the rest of the app understands one.

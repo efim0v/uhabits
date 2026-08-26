@@ -1442,6 +1442,18 @@ abstract class L10n {
   /// **'e.g. How did you sleep last night?'**
   String get sleepQuestionExample;
 
+  /// Toggle that leaves one day out of the reckoning, whatever was slept.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip this day'**
+  String get sleepSkipThisDay;
+
+  /// Sits under the skip toggle and says what skipping does.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded, but not counted for or against you.'**
+  String get sleepSkipExplained;
+
   /// No description provided for @sleepTargetBedtime.
   ///
   /// In en, this message translates to:

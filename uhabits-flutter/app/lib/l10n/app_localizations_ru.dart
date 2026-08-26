@@ -745,6 +745,13 @@ class L10nRu extends L10n {
   String get sleepQuestionExample => 'e.g. How did you sleep last night?';
 
   @override
+  String get sleepSkipThisDay => 'Skip this day';
+
+  @override
+  String get sleepSkipExplained =>
+      'Recorded, but not counted for or against you.';
+
+  @override
   String get sleepTargetBedtime => 'Target bedtime';
 
   @override

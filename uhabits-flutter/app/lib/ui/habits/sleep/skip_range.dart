@@ -64,28 +64,10 @@ class SkipRange {
   String toString() => 'SkipRange($fromDay..$toDay)';
 }
 
-/// How many of the last [windowDays] days carry a skip.
+/// Whether [day] is marked as not counting.
 ///
-/// Counted through the core's own `countSkippedDays`, which already knows what
-/// a skip is for both kinds of habit; counting them here as well would be a
-/// second answer to a question that already has one.
-int skippedDayCount(core.Habit habit, {required int today, int windowDays = 30}) {
-  final core.LocalDate from = core.LocalDate(today - windowDays + 1);
-  final core.LocalDate to = core.LocalDate(today);
-  return habit.originalEntries
-      .getByInterval(from, to)
-      .where((core.Entry e) => e.value == core.Entry.skip)
-      .length;
-}
-
-/// The most recent skipped day within the window, or null when there is none.
-int? lastSkippedDay(core.Habit habit,
-    {required int today, int windowDays = 30}) {
-  for (var day = today; day > today - windowDays; day--) {
-    if (habit.originalEntries.get(core.LocalDate(day)).value ==
-        core.Entry.skip) {
-      return day;
-    }
-  }
-  return null;
-}
+/// One place, because the question is asked from the sheet that sets it, the
+/// strip that draws it, and the section that reads it — and three answers to
+/// one question is how they come to disagree.
+bool isDaySkipped(core.Habit habit, int day) =>
+    habit.originalEntries.get(core.LocalDate(day)).value == core.Entry.skip;

@@ -52,25 +52,39 @@ class GoalSuggestion {
 
 /// Whether the timezone moved far enough to be worth setting days aside.
 ///
+/// How long after a jump the offer is still worth making.
+///
+/// A week: long enough to cover the trip and the days it took to settle,
+/// short enough that the offer is about something the person still remembers.
+const int timezoneSuggestionDays = 7;
+
 /// Only ever a suggestion. Marking days skipped is the person's judgement
 /// about their own week, and an app that made it for them would be deciding
 /// which of their nights counted.
 TimezoneSkipSuggestion? suggestSkipForTimezone(
-  Map<int, SleepEpisode> nights,
-) {
+  Map<int, SleepEpisode> nights, {
+  required int today,
+}) {
   final List<int> days = nights.keys.toList()..sort();
   if (days.length < 2) return null;
 
   for (var i = days.length - 1; i > 0; i--) {
     final int shift = nights[days[i]]!.utcOffsetMinutes -
         nights[days[i - 1]]!.utcOffsetMinutes;
-    if (shift.abs() >= timezoneJumpMinutes) {
-      return TimezoneSkipSuggestion(
-        fromDay: days[i],
-        toDay: days.last,
-        shiftMinutes: shift,
-      );
-    }
+    if (shift.abs() < timezoneJumpMinutes) continue;
+    // Found the most recent jump. Whether it is worth mentioning is a
+    // separate question, and the answer is no once the trip is over: an offer
+    // to excuse last month's flight is an offer to rewrite settled history,
+    // and it would stand on the screen for ever, because a jump that happened
+    // never stops having happened.
+
+
+    if (days.last - days[i] >= timezoneSuggestionDays) return null;
+    return TimezoneSkipSuggestion(
+      fromDay: days[i],
+      toDay: days.last,
+      shiftMinutes: shift,
+    );
   }
   return null;
 }

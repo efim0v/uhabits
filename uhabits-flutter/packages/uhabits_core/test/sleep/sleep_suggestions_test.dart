@@ -44,8 +44,7 @@ List<SleepEpisode> nightsShiftedBy(
 void main() {
   group('a change of timezone', () {
     test('two hours or more raises a suggestion', () {
-      final TimezoneSkipSuggestion? suggestion = suggestSkipForTimezone(
-        <int, SleepEpisode>{
+      final TimezoneSkipSuggestion? suggestion = suggestSkipForTimezone(today: 9000, <int, SleepEpisode>{
           8998: night(day: 8998, utcOffsetMinutes: 180),
           8999: night(day: 8999, utcOffsetMinutes: 180),
           9000: night(day: 9000, utcOffsetMinutes: -60),
@@ -59,7 +58,7 @@ void main() {
 
     test('just under two hours raises nothing', () {
       expect(
-        suggestSkipForTimezone(<int, SleepEpisode>{
+        suggestSkipForTimezone(today: 9000, <int, SleepEpisode>{
           8999: night(day: 8999, utcOffsetMinutes: 180),
           9000: night(day: 9000, utcOffsetMinutes: 61),
         }),
@@ -70,7 +69,7 @@ void main() {
 
     test('exactly two hours does raise one', () {
       expect(
-        suggestSkipForTimezone(<int, SleepEpisode>{
+        suggestSkipForTimezone(today: 9000, <int, SleepEpisode>{
           8999: night(day: 8999, utcOffsetMinutes: 180),
           9000: night(day: 9000, utcOffsetMinutes: 60),
         }),
@@ -80,8 +79,7 @@ void main() {
     });
 
     test('it works in both directions', () {
-      final TimezoneSkipSuggestion? east = suggestSkipForTimezone(
-        <int, SleepEpisode>{
+      final TimezoneSkipSuggestion? east = suggestSkipForTimezone(today: 9000, <int, SleepEpisode>{
           8999: night(day: 8999, utcOffsetMinutes: 0),
           9000: night(day: 9000, utcOffsetMinutes: 300),
         },
@@ -90,8 +88,7 @@ void main() {
     });
 
     test('the range reaches from the jump to the newest night', () {
-      final TimezoneSkipSuggestion? suggestion = suggestSkipForTimezone(
-        <int, SleepEpisode>{
+      final TimezoneSkipSuggestion? suggestion = suggestSkipForTimezone(today: 9000, <int, SleepEpisode>{
           8997: night(day: 8997, utcOffsetMinutes: 180),
           8998: night(day: 8998, utcOffsetMinutes: -240),
           8999: night(day: 8999, utcOffsetMinutes: -240),
@@ -104,7 +101,7 @@ void main() {
 
     test('a settled schedule raises nothing', () {
       expect(
-        suggestSkipForTimezone(<int, SleepEpisode>{
+        suggestSkipForTimezone(today: 9000, <int, SleepEpisode>{
           for (var d = 8990; d <= 9000; d++)
             d: night(day: d, utcOffsetMinutes: 180),
         }),
@@ -115,10 +112,65 @@ void main() {
 
     test('one night alone raises nothing', () {
       expect(
-        suggestSkipForTimezone(
-            <int, SleepEpisode>{9000: night(day: 9000)}),
+        suggestSkipForTimezone(today: 9000, <int, SleepEpisode>{9000: night(day: 9000)}),
         isNull,
         reason: 'sleep.skip#4',
+      );
+    });
+  });
+
+  group('how long the trip is worth mentioning', () {
+    test('a jump within the week is offered', () {
+      expect(
+        suggestSkipForTimezone(
+          today: 9000,
+          <int, SleepEpisode>{
+            8996: night(day: 8996, utcOffsetMinutes: 0),
+            8997: night(day: 8997, utcOffsetMinutes: 480),
+            9000: night(day: 9000, utcOffsetMinutes: 480),
+          },
+        ),
+        isNotNull,
+        reason: 'sleep.skip#4',
+      );
+    });
+
+    test('a jump older than the week is not', () {
+      // An offer to excuse last month's flight is an offer to rewrite settled
+      // history, and it would stand on the screen for ever: a jump that
+      // happened never stops having happened.
+      expect(
+        suggestSkipForTimezone(
+          today: 9000,
+          <int, SleepEpisode>{
+            8989: night(day: 8989, utcOffsetMinutes: 0),
+            8990: night(day: 8990, utcOffsetMinutes: 480),
+            9000: night(day: 9000, utcOffsetMinutes: 480),
+          },
+        ),
+        isNull,
+        reason: 'sleep.skip#4',
+      );
+    });
+
+    test('the boundary is the week itself', () {
+      Map<int, SleepEpisode> tripStartingOn(int jump) => <int, SleepEpisode>{
+            jump - 1: night(day: jump - 1, utcOffsetMinutes: 0),
+            jump: night(day: jump, utcOffsetMinutes: 480),
+            9000: night(day: 9000, utcOffsetMinutes: 480),
+          };
+
+      expect(
+        suggestSkipForTimezone(
+            today: 9000, tripStartingOn(9000 - timezoneSuggestionDays + 1)),
+        isNotNull,
+        reason: 'sleep.skip#4 — the last day inside the window',
+      );
+      expect(
+        suggestSkipForTimezone(
+            today: 9000, tripStartingOn(9000 - timezoneSuggestionDays)),
+        isNull,
+        reason: 'sleep.skip#4 — and the first day outside it',
       );
     });
   });

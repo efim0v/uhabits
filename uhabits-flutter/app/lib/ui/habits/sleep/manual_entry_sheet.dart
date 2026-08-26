@@ -31,6 +31,9 @@ Future<ManualNight?> showManualEntrySheet(
 }
 
 class ManualEntrySheet extends StatefulWidget {
+  /// The skip toggle, so a test can reach it without depending on its wording.
+  static const Key skipToggleKey = Key('sleep.manualEntry.skip');
+
   const ManualEntrySheet({
     required this.theme,
     required this.day,
@@ -54,6 +57,7 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
   late int _bedMinutes;
   late int _wakeMinutes;
   int? _asleepMinutes;
+  late bool _skipped;
 
   @override
   void initState() {
@@ -63,6 +67,7 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
     _bedMinutes = widget.initial?.bedMinutes ?? widget.goal.bedMinutes;
     _wakeMinutes = widget.initial?.wakeMinutes ?? widget.goal.wakeMinutes;
     _asleepMinutes = widget.initial?.asleepMinutes;
+    _skipped = widget.initial?.skipped ?? false;
   }
 
   ManualNight get _night => ManualNight(
@@ -71,6 +76,7 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
         wakeMinutes: _wakeMinutes,
         asleepMinutes: _asleepMinutes,
         utcOffsetMinutes: widget.utcOffsetMinutes,
+        skipped: _skipped,
       );
 
   Future<void> _pick({required bool bedtime}) async {
@@ -134,6 +140,30 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
               value: formatDurationMinutes(
                   _asleepMinutes ?? night.inBedMinutes),
               onTap: _pickAsleep,
+            ),
+            // Below the times rather than instead of them: a night on a
+            // plane still has a bedtime and a waking, and both are worth
+            // recording. What it has no bearing on is whether the goal is
+            // being kept.
+            SwitchListTile(
+              key: ManualEntrySheet.skipToggleKey,
+              contentPadding: EdgeInsets.zero,
+              value: _skipped,
+              onChanged: (bool value) => setState(() => _skipped = value),
+              title: Text(
+                l10n.sleepSkipThisDay,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: toFlutterColor(widget.theme.mediumContrastTextColor),
+                ),
+              ),
+              subtitle: Text(
+                l10n.sleepSkipExplained,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: toFlutterColor(widget.theme.lowContrastTextColor),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             FilledButton(

@@ -96,13 +96,6 @@ Widget section({
               firstDay: today - 13,
             ),
             StabilityCard(theme: theme, stability: stability),
-            SkipCard(
-              theme: theme,
-              skippedDays: skipped.length,
-              windowDays: 30,
-              lastSkippedLabel: skipped.isEmpty ? null : '14 Aug',
-              onMark: () {},
-            ),
           ],
         ),
       ),
@@ -146,7 +139,6 @@ void main() {
         expect(find.byType(NightsChart), findsOneWidget, reason: 'sleep.ui#3');
         expect(find.byType(StabilityCard), findsOneWidget,
             reason: 'sleep.stability#1');
-        expect(find.byType(SkipCard), findsOneWidget, reason: 'sleep.skip#3');
       });
     }
   });
@@ -197,7 +189,8 @@ void main() {
 
       expect(tester.takeException(), isNull, reason: 'sleep.ui#5');
       expect(find.byType(NightsChart), findsOneWidget, reason: 'sleep.ui#5');
-      expect(find.byType(SkipCard), findsOneWidget, reason: 'sleep.ui#5');
+      expect(find.byType(StabilityCard), findsOneWidget,
+          reason: 'sleep.ui#5');
     });
   });
 

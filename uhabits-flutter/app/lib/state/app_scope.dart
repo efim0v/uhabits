@@ -101,6 +101,22 @@ class AppScope {
   ///
   /// Which habits those are is asked of the repository each time rather than
   /// cached: a habit can become one, or stop being one, while the app runs.
+  /// Whether the offer to excuse a trip has already been turned down.
+  ///
+  /// Keyed by the day the trip began, so turning one down says nothing about
+  /// the next: a person who declines August's flight is not declining every
+  /// flight they will ever take. Kept in preferences rather than in the sleep
+  /// tables because it records what was said about the data, not the data.
+  bool travelPromptDismissed(int habitId, int fromDay) =>
+      preferencesStorage.getInt(_travelPromptKey(habitId), -1) == fromDay;
+
+  /// Remembers that it was turned down, for good.
+  void dismissTravelPrompt(int habitId, int fromDay) =>
+      preferencesStorage.putInt(_travelPromptKey(habitId), fromDay);
+
+  static String _travelPromptKey(int habitId) =>
+      'sleep.travelPromptDismissed.$habitId';
+
   /// Announces that a sleep habit's stored values changed.
   ///
   /// Sleep writes do not go through a Command: the values are computed from a

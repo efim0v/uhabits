@@ -70,58 +70,6 @@ void main() {
     });
   });
 
-  group('the skip card', () {
-    testWidgets('shows the count against its window', (tester) async {
-      await pump(
-        tester,
-        SkipCard(
-          theme: core.LightTheme(),
-          skippedDays: 2,
-          windowDays: 30,
-          lastSkippedLabel: '14 Aug',
-          onMark: () {},
-        ),
-      );
-      expect(find.text('2 of 30 days skipped'), findsOneWidget,
-          reason: 'sleep.skip#3');
-      expect(find.textContaining('14 Aug'), findsOneWidget,
-          reason: 'sleep.skip#3');
-    });
-
-    testWidgets('is shown even when nothing was skipped', (tester) async {
-      // The count is the standing check on unrestricted back-dating; hiding it
-      // at zero would hide it exactly when the habit is going well.
-      await pump(
-        tester,
-        SkipCard(
-          theme: core.LightTheme(),
-          skippedDays: 0,
-          windowDays: 30,
-          lastSkippedLabel: null,
-          onMark: () {},
-        ),
-      );
-      expect(find.text('0 of 30 days skipped'), findsOneWidget,
-          reason: 'sleep.skip#3');
-    });
-
-    testWidgets('offers a way to mark a range', (tester) async {
-      var marked = 0;
-      await pump(
-        tester,
-        SkipCard(
-          theme: core.LightTheme(),
-          skippedDays: 0,
-          windowDays: 30,
-          lastSkippedLabel: null,
-          onMark: () => marked++,
-        ),
-      );
-      await tester.tap(find.text('Mark'));
-      await tester.pumpAndSettle();
-      expect(marked, 1, reason: 'sleep.skip#1');
-    });
-  });
 
   group('marking a range', () {
     test('writes a skip on every day of it', () {
@@ -249,39 +197,4 @@ void main() {
     });
   });
 
-  group('counting skips', () {
-    test('counts only what is inside the window', () {
-      final core.Habit habit = newHabit();
-      const SkipRange(8990, 8992).applyTo(habit); // inside
-      const SkipRange(8900, 8901).applyTo(habit); // long before
-
-      expect(skippedDayCount(habit, today: 9000, windowDays: 30), 3,
-          reason: 'sleep.skip#3');
-    });
-
-    test('counts nothing when nothing was skipped', () {
-      expect(skippedDayCount(newHabit(), today: 9000), 0,
-          reason: 'sleep.skip#3');
-    });
-
-    test('does not count a scored day as a skip', () {
-      final core.Habit habit = newHabit();
-      habit.originalEntries.add(core.Entry(core.LocalDate(8995), 0));
-      habit.originalEntries.add(core.Entry(core.LocalDate(8996), 87000));
-      expect(skippedDayCount(habit, today: 9000), 0, reason: 'sleep.skip#3');
-    });
-
-    test('reports the most recent skipped day', () {
-      final core.Habit habit = newHabit();
-      const SkipRange(8985, 8987).applyTo(habit);
-      const SkipRange(8995, 8996).applyTo(habit);
-      expect(lastSkippedDay(habit, today: 9000), 8996,
-          reason: 'sleep.skip#3');
-    });
-
-    test('reports nothing when there is nothing to report', () {
-      expect(lastSkippedDay(newHabit(), today: 9000), isNull,
-          reason: 'sleep.skip#3');
-    });
-  });
 }

@@ -213,21 +213,40 @@ void main() {
   });
 
   group('what is drawn', () {
-    testWidgets('a skipped day is hatched rather than barred', (tester) async {
+    testWidgets('a skipped day is marked on its own column', (tester) async {
       await pumpChart(
         tester,
         days: <int>[8999, 9000],
         skipped: <int>{9000},
       );
-      expect(find.byType(NightBar), findsOneWidget, reason: 'sleep.ui#4');
       expect(find.byType(SkippedDayMark), findsOneWidget,
           reason: 'sleep.ui#4');
     });
 
-    testWidgets('a skip wins over a night stored for the same day',
+    testWidgets('the mark covers exactly one day, no more', (tester) async {
+      // It was diagonal hatching, and a diagonal does not stop at a column:
+      // the strokes of one excused day ran into its neighbours, so three read
+      // as a week.
+      await pumpChart(
+        tester,
+        days: <int>[8997, 8998, 8999, 9000],
+        skipped: <int>{8998},
+        visibleDays: 4,
+      );
+
+      final Rect mark = tester.getRect(find.byType(SkippedDayMark));
+      final Rect chart = tester.getRect(find.byType(NightsChart));
+      expect(mark.width, lessThan(chart.width / 3),
+          reason: 'sleep.ui#4 — one column of four, gutter and all');
+    });
+
+    testWidgets('a night recorded on a skipped day is still shown',
         (tester) async {
+      // Skipping says the day does not count, not that nothing happened. The
+      // mark used to replace the bar, so a night on a plane vanished the
+      // moment it was excused.
       await pumpChart(tester, days: <int>[9000], skipped: <int>{9000});
-      expect(find.byType(NightBar), findsNothing, reason: 'sleep.ui#4');
+      expect(find.byType(NightBar), findsOneWidget, reason: 'sleep.ui#4');
       expect(find.byType(SkippedDayMark), findsOneWidget,
           reason: 'sleep.ui#4');
     });

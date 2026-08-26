@@ -131,7 +131,22 @@ class NightsChart extends StatelessWidget {
                   window: visible,
                 ),
               ),
+              if (skippedDays.contains(day))
+                Positioned.fill(child: SkippedDayMark(theme: theme, day: day)),
               Positioned.fill(child: _dayColumn(day, visible)),
+              // The seam between one night and the next. Barely there on
+              // purpose: enough to read the strip as a row of days rather
+              // than as one drawing, and not enough to compete with it.
+              Positioned(
+                top: 0,
+                bottom: 0,
+                right: 0,
+                width: 1,
+                child: ColoredBox(
+                  color: toFlutterColor(theme.lowContrastTextColor)
+                      .withValues(alpha: 0.5),
+                ),
+              ),
             ],
           ),
         ),
@@ -148,10 +163,13 @@ class NightsChart extends StatelessWidget {
     );
   }
 
+  /// What was recorded for [day], over whatever the day itself says.
+  ///
+  /// A skipped day still shows its night when there is one: skipping is a
+  /// judgement about whether the day counts, not a claim that nothing
+  /// happened. It used to replace the bar, so a night on a plane vanished the
+  /// moment it was excused.
   Widget _dayColumn(int day, SleepWindow visible) {
-    if (skippedDays.contains(day)) {
-      return SkippedDayMark(theme: theme, day: day);
-    }
     final core.SleepEpisode? episode = nights[day];
     if (episode == null) return const SizedBox.shrink();
 
@@ -247,45 +265,24 @@ class SkippedDayMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _HatchPainter(toFlutterColor(theme.contrast20)),
+    // One filled cell, edge to edge, standing exactly on its own day.
+    //
+    // It was diagonal hatching, and diagonals do not stop at a column: the
+    // strokes of one skipped day ran on into its neighbours, so three excused
+    // days read as a week of them. A day is a rectangle, so the mark for a day
+    // is a rectangle.
+    final Color fill = toFlutterColor(theme.mediumContrastTextColor);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: fill.withValues(alpha: 0.18),
+        border: Border.symmetric(
+          vertical: BorderSide(color: fill.withValues(alpha: 0.45)),
+        ),
+      ),
       child: const SizedBox.expand(),
     );
   }
 }
-
-class _HatchPainter extends CustomPainter {
-  const _HatchPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = color
-      ..strokeWidth = 1;
-    for (double x = -size.height; x < size.width; x += 6) {
-      canvas.drawLine(
-        Offset(x, size.height),
-        Offset(x + size.height, 0),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_HatchPainter oldDelegate) => oldDelegate.color != color;
-}
-
-/// The target window, drawn behind the bars.
-///
-/// One rectangle per day rather than a single stripe: while the goal is
-/// catching up with a new timezone it moves an hour a night, and a straight
-/// band would quietly misrepresent what the days were judged against.
-/// One night's slice of the goal band.
-///
-/// A slice rather than a stripe because the goal itself moves: while it adapts
-/// to a new timezone the band is a staircase, one step per night.
 class _TargetBandSegment extends StatelessWidget {
   const _TargetBandSegment({
     required this.theme,
@@ -387,6 +384,16 @@ class _DayLabel extends StatelessWidget {
 }
 
 /// The two goal times, written down the left edge.
+/// The clock, written down the left edge.
+///
+/// Four readings at most: the two ends of the window and the two the goal
+/// names. The ends say how far the strip reaches, which is the only way to
+/// tell a bar that nearly touches the top from one that was cut off there;
+/// the goal says what the band across the middle is.
+///
+/// Where two would collide, the end wins. A goal time an hour from the edge is
+/// already obvious from the band, and two readings printed over each other are
+/// worse than one.
 class _Gutter extends StatelessWidget {
   const _Gutter({
     required this.theme,
@@ -398,10 +405,28 @@ class _Gutter extends StatelessWidget {
   final core.SleepGoal goal;
   final SleepWindow window;
 
+  /// How much of the height two labels need between them, as a fraction.
+  static const double _minGap = 0.11;
+
   @override
   Widget build(BuildContext context) {
-    final double? bed = window.fractionOf(goal.bedMinutes);
-    final double? wake = window.fractionOf(goal.wakeMinutes);
+    final int endMinutes = (window.startMinutes + window.spanMinutes) % 1440;
+
+    // In order of precedence, so the greedy pass below keeps the ends.
+    final List<(double, int)> wanted = <(double, int)>[
+      (0, window.startMinutes),
+      (1, endMinutes),
+      if (window.fractionOf(goal.bedMinutes) case final double f) (f, goal.bedMinutes),
+      if (window.fractionOf(goal.wakeMinutes) case final double f) (f, goal.wakeMinutes),
+    ];
+
+    final List<(double, int)> kept = <(double, int)>[];
+    for (final (double fraction, int minute) in wanted) {
+      final bool collides =
+          kept.any((k) => (k.$1 - fraction).abs() < _minGap);
+      if (!collides) kept.add((fraction, minute));
+    }
+
     final TextStyle style = TextStyle(
       fontSize: 10,
       color: toFlutterColor(theme.mediumContrastTextColor),
@@ -412,21 +437,12 @@ class _Gutter extends StatelessWidget {
         final double height = constraints.maxHeight;
         return Stack(
           children: <Widget>[
-            if (bed != null)
+            for (final (double fraction, int minute) in kept)
               Positioned(
-                top: (bed * height - 6).clamp(0.0, height - 12),
+                top: (fraction * height - 6).clamp(0.0, height - 12),
                 right: 6,
                 child: Text(
-                  formatDeviceTime(context, minuteOfDay: goal.bedMinutes),
-                  style: style,
-                ),
-              ),
-            if (wake != null)
-              Positioned(
-                top: (wake * height - 6).clamp(0.0, height - 12),
-                right: 6,
-                child: Text(
-                  formatDeviceTime(context, minuteOfDay: goal.wakeMinutes),
+                  formatDeviceTime(context, minuteOfDay: minute),
                   style: style,
                 ),
               ),
@@ -436,18 +452,6 @@ class _Gutter extends StatelessWidget {
     );
   }
 }
-
-/// The slice of the clock a strip of nights is drawn against.
-///
-/// Was a constant — eight in the evening plus fifteen hours — on the reasoning
-/// that bedtimes cluster in the evening and wake times in the morning, so a
-/// full day would spend two thirds of the height on emptiness. True of most
-/// people and false of some, and for those it did not merely crop: a night
-/// falling outside the window was dropped without trace, so a person who wakes
-/// at noon saw an empty strip and no reason for it.
-///
-/// So the window is measured from what is there. It always contains the goal,
-/// so the target band is never cropped either, and it never exceeds a day.
 class SleepWindow {
   const SleepWindow({required this.startMinutes, required this.spanMinutes});
 

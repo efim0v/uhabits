@@ -27,6 +27,8 @@
 /// and res/menu/show_habit.xml; this file only draws it.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:provider/provider.dart';
@@ -78,6 +80,9 @@ export 'show_habit_menu.dart' show ShowHabitMenu, ShowHabitMenuItem;
 /// The habit detail screen. Owns the [ShowHabitModel] for as long as it is
 /// mounted.
 class ShowHabitScreen extends StatelessWidget {
+  /// The offer to excuse a trip, so a test can find it without its wording.
+  static const Key travelToastKey = Key('sleep.travelToast');
+
   const ShowHabitScreen({
     required this.habit,
     this.system,
@@ -300,6 +305,52 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     // observer is what gives the two callbacks their other half
     // (`audit5.the-habit-detail-screen-never-refreshes#1`).
     WidgetsBinding.instance.addObserver(this);
+    // After the first frame, because a toast needs a Scaffold to hang from
+    // and there is none until this build has run.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _offerToExcuseTravel());
+  }
+
+  /// Offers to set a trip aside, once, at the bottom of the screen.
+  ///
+  /// A toast rather than a card: the offer is about a moment, not about the
+  /// habit, and a card put it permanently between the person and the figures
+  /// they opened the screen to read. Every other block here answers "how did I
+  /// sleep"; this one asks a question, and questions belong out of the way.
+  void _offerToExcuseTravel() {
+    if (!mounted) return;
+    final core.TimezoneSkipSuggestion? travel =
+        travelSuggestionFor(widget.scope, widget.habit);
+    if (travel == null) return;
+
+    final L10n l10n = L10n.of(context);
+    final int? habitId = widget.habit.id;
+    final ScaffoldFeatureController<SnackBar, SnackBarClosedReason> shown =
+        ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        key: ShowHabitScreen.travelToastKey,
+        content: Text(l10n.sleepSuggestSkip),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: l10n.sleepMarkSkipped,
+          onPressed: () => applyTravelSuggestion(
+            widget.scope,
+            widget.habit,
+            travel,
+            onChanged: _repaintSleep,
+          ),
+        ),
+      ),
+    );
+    // Answered however it goes away — taken up, swiped off, or left to time
+    // out. All three mean the person has seen it, and an offer seen is an
+    // offer answered: asking again tomorrow about the same trip is what made
+    // the old card unbearable.
+    unawaited(shown.closed.then((SnackBarClosedReason _) {
+      if (habitId != null) {
+        widget.scope.dismissTravelPrompt(habitId, travel.fromDay);
+      }
+    }));
   }
 
   /// `ShowHabitActivity.onResume` / `onPause` for the transitions that are not

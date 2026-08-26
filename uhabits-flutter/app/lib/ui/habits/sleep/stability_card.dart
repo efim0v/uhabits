@@ -69,68 +69,6 @@ class StabilityCard extends StatelessWidget {
     );
   }
 }
-
-/// How many days were set aside, and when the last of them was.
-///
-/// Shown at all times, and deliberately not hidden when the count is zero.
-/// Marking a day skipped is unrestricted, including in the past; a standing
-/// count is what keeps that freedom honest.
-class SkipCard extends StatelessWidget {
-  const SkipCard({
-    required this.theme,
-    required this.skippedDays,
-    required this.windowDays,
-    required this.lastSkippedLabel,
-    required this.onMark,
-    super.key,
-  });
-
-  final core.Theme theme;
-  final int skippedDays;
-  final int windowDays;
-
-  /// Already formatted for the locale, or null when nothing was skipped.
-  final String? lastSkippedLabel;
-
-  final VoidCallback onMark;
-
-  @override
-  Widget build(BuildContext context) {
-    final L10n l10n = L10n.of(context);
-    return SleepCard(
-      theme: theme,
-      title: l10n.sleepSkipped,
-      trailing: TextButton(
-        onPressed: onMark,
-        child: Text(l10n.sleepMarkSkipped),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            l10n.sleepSkippedCount(skippedDays, windowDays),
-            style: TextStyle(
-              fontSize: 15,
-              color: toFlutterColor(theme.highContrastTextColor),
-            ),
-          ),
-          if (lastSkippedLabel != null) ...<Widget>[
-            const SizedBox(height: 2),
-            Text(
-              l10n.sleepLastSkipped(lastSkippedLabel!),
-              style: TextStyle(
-                fontSize: 12,
-                color: toFlutterColor(theme.mediumContrastTextColor),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _Figure extends StatelessWidget {
   const _Figure({
     required this.theme,

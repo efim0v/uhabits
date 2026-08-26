@@ -323,6 +323,14 @@
   "@sleepQuestionExample": {
     "description": "Placeholder for the question a sleep habit asks in the morning."
   },
+  "sleepSkipThisDay": "Skip this day",
+  "@sleepSkipThisDay": {
+    "description": "Toggle that leaves one day out of the reckoning, whatever was slept."
+  },
+  "sleepSkipExplained": "Recorded, but not counted for or against you.",
+  "@sleepSkipExplained": {
+    "description": "Sits under the skip toggle and says what skipping does."
+  },
   "sleepTargetBedtime": "Target bedtime",
   "sleepTargetWakeTime": "Target wake time",
   "sleepMinimumSleep": "Minimum sleep",
