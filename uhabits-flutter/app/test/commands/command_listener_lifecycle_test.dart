@@ -574,6 +574,43 @@ void main() {
           reason: 'commands.command-runner-listeners#8 — stopListening() means '
               'removeListener(this): a later command reaches none of them');
     });
+
+    test('the computed-habit hooks come off with the scope', () {
+      final scope = openScope();
+      final tray = NotificationTray(
+        scope.taskRunner,
+        scope.commandRunner,
+        scope.preferences,
+        _FakeSystemTray(<String>[]),
+      );
+      final scheduler = ReminderScheduler(
+        scope.commandRunner,
+        scope.habitList,
+        _FakeSystemScheduler(<String>[]),
+        WidgetPreferences(scope.preferencesStorage),
+      );
+      final sync = WidgetSync(
+        bridge: HomeWidgetBridge(
+          habitList: scope.habitList,
+          registry: WidgetRegistry(scope.preferencesStorage),
+          platform: _SilentHomeWidgetPlatform(),
+        ),
+        commandRunner: scope.commandRunner,
+        taskRunner: scope.taskRunner,
+        midnightTimer: scope.midnightTimer,
+        preferences: scope.preferences,
+      );
+      // Steps (7), (8) and (9) — the same sequence that registers the
+      // computed-habit hooks alongside the three app-scoped listeners.
+      scope.startServices(tray: tray, scheduler: scheduler, sync: sync);
+
+      final int before = scope.commandRunner.listenerCount;
+      scope.close();
+      scopes.remove(scope);
+
+      expect(scope.commandRunner.listenerCount, lessThan(before),
+          reason: 'computed.lifecycle#2');
+    });
   });
 }
 

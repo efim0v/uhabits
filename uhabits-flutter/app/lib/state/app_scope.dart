@@ -31,6 +31,7 @@ import '../platform/flutter_files.dart';
 import '../platform/flutter_notification_tray.dart';
 import '../platform/home_widget_bridge.dart';
 import 'app_preferences.dart';
+import 'computed_habit_hooks.dart';
 import 'intent_router.dart';
 import '../platform/sleep_data_source_factory.dart';
 import '../platform/sleep_prompt_scheduler.dart';
@@ -708,6 +709,14 @@ class AppScope {
     scheduler.startListening();
     tray.startListening();
 
+    // Withdraws a computed habit's question when the habit goes away. Held so
+    // that close() can take it off again.
+    _computedHooks = ComputedHabitHooks(
+      cancelPrompt: (Habit habit) =>
+          unawaited(sleepPrompts?.cancel(habit) ?? Future<void>.value()),
+    );
+    commandRunner.addListener(_computedHooks!);
+
     _started = _Started(
       tray: tray,
       scheduler: scheduler,
@@ -732,6 +741,9 @@ class AppScope {
   }
 
   _Started? _started;
+
+  /// Held only so [close] can find the listener [startServices] registered.
+  ComputedHabitHooks? _computedHooks;
 
   /// The device — or Loop's own, through the Android 13 per-app language
   /// picker — changed language while the app was running.
@@ -951,6 +963,9 @@ class AppScope {
       started.sync.stopListening();
       started.tray.stopListening();
     }
+    final ComputedHabitHooks? hooks = _computedHooks;
+    if (hooks != null) commandRunner.removeListener(hooks);
+    _computedHooks = null;
     cache.cancelTasks();
     database.close();
   }

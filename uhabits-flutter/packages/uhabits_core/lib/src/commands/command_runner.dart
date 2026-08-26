@@ -53,6 +53,14 @@ class CommandRunner {
   void removeListener(CommandRunnerListener l) {
     _listeners.remove(l);
   }
+
+  /// How many listeners are currently registered.
+  ///
+  /// Exists only so a test can confirm a listener came off without exposing
+  /// the list itself — `commands.command-runner-listeners#8` and
+  /// `computed.lifecycle#2` both check a count dropped after a teardown, not
+  /// what the list holds.
+  int get listenerCount => _listeners.length;
 }
 
 /// Port of `CommandRunner.Listener`. Dart has no nested classes, so the Kotlin
