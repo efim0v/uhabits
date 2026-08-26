@@ -1013,13 +1013,21 @@ class _HabitListViewState extends State<_HabitListView>
         model.onToggle(habit, date, value, notes, origin.dx, origin.dy);
       },
       onEdit: (date) {
-        // A sleep habit's value is computed from a night, not typed in. The
-        // number popup would take a percentage the next recompute overwrites,
-        // so the gesture opens the night instead. No parity rule covers this:
-        // the original has no habit that works this way.
-        final core.SleepGoal? sleepGoal =
-            _model.scope.sleepRepository.goalFor(habit.id!);
-        if (sleepGoal != null) {
+        // A computed habit's value is the app's to write, not the person's to
+        // type. The number popup would take a value the next recompute
+        // overwrites — or, on a day the recompute never reaches, one that
+        // stands for ever. Asked of the definition rather than of the sleep
+        // goal: the question is whether the day is computed at all, and only
+        // some kinds will ever have a goal (`computed.write-paths#3`). No
+        // parity rule covers this: the original has no habit that works this
+        // way.
+        if (_model.scope.definitions.isComputed(habit.id!)) {
+          // Where it is a sleep habit, the gesture opens the night the day is
+          // computed from instead of refusing outright
+          // (`computed.write-paths#4`).
+          final core.SleepGoal? sleepGoal =
+              _model.scope.sleepRepository.goalFor(habit.id!);
+          if (sleepGoal == null) return;
           unawaited(enterNightByHand(
             context,
             scope: _model.scope,
