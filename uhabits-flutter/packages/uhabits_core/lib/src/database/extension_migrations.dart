@@ -55,6 +55,16 @@ create table SleepGoals (
 );""",
   101: r"""
 alter table SleepGoals add column covered_from_day integer;""",
+  102: r"""
+create table HabitDefinitions (
+    habit integer primary key references Habits(id) on delete cascade,
+    kind text not null,
+    committed_from integer,
+    payload text not null
+);
+
+insert into HabitDefinitions (habit, kind, payload)
+    select habit, 'sleep', '{}' from SleepGoals;""",
 };
 
 /// The schema version this build ships.
@@ -64,7 +74,7 @@ alter table SleepGoals add column covered_from_day integer;""",
 /// asks "is this file newer than we understand" or "bring this file up to
 /// date" means this one; anything still asking [databaseVersion] would refuse
 /// our own database.
-const int appDatabaseVersion = 101;
+const int appDatabaseVersion = 102;
 
 /// Whether a database at [version] is one this build can bring up to date.
 ///

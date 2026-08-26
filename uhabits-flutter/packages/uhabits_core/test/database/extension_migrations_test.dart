@@ -157,4 +157,48 @@ void main() {
           reason: 'sleep.persistence#3');
     });
   });
+
+  group('migration 102', () {
+    test('migration 102 creates the definitions table with a cascade', () {
+      final Database db = openAppSchemaDatabase();
+      addTearDown(db.close);
+
+      expect(db.getVersion(), 102, reason: 'computed.schema#1');
+      expect(
+        db.queryInt("select count(*) from sqlite_master "
+            "where type = 'table' and name = 'HabitDefinitions'"),
+        1,
+        reason: 'computed.schema#1',
+      );
+
+      // The cascade, exercised rather than read off the DDL.
+      db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
+      db.run("insert into HabitDefinitions (habit, kind, payload) "
+          "values (1,'sleep','{}')");
+      db.run('delete from Habits where id = 1');
+
+      expect(db.queryInt('select count(*) from HabitDefinitions'), 0,
+          reason: 'computed.schema#2 — a habit takes its definition with it');
+    });
+
+    test('a habit that already had a sleep goal is marked', () {
+      final Database db = openAppSchemaDatabaseAt(101);
+      addTearDown(db.close);
+      db.run("insert into Habits (id, name, uuid) values (1, 'Sleep', 'u1')");
+      db.run('insert into SleepGoals (habit, bed_minutes, wake_minutes, '
+          'min_sleep_minutes, weight_sleep, weight_bed, weight_wake, '
+          'half_credit_time_minutes, half_credit_sleep_minutes, home_utc_offset, '
+          'adaptation_minutes_per_day, merge_gap_minutes, prompt_after_wake_minutes) '
+          'values (1,1380,420,450,0.4,0.3,0.3,90,60,0,60,60,60)');
+
+      db.migrateTo(102, (int v) => migrationSqlFor(v) ?? '');
+
+      expect(
+          db.queryInt("select count(*) from HabitDefinitions "
+              "where habit = 1 and kind = 'sleep'"),
+          1,
+          reason: 'computed.schema#3 — an existing sleep habit is not left '
+              'unmarked');
+    });
+  });
 }

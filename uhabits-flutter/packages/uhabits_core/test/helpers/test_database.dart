@@ -44,3 +44,15 @@ Database openAppSchemaDatabase() {
   applyConnectionSettings(db);
   return db;
 }
+
+/// The app schema, stopped at [version].
+///
+/// Exists so a migration can be tested against the schema it actually runs
+/// against, rather than against the finished one.
+Database openAppSchemaDatabaseAt(int version) {
+  final db = openMemoryDatabase();
+  db.setVersion(8);
+  db.migrateTo(version, (v) => migrationSqlFor(v) ?? '');
+  applyConnectionSettings(db);
+  return db;
+}
