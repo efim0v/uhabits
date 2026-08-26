@@ -28,6 +28,8 @@
   `test/sleep/stored_value_test.dart:8-26`).
 - Значение дня — `доля × 1000`, строго выше 3.
 - Отсутствующий день остаётся отсутствующим: синтетический ноль не пишется.
+- Правила слоя живут в `docs/extensions/COMPUTED.md`, не в `SLEEP.md`:
+  тот обязан содержать только `sleep.*` (`test/tooling/parity_coverage_test.dart`).
 - Каждое правило реестра цитируется в `expect(..., reason:)`.
 - Тест не удаляется и не ослабляется ради зелёного прогона.
 - Каждая правка подтверждается мутацией: ломаем правку — тест падает.
@@ -131,7 +133,7 @@ group('what a recompute leaves alone', () {
 
 - [ ] **Шаг 6: записать правило**
 
-В `docs/extensions/SLEEP.md` добавить раздел:
+В `docs/extensions/COMPUTED.md` добавить раздел:
 
 ```markdown
 - [x] `computed.day-write`
@@ -141,7 +143,7 @@ group('what a recompute leaves alone', () {
 - [ ] **Шаг 7: коммит**
 
 ```bash
-git add packages/uhabits_core docs/extensions/SLEEP.md
+git add packages/uhabits_core docs/extensions/COMPUTED.md
 git commit -m "Keep the note when a recompute replaces the value"
 ```
 
@@ -382,7 +384,7 @@ class ComputedHabitHooks implements CommandRunnerListener {
 - [ ] **Шаг 9: коммит**
 
 ```bash
-git add app docs/extensions/SLEEP.md
+git add app docs/extensions/COMPUTED.md
 git commit -m "Withdraw a computed habit's question when the habit goes away"
 ```
 
@@ -518,7 +520,7 @@ test('a habit that already had a sleep goal is marked', () {
 - [ ] **Шаг 8: коммит**
 
 ```bash
-git add packages/uhabits_core docs/extensions/SLEEP.md
+git add packages/uhabits_core docs/extensions/COMPUTED.md
 git commit -m "Add the definitions table, and mark the sleep habits that exist"
 ```
 
@@ -842,7 +844,7 @@ export 'src/computed/habit_definition.dart';
 - [ ] **Шаг 10: коммит**
 
 ```bash
-git add packages/uhabits_core docs/extensions/SLEEP.md
+git add packages/uhabits_core docs/extensions/COMPUTED.md
 git commit -m "Give a computed habit somewhere to say so"
 ```
 
@@ -1020,7 +1022,7 @@ is left alone» и тест сна `sleep.skip#6` обязаны упасть. �
 - [ ] **Шаг 9: коммит**
 
 ```bash
-git add packages/uhabits_core docs/extensions/SLEEP.md
+git add packages/uhabits_core docs/extensions/COMPUTED.md
 git commit -m "One door for writing a computed day"
 ```
 
@@ -1138,7 +1140,7 @@ test('randomising a computed habit does nothing at all', () {
 - [ ] **Шаг 9: коммит**
 
 ```bash
-git add packages/uhabits_core app docs/extensions/SLEEP.md
+git add packages/uhabits_core app docs/extensions/COMPUTED.md
 git commit -m "Shut randomise for habits whose days the app computes"
 ```
 
@@ -1267,7 +1269,7 @@ class DefinitionImporter {
 - [ ] **Шаг 9: коммит**
 
 ```bash
-git add packages/uhabits_core app docs/extensions/SLEEP.md
+git add packages/uhabits_core app docs/extensions/COMPUTED.md
 git commit -m "Carry a habit's definition through a restore"
 ```
 
@@ -1340,7 +1342,7 @@ test('a new sleep habit is marked as computed', () {
 - [ ] **Шаг 7: коммит**
 
 ```bash
-git add app docs/extensions/SLEEP.md
+git add app docs/extensions/COMPUTED.md
 git commit -m "Mark a new sleep habit as computed when it is created"
 ```
 
@@ -1479,7 +1481,7 @@ void main() {
 - [ ] **Шаг 8: коммит**
 
 ```bash
-git add app docs/extensions/SLEEP.md
+git add app docs/extensions/COMPUTED.md
 git commit -m "Refuse a tap that promises what a computed habit cannot keep"
 ```
 
