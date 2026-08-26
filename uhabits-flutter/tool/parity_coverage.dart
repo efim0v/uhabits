@@ -22,14 +22,16 @@ void main(List<String> args) {
   final repoRoot = Directory.current.path.endsWith('uhabits-flutter')
       ? Directory.current.parent.path
       : Directory.current.path;
-  // Two ledgers, one format. FEATURES.md records what the Kotlin original
-  // does and must never grow a rule without a counterpart there; SLEEP.md
-  // records extensions that have no original at all. Keeping them apart is
-  // what lets "matches Kotlin" stay a claim worth making. Ids cannot collide:
-  // extension rules all carry a `sleep.` prefix.
+  // Three ledgers, one format. FEATURES.md records what the Kotlin original
+  // does and must never grow a rule without a counterpart there; each
+  // extension ledger records extensions that have no original at all.
+  // Keeping them apart is what lets "matches Kotlin" stay a claim worth
+  // making. Ids cannot collide: each extension ledger carries its own
+  // prefix.
   final ledgerFiles = <File>[
     File('$repoRoot/docs/parity/FEATURES.md'),
     File('$repoRoot/docs/extensions/SLEEP.md'),
+    File('$repoRoot/docs/extensions/COMPUTED.md'),
   ];
   for (final file in ledgerFiles) {
     if (!file.existsSync()) {

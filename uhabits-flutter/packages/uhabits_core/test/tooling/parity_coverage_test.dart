@@ -100,14 +100,23 @@ void main() {
     });
 
     test('extension rules are all prefixed, so ids cannot collide', () {
-      final extensions =
-          File('${repoRoot.path}/docs/extensions/SLEEP.md').readAsLinesSync();
-      final ledger = parseLedgers([extensions]);
-      for (final feature in ledger.rulesByFeature.keys) {
-        expect(feature, startsWith('sleep.'));
-      }
-      for (final rule in ledger.rulesByFeature.values.expand((r) => r)) {
-        expect(rule, startsWith('sleep.'));
+      // Every extension ledger carries its own prefix, precisely so that two
+      // ledgers can never mint the same id. Checked together so a new ledger
+      // cannot join without being held to the same rule as SLEEP.md.
+      const ledgersAndPrefixes = <String, String>{
+        'SLEEP.md': 'sleep.',
+        'COMPUTED.md': 'computed.',
+      };
+      for (final entry in ledgersAndPrefixes.entries) {
+        final lines = File('${repoRoot.path}/docs/extensions/${entry.key}')
+            .readAsLinesSync();
+        final ledger = parseLedgers([lines]);
+        for (final feature in ledger.rulesByFeature.keys) {
+          expect(feature, startsWith(entry.value), reason: entry.key);
+        }
+        for (final rule in ledger.rulesByFeature.values.expand((r) => r)) {
+          expect(rule, startsWith(entry.value), reason: entry.key);
+        }
       }
     });
   });
