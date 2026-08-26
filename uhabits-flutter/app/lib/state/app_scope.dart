@@ -85,6 +85,7 @@ class AppScope {
     required this.adapter,
     required this.sleepRepository,
     required this.sleepSync,
+    required this.definitions,
   });
 
   final Database database;
@@ -94,6 +95,9 @@ class AppScope {
   /// A habit is a sleep habit exactly when it has a goal here; nothing else in
   /// the model records that fact.
   final SleepSessionRepository sleepRepository;
+
+  /// Where a habit says its days are computed. See [DefinitionRepository].
+  final DefinitionRepository definitions;
 
   /// Reads sleep from the platform and turns it into scored days.
   final SleepSync sleepSync;
@@ -907,8 +911,10 @@ class AppScope {
       database,
       () => DateTime.now().millisecondsSinceEpoch,
     );
+    final definitions = DefinitionRepository(database);
     return AppScope._(
       sleepRepository: sleepRepository,
+      definitions: definitions,
       sleepSync: SleepSync(
         repository: sleepRepository,
         // The resolved one, not the parameter: a bare StandardLogging writes

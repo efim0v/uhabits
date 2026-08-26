@@ -60,3 +60,7 @@ export 'src/sleep/timezone_drift.dart';
 export 'src/sleep/sleep_sync.dart';
 export 'src/sleep/sleep_reminder.dart';
 export 'src/sleep/sleep_suggestions.dart';
+
+// Computed habits
+export 'src/computed/definition_repository.dart';
+export 'src/computed/habit_definition.dart';
