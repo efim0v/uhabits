@@ -1094,6 +1094,9 @@ void main() {
         commandRunner: commandRunner,
         notificationTray: tray,
         preferences: spyPreferences,
+        // No habit in this file is computed; the guard itself is exercised
+        // by test/state/computed_write_paths_test.dart.
+        isComputed: (int _) => false,
       );
       habit = addHabit();
       today = getToday();
@@ -1405,6 +1408,7 @@ void main() {
         commandRunner: realRunner,
         notificationTray: tray,
         preferences: spyPreferences,
+        isComputed: (int _) => false,
       );
       tapBehavior.onAddRepetition(habit, today);
       await taskRunner.awaitAll();
@@ -1490,6 +1494,7 @@ void main() {
         commandRunner: realRunner,
         notificationTray: realTray,
         preferences: preferences,
+        isComputed: (int _) => false,
       );
 
       // Something is showing for this habit, so the first cancel has work to
@@ -1561,6 +1566,7 @@ void main() {
         commandRunner: commandRunner,
         notificationTray: tray,
         preferences: spyPreferences,
+        isComputed: (int _) => false,
       );
       habit = addHabit();
       today = getToday();
@@ -1744,6 +1750,7 @@ void main() {
           log,
         ),
         preferences: spyPreferences,
+        isComputed: (int _) => false,
       );
       final Habit habit = addHabit();
       final LocalDate today = getToday();

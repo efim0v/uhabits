@@ -433,7 +433,7 @@ class WidgetBehavior {
     required CommandRunner commandRunner,
     required NotificationTray notificationTray,
     required Preferences preferences,
-    this.isComputed,
+    required this.isComputed,
   })  : _habitList = habitList,
         _commandRunner = commandRunner,
         _notificationTray = notificationTray,
@@ -450,7 +450,13 @@ class WidgetBehavior {
   /// Not upstream. Whether a habit's days are computed by the app rather
   /// than entered by the person. Given as a predicate rather than as the
   /// repository, because the behaviour needs the answer and not the table.
-  final bool Function(int habitId)? isComputed;
+  ///
+  /// Required, and not optional with a permissive default: the guard lives on
+  /// the instance, so a construction site that leaves it out builds a door
+  /// with no lock. This class had two sites when the plan named one, and the
+  /// one it missed was the one a real widget tap goes through. A third cannot
+  /// forget now — the compiler asks.
+  final bool Function(int habitId) isComputed;
 
   void onAddRepetition(Habit habit, LocalDate date) {
     _notificationTray.cancel(habit);
@@ -515,7 +521,7 @@ class WidgetBehavior {
     // that reach this method, because five copies of one rule is five places
     // for it to drift.
     final int? id = habit.id;
-    if (id != null && (isComputed?.call(id) ?? false)) return;
+    if (id != null && isComputed(id)) return;
 
     _commandRunner.run(
       CreateRepetitionCommand(_habitList, habit, date, newValue, notes),

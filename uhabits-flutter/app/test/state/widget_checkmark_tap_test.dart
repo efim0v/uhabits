@@ -139,6 +139,7 @@ void main() {
             _SilentTray(),
           ),
           preferences: scope.preferences,
+          isComputed: (int id) => scope.definitions.isComputed(id),
         ),
         preferences: scope.preferences,
         updateWidgets: () async {},

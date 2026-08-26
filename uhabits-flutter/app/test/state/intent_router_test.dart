@@ -99,6 +99,9 @@ void main() {
       commandRunner: commandRunner,
       notificationTray: tray,
       preferences: preferences,
+      // No habit in this file is computed; the guard itself is exercised by
+      // test/state/computed_write_paths_test.dart.
+      isComputed: (int _) => false,
     );
     logOut = StringBuffer();
     logErr = StringBuffer();
