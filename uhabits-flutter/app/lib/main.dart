@@ -237,6 +237,14 @@ class _ThemedAppState extends State<_ThemedApp> with WidgetsBindingObserver {
                 commandRunner: scope.commandRunner,
                 notificationTray: tray,
                 preferences: scope.preferences,
+                // A second `WidgetBehavior`, alongside the one
+                // `AppScope._startPlatformServices` builds for the
+                // notification button and the iOS staged-tap queue: this one
+                // is what an actual home-screen widget tap reaches, over the
+                // `uhabits://widget/...` deep link. The guard lives on the
+                // instance, not the class, so it has to be wired here too —
+                // this is the door `computed.write-paths` is named for.
+                isComputed: (int id) => scope.definitions.isComputed(id),
               ),
               preferences: scope.preferences,
               updateWidgets: sync.updateWidgets,

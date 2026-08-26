@@ -595,6 +595,7 @@ class AppScope {
       commandRunner: commandRunner,
       notificationTray: tray,
       preferences: preferences,
+      isComputed: (int id) => definitions.isComputed(id),
     );
 
     final sync = WidgetSync(

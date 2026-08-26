@@ -433,6 +433,7 @@ class WidgetBehavior {
     required CommandRunner commandRunner,
     required NotificationTray notificationTray,
     required Preferences preferences,
+    this.isComputed,
   })  : _habitList = habitList,
         _commandRunner = commandRunner,
         _notificationTray = notificationTray,
@@ -445,6 +446,11 @@ class WidgetBehavior {
   final NotificationTray _notificationTray;
 
   final Preferences _preferences;
+
+  /// Not upstream. Whether a habit's days are computed by the app rather
+  /// than entered by the person. Given as a predicate rather than as the
+  /// repository, because the behaviour needs the answer and not the table.
+  final bool Function(int habitId)? isComputed;
 
   void onAddRepetition(Habit habit, LocalDate date) {
     _notificationTray.cancel(habit);
@@ -503,6 +509,14 @@ class WidgetBehavior {
   }
 
   void setValue(Habit habit, LocalDate date, int newValue, String notes) {
+    // A habit whose days the app computes has no "yes" to record: the next
+    // recompute would overwrite it, so accepting the tap would be a promise
+    // the app cannot keep. Refused here rather than at the five entry points
+    // that reach this method, because five copies of one rule is five places
+    // for it to drift.
+    final int? id = habit.id;
+    if (id != null && (isComputed?.call(id) ?? false)) return;
+
     _commandRunner.run(
       CreateRepetitionCommand(_habitList, habit, date, newValue, notes),
     );
