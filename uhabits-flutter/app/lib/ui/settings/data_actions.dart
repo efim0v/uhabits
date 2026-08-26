@@ -35,6 +35,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:uhabits_core/src/computed/definition_importer.dart';
 import 'package:uhabits_core/src/io/abstract_importer.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
@@ -552,6 +553,7 @@ GenericImporter buildGenericImporter({
     // A restored backup carries a sleep habit's goal and every night it ever
     // recorded; nothing else in the import re-keys those onto this device.
     sleepImporter: SleepImporter(scope.sleepRepository),
+    definitionImporter: DefinitionImporter(scope.definitions),
   );
   final rewire =
       RewireDBImporter(scope.habitList, scope.modelFactory, opener);

@@ -16,6 +16,7 @@ library;
 import '../commands/command_runner.dart';
 import '../commands/create_habit_command.dart';
 import '../commands/edit_habit_command.dart';
+import '../computed/definition_importer.dart';
 import '../database/database.dart';
 import '../database/habit_repository.dart';
 import '../database/extension_migrations.dart';
@@ -68,6 +69,7 @@ class LoopDBImporter {
     required Logging logging,
     required this.fileOpener,
     this.sleepImporter,
+    this.definitionImporter,
   }) : logger = logging.getLogger('LoopDBImporter');
 
   final HabitList habitList;
@@ -90,6 +92,11 @@ class LoopDBImporter {
   /// the ids the file was written with. Null wherever there is no sleep
   /// database to write to, which is every importer test that predates it.
   final SleepImporter? sleepImporter;
+
+  /// Not upstream, and for the same reason as [sleepImporter]: the mark that
+  /// makes a habit computed is keyed by habit id, and the ids here are not the
+  /// ids the file was written with.
+  final DefinitionImporter? definitionImporter;
 
   Future<bool> canHandle(UserFile file) async {
     if (!await _isSQLite3File(file)) return false;
@@ -181,7 +188,7 @@ class LoopDBImporter {
       // The habit's own rows are re-keyed by the commands above; the sleep
       // rows are not, and are lost unless they are carried across explicitly.
       sleepImporter?.importFor(db, habitData.id, habit.id!);
-
+      definitionImporter?.importFor(db, habitData.id, habit.id!);
     }
     habitList.resort();
     db.close();
