@@ -123,13 +123,19 @@ class ShowHabitMenuPresenter {
     required ShowHabitMenuPresenterSystem system,
     required TaskRunner taskRunner,
     math.Random? random,
+
+    /// Not upstream. Whether this habit's days are computed by the app rather
+    /// than entered — for those, `onRandomize` is not a shortcut for testing
+    /// but a way to lose data that cannot be recovered.
+    bool Function(int habitId)? isComputed,
   })  : _commandRunner = commandRunner,
         _habit = habit,
         _habitList = habitList,
         _screen = screen,
         _system = system,
         _taskRunner = taskRunner,
-        _random = random ?? math.Random();
+        _random = random ?? math.Random(),
+        _isComputed = isComputed;
 
   final CommandRunner _commandRunner;
 
@@ -144,6 +150,8 @@ class ShowHabitMenuPresenter {
   final TaskRunner _taskRunner;
 
   final math.Random _random;
+
+  final bool Function(int habitId)? _isComputed;
 
   /// Whether the Archive item applies: the plain negation of the flag, read
   /// fresh every time. The Android menu only asks once, in
@@ -226,7 +234,16 @@ class ShowHabitMenuPresenter {
   /// refreshed directly. Nothing is undoable and no command listener fires, so
   /// widgets, reminders and the habit-list cache keep showing the old data
   /// until something else refreshes them.
+  ///
+  /// Not upstream. If [_isComputed] says this habit's days are computed by the
+  /// app, the whole method is a no-op: `originalEntries.clear()` is
+  /// `deleteByHabitId` in SQLite, and it would take the computed values and
+  /// the person's own skips with it, unrecoverably outside the sync's read
+  /// window. `computed.lifecycle#3`.
   void onRandomize() {
+    final int? id = _habit.id;
+    if (id != null && (_isComputed?.call(id) ?? false)) return;
+
     _habit.originalEntries.clear();
     var strength = 50.0;
     for (var i = 0; i < 365 * 5; i++) {

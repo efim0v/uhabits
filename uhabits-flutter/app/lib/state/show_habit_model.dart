@@ -143,6 +143,7 @@ class ShowHabitModel extends ChangeNotifier
       screen: this,
       system: system ?? const _UnresolvedCSVOutputDir(),
       taskRunner: scope.taskRunner,
+      isComputed: (int id) => scope.definitions.isComputed(id),
     );
     menu = ShowHabitMenu(
       presenter: menuPresenter,

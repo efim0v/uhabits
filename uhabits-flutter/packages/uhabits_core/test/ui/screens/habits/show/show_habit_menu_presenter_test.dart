@@ -290,7 +290,11 @@ void main() {
   late LocalDate today;
 
   /// Builds a presenter for [h], optionally with a scripted generator.
-  ShowHabitMenuPresenter presenterFor(Habit h, {math.Random? random}) =>
+  ShowHabitMenuPresenter presenterFor(
+    Habit h, {
+    math.Random? random,
+    bool Function(int)? isComputed,
+  }) =>
       ShowHabitMenuPresenter(
         commandRunner: commandRunner,
         habit: h,
@@ -299,6 +303,7 @@ void main() {
         system: system,
         taskRunner: taskRunner,
         random: random,
+        isComputed: isComputed,
       );
 
   setUp(() {
@@ -754,6 +759,24 @@ void main() {
     expect(log, <String>['refresh'],
         reason: 'show-habit.randomize#8 — refresh is the only call the '
             'presenter makes; nothing else is notified');
+  });
+
+  test('randomising a computed habit does nothing at all', () {
+    // clear() is deleteByHabitId in SQLite: it takes the computed values and
+    // the person's own skips with it, and outside the read window nothing
+    // brings them back.
+    habit.originalEntries.add(Entry(LocalDate(9000), 89763));
+
+    // `presenterFor` is the file's own helper (line 293). Add the parameter to
+    // it rather than building a presenter by hand here — the helper is what the
+    // other twenty tests use, and two ways of building one is how they drift.
+    final ShowHabitMenuPresenter presenter =
+        presenterFor(habit, isComputed: (int _) => true);
+
+    presenter.onRandomize();
+
+    expect(habit.originalEntries.get(LocalDate(9000)).value, 89763,
+        reason: 'computed.lifecycle#3');
   });
 
   // -------------------------------------------------------------------------

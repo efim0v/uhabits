@@ -22,6 +22,7 @@
 - [x] `computed.lifecycle`
 1. `computed.lifecycle#1` Архивная привычка не читается с платформы и не получает напоминание.
 2. `computed.lifecycle#2` Удаление и архивация снимают собственный будильник вида; разархивация — нет.
+3. `computed.lifecycle#3` `onRandomize` ничего не делает для вычисляемой привычки.
 
 - [x] `computed.schema`
 1. `computed.schema#1` Миграция 102 создаёт HabitDefinitions.
