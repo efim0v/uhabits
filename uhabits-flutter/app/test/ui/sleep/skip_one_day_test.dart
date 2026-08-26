@@ -100,20 +100,85 @@ void main() {
 
   int valueOn(int d) => habit.originalEntries.get(LocalDate(d)).value;
 
+  /// Puts a night on [day] as the platform would have.
+  void recordWatchNight({
+    int offsetMinutes = 0,
+    int bedLocal = 23 * 60,
+    int wakeLocal = 7 * 60,
+  }) {
+    final int wake = (day + 10957) * 86400000 +
+        wakeLocal * 60000 -
+        offsetMinutes * 60000;
+    scope.sleepRepository.upsert(
+      habit.id!,
+      day,
+      SleepEpisode(
+        bedStartMillis: wake -
+            ((wakeLocal - bedLocal) > 0
+                    ? wakeLocal - bedLocal
+                    : wakeLocal - bedLocal + 1440) *
+                60000,
+        wakeEndMillis: wake,
+        asleepMinutes: 450,
+        utcOffsetMinutes: offsetMinutes,
+      ),
+      manual: false,
+    );
+  }
+
   group('the toggle', () {
-    testWidgets('marks the day, and the night is stored all the same',
-        (tester) async {
+    testWidgets('marks the day without inventing a night', (tester) async {
+      // The sheet opens on the goal when nothing is recorded. Confirming that
+      // used to store it, so excusing a day fabricated a perfect night nobody
+      // slept — and marked it as typed by hand, which is permanent.
       await openSheet(tester);
       await tester.tap(find.byKey(ManualEntrySheet.skipToggleKey));
       await tester.pumpAndSettle();
       await confirm(tester);
 
       expect(valueOn(day), Entry.skip, reason: 'sleep.skip#3');
-      expect(scope.sleepRepository.forDay(habit.id!, day), isNotNull,
-          reason: 'sleep.skip#7 — the night happened, it just does not count');
+      expect(scope.sleepRepository.forDay(habit.id!, day), isNull,
+          reason: 'sleep.skip#9 — nothing was described, so nothing is stored');
+    });
+
+    testWidgets('leaves a measured night measured', (tester) async {
+      // Confirming a night the watch recorded used to re-store it as manual,
+      // which exempts it from every future sync for ever.
+      recordWatchNight();
+      await openSheet(tester);
+      await tester.tap(find.byKey(ManualEntrySheet.skipToggleKey));
+      await tester.pumpAndSettle();
+      await confirm(tester);
+
+      expect(valueOn(day), Entry.skip, reason: 'sleep.skip#3');
+      expect(scope.sleepRepository.isManual(habit.id!, day), isFalse,
+          reason: 'sleep.skip#9 — the watch still owns this night');
+    });
+
+    testWidgets('does not re-time a night recorded in another zone',
+        (tester) async {
+      // The sheet used to stamp the phone's current offset onto whatever it
+      // saved. A night recorded eight hours away — or merely before a
+      // daylight saving change — moved by that difference.
+      recordWatchNight(offsetMinutes: 480);
+      final SleepEpisode before = scope.sleepRepository.forDay(habit.id!, day)!;
+
+      await openSheet(tester);
+      await tester.tap(find.byKey(ManualEntrySheet.skipToggleKey));
+      await tester.pumpAndSettle();
+      await confirm(tester);
+
+      final SleepEpisode after = scope.sleepRepository.forDay(habit.id!, day)!;
+      expect(after.utcOffsetMinutes, before.utcOffsetMinutes,
+          reason: 'sleep.skip#9');
+      expect(after.bedStartMillis, before.bedStartMillis,
+          reason: 'sleep.skip#9');
+      expect(after.wakeEndMillis, before.wakeEndMillis,
+          reason: 'sleep.skip#9');
     });
 
     testWidgets('left alone, the day is scored as usual', (tester) async {
+      recordWatchNight();
       await openSheet(tester);
       await confirm(tester);
 
@@ -156,6 +221,51 @@ void main() {
       expect(valueOn(day), isNot(Entry.skip), reason: 'sleep.skip#3');
       expect(valueOn(day), greaterThan(0),
           reason: 'sleep.skip#3 — and it is scored, not merely un-skipped');
+      expect(scope.sleepRepository.forDay(habit.id!, day), isNotNull,
+          reason: 'sleep.skip#9 — and the night it had is still there');
+    });
+  });
+
+  group('when a night really is described', () {
+    testWidgets('touching a time writes it down', (tester) async {
+      // The other half of the rule: a night the person did touch is theirs,
+      // and it is stored as typed by hand — which is what exempts it from
+      // being overwritten by the next sync.
+      await openSheet(tester);
+
+      await tester.tap(find.text('11:00 PM'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await confirm(tester);
+
+      expect(scope.sleepRepository.forDay(habit.id!, day), isNotNull,
+          reason: 'sleep.skip#9');
+      expect(scope.sleepRepository.isManual(habit.id!, day), isTrue,
+          reason: 'sleep.skip#9');
+    });
+
+    testWidgets('and it keeps the frame the night was recorded in',
+        (tester) async {
+      // Editing a night recorded elsewhere must correct the night, not move
+      // it. The sheet used to stamp the phone's current offset on whatever it
+      // wrote, so a correction of five minutes also moved the night by eight
+      // hours.
+      recordWatchNight(offsetMinutes: 480);
+
+      await openSheet(tester);
+      await tester.tap(find.text('11:00 PM'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await confirm(tester);
+
+      final SleepEpisode after = scope.sleepRepository.forDay(habit.id!, day)!;
+      expect(after.utcOffsetMinutes, 480, reason: 'sleep.skip#9');
+      expect(localMinutesOf(after.wakeEndMillis, after.utcOffsetMinutes),
+          7 * 60,
+          reason: 'sleep.skip#9 — and it still says seven in the morning '
+              'where it was recorded');
     });
   });
 

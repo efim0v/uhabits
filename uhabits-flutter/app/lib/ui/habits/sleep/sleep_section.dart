@@ -264,45 +264,60 @@ Future<void> enterNightByHand(
       scope.sleepRepository.forDay(habit.id!, day);
   final bool wasSkipped = isDaySkipped(habit, day);
 
+  // What is already known about this day, so opening it to change one thing
+  // does not silently discard the rest — and so that confirming without
+  // changing anything can be told from describing a night.
+  final ManualNight? opened = recorded != null
+      ? ManualNight.fromEpisode(recorded, day: day, skipped: wasSkipped)
+      : wasSkipped
+          ? ManualNight(
+              day: day,
+              bedMinutes: goal.bedMinutes,
+              wakeMinutes: goal.wakeMinutes,
+              utcOffsetMinutes: offset,
+              skipped: true,
+            )
+          : null;
+
   final ManualNight? night = await showManualEntrySheet(
     context,
     theme: theme,
     day: day,
     goal: goal,
     utcOffsetMinutes: offset,
-    // What is already known about this day, so opening it to change one thing
-    // does not silently discard the rest. Null only when there is nothing:
-    // then the sheet opens on the goal, which is the likeliest answer.
-    initial: recorded != null
-        ? ManualNight.fromEpisode(recorded, day: day, skipped: wasSkipped)
-        : wasSkipped
-            ? ManualNight(
-                day: day,
-                bedMinutes: goal.bedMinutes,
-                wakeMinutes: goal.wakeMinutes,
-                utcOffsetMinutes: offset,
-                skipped: true,
-              )
-            : null,
+    initial: opened,
   );
   if (night == null) return;
 
-  final core.SleepEpisode episode = night.toEpisode();
-  scope.sleepRepository.upsert(habit.id!, day, episode, manual: true);
+  // The times are written when the times were touched — see
+  // [ManualNight.timesEdited] for why confirming an untouched night must not
+  // count as describing one.
+  final core.SleepEpisode? episode =
+      night.timesEdited ? night.toEpisode() : null;
+  if (episode != null) {
+    scope.sleepRepository.upsert(habit.id!, day, episode, manual: true);
+  }
+
   // The skip is cleared before the recompute and set after it, because a
   // recompute deliberately leaves a skipped day alone (`sleep.skip#6`): with
   // the order the other way round, un-skipping a day would leave it holding
   // the skip it was supposed to lose.
   if (!night.skipped) SkipRange(day, day).clearFrom(habit);
-  scope.sleepSync.recomputeDays(habit, day, day);
+  // Through to today, not this day alone: a night's offset feeds the drift
+  // fold, so changing one changes the frame every later night is judged in.
+  scope.sleepSync.recomputeDays(
+      habit, day, scope.sleepSync.today().daysSince2000);
   if (night.skipped) SkipRange(day, day).applyTo(habit);
   _wrote(scope, habit, onChanged);
-  // Also written back to the platform, so a night typed in here shows up in
-  // the health app the rest of the data comes from.
-  await scope.sleepSync.source.writeSession(
-    episode.bedStartMillis,
-    episode.wakeEndMillis,
-  );
+
+  // Written back to the platform only when there is something new to tell it,
+  // so that opening a night changes nothing anywhere.
+  if (episode != null) {
+    await scope.sleepSync.source.writeSession(
+      episode.bedStartMillis,
+      episode.wakeEndMillis,
+    );
+  }
 }
 
 /// Moves the goal to what the recent nights suggest, and rescores everything.

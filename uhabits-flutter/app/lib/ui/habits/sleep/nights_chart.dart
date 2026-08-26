@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
@@ -55,10 +57,49 @@ class NightsChart extends StatelessWidget {
   /// not three fewer nights.
   static const double dayWidth = 30;
   static const double chartHeight = 158;
-  static const double gutterWidth = 44;
+  /// The narrowest the gutter is ever drawn, whatever the labels measure.
+  ///
+  /// It used to be the only width: a constant 44, which is narrower than
+  /// "11:00 PM" at its own size. The label overflowed to the left and was
+  /// clipped — always the leading digit — so eleven at night was drawn as
+  /// "1:00 PM". A scale that reports the wrong time is worse than no scale, so
+  /// the width is now measured from the readings themselves; see
+  /// [SleepWindow.gutterWidthFor].
+  static const double minGutterWidth = 44;
+
+  /// Space between the longest reading and the strip.
+  static const double gutterMargin = 6;
+
+  /// The gutter itself, so a test can measure what it actually got.
+  static const Key gutterKey = Key('sleep.nights.gutter');
+
+  /// The size the readings are printed at. Named because both the drawing and
+  /// the measuring have to agree, and a second copy of it is how they stop.
+  static const double _gutterFontSize = 10;
 
   /// Room for the two label rows below the strip.
   static const double labelHeight = 30;
+
+  /// How wide the gutter has to be for [minutes] to be printed in full.
+  ///
+  /// Measured rather than assumed, because the answer depends on the locale's
+  /// clock, on the language, and on the reader's text size — three things a
+  /// constant cannot know.
+  static double gutterWidthFor(BuildContext context, List<int> minutes) {
+    final TextScaler scaler = MediaQuery.textScalerOf(context);
+    double widest = 0;
+    for (final int minute in minutes) {
+      final TextPainter painter = TextPainter(
+        text: TextSpan(
+          text: formatDeviceTime(context, minuteOfDay: minute),
+          style: TextStyle(fontSize: scaler.scale(_gutterFontSize)),
+        ),
+        textDirection: Directionality.of(context),
+      )..layout();
+      if (painter.width > widest) widest = painter.width;
+    }
+    return math.max(minGutterWidth, widest + gutterMargin * 2);
+  }
 
   /// The slice of the clock this strip draws, wide enough for every night in
   /// it.
@@ -69,6 +110,8 @@ class NightsChart extends StatelessWidget {
     final L10n l10n = L10n.of(context);
     final int dayCount = lastDay - firstDay + 1;
     final SleepWindow visible = window;
+    final List<int> labels = visible.labelMinutes(goal);
+    final double gutter = gutterWidthFor(context, labels);
     final core.LocalDateFormatter formatter =
         IntlLocalDateFormatter.of(context);
 
@@ -81,9 +124,14 @@ class NightsChart extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             SizedBox(
-              width: gutterWidth,
+              key: gutterKey,
+              width: gutter,
               height: chartHeight,
-              child: _Gutter(theme: theme, goal: goal, window: visible),
+              child: _Gutter(
+                theme: theme,
+                window: visible,
+                minutes: labels,
+              ),
             ),
             Expanded(
               // Built on demand rather than all at once: the strip is as long
@@ -397,38 +445,22 @@ class _DayLabel extends StatelessWidget {
 class _Gutter extends StatelessWidget {
   const _Gutter({
     required this.theme,
-    required this.goal,
     required this.window,
+    required this.minutes,
   });
 
   final core.Theme theme;
-  final core.SleepGoal goal;
   final SleepWindow window;
 
-  /// How much of the height two labels need between them, as a fraction.
-  static const double _minGap = 0.11;
+  /// The readings to print, already chosen by [SleepWindow.labelMinutes]. Given
+  /// rather than worked out here, because the gutter's width is measured from
+  /// this same list and the two must not disagree.
+  final List<int> minutes;
 
   @override
   Widget build(BuildContext context) {
-    final int endMinutes = (window.startMinutes + window.spanMinutes) % 1440;
-
-    // In order of precedence, so the greedy pass below keeps the ends.
-    final List<(double, int)> wanted = <(double, int)>[
-      (0, window.startMinutes),
-      (1, endMinutes),
-      if (window.fractionOf(goal.bedMinutes) case final double f) (f, goal.bedMinutes),
-      if (window.fractionOf(goal.wakeMinutes) case final double f) (f, goal.wakeMinutes),
-    ];
-
-    final List<(double, int)> kept = <(double, int)>[];
-    for (final (double fraction, int minute) in wanted) {
-      final bool collides =
-          kept.any((k) => (k.$1 - fraction).abs() < _minGap);
-      if (!collides) kept.add((fraction, minute));
-    }
-
     final TextStyle style = TextStyle(
-      fontSize: 10,
+      fontSize: NightsChart._gutterFontSize,
       color: toFlutterColor(theme.mediumContrastTextColor),
     );
 
@@ -437,15 +469,20 @@ class _Gutter extends StatelessWidget {
         final double height = constraints.maxHeight;
         return Stack(
           children: <Widget>[
-            for (final (double fraction, int minute) in kept)
-              Positioned(
-                top: (fraction * height - 6).clamp(0.0, height - 12),
-                right: 6,
-                child: Text(
-                  formatDeviceTime(context, minuteOfDay: minute),
-                  style: style,
+            for (final int minute in minutes)
+              if (window.fractionOf(minute) case final double fraction)
+                Positioned(
+                  top: (fraction * height - 6).clamp(0.0, height - 12),
+                  left: 0,
+                  right: NightsChart.gutterMargin,
+                  child: Text(
+                    formatDeviceTime(context, minuteOfDay: minute),
+                    style: style,
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
                 ),
-              ),
           ],
         );
       },
@@ -500,6 +537,35 @@ class SleepWindow {
       spanMinutes: span,
     );
   }
+
+  /// The readings worth printing, in the order precedence is decided.
+  ///
+  /// The two ends of the window say how far the strip reaches — the only way
+  /// to tell a bar that nearly touches the top from one that was cut off
+  /// there. The goal's two times say what the band across the middle is.
+  List<int> labelMinutes(core.SleepGoal goal) {
+    final int endMinutes = (startMinutes + spanMinutes) % 1440;
+    final List<(double, int)> wanted = <(double, int)>[
+      (0, startMinutes),
+      (1, endMinutes),
+      if (fractionOf(goal.bedMinutes) case final double f) (f, goal.bedMinutes),
+      if (fractionOf(goal.wakeMinutes) case final double f)
+        (f, goal.wakeMinutes),
+    ];
+
+    // Where two would collide, the end wins: a goal time an hour from the edge
+    // is already plain from the band, and two readings printed over each other
+    // are worse than one.
+    final List<(double, int)> kept = <(double, int)>[];
+    for (final (double fraction, int minute) in wanted) {
+      if (kept.any((k) => (k.$1 - fraction).abs() < labelMinGap)) continue;
+      kept.add((fraction, minute));
+    }
+    return kept.map((k) => k.$2).toList();
+  }
+
+  /// How much of the height two readings need between them, as a fraction.
+  static const double labelMinGap = 0.11;
 
   /// Where a time of day sits in the window, as a fraction of the height, or
   /// null when it falls outside.

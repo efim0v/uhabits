@@ -33,6 +33,7 @@ Future<void> pumpChart(
   Set<int> skipped = const <int>{},
   Map<int, int>? offsets,
   int visibleDays = 14,
+  bool use24HourFormat = true,
 }) async {
   final int lastDay = days.isEmpty ? 9000 : days.reduce((a, b) => a > b ? a : b);
   final int firstDay = lastDay - visibleDays + 1;
@@ -47,7 +48,7 @@ Future<void> pumpChart(
     ],
     supportedLocales: L10n.supportedLocales,
     home: MediaQuery(
-      data: const MediaQueryData(alwaysUse24HourFormat: true),
+      data: MediaQueryData(alwaysUse24HourFormat: use24HourFormat),
       child: Scaffold(
         body: NightsChart(
           theme: core.LightTheme(),
@@ -361,6 +362,81 @@ void main() {
       expect(find.byType(NightBar, skipOffstage: false).evaluate().length,
           lessThan(60),
           reason: 'sleep.ui#8 — the strip is built on demand');
+    });
+  });
+
+  group('the clock down the side', () {
+    testWidgets('prints the hour it means, not a truncation of it',
+        (tester) async {
+      // The gutter was narrower than "11:00 PM" at its own font size, so the
+      // label overflowed to the left and was clipped — always in the same
+      // place, the leading digit — and eleven at night was drawn as "1:00 PM".
+      // A scale that reports the wrong time is worse than no scale.
+      // On a twelve-hour clock, where the readings are longest and where the
+      // clipping actually bit.
+      await pumpChart(
+        tester,
+        days: <int>[9000],
+        visibleDays: 1,
+        use24HourFormat: false,
+      );
+
+      // The goal is 23:00 to 07:00, so the window runs 22:00 to 08:00.
+      expect(find.text('10:00 PM'), findsOneWidget, reason: 'sleep.ui#12');
+      expect(find.text('0:00 PM'), findsNothing,
+          reason: 'sleep.ui#12 — what the clipping used to produce');
+    });
+
+    testWidgets('the gutter is wide enough for the reading it holds',
+        (tester) async {
+      // Measured, not eyeballed. Bounding the label to the gutter stops it
+      // overflowing but not being cut: the widget still reports the right
+      // string while the screen shows half of it. The only honest question is
+      // whether the text, laid out at its own style, fits the space it is
+      // given.
+      await pumpChart(
+        tester,
+        days: <int>[9000],
+        visibleDays: 1,
+        use24HourFormat: false,
+      );
+
+      final double available =
+          tester.getSize(find.byKey(NightsChart.gutterKey)).width -
+              NightsChart.gutterMargin;
+      for (final Element element in find.byType(Text).evaluate()) {
+        final Text text = element.widget as Text;
+        final String? data = text.data;
+        if (data == null || !data.contains(':')) continue;
+
+        final TextPainter painter = TextPainter(
+          text: TextSpan(text: data, style: text.style),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        expect(painter.width, lessThanOrEqualTo(available),
+            reason: 'sleep.ui#12 — "$data" needs ${painter.width.round()} of '
+                '${available.round()} and will be cut');
+      }
+    });
+
+    testWidgets('no label is wider than the gutter it sits in',
+        (tester) async {
+      await pumpChart(
+        tester,
+        days: <int>[9000],
+        visibleDays: 1,
+        use24HourFormat: false,
+      );
+
+      for (final Element element in find.byType(Text).evaluate()) {
+        final Text text = element.widget as Text;
+        final String? data = text.data;
+        if (data == null || !data.contains(':')) continue;
+        expect(tester.getSize(find.byWidget(text)).width,
+            lessThanOrEqualTo(
+                tester.getSize(find.byKey(NightsChart.gutterKey)).width),
+            reason: 'sleep.ui#12 — "\$data" does not fit and will be cut');
+      }
     });
   });
 

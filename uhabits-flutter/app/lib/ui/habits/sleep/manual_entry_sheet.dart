@@ -58,6 +58,8 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
   late int _wakeMinutes;
   int? _asleepMinutes;
   late bool _skipped;
+  late int _utcOffsetMinutes;
+  bool _timesEdited = false;
 
   @override
   void initState() {
@@ -68,6 +70,12 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
     _wakeMinutes = widget.initial?.wakeMinutes ?? widget.goal.wakeMinutes;
     _asleepMinutes = widget.initial?.asleepMinutes;
     _skipped = widget.initial?.skipped ?? false;
+    // The frame the night was recorded in, not the one the phone is in now.
+    // Dropping it re-anchors both instants on today's offset, which moves a
+    // night recorded elsewhere — or merely before a daylight saving change —
+    // by that difference, and overwrites what the watch measured.
+    _utcOffsetMinutes =
+        widget.initial?.utcOffsetMinutes ?? widget.utcOffsetMinutes;
   }
 
   ManualNight get _night => ManualNight(
@@ -75,8 +83,9 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
         bedMinutes: _bedMinutes,
         wakeMinutes: _wakeMinutes,
         asleepMinutes: _asleepMinutes,
-        utcOffsetMinutes: widget.utcOffsetMinutes,
+        utcOffsetMinutes: _utcOffsetMinutes,
         skipped: _skipped,
+        timesEdited: _timesEdited,
       );
 
   Future<void> _pick({required bool bedtime}) async {
@@ -87,6 +96,7 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
     );
     if (picked == null) return;
     setState(() {
+      _timesEdited = true;
       final int minutes = picked.hour * 60 + picked.minute;
       if (bedtime) {
         _bedMinutes = minutes;
@@ -189,7 +199,10 @@ class _ManualEntrySheetState extends State<ManualEntrySheet> {
       ),
     );
     if (picked == null) return;
-    setState(() => _asleepMinutes = picked.hour * 60 + picked.minute);
+    setState(() {
+      _timesEdited = true;
+      _asleepMinutes = picked.hour * 60 + picked.minute;
+    });
   }
 }
 

@@ -116,69 +116,92 @@ class SubtitleCardView extends StatelessWidget {
         Padding(
           // `android:layout_marginBottom="2dp"`
           padding: const EdgeInsets.only(bottom: 2),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          // Wrapping rather than clipped, and each icon kept with the text it
+          // labels. The ported row holds a number, a frequency and a reminder,
+          // which fit on one line; a sleep habit puts a whole goal —
+          // "11:00 PM → 7:00 AM" — where the number was, and the reminder fell
+          // off the right edge. A row that fits is laid out identically either
+          // way, so nothing about the ported habits moves.
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 2,
             children: <Widget>[
-              if (state.isTargetVisible) ...<Widget>[
-                Text(
-                  state.targetIconGlyph,
-                  key: targetIconKey,
-                  style: iconStyle.copyWith(fontSize: targetIconFontSize),
+              if (state.isTargetVisible)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      state.targetIconGlyph,
+                      key: targetIconKey,
+                      style: iconStyle.copyWith(fontSize: targetIconFontSize),
+                    ),
+                    // `android:layout_marginStart="4dp"`
+                    const SizedBox(width: 4),
+                    // The seven-em cap is `android:maxEms="7"` on the ported
+                    // field, where the text is a number and a short unit. An
+                    // override is neither — "23:00 → 07:00" is thirteen
+                    // characters, and capping it printed "23:00 → 0…", which is
+                    // the one part a person reads it for.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: targetOverride == null
+                            ? targetMaxEms * smallFontSize
+                            : double.infinity,
+                      ),
+                      child: Text(
+                        targetOverride ?? state.targetText,
+                        key: targetTextKey,
+                        style: captionStyle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                // `android:layout_marginStart="4dp"`
-                const SizedBox(width: 4),
-                // The seven-em cap is `android:maxEms="7"` on the ported
-                // field, where the text is a number and a short unit. An
-                // override is neither — "23:00 → 07:00" is thirteen
-                // characters, and capping it printed "23:00 → 0…", which is
-                // the one part a person reads it for.
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: targetOverride == null
-                        ? targetMaxEms * smallFontSize
-                        : double.infinity,
+              // `android:layout_marginEnd="16dp"` is the Wrap's own spacing.
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    SubtitleCardState.frequencyIconGlyph,
+                    key: frequencyIconKey,
+                    style: iconStyle,
                   ),
-                  child: Text(
-                    targetOverride ?? state.targetText,
-                    key: targetTextKey,
+                  const SizedBox(width: 4),
+                  Text(
+                    formatFrequency(
+                      state.frequency.numerator,
+                      state.frequency.denominator,
+                      l10n,
+                    ),
+                    key: frequencyLabelKey,
                     style: captionStyle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                // `android:layout_marginEnd="16dp"`
-                const SizedBox(width: 16),
-              ],
-              Text(
-                SubtitleCardState.frequencyIconGlyph,
-                key: frequencyIconKey,
-                style: iconStyle,
+                ],
               ),
-              const SizedBox(width: 4),
-              Text(
-                formatFrequency(
-                  state.frequency.numerator,
-                  state.frequency.denominator,
-                  l10n,
-                ),
-                key: frequencyLabelKey,
-                style: captionStyle,
-              ),
-              const SizedBox(width: 16),
-              Text(
-                SubtitleCardState.reminderIconGlyph,
-                key: reminderIconKey,
-                style: iconStyle,
-              ),
-              const SizedBox(width: 4),
-              Padding(
-                // `android:paddingTop="1dp"` on reminderLabel.
-                padding: const EdgeInsets.only(top: 1),
-                child: Text(
-                  _reminderText(context, l10n),
-                  key: reminderLabelKey,
-                  style: captionStyle,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    SubtitleCardState.reminderIconGlyph,
+                    key: reminderIconKey,
+                    style: iconStyle,
+                  ),
+                  const SizedBox(width: 4),
+                  Padding(
+                    // `android:paddingTop="1dp"` on reminderLabel.
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Text(
+                      _reminderText(context, l10n),
+                      key: reminderLabelKey,
+                      style: captionStyle,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -215,8 +238,8 @@ class SubtitleCardView extends StatelessWidget {
 
 /// Same rounding as `FlutterCanvas.setColor` and `core.Color.toInt`.
 Color _toFlutterColor(core.Color color) => Color.fromARGB(
-      (color.alpha * 255).round().clamp(0, 255),
-      (color.red * 255).round().clamp(0, 255),
-      (color.green * 255).round().clamp(0, 255),
-      (color.blue * 255).round().clamp(0, 255),
-    );
+  (color.alpha * 255).round().clamp(0, 255),
+  (color.red * 255).round().clamp(0, 255),
+  (color.green * 255).round().clamp(0, 255),
+  (color.blue * 255).round().clamp(0, 255),
+);

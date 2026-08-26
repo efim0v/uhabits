@@ -16,6 +16,7 @@ class ManualNight {
     this.asleepMinutes,
     this.utcOffsetMinutes = 0,
     this.skipped = false,
+    this.timesEdited = false,
   });
 
   /// The day the night closes, as `daysSince2000`: the day they woke up.
@@ -41,6 +42,18 @@ class ManualNight {
   /// not have is any bearing on whether the person is keeping their goal.
   /// Saying "skip" is a judgement about the day, not a refusal to describe it.
   final bool skipped;
+
+  /// Whether the person actually touched a time, rather than confirming what
+  /// the sheet already showed.
+  ///
+  /// It decides whether a night is written at all, and that matters twice
+  /// over. A night written down is marked as entered by hand, which exempts it
+  /// from every future sync for ever — so confirming an untouched watch night,
+  /// which is what marking a day skipped looks like from here, would quietly
+  /// take it out of the platform's hands. And on a day with nothing recorded
+  /// the sheet opens on the goal, so the same confirm would invent a perfect
+  /// night nobody slept.
+  final bool timesEdited;
 
   /// How long the person was in bed, going forward from bedtime to wake time.
   ///
