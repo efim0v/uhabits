@@ -33,3 +33,4 @@ Pods/
 *.lock
 !pubspec.lock
 .superpowers/
+.local-signing/

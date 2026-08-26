@@ -688,153 +688,153 @@ class L10nRu extends L10n {
   }
 
   @override
-  String get sleepLastNight => 'Last night';
+  String get sleepLastNight => 'Прошлая ночь';
 
   @override
-  String get sleepBedtime => 'Bedtime';
+  String get sleepBedtime => 'Отбой';
 
   @override
-  String get sleepWakeTime => 'Wake time';
+  String get sleepWakeTime => 'Подъём';
 
   @override
-  String get sleepDuration => 'Sleep';
+  String get sleepDuration => 'Сон';
 
   @override
-  String get sleepNights => 'Nights';
+  String get sleepNights => 'Ночи';
 
   @override
-  String get sleepStability => 'Stability';
+  String get sleepStability => 'Стабильность';
 
   @override
-  String get sleepNoData => 'No data yet';
+  String get sleepNoData => 'Данных пока нет';
 
   @override
   String sleepSpreadMinutes(String minutes) {
-    return '±$minutes min';
+    return '±$minutes мин';
   }
 
   @override
   String sleepSkippedCount(int skipped, int days) {
-    return '$skipped of $days days skipped';
+    return 'Пропущено дней: $skipped из $days';
   }
 
   @override
-  String get sleepMarkSkipped => 'Mark';
+  String get sleepMarkSkipped => 'Отметить';
 
   @override
   String sleepLastSkipped(String date) {
-    return 'Last: $date';
+    return 'Последний: $date';
   }
 
   @override
   String get sleepWeakestSleep =>
-      'Went to bed and got up on time, but slept less than the goal.';
+      'Легли и встали вовремя, но спали меньше цели.';
 
   @override
   String get sleepWeakestBed =>
-      'Slept enough and got up on time, but went to bed off schedule.';
+      'Выспались и встали вовремя, но легли не по расписанию.';
 
   @override
   String get sleepWeakestWake =>
-      'Slept enough and went to bed on time, but got up off schedule.';
+      'Выспались и легли вовремя, но встали не по расписанию.';
 
   @override
-  String get sleepPerfectNight => 'On schedule and slept enough.';
+  String get sleepPerfectNight => 'По расписанию и выспались.';
 
   @override
-  String get sleepQuestionExample => 'e.g. How did you sleep last night?';
+  String get sleepQuestionExample => 'напр.: Как вы спали прошлой ночью?';
 
   @override
-  String get sleepSkipThisDay => 'Skip this day';
+  String get sleepSkipThisDay => 'Пропустить этот день';
 
   @override
   String get sleepSkipExplained =>
-      'Recorded, but not counted for or against you.';
+      'Записано, но не засчитывается ни в плюс, ни в минус.';
 
   @override
-  String get sleepTargetBedtime => 'Target bedtime';
+  String get sleepTargetBedtime => 'Целевой отбой';
 
   @override
-  String get sleepTargetWakeTime => 'Target wake time';
+  String get sleepTargetWakeTime => 'Целевой подъём';
 
   @override
-  String get sleepMinimumSleep => 'Minimum sleep';
+  String get sleepMinimumSleep => 'Минимум сна';
 
   @override
-  String get sleepHomeTimezone => 'Home time zone';
+  String get sleepHomeTimezone => 'Домашний часовой пояс';
 
   @override
-  String get sleepAdaptationRate => 'Adaptation';
+  String get sleepAdaptationRate => 'Адаптация';
 
   @override
   String sleepAdaptationPerDay(int minutes) {
-    return '$minutes min per day';
+    return '$minutes мин в день';
   }
 
   @override
-  String get sleepEnterNight => 'Enter night';
+  String get sleepEnterNight => 'Ввести ночь';
 
   @override
-  String get sleepActuallyAsleep => 'Actually asleep';
+  String get sleepActuallyAsleep => 'Фактически спали';
 
   @override
-  String get sleepHealthAccess => 'Allow access to Health';
+  String get sleepHealthAccess => 'Разрешить доступ к Здоровью';
 
   @override
   String get sleepHealthDenied =>
-      'Without access to Health, nights have to be entered by hand.';
+      'Без доступа к Здоровью ночи придётся вводить вручную.';
 
   @override
   String sleepSuggestGoalBed(String time) {
-    return 'You have been going to bed around $time. Move the goal?';
+    return 'Вы ложитесь около $time. Сдвинуть цель?';
   }
 
   @override
   String sleepSuggestGoalWake(String time) {
-    return 'You have been getting up around $time. Move the goal?';
+    return 'Вы встаёте около $time. Сдвинуть цель?';
   }
 
   @override
   String get sleepSuggestSkip =>
-      'Your time zone changed. Mark these days as skipped?';
+      'Часовой пояс изменился. Отметить эти дни пропущенными?';
 
   @override
-  String get sleepSuggestApply => 'Move';
+  String get sleepSuggestApply => 'Сдвинуть';
 
   @override
-  String get sleepSuggestDismiss => 'Not now';
+  String get sleepSuggestDismiss => 'Не сейчас';
 
   @override
-  String get sleepSkipped => 'Skipped';
+  String get sleepSkipped => 'Пропущено';
 
   @override
-  String get sleepHabitType => 'Sleep';
+  String get sleepHabitType => 'Сон';
 
   @override
   String get sleepHabitTypeExample =>
-      'e.g. Go to bed at 23:00, get up at 07:00, and sleep at least 7:30 — scored from Health or entered by hand.';
+      'напр.: Ложиться в 23:00, вставать в 07:00 и спать не меньше 7:30 — оценивается по данным Здоровья или вводится вручную.';
 
   @override
-  String get sleepAdvanced => 'Advanced';
+  String get sleepAdvanced => 'Дополнительно';
 
   @override
-  String get sleepWeightSleep => 'Weight: sleep';
+  String get sleepWeightSleep => 'Вес: сон';
 
   @override
-  String get sleepWeightBed => 'Weight: bedtime';
+  String get sleepWeightBed => 'Вес: отбой';
 
   @override
-  String get sleepWeightWake => 'Weight: wake time';
+  String get sleepWeightWake => 'Вес: подъём';
 
   @override
-  String get sleepHalfCreditTime => 'Half credit at (times)';
+  String get sleepHalfCreditTime => 'Половина зачёта (время)';
 
   @override
-  String get sleepHalfCreditSleep => 'Half credit at (sleep)';
+  String get sleepHalfCreditSleep => 'Половина зачёта (сон)';
 
   @override
   String sleepMinutesShort(int minutes) {
-    return '$minutes min';
+    return '$minutes мин';
   }
 
   @override
