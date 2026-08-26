@@ -163,6 +163,15 @@ void main() {
       expect(scope.sleepRepository.sleepHabitIds(), <int>[habit.id!],
           reason: 'sleep.habit-type#4');
     });
+
+    test('an archived habit is left alone', () async {
+      final Habit habit = addSleepHabit(name: 'Sleep');
+      habit.isArchived = true;
+
+      await scope.syncSleepHabits();
+
+      expect(source.reads, 0, reason: 'computed.lifecycle#1');
+    });
   });
 
   group('the platform source', () {

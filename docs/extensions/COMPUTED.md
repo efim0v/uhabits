@@ -13,3 +13,6 @@
 
 - [x] `computed.day-write`
 1. `computed.day-write#1` Вычисленная запись дня сохраняет заметку человека.
+
+- [x] `computed.lifecycle`
+1. `computed.lifecycle#1` Архивная привычка не читается с платформы и не получает напоминание.

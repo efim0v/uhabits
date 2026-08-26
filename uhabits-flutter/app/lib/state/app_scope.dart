@@ -202,6 +202,10 @@ class AppScope {
     for (final int id in sleepRepository.sleepHabitIds()) {
       final Habit? habit = habitList.getById(id);
       if (habit == null) continue;
+      // The ported scheduler and tray both skip archived habits; reading the
+      // platform for one is work nobody asked for, and arming its question is
+      // a notification for a habit the person put away.
+      if (habit.isArchived) continue;
       // Read first, then check, then write. A sync waits on a permission
       // sheet and a fortnight of platform reads, and the person can leave the
       // app at any point during that; past this check there is no await left
