@@ -513,19 +513,37 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   core.LocalDate? get _lastClickedDate =>
       editor.HistoryEditorDialog.current?.chart?.lastClickedDate;
 
+  /// Whether this habit's day value is computed by the app rather than typed
+  /// in by the person.
+  ///
+  /// Read fresh rather than cached: a habit becomes one, or stops being one,
+  /// while the screen is open. Asked of the definition and not of the sleep
+  /// goal, because the question here is "may the person type a value", and
+  /// the answer is no for every computed habit — not only for the one kind
+  /// this build happens to have a goal table for (`computed.write-paths#3`).
+  bool get _isComputed {
+    final int? id = widget.habit.id;
+    return id != null && widget.scope.definitions.isComputed(id);
+  }
+
   @override
   Future<void> showNumberPopup(
     double value,
     String notes,
     NumberPickerCallback callback,
   ) async {
-    // A sleep habit's value is a night, not a number. The popup would take a
-    // percentage the next recompute overwrites.
-    final core.SleepGoal? sleepGoal =
-        widget.scope.sleepRepository.goalFor(widget.habit.id!);
-    final core.LocalDate? date = _lastClickedDate;
-    if (sleepGoal != null && date != null) {
+    // A computed habit's value is not a number the person types: the next
+    // recompute would overwrite it, and on a day the recompute never reaches
+    // — a gap in the health store, a day before the app was installed, a day
+    // still to come — it would stand for ever. Refused first; where the habit
+    // is a sleep habit and the day is known, the gesture opens the night that
+    // day is computed from instead (`computed.write-paths#3`, `#4`).
+    if (_isComputed) {
       callback.onNumberPickerDismissed();
+      final core.SleepGoal? sleepGoal =
+          widget.scope.sleepRepository.goalFor(widget.habit.id!);
+      final core.LocalDate? date = _lastClickedDate;
+      if (sleepGoal == null || date == null) return;
       await enterNightByHand(
         context,
         scope: widget.scope,
@@ -562,6 +580,15 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     core.PaletteColor color,
     CheckMarkDialogCallback callback,
   ) async {
+    // The same door, for a computed habit that is a yes/no one. No kind is
+    // yet — sleep is numerical — but the popup writes through the same
+    // `CreateRepetitionCommand`, and a guard on one of the two is a guard
+    // that reads as complete and is not (`computed.write-paths#3`).
+    if (_isComputed) {
+      callback.onNotesDismissed();
+      return;
+    }
+
     final theme = coreThemeOf(context);
     final result = await _dismissCurrentAndShow<CheckmarkDialogResult>(
       () => showCheckmarkDialog(
