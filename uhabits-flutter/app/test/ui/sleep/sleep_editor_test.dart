@@ -73,6 +73,10 @@ void main() {
               'sleep habit at all, and its screen shows none of its blocks');
       expect(real.sleepRepository.sleepHabitIds(), <int>[habit.id!],
           reason: 'sleep.habit-type#4');
+      expect(real.definitions.forHabit(habit.id!)?.kind, ComputedKind.sleep,
+          reason: 'computed.definition#7 — written on the same task-runner '
+              'completion as the goal, so a habit created on a device is '
+              'marked too, not only one created in a synchronous harness');
     });
 
     test('the goal that is stored is the one the person set', () async {
