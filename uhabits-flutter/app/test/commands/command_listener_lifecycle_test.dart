@@ -22,7 +22,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/platform/app_database.dart';
+import 'package:uhabits/platform/flutter_alarm_scheduler.dart' show AlarmPlugin;
+import 'package:uhabits/platform/flutter_notification_tray.dart'
+    show NotificationSpec, ReminderNotificationBuilder;
 import 'package:uhabits/platform/home_widget_bridge.dart';
+import 'package:uhabits/platform/sleep_prompt_scheduler.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/show_habit_model.dart';
 import 'package:uhabits/state/widget_sync.dart';
@@ -611,6 +615,167 @@ void main() {
       expect(scope.commandRunner.listenerCount, lessThan(before),
           reason: 'computed.lifecycle#2');
     });
+
+    // =====================================================================
+    // computed.lifecycle#2, exercised through the real wiring rather than
+    // the count above: `listenerCount` proves *a* listener came off, not
+    // that it was the right one and not that it did anything while it was
+    // on. These three call through a real `SleepPromptScheduler` into a
+    // recording `AlarmPlugin`, so the assertion is on the notification id
+    // the fake actually saw rather than on a boolean "something happened".
+    // =====================================================================
+
+    test(
+        'deleting a habit cancels its sleep prompt through the real '
+        'scheduler', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Sleep');
+      final alarms = _RecordingAlarms();
+      final prompts = SleepPromptScheduler(
+        alarms: alarms,
+        builder: ReminderNotificationBuilder(preferences: scope.preferences),
+      );
+
+      scope.startServices(
+        tray: NotificationTray(
+          scope.taskRunner,
+          scope.commandRunner,
+          scope.preferences,
+          _FakeSystemTray(<String>[]),
+        ),
+        scheduler: ReminderScheduler(
+          scope.commandRunner,
+          scope.habitList,
+          _FakeSystemScheduler(<String>[]),
+          WidgetPreferences(scope.preferencesStorage),
+        ),
+        sync: WidgetSync(
+          bridge: HomeWidgetBridge(
+            habitList: scope.habitList,
+            registry: WidgetRegistry(scope.preferencesStorage),
+            platform: _SilentHomeWidgetPlatform(),
+          ),
+          commandRunner: scope.commandRunner,
+          taskRunner: scope.taskRunner,
+          midnightTimer: scope.midnightTimer,
+          preferences: scope.preferences,
+        ),
+        sleepPrompts: prompts,
+      );
+
+      scope.commandRunner
+          .run(DeleteHabitsCommand(scope.habitList, <core.Habit>[habit]));
+
+      // Not merely "a callback ran": the id the fake saw is derived from
+      // this exact habit, so a closure that dropped the argument, cancelled
+      // the wrong habit, or never reached the scheduler at all would not
+      // produce it either.
+      expect(alarms.cancelled, <int>[sleepPromptNotificationId(habit)],
+          reason: 'computed.lifecycle#2');
+    });
+
+    test('archiving a habit cancels its sleep prompt too', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Sleep');
+      final alarms = _RecordingAlarms();
+      final prompts = SleepPromptScheduler(
+        alarms: alarms,
+        builder: ReminderNotificationBuilder(preferences: scope.preferences),
+      );
+
+      scope.startServices(
+        tray: NotificationTray(
+          scope.taskRunner,
+          scope.commandRunner,
+          scope.preferences,
+          _FakeSystemTray(<String>[]),
+        ),
+        scheduler: ReminderScheduler(
+          scope.commandRunner,
+          scope.habitList,
+          _FakeSystemScheduler(<String>[]),
+          WidgetPreferences(scope.preferencesStorage),
+        ),
+        sync: WidgetSync(
+          bridge: HomeWidgetBridge(
+            habitList: scope.habitList,
+            registry: WidgetRegistry(scope.preferencesStorage),
+            platform: _SilentHomeWidgetPlatform(),
+          ),
+          commandRunner: scope.commandRunner,
+          taskRunner: scope.taskRunner,
+          midnightTimer: scope.midnightTimer,
+          preferences: scope.preferences,
+        ),
+        sleepPrompts: prompts,
+      );
+
+      scope.commandRunner
+          .run(ArchiveHabitsCommand(scope.habitList, <core.Habit>[habit]));
+
+      expect(alarms.cancelled, <int>[sleepPromptNotificationId(habit)],
+          reason: 'computed.lifecycle#2');
+    });
+
+    test('after close(), a finished command cancels no sleep prompt', () {
+      final scope = openScope();
+      final habit = addHabit(scope, 'Sleep');
+      final alarms = _RecordingAlarms();
+      final prompts = SleepPromptScheduler(
+        alarms: alarms,
+        builder: ReminderNotificationBuilder(preferences: scope.preferences),
+      );
+
+      scope.startServices(
+        tray: NotificationTray(
+          scope.taskRunner,
+          scope.commandRunner,
+          scope.preferences,
+          _FakeSystemTray(<String>[]),
+        ),
+        scheduler: ReminderScheduler(
+          scope.commandRunner,
+          scope.habitList,
+          _FakeSystemScheduler(<String>[]),
+          WidgetPreferences(scope.preferencesStorage),
+        ),
+        sync: WidgetSync(
+          bridge: HomeWidgetBridge(
+            habitList: scope.habitList,
+            registry: WidgetRegistry(scope.preferencesStorage),
+            platform: _SilentHomeWidgetPlatform(),
+          ),
+          commandRunner: scope.commandRunner,
+          taskRunner: scope.taskRunner,
+          midnightTimer: scope.midnightTimer,
+          preferences: scope.preferences,
+        ),
+        sleepPrompts: prompts,
+      );
+
+      // The mechanism really is live before close() — otherwise its silence
+      // afterwards would prove nothing.
+      scope.commandRunner
+          .run(DeleteHabitsCommand(scope.habitList, <core.Habit>[habit]));
+      expect(alarms.cancelled, isNotEmpty,
+          reason: 'computed.lifecycle#2 — sanity check that the hook is '
+              'wired before close(), so its silence afterwards means '
+              'something');
+      alarms.cancelled.clear();
+
+      scope.close();
+      scopes.remove(scope);
+
+      // Bypasses run(): close() just released the connection, the same
+      // reason commands.command-runner-listeners#8 above calls
+      // notifyListeners directly rather than running a command post-close.
+      scope.commandRunner.notifyListeners(
+        DeleteHabitsCommand(scope.habitList, <core.Habit>[habit]),
+      );
+      expect(alarms.cancelled, isEmpty,
+          reason: 'computed.lifecycle#2 — close() takes the hook off the '
+              'runner, the same as the three platform listeners above');
+    });
   });
 }
 
@@ -626,6 +791,26 @@ class _NamedListener implements CommandRunnerListener {
 
   @override
   void onCommandFinished(Command command) => calls.add(name);
+}
+
+/// [AlarmPlugin], reduced to a note of the ids it was told to cancel.
+class _RecordingAlarms implements AlarmPlugin {
+  final List<int> cancelled = <int>[];
+
+  @override
+  Future<void> scheduleExact({
+    required NotificationSpec spec,
+    required int whenMillis,
+  }) async {}
+
+  @override
+  Future<void> cancel(int id) async => cancelled.add(id);
+
+  @override
+  Future<bool> canScheduleExactAlarms() async => true;
+
+  @override
+  Future<bool> requestExactAlarmsPermission() async => true;
 }
 
 /// `AndroidNotificationTray`, reduced to a note.
