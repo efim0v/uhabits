@@ -36,6 +36,7 @@
 4. `computed.definition#4` Перечисление по виду не возвращает чужих.
 5. `computed.definition#5` Удаление определения не трогает привычку.
 6. `computed.definition#6` Равенство сравнивает kind, committedFrom и payload по содержимому; порядок ключей payload не влияет ни на сравнение, ни на hashCode.
+7. `computed.definition#7` Новая привычка со сном получает определение вместе с целью.
 
 - [x] `computed.backup`
 1. `computed.backup#1` Восстановление копии переносит определение на привычку с тем же uuid.

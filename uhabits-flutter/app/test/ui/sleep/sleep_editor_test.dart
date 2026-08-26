@@ -155,6 +155,16 @@ void main() {
           reason: 'sleep.habit-type#4');
     });
 
+    test('a new sleep habit is marked as computed', () {
+      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      model.nameController.text = 'Sleep';
+      model.save();
+
+      final Habit habit = scope.habitList.getByPosition(0);
+      expect(scope.definitions.forHabit(habit.id!)?.kind, ComputedKind.sleep,
+          reason: 'computed.definition#7');
+    });
+
     test('an ordinary numerical habit stays out of the sleep list', () {
       final EditHabitModel model =
           EditHabitModel(scope: scope, habitType: HabitType.numerical);

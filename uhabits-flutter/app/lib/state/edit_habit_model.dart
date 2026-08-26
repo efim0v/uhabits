@@ -426,6 +426,13 @@ class _SleepGoalWriter implements CommandRunnerListener {
     if (saved?.id == null) return;
 
     scope.sleepRepository.saveGoal(saved!.id!, goal);
+    // The goal is what sleep needs; the definition is what the app needs to
+    // know there is anything to compute at all. Written together because a
+    // habit with one and not the other is a habit half of the app can see.
+    scope.definitions.save(
+      saved.id!,
+      const HabitDefinition(kind: ComputedKind.sleep),
+    );
     // Changing a goal changes what every past night was worth. Rescoring only
     // from today would leave the history a mixture of two scales.
     scope.sleepSync.recomputeAll(saved);
