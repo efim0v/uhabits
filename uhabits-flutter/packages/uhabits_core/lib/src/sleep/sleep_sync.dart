@@ -1,4 +1,4 @@
-import '../models/entry.dart';
+import '../computed/day_writer.dart';
 import '../models/habit.dart';
 import '../time/date_utils.dart';
 import '../time/local_date.dart';
@@ -212,31 +212,21 @@ class SleepSync {
         repository.range(habit.id!, fromDay, toDay);
     var wrote = false;
     for (final MapEntry<int, SleepEpisode> night in nights.entries) {
-      // A day the person marked as not applicable stays that way, even though
-      // a night is on record for it. Scoring it would quietly erase the
-      // judgement they made about their own week — and would do it on the
-      // next sync after the trip, nowhere near the moment they marked it.
-      //
-      // Clearing the mark leaves the day empty rather than zero, so the very
-      // next recompute scores it from the night that is still stored.
-      if (habit.originalEntries.get(LocalDate(night.key)).value == Entry.skip) {
-        continue;
-      }
       final SleepBreakdown? breakdown = scoreNight(
         night.value,
         goal,
         offsets[night.key] ?? goal.homeUtcOffsetMinutes,
       );
       if (breakdown == null) continue;
-      // The note belongs to the person, the value belongs to the app. A
-      // recompute replaces the second and must not touch the first.
-      final Entry existing = habit.originalEntries.get(LocalDate(night.key));
-      habit.originalEntries.add(Entry(
-        LocalDate(night.key),
-        breakdown.storedValue,
-        notes: existing.notes,
-      ));
-      wrote = true;
+      // A day the person marked as not applicable stays that way, even
+      // though a night is on record for it — `DayWriter` owns that rule now,
+      // along with keeping the note and never overwriting with the same
+      // value. Scoring over the mark would quietly erase the judgement they
+      // made about their own week — and would do it on the next sync after
+      // the trip, nowhere near the moment they marked it.
+      if (const DayWriter().write(habit, night.key, breakdown.storedValue)) {
+        wrote = true;
+      }
     }
     if (wrote) habit.recompute();
   }
