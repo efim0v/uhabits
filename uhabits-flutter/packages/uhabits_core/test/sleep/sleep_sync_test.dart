@@ -388,4 +388,17 @@ void main() {
       expect(repo.forDay(1, today), isNotNull, reason: 'sleep.merge#8');
     });
   });
+
+  group('what a recompute leaves alone', () {
+    test('a note the person wrote survives it', () async {
+      habit.originalEntries
+          .add(Entry(LocalDate(today), 0, notes: 'flew to Tokyo'));
+      source.segments = nightOn(today, bedMinutes: 1380, asleepMinutes: 480);
+
+      await sync.syncRecent(habit);
+
+      expect(habit.originalEntries.get(LocalDate(today)).notes, 'flew to Tokyo',
+          reason: 'computed.day-write#1');
+    });
+  });
 }

@@ -228,8 +228,14 @@ class SleepSync {
         offsets[night.key] ?? goal.homeUtcOffsetMinutes,
       );
       if (breakdown == null) continue;
-      habit.originalEntries
-          .add(Entry(LocalDate(night.key), breakdown.storedValue));
+      // The note belongs to the person, the value belongs to the app. A
+      // recompute replaces the second and must not touch the first.
+      final Entry existing = habit.originalEntries.get(LocalDate(night.key));
+      habit.originalEntries.add(Entry(
+        LocalDate(night.key),
+        breakdown.storedValue,
+        notes: existing.notes,
+      ));
       wrote = true;
     }
     if (wrote) habit.recompute();
