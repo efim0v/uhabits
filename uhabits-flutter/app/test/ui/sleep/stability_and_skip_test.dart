@@ -142,6 +142,39 @@ void main() {
       expect(habit.originalEntries.get(core.LocalDate(8991)).value, 87000,
           reason: 'sleep.skip#1');
     });
+
+    test('marking keeps the note the person left on the day', () {
+      // The trip is the app's mark; the note is the person's, and nothing the
+      // app writes over a day is allowed to take it.
+      final core.Habit habit = newHabit();
+      habit.originalEntries
+          .add(core.Entry(core.LocalDate(8991), 87000, notes: 'wine'));
+
+      const SkipRange(8990, 8992).applyTo(habit);
+
+      expect(habit.originalEntries.get(core.LocalDate(8991)).value,
+          core.Entry.skip,
+          reason: 'sleep.skip#1');
+      expect(habit.originalEntries.get(core.LocalDate(8991)).notes, 'wine',
+          reason: 'computed.day-write#7');
+    });
+
+    test('and un-marking keeps it too', () {
+      final core.Habit habit = newHabit();
+      habit.originalEntries
+          .add(core.Entry(core.LocalDate(8991), 87000, notes: 'wine'));
+      const SkipRange range = SkipRange(8990, 8992);
+      range.applyTo(habit);
+
+      range.clearFrom(habit);
+
+      expect(habit.originalEntries.get(core.LocalDate(8991)).value,
+          core.Entry.unknown,
+          reason: 'sleep.skip#1');
+      expect(habit.originalEntries.get(core.LocalDate(8991)).notes, 'wine',
+          reason: 'computed.day-write#7 — the note outlives the mark in both '
+              'directions, or a trip marked and un-marked erases it twice');
+    });
   });
 
   group('which nights the spread is measured from', () {

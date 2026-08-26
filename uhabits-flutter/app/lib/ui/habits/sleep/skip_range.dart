@@ -33,9 +33,18 @@ class SkipRange {
   ///
   /// A skip is the port's existing `Entry.skip`: the day is neither a success
   /// nor a failure, the score carries over and the streak survives.
+  ///
+  /// The note the person left on the day is carried over, here and in
+  /// [clearFrom] (`computed.day-write#7`). The mark is the app's; the note is
+  /// theirs, and marking a trip is not a reason to lose a fortnight of them —
+  /// nor is changing one's mind about it. Kept here rather than routed through
+  /// `DayWriter`: that door is for values the app computes and refuses
+  /// `Entry.skip` by design, which is the very thing being written.
   void applyTo(core.Habit habit) {
     for (final int day in days) {
-      habit.originalEntries.add(core.Entry(core.LocalDate(day), core.Entry.skip));
+      final core.LocalDate date = core.LocalDate(day);
+      habit.originalEntries.add(core.Entry(date, core.Entry.skip,
+          notes: habit.originalEntries.get(date).notes));
     }
     if (length > 0) habit.recompute();
   }
@@ -47,8 +56,10 @@ class SkipRange {
   void clearFrom(core.Habit habit) {
     for (final int day in days) {
       final core.LocalDate date = core.LocalDate(day);
-      if (habit.originalEntries.get(date).value != core.Entry.skip) continue;
-      habit.originalEntries.add(core.Entry(date, core.Entry.unknown));
+      final core.Entry existing = habit.originalEntries.get(date);
+      if (existing.value != core.Entry.skip) continue;
+      habit.originalEntries
+          .add(core.Entry(date, core.Entry.unknown, notes: existing.notes));
     }
     if (length > 0) habit.recompute();
   }
