@@ -45,6 +45,14 @@ class HabitDefinition {
   /// an abstinence habit does — has no oldest entry to start from.
   final int? committedFrom;
 
+  /// A flat map of scalars — numbers, strings, booleans, null — for a kind
+  /// that has nowhere else of its own to keep a handful of values.
+  ///
+  /// "Flat" is load-bearing: [encodedPayload] sorts this map's own keys so
+  /// that two payloads built in a different order — which different call
+  /// sites will do — compare equal, but it does not walk into a nested map or
+  /// list to sort that too. A kind that needs more structure than a flat map
+  /// gives it should not put it here.
   final Map<String, Object?> payload;
 
   HabitDefinition copyWith(
@@ -55,7 +63,21 @@ class HabitDefinition {
         payload: payload ?? this.payload,
       );
 
-  String get encodedPayload => jsonEncode(payload);
+  /// [payload], as JSON with its keys sorted.
+  ///
+  /// The sort makes this a function of the payload's content rather than of
+  /// the order it happened to be built in, which is what lets `==` and
+  /// [hashCode] — both built from this string — treat `{'x': 1, 'y': 2}` and
+  /// `{'y': 2, 'x': 1}` as the same value. It is also what gets persisted, so
+  /// the stored bytes get the same benefit: two saves of an equal payload
+  /// write identical rows.
+  String get encodedPayload {
+    final List<String> sortedKeys = payload.keys.toList()..sort();
+    final Map<String, Object?> sorted = <String, Object?>{
+      for (final String key in sortedKeys) key: payload[key],
+    };
+    return jsonEncode(sorted);
+  }
 
   static Map<String, Object?> decodePayload(String encoded) {
     if (encoded.isEmpty) return const <String, Object?>{};

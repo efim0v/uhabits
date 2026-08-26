@@ -29,3 +29,4 @@
 3. `computed.definition#3` Незнакомый вид читается как отсутствие определения.
 4. `computed.definition#4` Перечисление по виду не возвращает чужих.
 5. `computed.definition#5` Удаление определения не трогает привычку.
+6. `computed.definition#6` Равенство сравнивает kind, committedFrom и payload по содержимому; порядок ключей payload не влияет ни на сравнение, ни на hashCode.
