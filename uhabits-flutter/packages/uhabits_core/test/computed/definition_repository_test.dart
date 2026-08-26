@@ -54,6 +54,22 @@ void main() {
     expect(repository.forHabit(1), isNull, reason: 'computed.definition#3');
   });
 
+  test('but a kind nobody knows is still computed', () {
+    // Two different questions. "What do I compute this with?" — not knowing
+    // means there is nothing here to compute with. "May something outside
+    // write this habit's days?" — not knowing has to mean no, or a habit from
+    // a newer build is writable from a widget and clearable by randomise.
+    db.run("insert into HabitDefinitions (habit, kind, payload) "
+        "values (1,'telepathy','{}')");
+    expect(repository.isComputed(1), isTrue, reason: 'computed.definition#9');
+  });
+
+  test('a known kind is computed too', () {
+    repository.save(1, const HabitDefinition(kind: ComputedKind.sleep));
+
+    expect(repository.isComputed(1), isTrue, reason: 'computed.definition#9');
+  });
+
   test('the habits of one kind are listed, and no others', () {
     db.run("insert into Habits (id, name, uuid) values (2, 'y', 'u2')");
     repository.save(1, const HabitDefinition(kind: ComputedKind.sleep));

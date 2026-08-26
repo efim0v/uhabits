@@ -25,6 +25,7 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/widget_sync.dart' show WidgetBehavior;
 import 'package:uhabits_core/src/computed/habit_definition.dart';
+import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
@@ -32,6 +33,7 @@ import 'package:uhabits_core/src/ui/notification_tray.dart';
 
 void main() {
   late Directory tempDir;
+  late Database database;
   late AppScope scope;
   late WidgetBehavior behavior;
   late Habit habit;
@@ -40,9 +42,8 @@ void main() {
   setUp(() {
     setToday(LocalDate.ymd(2015, 1, 26));
     tempDir = Directory.systemTemp.createTempSync('uhabits_computed_write');
-    scope = AppScope.open(
-      AppDatabase.openAndMigrate('${tempDir.path}/habits.db'),
-    );
+    database = AppDatabase.openAndMigrate('${tempDir.path}/habits.db');
+    scope = AppScope.open(database);
     scope.preferences.isFirstRun = false;
 
     habit = scope.modelFactory.buildHabit()..name = 'Sleep';
@@ -106,6 +107,25 @@ void main() {
 
     expect(habit.originalEntries.get(LocalDate(9000)).value, 89763,
         reason: 'computed.write-paths#1');
+  });
+
+  test('nor one whose kind this build has never heard of', () async {
+    // A definition written by a newer build. The app cannot say what computes
+    // this habit's days — but it can say they are not the widget's to write,
+    // and that is the answer that keeps the person's history.
+    database.run("insert into HabitDefinitions (habit, kind, payload) "
+        "values (${habit.id}, 'telepathy', '{}')");
+    habit.originalEntries.add(Entry(LocalDate(9000), 89763));
+
+    behavior.onAddRepetition(habit, LocalDate(9000));
+    await pumpEventQueue();
+
+    expect(scope.definitions.forHabit(habit.id!), isNull,
+        reason: 'computed.definition#3 — the kind is genuinely unreadable, '
+            'which is what makes this case worth testing');
+    expect(habit.originalEntries.get(LocalDate(9000)).value, 89763,
+        reason: 'computed.definition#9 — and the tap is refused all the same '
+            '(`computed.write-paths#1`)');
   });
 
   test('an ordinary habit is written exactly as before', () async {

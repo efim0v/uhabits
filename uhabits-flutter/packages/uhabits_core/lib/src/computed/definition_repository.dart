@@ -28,7 +28,23 @@ class DefinitionRepository {
         },
       );
 
-  bool isComputed(int habitId) => forHabit(habitId) != null;
+  /// Whether anything outside the app may write this habit's days.
+  ///
+  /// Deliberately not `forHabit(habitId) != null`. [forHabit] answers "what do
+  /// I compute this with", and a kind this build does not know is nothing it
+  /// can compute with — so it answers null. This answers "may something
+  /// outside write here", and a kind this build does not know has to answer
+  /// no: a habit whose definition came from a newer build would otherwise be
+  /// writable from a widget and clearable by randomise, and randomise is
+  /// `originalEntries.clear()`. The row is what makes a habit computed
+  /// (`computed.definition#9`).
+  bool isComputed(int habitId) =>
+      _db.querySingle<bool>(
+        'select 1 from HabitDefinitions where habit = ?',
+        <String>['$habitId'],
+        (stmt) => true,
+      ) ??
+      false;
 
   void save(int habitId, HabitDefinition definition) {
     _db.run(
