@@ -414,9 +414,7 @@ test('migration 102 creates the definitions table with a cascade', () {
   );
 
   // The cascade, exercised rather than read off the DDL.
-  db.run("insert into Habits (id, name, description, question, freq_num, "
-      "freq_den, color, position, highlight, archived, type, target_value, "
-      "target_type, unit, uuid) values (1,'x','','',1,1,0,0,0,0,1,0,0,'','u')");
+  db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
   db.run("insert into HabitDefinitions (habit, kind, payload) "
       "values (1,'sleep','{}')");
   db.run('delete from Habits where id = 1');
@@ -488,9 +486,7 @@ Database openAppSchemaDatabaseAt(int version) {
 test('a habit that already had a sleep goal is marked', () {
   final Database db = openAppSchemaDatabaseAt(101);
   addTearDown(db.close);
-  db.run("insert into Habits (id, name, description, question, freq_num, "
-      "freq_den, color, position, highlight, archived, type, target_value, "
-      "target_type, unit, uuid) values (1,'Sleep','','',1,1,0,0,0,0,1,100,0,'%','u')");
+  db.run("insert into Habits (id, name, uuid) values (1, 'Sleep', 'u1')");
   db.run('insert into SleepGoals (habit, bed_minutes, wake_minutes, '
       'min_sleep_minutes, weight_sleep, weight_bed, weight_wake, '
       'half_credit_time_minutes, half_credit_sleep_minutes, home_utc_offset, '
@@ -561,9 +557,7 @@ void main() {
   setUp(() {
     db = openAppSchemaDatabase();
     repository = DefinitionRepository(db);
-    db.run("insert into Habits (id, name, description, question, freq_num, "
-        "freq_den, color, position, highlight, archived, type, target_value, "
-        "target_type, unit, uuid) values (1,'x','','',1,1,0,0,0,0,1,0,0,'','u')");
+    db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
   });
 
   tearDown(() => db.close());
@@ -606,9 +600,7 @@ void main() {
   });
 
   test('the habits of one kind are listed, and no others', () {
-    db.run("insert into Habits (id, name, description, question, freq_num, "
-        "freq_den, color, position, highlight, archived, type, target_value, "
-        "target_type, unit, uuid) values (2,'y','','',1,1,0,0,0,0,1,0,0,'','v')");
+    db.run("insert into Habits (id, name, uuid) values (2, 'y', 'u2')");
     repository.save(1, const HabitDefinition(kind: ComputedKind.sleep));
     repository.save(2, const HabitDefinition(kind: ComputedKind.abstinence));
 
@@ -795,7 +787,29 @@ class DefinitionRepository {
 
 `bindNull(int index)` есть в `Database` (`database.dart:55`), проверено.
 
-- [ ] **Шаг 5: экспортировать**
+- [ ] **Шаг 5: завести репозиторий в области**
+
+Точка доступа заводится здесь, вместе с репозиторием: задачи 7, 8, 9 и 10 все
+обращаются к `scope.definitions`, и если завести её позже, первая же из них
+обратится к тому, чего ещё нет.
+
+В `app/lib/state/app_scope.dart`, рядом с полем `sleepRepository`:
+
+```dart
+  /// Where a habit says its days are computed. See [DefinitionRepository].
+  final DefinitionRepository definitions;
+```
+
+в списке параметров приватного конструктора `AppScope._` — `required this.definitions,`
+— и в `AppScope.open`, рядом с постройкой `sleepRepository`:
+
+```dart
+    final definitions = DefinitionRepository(database);
+```
+
+передав `definitions: definitions` в `AppScope._`.
+
+- [ ] **Шаг 6: экспортировать**
 
 В `packages/uhabits_core/lib/uhabits_core.dart`, рядом с экспортами сна:
 
@@ -804,17 +818,17 @@ export 'src/computed/definition_repository.dart';
 export 'src/computed/habit_definition.dart';
 ```
 
-- [ ] **Шаг 6: запустить, убедиться что проходит**
+- [ ] **Шаг 7: запустить, убедиться что проходит**
 
-Выполнить: `dart test test/computed/`
-Ожидается: PASS, шесть тестов.
+Выполнить: `dart test test/computed/` и `cd ../../app && flutter analyze`
+Ожидается: PASS, шесть тестов; анализ чистый.
 
-- [ ] **Шаг 7: мутация**
+- [ ] **Шаг 8: мутация**
 
 В `fromWire` вернуть `values.first` вместо `null`. Тест «a kind nobody knows»
 обязан упасть. Вернуть.
 
-- [ ] **Шаг 8: записать правила**
+- [ ] **Шаг 9: записать правила**
 
 ```markdown
 - [x] `computed.definition`
@@ -825,7 +839,7 @@ export 'src/computed/habit_definition.dart';
 5. `computed.definition#5` Удаление определения не трогает привычку.
 ```
 
-- [ ] **Шаг 9: коммит**
+- [ ] **Шаг 10: коммит**
 
 ```bash
 git add packages/uhabits_core docs/extensions/SLEEP.md
@@ -1037,10 +1051,12 @@ test('randomising a computed habit does nothing at all', () {
   // the person's own skips with it, and outside the read window nothing
   // brings them back.
   habit.originalEntries.add(Entry(LocalDate(9000), 89763));
-  final presenter = ShowHabitMenuPresenter(
-    /* ...как в соседних тестах... */
-    isComputed: (int _) => true,
-  );
+
+  // `presenterFor` is the file's own helper (line 293). Add the parameter to
+  // it rather than building a presenter by hand here — the helper is what the
+  // other twenty tests use, and two ways of building one is how they drift.
+  final ShowHabitMenuPresenter presenter =
+      presenterFor(habit, isComputed: (int _) => true);
 
   presenter.onRandomize();
 
@@ -1054,7 +1070,29 @@ test('randomising a computed habit does nothing at all', () {
 Выполнить: `dart test test/ui/screens/habits/show/show_habit_menu_presenter_test.dart`
 Ожидается: FAIL — значение стёрто.
 
-- [ ] **Шаг 3: закрыть**
+- [ ] **Шаг 3: расширить хелпер теста**
+
+В `show_habit_menu_presenter_test.dart`, в `presenterFor` (строка 293):
+
+```dart
+  ShowHabitMenuPresenter presenterFor(
+    Habit h, {
+    math.Random? random,
+    bool Function(int)? isComputed,
+  }) =>
+      ShowHabitMenuPresenter(
+        commandRunner: commandRunner,
+        habit: h,
+        habitList: habitList,
+        screen: screen,
+        system: system,
+        taskRunner: taskRunner,
+        random: random,
+        isComputed: isComputed,
+      );
+```
+
+- [ ] **Шаг 4: закрыть**
 
 В конструктор презентера добавить:
 
@@ -1072,13 +1110,13 @@ test('randomising a computed habit does nothing at all', () {
     if (id != null && (isComputed?.call(id) ?? false)) return;
 ```
 
-- [ ] **Шаг 4: запустить, убедиться что проходит**
+- [ ] **Шаг 5: запустить, убедиться что проходит**
 
 Выполнить: `dart test test/ui/screens/habits/show/`
 Ожидается: PASS. Портированные тесты `onRandomize` проходят без правки —
 предикат по умолчанию отвечает «нет».
 
-- [ ] **Шаг 5: проводка в приложении**
+- [ ] **Шаг 6: проводка в приложении**
 
 В `app/lib/state/show_habit_model.dart`, там где строится презентер меню:
 
@@ -1086,18 +1124,18 @@ test('randomising a computed habit does nothing at all', () {
       isComputed: (int id) => scope.definitions.isComputed(id),
 ```
 
-- [ ] **Шаг 6: мутация**
+- [ ] **Шаг 7: мутация**
 
 Заменить `?? false` на `?? true`. Портированные тесты `onRandomize` обязаны
 упасть. Вернуть.
 
-- [ ] **Шаг 7: записать правило**
+- [ ] **Шаг 8: записать правило**
 
 ```markdown
 3. `computed.lifecycle#3` `onRandomize` ничего не делает для вычисляемой привычки.
 ```
 
-- [ ] **Шаг 8: коммит**
+- [ ] **Шаг 9: коммит**
 
 ```bash
 git add packages/uhabits_core app docs/extensions/SLEEP.md
@@ -1267,22 +1305,10 @@ test('a new sleep habit is marked as computed', () {
 Выполнить: `cd app && flutter test test/ui/sleep/sleep_editor_test.dart`
 Ожидается: FAIL — определения нет.
 
-- [ ] **Шаг 3: завести репозиторий в области**
+- [ ] **Шаг 3: проставлять метку вместе с целью**
 
-В `AppScope`, рядом с `sleepRepository`:
+Поле `scope.definitions` уже заведено задачей 5.
 
-```dart
-  /// Where a habit says its days are computed. See [DefinitionRepository].
-  final DefinitionRepository definitions;
-```
-
-и в `AppScope.open`, где строится `sleepRepository`:
-
-```dart
-    final definitions = DefinitionRepository(database);
-```
-
-- [ ] **Шаг 4: проставлять метку вместе с целью**
 
 В `_SleepGoalWriter.onCommandFinished`, сразу после `saveGoal`:
 
@@ -1296,22 +1322,22 @@ test('a new sleep habit is marked as computed', () {
     );
 ```
 
-- [ ] **Шаг 5: запустить, убедиться что проходит**
+- [ ] **Шаг 4: запустить, убедиться что проходит**
 
 Выполнить: `flutter test test/ui/sleep/`
 Ожидается: PASS.
 
-- [ ] **Шаг 6: мутация**
+- [ ] **Шаг 5: мутация**
 
 Убрать вызов `definitions.save`. Тест обязан упасть. Вернуть.
 
-- [ ] **Шаг 7: записать правило**
+- [ ] **Шаг 6: записать правило**
 
 ```markdown
 6. `computed.definition#6` Новая привычка со сном получает определение вместе с целью.
 ```
 
-- [ ] **Шаг 8: коммит**
+- [ ] **Шаг 7: коммит**
 
 ```bash
 git add app docs/extensions/SLEEP.md
@@ -1320,80 +1346,137 @@ git commit -m "Mark a new sleep habit as computed when it is created"
 
 ---
 
-## Задача 10: пути записи мимо команд знают о вычисляемых
+## Задача 10: запись из виджета не лжёт вычисляемой привычке
 
-Их три, а не два: `WidgetBehavior` пишет `Entry.yesManual` из виджета,
-уведомления и отложенной очереди тапов без единой проверки вида. Для привычки,
-чей день считает приложение, «да, сделал» — не значение, а ложь, которую следующий
-свод молча перепишет.
+Виджет, уведомление и отложенная очередь тапов пишут «да, сделал» без единой
+проверки вида. Для привычки, чей день считает приложение, это не значение, а
+обещание, которое следующий свод молча перепишет.
+
+**Дверь одна.** Пять входов — `onAddRepetition`, `onRemoveRepetition`,
+`onToggleRepetition`, увеличение и уменьшение — все сходятся в
+`WidgetBehavior.setValue` (`app/lib/state/widget_sync.dart:505`), и маршрутизатор
+намерений с очередью тапов зовут именно эти пять. Проверка ставится в `setValue`
+и больше нигде: пять копий одного правила — это пять мест, где оно разойдётся.
 
 **Файлы:**
-- Изменить: `app/lib/state/widget_sync.dart:449-503`
-- Изменить: `app/lib/state/intent_router.dart:229-253`
-- Изменить: `app/lib/state/widget_toggle_queue.dart`
+- Изменить: `app/lib/state/widget_sync.dart:505` (`WidgetBehavior.setValue`)
 - Тест: `app/test/state/computed_write_paths_test.dart`
 
 **Интерфейсы:**
-- Потребляет: `AppScope.definitions.isComputed(int)`.
+- Потребляет: `DefinitionRepository.isComputed(int)` — заведено задачей 5 как
+  `scope.definitions`. `WidgetBehavior` получает предикат конструктором, чтобы
+  не тянуть за собой всю область.
 - Даёт: ничего нового; поведение.
 
 - [ ] **Шаг 1: написать падающий тест**
 
 ```dart
+/// Every widget write funnels through `WidgetBehavior.setValue`, so the three
+/// entry points are tested through the three methods that reach it.
 void main() {
-  // Каждый из трёх путей, по одному тесту, с одной и той же проверкой:
-  // значение дня после попытки осталось вычисленным.
-  test('a widget tap cannot mark a computed habit done', () async {
-    scope.definitions.save(habit.id!,
-        const HabitDefinition(kind: ComputedKind.sleep));
-    habit.originalEntries.add(Entry(LocalDate(today), 89763));
+  // Харнесс копируется из существующего `app/test/state/widget_sync_test.dart`:
+  // он уже строит WidgetBehavior с базой, списком привычек и фейковым треем.
 
-    await scope.widgetSync!.toggle(habit.id!, LocalDate(today));
+  test('a widget tap cannot mark a computed habit done', () {
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
+    habit.originalEntries.add(Entry(LocalDate(9000), 89763));
 
-    expect(habit.originalEntries.get(LocalDate(today)).value, 89763,
+    behavior.onAddRepetition(habit, LocalDate(9000));
+
+    expect(habit.originalEntries.get(LocalDate(9000)).value, 89763,
         reason: 'computed.write-paths#1');
+  });
+
+  test('nor undo one', () {
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
+    habit.originalEntries.add(Entry(LocalDate(9000), 89763));
+
+    behavior.onRemoveRepetition(habit, LocalDate(9000));
+
+    expect(habit.originalEntries.get(LocalDate(9000)).value, 89763,
+        reason: 'computed.write-paths#1');
+  });
+
+  test('nor toggle one', () {
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
+    habit.originalEntries.add(Entry(LocalDate(9000), 89763));
+
+    behavior.onToggleRepetition(habit, LocalDate(9000));
+
+    expect(habit.originalEntries.get(LocalDate(9000)).value, 89763,
+        reason: 'computed.write-paths#1');
+  });
+
+  test('an ordinary habit is written exactly as before', () {
+    behavior.onAddRepetition(ordinary, LocalDate(9000));
+
+    expect(ordinary.originalEntries.get(LocalDate(9000)).value,
+        Entry.yesManual,
+        reason: 'computed.write-paths#2 — nothing about the ported widget '
+            'behaviour moves');
   });
 }
 ```
 
-Точные имена методов взять из `widget_sync.dart:449-503`; тест пишется против
-того, что там есть, а не против того, что кажется.
-
 - [ ] **Шаг 2: запустить, убедиться что падает**
 
-Выполнить: `flutter test test/state/computed_write_paths_test.dart`
-Ожидается: FAIL — значение стало 2.
+Выполнить: `cd app && flutter test test/state/computed_write_paths_test.dart`
+Ожидается: FAIL — первые три теста, значение стало 2 или 0.
 
-- [ ] **Шаг 3: закрыть все три**
+- [ ] **Шаг 3: поставить одну проверку**
 
-В каждом из трёх мест, перед записью:
+`WidgetBehavior` получает предикат:
 
 ```dart
-      // A habit whose days the app computes has no "yes" to record: the next
-      // recompute would overwrite it, so accepting the tap would be a promise
-      // the app cannot keep.
-      if (scope.definitions.isComputed(habitId)) return;
+    /// Not upstream. Whether a habit's days are computed by the app rather
+    /// than entered by the person. Given as a predicate rather than as the
+    /// repository, because the behaviour needs the answer and not the table.
+    bool Function(int habitId)? isComputed,
 ```
 
-- [ ] **Шаг 4: запустить, убедиться что проходит**
+и в начало `setValue`:
+
+```dart
+    // A habit whose days the app computes has no "yes" to record: the next
+    // recompute would overwrite it, so accepting the tap would be a promise
+    // the app cannot keep. Refused here rather than at the five entry points
+    // that reach this method, because five copies of one rule is five places
+    // for it to drift.
+    final int? id = habit.id;
+    if (id != null && (isComputed?.call(id) ?? false)) return;
+```
+
+- [ ] **Шаг 4: провести предикат в области**
+
+В `app/lib/state/app_scope.dart`, там где строится `WidgetBehavior`:
+
+```dart
+      isComputed: (int id) => definitions.isComputed(id),
+```
+
+- [ ] **Шаг 5: запустить, убедиться что проходит**
 
 Выполнить: `flutter test test/state/`
-Ожидается: PASS. Портированные тесты виджетов проходят без правки — для
-обычной привычки предикат отвечает «нет».
+Ожидается: PASS. Портированные тесты виджетов проходят без правки — предикат
+по умолчанию отвечает «нет».
 
-- [ ] **Шаг 5: мутация**
+- [ ] **Шаг 6: мутация**
 
-Убрать проверку в `widget_sync.dart`. Соответствующий тест обязан упасть.
-Вернуть. Повторить для двух остальных путей — каждый закрыт своим тестом.
+Заменить `?? false` на `?? true`. Портированные тесты виджетов обязаны упасть
+(обычная привычка перестанет отмечаться). Вернуть.
 
-- [ ] **Шаг 6: записать правило**
+- [ ] **Шаг 7: записать правила**
 
 ```markdown
 - [x] `computed.write-paths`
 1. `computed.write-paths#1` Виджет, уведомление и отложенная очередь тапов не пишут «сделал» вычисляемой привычке.
+2. `computed.write-paths#2` Для обычной привычки поведение виджета не меняется.
 ```
 
-- [ ] **Шаг 7: коммит**
+- [ ] **Шаг 8: коммит**
 
 ```bash
 git add app docs/extensions/SLEEP.md
@@ -1457,9 +1540,12 @@ git add -A && git commit -m "Verify the computed-habit layer on the device"
 здесь намеренно**: она требует решения владельца, а не кода. Метка — задачи 4,
 5, 9. Конвейер — задача 6.
 
-**Плейсхолдеры.** В задаче 10 тест написан по образцу, а не дословно: точные
-имена методов трёх путей записи берутся из кода. Это единственное место, и оно
-помечено явно — выдумывать сигнатуру, которую я не прочитал, было бы хуже.
+**Плейсхолдеры.** Предполётный разбор нашёл четыре и все устранены: вставки в
+`Habits` сокращены до трёх колонок (таблица создаётся с одиннадцатью, остальные
+добавляются миграциями); конструктор презентера в T7 взят из хелпера
+`presenterFor` того же файла; в T8 назван образец хелпера; T10 переписана —
+путей записи не три, а один, `WidgetBehavior.setValue`, куда сходятся все пять
+входов.
 
 **Проверено в коде, а не по памяти.** `queryInt(String sql)` берёт только SQL
 (`database.dart:102`); `bindNull(int)` есть (`:55`); `openAppSchemaDatabase()`
