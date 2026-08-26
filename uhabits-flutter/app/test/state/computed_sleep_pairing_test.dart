@@ -115,6 +115,40 @@ void main() {
     expectPaired(db, count: 1);
   });
 
+  test('editing an existing habit moves it to neither side of the pair',
+      () async {
+    // The kind is settled at creation and there is no path that changes it —
+    // see "computed: вид привычки после создания не меняется" in
+    // docs/parity/DEVIATIONS.md. This is that statement, asked of the code.
+    final Database db = AppDatabase.openAndMigrate('${tempDir.path}/edit.db');
+    final AppScope scope = AppScope.open(db);
+    addTearDown(scope.close);
+
+    final EditHabitModel making = EditHabitModel(scope: scope, sleep: true);
+    making.nameController.text = 'Sleep';
+    making.save();
+    await pumpEventQueue(times: 20);
+    final Habit sleep = scope.habitList.getByPosition(0);
+
+    final Habit ordinary = scope.modelFactory.buildHabit()..name = 'Meditate';
+    scope.habitList.add(ordinary);
+
+    for (final Habit habit in <Habit>[sleep, ordinary]) {
+      final EditHabitModel editing =
+          EditHabitModel(scope: scope, habitId: habit.id);
+      editing.nameController.text = '${habit.name} renamed';
+      editing.save();
+      await pumpEventQueue(times: 20);
+    }
+
+    expectPaired(db, count: 1);
+    expect(scope.definitions.isComputed(ordinary.id!), isFalse,
+        reason: '$pairing — an ordinary habit does not become computed by '
+            'being edited');
+    expect(scope.definitions.isComputed(sleep.id!), isTrue,
+        reason: '$pairing — nor does a computed one stop being computed');
+  });
+
   test('a sleep habit restored from a backup gets both', () async {
     // The backup is a byte-for-byte copy, so both rows are inside the file —
     // but under the id the other device used. The restore re-keys the habit.
