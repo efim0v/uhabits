@@ -49,6 +49,10 @@ void main() {
     // Deliberately several: the whole point is that the habit's id in the
     // file is not the id it will be given here.
     int decoys = 3,
+    HabitDefinition definition = const HabitDefinition(
+      kind: ComputedKind.abstinence,
+      committedFrom: 8990,
+    ),
   }) {
     final (Database source, String path) =
         makeDatabaseFile('uhabits_definition_src');
@@ -63,13 +67,7 @@ void main() {
     list.add(habit);
 
     final DefinitionRepository there = DefinitionRepository(source);
-    there.save(
-      habit.id!,
-      const HabitDefinition(
-        kind: ComputedKind.abstinence,
-        committedFrom: 8990,
-      ),
-    );
+    there.save(habit.id!, definition);
     source.close();
     return LocalUserFile(path);
   }
@@ -114,6 +112,28 @@ void main() {
     expect(here.forHabit(habit.id!)?.committedFrom, 8990,
         reason:
             'computed.backup#2 — the day of the commitment travels with it');
+  });
+
+  test('the whole definition survives, not only its kind', () async {
+    // Two entries of different types, so a payload silently dropped and one
+    // silently truncated would both be caught.
+    const HabitDefinition definition = HabitDefinition(
+      kind: ComputedKind.abstinence,
+      committedFrom: 8990,
+      payload: <String, Object?>{'allowanceDays': 30, 'unit': 'day'},
+    );
+    final UserFile file =
+        backupWithDefinition(uuid: 'abst-uuid', definition: definition);
+
+    await importFile(file);
+
+    final Habit habit = destinationList.getByUUID('abst-uuid')!;
+    // Whole-object comparison, not field by field: HabitDefinition's equality
+    // is pinned by computed.definition#6, so this is the strongest and
+    // shortest assertion available.
+    expect(here.forHabit(habit.id!), definition,
+        reason: 'computed.backup#3 — the whole definition travels, not only '
+            'its kind');
   });
 
   test('a habit with no definition gains none', () async {
