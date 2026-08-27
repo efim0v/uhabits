@@ -848,24 +848,28 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     ShowHabitCard.score,
   };
 
-  /// The whole column, ported cards and sleep blocks together.
+  /// The whole column, ported cards and a computed habit's own blocks
+  /// together.
   ///
   /// For every habit the original knows this is exactly `ShowHabitCard`'s
   /// declaration order (`show-habit.card-order-and-visibility#1`). A sleep
-  /// habit splits that order in two and puts its own blocks in the seam.
+  /// habit and an abstinence habit both split that order in the same place
+  /// and put their own blocks in the seam — after `subtitle`, `notes`,
+  /// `overview` and `score`, before everything else — because those four
+  /// cards are the habit itself, not its machinery, and a person reads them
+  /// first (`computed.abstinence-screen#3`). The two kinds never overlap
+  /// (`_abstinenceDefinition` and a sleep goal are mutually exclusive), so at
+  /// most one of [_buildSleepCards] and [_buildAbstinenceCards] is ever
+  /// non-empty, and the other contributes nothing to `own`.
   List<Widget> _buildColumn(BuildContext context, ShowHabitModel model) {
-    // Воздержание кладёт свою карточку НАД портированными, а сон — под
-    // четвёркой: у сна собственные блоки есть механика, а «сорок дней без
-    // срыва» есть сама привычка (`computed.abstinence-screen#3`).
-    final List<Widget> abstinence = _buildAbstinenceCards(context, model);
-    if (abstinence.isNotEmpty) {
-      return <Widget>[...abstinence, ..._buildCards(context, model)];
-    }
-    final List<Widget> sleep = _buildSleepCards(context, model);
-    if (sleep.isEmpty) return _buildCards(context, model);
+    final List<Widget> own = <Widget>[
+      ..._buildSleepCards(context, model),
+      ..._buildAbstinenceCards(context, model),
+    ];
+    if (own.isEmpty) return _buildCards(context, model);
     return <Widget>[
       ..._buildCards(context, model, only: _sleepLeadingCards),
-      ...sleep,
+      ...own,
       ..._buildCards(context, model, except: _sleepLeadingCards),
     ];
   }

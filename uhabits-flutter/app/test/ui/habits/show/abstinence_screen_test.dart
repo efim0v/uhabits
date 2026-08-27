@@ -113,21 +113,36 @@ void main() {
             'числом');
   });
 
-  testWidgets('computed.abstinence-screen#3 счётчик стоит выше портированных '
-      'карточек', (tester) async {
+  testWidgets('computed.abstinence-screen#3 счётчик стоит в шве после '
+      'ведущей четвёрки', (tester) async {
     final int today = getToday().daysSince2000;
     final Habit habit = addAbstinence(committedFrom: today - 40);
 
     await tester.pumpWidget(wrap(habit));
     await tester.pumpAndSettle();
 
-    final double counter =
-        tester.getTopLeft(find.byKey(AbstinenceCounterCard.cardKey)).dy;
-    final double subtitle = tester
-        .getTopLeft(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.subtitle)))
-        .dy;
-    expect(counter, lessThan(subtitle),
-        reason: 'computed.abstinence-screen#3');
+    double dyOf(Key key) => tester.getTopLeft(find.byKey(key)).dy;
+
+    // Тот же шов, что и у сна: после ведущей четвёрки (subtitle, notes,
+    // overview, score) и до всего остального — не выше всего экрана.
+    // `counter < subtitle` держится и когда счётчик стоит над всей колонкой,
+    // и потому не различает два размещения; здесь счётчик прижат к обоим
+    // соседям по шву — ниже score, выше bar, первой карточки, что идёт за
+    // четвёркой у привычки-воздержания (цель скрыта, `#4`).
+    final double subtitle = dyOf(ShowHabitScreen.cardKey(ShowHabitCard.subtitle));
+    final double score = dyOf(ShowHabitScreen.cardKey(ShowHabitCard.score));
+    final double counter = dyOf(AbstinenceCounterCard.cardKey);
+    final double bar = dyOf(ShowHabitScreen.cardKey(ShowHabitCard.bar));
+
+    expect(subtitle, lessThan(score),
+        reason: 'computed.abstinence-screen#3 — ведущая четвёрка идёт в '
+            'портированном порядке');
+    expect(score, lessThan(counter),
+        reason: 'computed.abstinence-screen#3 — счётчик ниже ведущей '
+            'четвёрки, а не выше всего экрана');
+    expect(counter, lessThan(bar),
+        reason: 'computed.abstinence-screen#3 — счётчик выше первой '
+            'портированной карточки, что идёт после шва');
   });
 
   testWidgets('computed.abstinence-screen#4 цель скрыта, кольцо показано',
