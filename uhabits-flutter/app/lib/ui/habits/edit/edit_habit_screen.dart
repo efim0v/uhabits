@@ -234,16 +234,6 @@ class EditHabitScreen extends StatelessWidget {
   static const Key abstinenceCommittedPickerKey =
       Key('editHabit.abstinenceCommittedPicker');
 
-  /// The earliest day the commitment picker will offer, as `daysSince2000`.
-  ///
-  /// Day 1, not day 0. `daysSince2000` expresses the epoch and the days before
-  /// it perfectly well, but `computed.commitment#6` reads a stored commitment
-  /// day of 0 back as no commitment day at all — zero is what an unfilled
-  /// integer looks like, not a decision anybody made. So 2000-01-01 is a day
-  /// the calendar could offer and the storage would then drop, silently: the
-  /// clean stretch would be counted from the first entry instead, with nothing
-  /// on screen to say the choice went missing. Refused before it is offered.
-  static const int commitmentFloorDay = 1;
   static const Key targetFieldKey = Key('editHabit.targetInput');
   static const Key colorButtonKey = Key('editHabit.colorButton');
   static const Key frequencyBoxKey = Key('editHabit.frequencyOuterBox');
@@ -989,7 +979,7 @@ class _EditHabitViewState extends State<_EditHabitView> {
         context: context,
         initialDate: _asDateTime(core.LocalDate(model.committedFrom)),
         firstDate: _asDateTime(
-            core.LocalDate(EditHabitScreen.commitmentFloorDay)),
+            core.LocalDate(EditHabitModel.commitmentFloorDay)),
         lastDate: _asDateTime(today),
       ),
     );

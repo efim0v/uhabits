@@ -110,6 +110,33 @@ void main() {
           reason: 'computed.create#8 — a habit committed to tomorrow would '
               'score days nobody has lived');
     });
+
+    test('nor back onto the epoch, which the storage refuses', () {
+      // The other end of the same clamp. Day 0 is not a day anybody chose —
+      // it is what an unfilled integer looks like — so
+      // `DefinitionRepository.save` throws on one, from inside a command
+      // listener, where the habit has already been created and the listeners
+      // queued behind this one never run. The picker's floor keeps a person
+      // away from it; this keeps the model away from it, which is where the
+      // value is decided.
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'No alcohol';
+      model.setCommittedFrom(0);
+      expect(model.committedFrom, EditHabitModel.commitmentFloorDay,
+          reason: 'computed.commitment#6 — nobody commits on a day at or '
+              'before the epoch, and the model must not be able to make the '
+              'mistake the repository throws on');
+
+      expect(model.save(), isTrue, reason: 'computed.commitment#6');
+      expect(
+          scope.definitions
+              .forHabit(scope.habitList.getByPosition(0).id!)
+              ?.committedFrom,
+          EditHabitModel.commitmentFloorDay,
+          reason: 'computed.commitment#6 — and the row is written rather than '
+              'lost with the throw');
+    });
   });
 
   group('the habit an abstinence habit is stored as', () {
@@ -335,23 +362,26 @@ void main() {
           scope.definitions.forHabit(habit.id!)!;
       expect(saved.targetValue, 10.0, reason: 'computed.allowance#1');
       expect(abstinenceAllowanceOf(definition), saved.targetValue,
-          reason: 'computed.allowance#1 — обе записи ставит один save: строка '
-              'с прежним допуском вернула бы форме тридцать, а ячейке — своё '
-              'представление о том, где начинается срыв');
+          reason: 'computed.allowance#1 — one save puts down both: a row left '
+              'at the old allowance would hand the form back thirty and give '
+              'the cell its own idea of where a slip begins');
       expect(abstinenceAllowanceOf(definition), 10.0,
-          reason: 'computed.allowance#1 — и это новое число, а не старое, на '
-              'которое согласились оба');
+          reason: 'computed.allowance#1 — and it is the new number, not the '
+              'old one they both happen to agree on');
       final HabitDefinition? live = saved.definition;
       expect(live, isNotNull,
-          reason: 'computed.commitment#5 — определение живёт и на самой '
-              'привычке, а не только в базе: пересчёт читает поле');
-      expect(abstinenceAllowanceOf(live ?? definition), 10.0,
-          reason: 'computed.allowance#1 — и на живой привычке новое число: до '
-              'перезапуска все читают его отсюда');
+          reason: 'computed.commitment#5 — the definition lives on the habit '
+              'itself and not only in the database: a recompute reads the '
+              'field');
+      expect(abstinenceAllowanceOf(live!), 10.0,
+          reason: 'computed.allowance#1 — and the live habit carries the new '
+              'number too: until the app is restarted everything reads it '
+              'from here');
       expect(definition.committedFrom, 8990,
-          reason: 'computed.create#8 — правка допуска не есть новое '
-              'обязательство: сдвинутый на сегодня день стёр бы человеку все '
-              'накопленные чистые дни, ради счёта которых всё и затевалось');
+          reason: 'computed.create#8 — editing the allowance is not a new '
+              'commitment: a day quietly moved to today would wipe out every '
+              'clean day the person had accumulated, which is the count the '
+              'whole thing exists for');
     });
   });
 
@@ -382,15 +412,16 @@ void main() {
           reason: 'computed.create#7');
       expect(scope.definitions.isComputed(habit.id!), isTrue,
           reason: 'computed.create#7');
-      // Настоящая цитата `computed.write-paths#5`: тип у привычки не тот, что
-      // ей выставил тест, а тот, с которым её завёл редактор. Неохраняемая
-      // дверь переключения да/нет живёт под `!habit.isNumerical`, и достать
-      // воздержание она не может ровно потому, что вот эта строка зелёная.
+      // A real citation of `computed.write-paths#5`: the type here is not one
+      // a test set on the habit, it is the one the editor created it with. The
+      // unguarded yes/no toggle lives under `!habit.isNumerical`, and the
+      // reason it cannot reach an abstinence habit is exactly that this line
+      // is green.
       expect(habit.type, HabitType.numerical,
-          reason: 'computed.write-paths#5 — вычисляемая привычка числовая по '
-              'построению, и переключить её нечем');
+          reason: 'computed.write-paths#5 — a computed habit is numerical by '
+              'construction, and there is nothing that could toggle it');
       expect(habit.targetType, NumericalHabitType.atMost,
-          reason: 'computed.create#7 — «не более допуска»');
+          reason: 'computed.create#7 — "no more than the allowance"');
     });
 
     test('the allowance in the row and the target on the habit are one number',
@@ -424,8 +455,8 @@ void main() {
       expect(abstinenceAllowanceOf(definition), 0.0,
           reason: 'computed.create#5 — zero allowance means one tap is a slip');
       expect(definition.payload['unit'], abstinenceUnitCount,
-          reason: 'computed.create#5 — единица названа один раз, и пустая '
-              'строка в базу не уезжает (`computed.allowance#2`)');
+          reason: 'computed.create#5 — the unit is named once, and an empty '
+              'string never travels to the database (`computed.allowance#2`)');
     });
 
     test('an ordinary habit gets no row on this path', () {
@@ -542,13 +573,21 @@ void main() {
     });
 
     test('an ordinary habit opened for editing never becomes computed', () {
-      final EditHabitModel making =
-          EditHabitModel(scope: scope, habitType: HabitType.numerical);
-      making.nameController.text = 'Pages';
-      making.unitController.text = 'pages';
-      making.targetController.text = '30';
-      making.save();
-      final int id = scope.habitList.getByPosition(0).id!;
+      // Built directly, not through `EditHabitModel.save()`: that save is a
+      // second `save()` this test does not mean to exercise, and on the
+      // broadest form of the mutation below (the definition write turned
+      // unconditional) it would throw while creating this very fixture —
+      // "Pages" has no commitment day, so `committedFrom` is still the field
+      // default of 0, and `DefinitionRepository.save` refuses a day at or
+      // before the epoch. That throw would kill this test for a reason that
+      // has nothing to do with EDIT mode, before `editing` even exists.
+      final Habit made = scope.modelFactory.buildHabit()
+        ..name = 'Pages'
+        ..type = HabitType.numerical
+        ..unit = 'pages'
+        ..targetValue = 30;
+      scope.habitList.add(made);
+      final int id = made.id!;
 
       final EditHabitModel editing = EditHabitModel(scope: scope, habitId: id);
       expect(editing.computedKind, isNull, reason: 'computed.create#10');

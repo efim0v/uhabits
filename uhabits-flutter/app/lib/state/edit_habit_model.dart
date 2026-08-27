@@ -243,14 +243,35 @@ class EditHabitModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The commitment day, never in the future.
+  /// The earliest day a commitment can be made on, as `daysSince2000`.
   ///
-  /// The picker's `lastDate` already refuses tomorrow; this refuses it again,
-  /// because the picker is one of three ways this value can be set and the
-  /// other two are a restored backup and a future build.
+  /// Day 1, not day 0. `daysSince2000` expresses the epoch and the days before
+  /// it perfectly well, but `computed.commitment#6` reads a stored commitment
+  /// day of 0 back as no commitment day at all — zero is what an unfilled
+  /// integer looks like, not a decision anybody made, so
+  /// [DefinitionRepository.save] throws on one rather than store a value the
+  /// next read would drop.
+  ///
+  /// Named here rather than on the screen because this is where the value is
+  /// decided: the picker's `firstDate` reads it, and so does [setCommittedFrom]
+  /// — one floor, whichever way the day arrives.
+  static const int commitmentFloorDay = 1;
+
+  /// The commitment day, never in the future and never on the epoch.
+  ///
+  /// The picker's `lastDate` already refuses tomorrow and its `firstDate`
+  /// already refuses 2000-01-01; this refuses both again, because the picker is
+  /// one of three ways this value can be set and the other two are a restored
+  /// backup and a future build. The lower clamp is not tidiness: a day of 0
+  /// reaches [DefinitionRepository.save] from inside a command listener, and
+  /// the throw leaves a created habit with no row and skips every listener
+  /// queued behind it.
   void setCommittedFrom(int day) {
     final int today = getToday().daysSince2000;
-    committedFrom = day > today ? today : day;
+    final int notInTheFuture = day > today ? today : day;
+    committedFrom = notInTheFuture < commitmentFloorDay
+        ? commitmentFloorDay
+        : notInTheFuture;
     notifyListeners();
   }
 
@@ -432,11 +453,31 @@ class EditHabitModel extends ChangeNotifier {
     // ported at-most branch starts its score at 1.0 and counts a day with no
     // entry through `max(0, -1)`, which is exactly "innocent until proven
     // otherwise".
+    //
+    // The row that makes it an abstinence habit is built here, from the same
+    // two values, rather than read out of the fields a second time later: the
+    // allowance is stored twice on purpose — in `targetValue`, which is what
+    // the score judges by, and in the payload, which is what the cell draws a
+    // cross from — and one parse is what makes those two the same number by
+    // construction instead of by agreement (`computed.allowance#1`). Parsed
+    // twice they can differ, and a day the ring calls a lapse with no cross on
+    // it is the shape of that bug.
+    HabitDefinition? abstinenceRow;
     if (isAbstinence) {
-      habit.targetValue = double.tryParse(targetController.text) ?? 0;
+      final double allowance = double.tryParse(targetController.text) ?? 0;
+      final String unit = unitController.text.trim();
+      habit.targetValue = allowance;
       habit.targetType = NumericalHabitType.atMost;
-      habit.unit = unitController.text.trim();
+      habit.unit = unit;
       habit.frequency = Frequency(1, 1);
+      // The payload is assembled by the core's own door rather than by
+      // literals: the keys are named once, the allowance is a `double`, and an
+      // empty unit becomes `count` instead of `''` (`computed.allowance#2`).
+      abstinenceRow = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: committedFrom,
+        payload: abstinencePayload(allowance: allowance, unit: unit),
+      );
     }
 
     // Last, as in Kotlin (`edit-habit.save#7`).
@@ -452,44 +493,27 @@ class EditHabitModel extends ChangeNotifier {
     // once, the one a device uses does not. Reading the result immediately
     // worked in every test and silently did nothing on a phone — the habit was
     // created and the row that makes it computed was never stored.
+    //
+    // The kind picks the writer; the registration is written once. Two
+    // `addListener` blocks differing only in their callback are two places to
+    // remember when the listener changes, and the third kind would make three.
     final SleepGoal? goal = sleepGoal;
+    final HabitDefinition? row = abstinenceRow;
+    void Function(AppScope scope, Habit saved)? write;
     if (goal != null) {
+      write = (AppScope scope, Habit saved) =>
+          _writeSleepGoal(scope, saved, goal);
+    } else if (row != null) {
+      write = (AppScope scope, Habit saved) =>
+          _writeAbstinenceRow(scope, saved, row);
+    }
+    if (write != null) {
       scope.commandRunner.addListener(_AfterCommand(
         scope: scope,
         command: command,
         habitId: habitId,
         uuid: habit.uuid,
-        apply: (AppScope scope, Habit saved) =>
-            _writeSleepGoal(scope, saved, goal),
-      ));
-    } else if (isAbstinence) {
-      // Payload собирается дверью ядра, а не литералами: ключи названы один
-      // раз (`computed/abstinence_payload.dart`), тип допуска — `double`, и
-      // пустая единица сама становится `count`.
-      final HabitDefinition definition = HabitDefinition(
-        kind: ComputedKind.abstinence,
-        committedFrom: committedFrom,
-        payload: abstinencePayload(
-          allowance: double.tryParse(targetController.text) ?? 0,
-          unit: unitController.text.trim(),
-        ),
-      );
-      scope.commandRunner.addListener(_AfterCommand(
-        scope: scope,
-        command: command,
-        habitId: habitId,
-        uuid: habit.uuid,
-        apply: (AppScope scope, Habit saved) {
-          scope.definitions.save(saved.id!, definition);
-          // Строка в базе и живая модель — разные вещи: пересчёт читает поле,
-          // а не репозиторий (`computed.commitment#5`), и `attachDefinition`
-          // заодно включает деление пополам (`computed.lapse-score#11`). Без
-          // этих двух строк только что созданное воздержание до перезапуска
-          // считалось бы с сегодняшнего дня и затуханием порта.
-          attachDefinition(saved, scope.definitions);
-          saved.recompute();
-          scope.onComputedDataChanged(saved.id!);
-        },
+        apply: write,
       ));
     }
 
@@ -564,6 +588,24 @@ class _AfterCommand implements CommandRunnerListener {
   }
 }
 
+/// Everything an abstinence habit needs beside its row in `Habits`.
+void _writeAbstinenceRow(
+  AppScope scope,
+  Habit saved,
+  HabitDefinition definition,
+) {
+  scope.definitions.save(saved.id!, definition);
+  // The row in the database and the live model are two different things: a
+  // recompute reads the field, not the repository, and `attachDefinition` is
+  // also what turns the halving on (`computed.lapse-score#11`). Without these
+  // two lines an abstinence habit created or edited in this session would go
+  // on being scored from today, with the ported decay, until the app is
+  // restarted.
+  attachDefinition(saved, scope.definitions);
+  saved.recompute();
+  scope.onComputedDataChanged(saved.id!);
+}
+
 /// Everything a sleep habit needs beside its row in `Habits`.
 void _writeSleepGoal(AppScope scope, Habit saved, SleepGoal goal) {
   scope.sleepRepository.saveGoal(saved.id!, goal);
@@ -574,11 +616,12 @@ void _writeSleepGoal(AppScope scope, Habit saved, SleepGoal goal) {
     saved.id!,
     const HabitDefinition(kind: ComputedKind.sleep),
   );
-  // And onto the live model, not only into the database — the same two lines
-  // abstinence needs, and the same hole without them: a habit created in this
-  // session would compute by the ported window until the app restarts.
-  attachDefinition(saved, scope.definitions);
-  saved.recompute();
+  // No `attachDefinition` here, and no `recompute`: a sleep definition carries
+  // no commitment day and does not halve on a lapse, so there is nothing on it
+  // for a recompute to read, and `recomputeAll` on the next line recomputes
+  // anyway. Abstinence needs both and has a test that says so; sleep would
+  // have had two lines nothing could prove.
+  //
   // Changing a goal changes what every past night was worth. Rescoring only
   // from today would leave the history a mixture of two scales.
   scope.sleepSync.recomputeAll(saved);
