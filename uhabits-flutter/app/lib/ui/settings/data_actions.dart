@@ -305,6 +305,9 @@ class DataActions {
         // The nights themselves, which the percentages in Checkmarks.csv
         // cannot be turned back into.
         sleepRepository: scope.sleepRepository,
+        // And the amounts themselves, which the day values cannot be turned
+        // back into either: 45000 is a number, "45 minutes" is the fact.
+        lapseRepository: scope.lapses,
         _ExportCsvListener((String? filename) {
           if (filename != null) {
             followUp = showSendFileScreen(filename);

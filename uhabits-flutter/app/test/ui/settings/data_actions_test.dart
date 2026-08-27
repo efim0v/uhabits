@@ -18,6 +18,7 @@ library;
 // ignore_for_file: implementation_imports
 
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/app_database.dart';
@@ -28,6 +29,9 @@ import 'package:uhabits/state/settings_model.dart' show SettingsResult;
 import 'package:uhabits/ui/settings/data_actions.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
+import 'package:uhabits_core/src/io/zip.dart';
+import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/time/local_date.dart';
 import 'package:flutter/widgets.dart' show Rect;
 
 /// `FileChooser` over a canned answer — the `ACTION_OPEN_DOCUMENT` result.
@@ -373,6 +377,32 @@ void main() {
           'content://org.isoron.uhabits/backup.zip',
           reason: 'show-habit.export-csv#4: a content URI is already what '
               'FileProvider would have produced');
+    });
+
+    test('computed.backup#5 the exported archive carries the lapse journal',
+        () async {
+      final scope = openScope();
+      final habit = scope.modelFactory.buildHabit()
+        ..name = 'Sober'
+        ..type = HabitType.numerical
+        ..targetType = NumericalHabitType.atMost
+        ..targetValue = 0
+        ..unit = '';
+      scope.habitList.add(habit);
+      scope.lapses.save(habit.id!, getToday().daysSince2000, amount: 45);
+
+      final sharer = _RecordingSharer();
+      final built = buildActions(scope, pickedPath: null, fileSharer: sharer);
+      await built.actions.exportCsv();
+
+      final Uint8List bytes = File(sharer.shared.single.path).readAsBytesSync();
+      final Set<String> names = <String>{
+        for (final ZipEntry e in await ZipReader(bytes).entries()) e.name,
+      };
+
+      expect(names, contains('Lapses.csv'),
+          reason: 'computed.backup#5 — «экспортёр умеет» и «экспорт выносит» '
+              'это разные утверждения, и второе держится на этой строке');
     });
 
     test('show-habit.export-csv#5 nothing able to handle the share falls back '
