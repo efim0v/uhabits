@@ -213,12 +213,18 @@ void main() {
       expect(daysWithoutLapse(habit), 40, reason: 'computed.streak#4');
     });
 
-    test('#6 the streak card and the counter agree, and the date has '
-        'happened', () {
+    test('#6 the streak card and the counter read one streak, in two units',
+        () {
       // Ревью нашло это на экране: счётчик говорил «10 дней без срыва», а
       // карточка серий под ним — «41 день, до 19 сентября», даты, которой
       // ещё не было. Одна и та же `StreakList` отвечала двоим по-разному,
       // потому что хвост окна в тридцать дней вперёд входил в серию целиком.
+      //
+      // Серия у них одна, а единицы разные, и это остаётся так: `length`
+      // считает дни включительно, счётчик — прошедшее время
+      // (`computed.streak#4`), и одиннадцать против десяти — та же
+      // портированная арифметика, что у всякой другой привычки. Правило
+      // говорит «одна серия», а не «одно число».
       final Habit habit = buildAbstinence(10);
       habit.recompute();
 
@@ -232,9 +238,13 @@ void main() {
       expect(shown.length, 11,
           reason: 'computed.streak#6 — одиннадцать прожитых дней, а не сорок '
               'один; тридцать из них ещё не наступили');
+      expect(shown.start, today.minus(10),
+          reason: 'computed.streak#6 — и начало у карточки то же, что у '
+              'счётчика: серия одна');
       expect(daysWithoutLapse(habit), 10,
-          reason: 'computed.streak#4 — счётчик считает прошедшее время от '
-              'начала той же серии');
+          reason: 'computed.streak#6 — счётчик читает ту же серию и печатает '
+              'прошедшее время; «11» на карточке и «10» под счётчиком есть '
+              'одна серия в двух единицах, а не два ответа (`#4`)');
     });
 
     test('#6 a lapse still cuts the streak where it happened', () {
