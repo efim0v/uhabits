@@ -36,19 +36,30 @@ void main() {
     tempDir.deleteSync(recursive: true);
   });
 
-  Habit addAbstinence({required int committedFrom}) {
+  // `allowance` is stored twice, in `targetValue` and in the payload, on
+  // purpose: that is what `computed.allowance#1` promises, and it is exactly
+  // the thing whose two readers this fix's own test leans on. The real
+  // editor (`_writeAbstinenceRow`) sets both from one parsed value; this
+  // helper mirrors it rather than picking a shortcut that only one of the
+  // two readers would notice.
+  Habit addAbstinence({
+    required int committedFrom,
+    double allowance = 0.0,
+    String unit = '',
+  }) {
     final Habit habit = scope.modelFactory.buildHabit()
       ..name = 'Sober'
       ..type = HabitType.numerical
       ..targetType = NumericalHabitType.atMost
-      ..targetValue = 0
-      ..unit = '';
+      ..targetValue = allowance
+      ..unit = unit;
     scope.habitList.add(habit);
     scope.definitions.save(
       habit.id!,
       HabitDefinition(
         kind: ComputedKind.abstinence,
         committedFrom: committedFrom,
+        payload: abstinencePayload(allowance: allowance, unit: unit),
       ),
     );
     // `definitions.save` only writes the row; the live `Habit` learns about
@@ -111,6 +122,41 @@ void main() {
     expect(find.textContaining('Последний срыв:'), findsOneWidget,
         reason: 'computed.abstinence-screen#2 — подпись меняется вместе с '
             'числом');
+  });
+
+  testWidgets('computed.abstinence-screen#2 запись под допуском — не срыв '
+      'нигде на экране', (tester) async {
+    // Ревью нашло: подпись брала последний день с записью в журнале
+    // (`lapses.lastDay`), а кнопка, счётчик и ячейка списка судят срывом
+    // `core.isAbstinenceLapse(definition, величина)`. При допуске 0 эти два
+    // вопроса совпадают — сюда попадает только он один. При допуске 30 они
+    // расходятся: запись в двадцать минут есть, а срыва нет, и карточка
+    // говорила разом «40 дней без срыва», «Отметить срыв» и «Последний срыв:
+    // сегодня». Один судья на экран — не три ответа на один вопрос.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(
+      committedFrom: today - 40,
+      allowance: 30,
+      unit: 'minutes',
+    );
+    scope.abstinence.setLapse(habit, LocalDate(today), true, amount: 20);
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.text('40'), findsOneWidget,
+        reason: 'computed.abstinence-screen#2 — запись под допуском не '
+            'обнуляет счётчик');
+    expect(find.text('Отметить срыв'), findsOneWidget,
+        reason: 'computed.abstinence-screen#2 — кнопка предлагает отметить '
+            'срыв, а не отменить: сегодня в пределах допуска');
+    expect(find.textContaining('С '), findsWidgets,
+        reason: 'computed.abstinence-screen#2 — подпись говорит «С …», как '
+            'счётчик и кнопка; запись под допуском не срыв, и подпись не '
+            'вправе называть её иначе, чем они');
+    expect(find.textContaining('Последний срыв'), findsNothing,
+        reason: 'computed.abstinence-screen#2 — единственный судья на '
+            'экране это isAbstinenceLapse, а не «есть ли строка в журнале»');
   });
 
   testWidgets('computed.abstinence-screen#3 счётчик стоит в шве после '

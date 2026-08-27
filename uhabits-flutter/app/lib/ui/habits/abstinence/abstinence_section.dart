@@ -25,12 +25,26 @@ List<Widget> buildAbstinenceSection(
   final int id = habit.id!;
   final int committedFrom = definition.committedFrom!;
   final core.LocalDate today = core.getToday();
-  // Из журнала берётся только подпись: какое число показать, знает ядро.
-  final int? lastLapse = scope.lapses.lastDay(id);
-  // Тот же судья, что у ячейки и у оценки. «Есть запись в дне» ответило бы не
-  // на тот вопрос: при допуске 30 двадцать минут записаны, а срыва нет, и
-  // кнопка предложила бы «Отменить срыв» там, где счётчик показывает
-  // сорок дней без срыва.
+  // Тот же судья, что у ячейки, у кнопки и у счётчика:
+  // `core.isAbstinenceLapse(definition, величина)`. `lapses.lastDay` отвечал
+  // бы на другой вопрос — «есть ли запись», а не «был ли срыв», — и при
+  // допуске 30 запись в двадцать минут дала бы подпись «последний срыв:
+  // сегодня» рядом с кнопкой «отметить срыв» и числом «40» — три ответа на
+  // один вопрос на одной карточке (`computed.abstinence-screen#2`). Ранее
+  // здесь стоял именно этот второй судья; это и был дефект.
+  //
+  // Диапазон — от дня обязательства до сегодня, а не весь журнал: строка до
+  // обязательства не была срывом обязательства, которого ещё не было тогда, а
+  // строка позже сегодня ещё не наступила — последний срыв не может лежать в
+  // будущем. Оба края и есть та отдельная развилка, о которой предупреждает
+  // ревью: старая проверка `lastLapse < committedFrom` теперь не нужна,
+  // потому что диапазон уже не выходит за неё.
+  final Map<int, int> journal =
+      scope.lapses.range(id, committedFrom, today.daysSince2000);
+  int? lastLapse;
+  for (final MapEntry<int, int> entry in journal.entries) {
+    if (core.isAbstinenceLapse(definition, entry.value)) lastLapse = entry.key;
+  }
   final bool lapsedToday =
       isAbstinenceLapseDay(definition, habit.originalEntries.get(today).value);
   final IntlLocalDateFormatter formatter = IntlLocalDateFormatter.of(context);
@@ -40,7 +54,7 @@ List<Widget> buildAbstinenceSection(
     AbstinenceCounterCard(
       theme: theme,
       days: core.daysWithoutLapse(habit),
-      subtitle: lastLapse == null || lastLapse < committedFrom
+      subtitle: lastLapse == null
           ? l10n.abstinenceSince(
               formatter.longFormat(core.LocalDate(committedFrom)))
           : l10n.abstinenceLastLapse(
