@@ -1,9 +1,14 @@
 import 'dart:math';
 
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/computed/habit_definition.dart';
+import 'package:uhabits_core/src/computed/lapse_day_value.dart';
+import 'package:uhabits_core/src/computed/lapse_scoring.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
+import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/score.dart';
 import 'package:uhabits_core/src/models/score_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
@@ -302,5 +307,40 @@ void main() {
         reason: 'computed.lapse-score#13');
     expect(scores[today].value, greaterThan(0.9),
         reason: 'computed.lapse-score#13 — не 0.125');
+  });
+
+  test('the halving survives Habit.recompute()', () {
+    Habit buildAbstinenceShapedHabit() =>
+        MemoryModelFactory().buildHabit()
+          ..type = HabitType.numerical
+          ..targetType = NumericalHabitType.atMost
+          ..targetValue = 0.0
+          ..frequency = Frequency.daily;
+
+    final Habit committed = buildAbstinenceShapedHabit()..id = 1;
+    applyLapseScoring(
+      committed,
+      const HabitDefinition(kind: ComputedKind.abstinence, committedFrom: 5450),
+    );
+    committed.originalEntries
+        .add(Entry(today.minus(5), lapseDayValue(1)!));
+    committed.recompute();
+
+    expect(committed.scores[today.minus(5)].value, closeTo(0.5, 1e-12),
+        reason: 'computed.lapse-score#12');
+    expect(committed.scores[today].value, closeTo(0.617008, 1e-6),
+        reason: 'computed.lapse-score#12');
+
+    // Сосед без определения на тех же самых данных считается портом: тот же
+    // день теряет 5.2%, а не половину.
+    final Habit plain = buildAbstinenceShapedHabit()..id = 2;
+    applyLapseScoring(plain, null);
+    plain.originalEntries.add(Entry(today.minus(5), lapseDayValue(1)!));
+    plain.recompute();
+
+    expect(plain.scores[today.minus(5)].value, closeTo(m, 1e-12),
+        reason: 'computed.lapse-score#12');
+    expect(plain.scores[today].value, closeTo(0.960228, 1e-6),
+        reason: 'computed.lapse-score#12');
   });
 }
