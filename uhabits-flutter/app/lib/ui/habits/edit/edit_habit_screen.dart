@@ -223,6 +223,16 @@ class EditHabitScreen extends StatelessWidget {
   static const Key unitFieldKey = Key('editHabit.unitInput');
   static const Key sleepTypeCardKey = Key('habitType.sleepCard');
   static const Key abstinenceTypeCardKey = Key('habitType.abstinenceCard');
+  static const Key abstinenceAllowanceBoxKey =
+      Key('editHabit.abstinenceAllowanceOuterBox');
+  static const Key abstinenceAllowanceFieldKey =
+      Key('editHabit.abstinenceAllowanceInput');
+  static const Key abstinenceUnitFieldKey =
+      Key('editHabit.abstinenceUnitInput');
+  static const Key abstinenceCommittedBoxKey =
+      Key('editHabit.abstinenceCommittedOuterBox');
+  static const Key abstinenceCommittedPickerKey =
+      Key('editHabit.abstinenceCommittedPicker');
   static const Key targetFieldKey = Key('editHabit.targetInput');
   static const Key colorButtonKey = Key('editHabit.colorButton');
   static const Key frequencyBoxKey = Key('editHabit.frequencyOuterBox');
@@ -451,6 +461,14 @@ class _EditHabitViewState extends State<_EditHabitView> {
           goal: model.sleepGoal!,
           onChanged: model.setSleepGoal,
         )
+      // An abstinence habit is stored as a numerical one too, and the same
+      // reasoning applies: its unit, target, target type and frequency are
+      // settled by the kind. Two of them ARE the allowance and are asked for
+      // under that name; the other two are not offered at all.
+      else if (model.isAbstinence) ...<Widget>[
+        _buildAllowanceRow(model, theme, l10n),
+        _buildCommitmentBox(model, theme, l10n),
+      ]
       else if (model.isNumerical) ...<Widget>[
         _buildUnitBox(model, theme, l10n),
         _buildTargetRow(model, theme, l10n),
@@ -529,14 +547,16 @@ class _EditHabitViewState extends State<_EditHabitView> {
         key: EditHabitScreen.questionFieldKey,
         controller: model.questionController,
         theme: theme,
-        // A sleep habit is a numerical habit underneath, and the numerical
+        // A computed habit is a numerical habit underneath, and the numerical
         // hint asks about miles run. Its own hint, because the placeholder is
         // the only thing on the form that says what the question is for.
         hintText: model.isSleep
             ? l10n.sleepQuestionExample
-            : model.isNumerical
-                ? l10n.measurableQuestionExample
-                : l10n.exampleQuestionBoolean,
+            : model.isAbstinence
+                ? l10n.abstinenceQuestionExample
+                : model.isNumerical
+                    ? l10n.measurableQuestionExample
+                    : l10n.exampleQuestionBoolean,
         // No maxLines cap and no maxLength (`edit-habit.form-layout#4`).
         maxLines: null,
         keyboardType: TextInputType.multiline,
@@ -625,6 +645,83 @@ class _EditHabitViewState extends State<_EditHabitView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The allowance and the unit it is counted in, side by side.
+  ///
+  /// The two controls the ordinary numerical form calls Target and Unit, asked
+  /// as one question: how much may a day hold before it counts as a slip. They
+  /// are the same two controllers, because for this kind they are the same two
+  /// values — a person who writes 30 minutes has set `targetValue` and `unit`.
+  /// What does not come along is the numerical frequency picker that shares
+  /// this row upstream: an abstinence habit is scored every day, and no
+  /// control on the form may say otherwise.
+  Widget _buildAllowanceRow(
+    EditHabitModel model,
+    core.Theme theme,
+    L10n l10n,
+  ) {
+    return IntrinsicHeight(
+      key: EditHabitScreen.abstinenceAllowanceBoxKey,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Expanded(
+            child: _FormBox(
+              label: l10n.abstinenceAllowance,
+              theme: theme,
+              child: _FormInput(
+                key: EditHabitScreen.abstinenceAllowanceFieldKey,
+                controller: model.targetController,
+                theme: theme,
+                hintText: l10n.abstinenceAllowanceExample,
+                errorText: _errorTextOf(model.allowanceError, l10n),
+                maxLines: 1,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _FormBox(
+              label: l10n.abstinenceAllowanceUnit,
+              theme: theme,
+              child: _FormInput(
+                key: EditHabitScreen.abstinenceUnitFieldKey,
+                controller: model.unitController,
+                theme: theme,
+                hintText: l10n.abstinenceAllowanceUnitExample,
+                maxLines: 1,
+                // Same reason as the ported unit input: "minutes", lower case,
+                // is what the list subtitle renders next to the number
+                // (`audit4.the-unit-field-auto-capitalizes-which#1`).
+                textCapitalization: TextCapitalization.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The day the person committed.
+  Widget _buildCommitmentBox(
+    EditHabitModel model,
+    core.Theme theme,
+    L10n l10n,
+  ) {
+    return _FormBox(
+      key: EditHabitScreen.abstinenceCommittedBoxKey,
+      label: l10n.abstinenceCommittedFrom,
+      theme: theme,
+      child: _FormDropdown(
+        key: EditHabitScreen.abstinenceCommittedPickerKey,
+        theme: theme,
+        text: IntlLocalDateFormatter.of(context)
+            .longFormat(core.LocalDate(model.committedFrom)),
+        onTap: _onPickCommitmentDay,
       ),
     );
   }
@@ -866,6 +963,33 @@ class _EditHabitViewState extends State<_EditHabitView> {
     if (picked == null) return;
     model.setReminderTime(picked.hour, picked.minute);
   }
+
+  /// Backwards only.
+  ///
+  /// Clean days are counted from this day rather than from the first slip, so
+  /// a person who stopped six weeks ago can say so and the six weeks exist.
+  /// Forward is refused by `lastDate`, and refused again in the model: the
+  /// picker is one of three ways this value gets set.
+  Future<void> _onPickCommitmentDay() async {
+    final model = context.read<EditHabitModel>();
+    final core.LocalDate today = core.getToday();
+    final DateTime? picked = await _dismissCurrentAndShow<DateTime>(
+      () => showDatePicker(
+        context: context,
+        initialDate: _asDateTime(core.LocalDate(model.committedFrom)),
+        firstDate: DateTime(2000, 1, 1),
+        lastDate: _asDateTime(today),
+      ),
+    );
+    if (picked == null) return;
+    model.setCommittedFrom(
+      core.LocalDate.ymd(picked.year, picked.month, picked.day).daysSince2000,
+    );
+  }
+
+  /// A [core.LocalDate] as the local midnight `showDatePicker` compares by.
+  static DateTime _asDateTime(core.LocalDate date) =>
+      DateTime(date.year, date.month, date.day);
 
   /// `WeekdayPickerDialog` pre-checked with the current days
   /// (`edit-habit.reminder-days#1`).

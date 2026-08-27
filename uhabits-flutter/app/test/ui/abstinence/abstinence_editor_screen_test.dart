@@ -1,9 +1,11 @@
 /// The type chooser and the editor, opened for an abstinence habit.
 ///
-/// The model side is tested elsewhere. What is tested here is the fourth
-/// card in the type chooser: that it exists, that it sits after the three
-/// cards already there, and that tapping it opens the editor holding
-/// `ComputedKind.abstinence`.
+/// The model side is tested elsewhere. What is tested here is the fourth card
+/// in the type chooser — that it exists, that it sits after the three cards
+/// already there, and that tapping it opens the editor holding
+/// `ComputedKind.abstinence` — and then the form that editor draws: which
+/// boxes it offers and, just as much, which of the numerical ones it refuses
+/// to offer.
 library;
 
 import 'package:flutter/material.dart';
@@ -13,6 +15,8 @@ import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/edit_habit_model.dart';
 import 'package:uhabits/ui/habits/edit/edit_habit_screen.dart';
+import 'package:uhabits/ui/habits/list/list_header.dart'
+    show IntlLocalDateFormatter;
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/time/date_utils.dart' as core_time;
 import 'package:uhabits_core/uhabits_core.dart';
@@ -25,6 +29,11 @@ void main() {
 
   setUp(() {
     core_time.DateUtils.setFixedTimeZone(const core_time.FixedTimeZone(0));
+    // `AppScope.open` stamps today itself, from the wall clock rather than
+    // from `setToday` — so the clock is what has to be pinned. Without this
+    // the commitment day the form shows is the day the suite happens to run.
+    core_time.systemCurrentTimeMillis =
+        () => (9000 + 10957) * 86400000 + 12 * 3600000;
     setToday(LocalDate(9000));
     database = Sqlite3Database.memory();
     database.setVersion(8);
@@ -40,6 +49,7 @@ void main() {
   tearDown(() {
     scope.close();
     core_time.DateUtils.setFixedTimeZone(null);
+    core_time.systemCurrentTimeMillis = core_time.defaultCurrentTimeMillis;
     resetToday();
   });
 
@@ -55,6 +65,44 @@ void main() {
               body: Center(
                 child: ElevatedButton(
                   onPressed: () => EditHabitScreen.selectTypeAndOpen(context),
+                  child: const Text('host'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('host'));
+    await tester.pumpAndSettle();
+  }
+
+  /// The editor itself, opened directly rather than through the chooser.
+  ///
+  /// The same shape as [pumpChooser] and for the same reason: the scope is
+  /// provided below the navigator by `MaterialApp.home`, so a pushed route has
+  /// to be handed the scope the way `EditHabitScreen.route` takes it.
+  Future<void> pumpEditor(
+    WidgetTester tester, {
+    required ComputedKind computed,
+  }) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: L10n.localizationsDelegates,
+        supportedLocales: L10n.supportedLocales,
+        home: Provider<AppScope>.value(
+          value: scope,
+          child: Builder(
+            builder: (BuildContext context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    EditHabitScreen.route(
+                      scope: scope,
+                      habitType: HabitType.numerical,
+                      computed: computed,
+                    ),
+                  ),
                   child: const Text('host'),
                 ),
               ),
@@ -111,5 +159,119 @@ void main() {
     expect(model.habitType, HabitType.numerical,
         reason: 'computed.create#2 — and it is a numerical habit, because '
             'there is no third type and never will be');
+  });
+
+  testWidgets('the form asks about the allowance, not about miles run',
+      (tester) async {
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+
+    expect(find.byKey(EditHabitScreen.abstinenceAllowanceBoxKey), findsOneWidget,
+        reason: 'computed.create#4');
+    expect(find.byKey(EditHabitScreen.abstinenceCommittedBoxKey), findsOneWidget,
+        reason: 'computed.create#4');
+    expect(find.text('Allowance'), findsOneWidget, reason: 'computed.create#4');
+    expect(find.text('Counted in'), findsOneWidget,
+        reason: 'computed.create#4 — the unit is asked for under the '
+            'allowance\'s name, because it is the allowance\'s unit');
+    expect(find.text('Committed since'), findsOneWidget,
+        reason: 'computed.create#4');
+
+    // What it must NOT show: the four numerical boxes and the yes/no
+    // frequency. Every one of them would let a person change something the
+    // kind settles — the frequency it is scored at, the unit and the target
+    // that ARE the allowance, and the target type that is what makes silence
+    // count as success.
+    expect(find.byKey(EditHabitScreen.unitBoxKey), findsNothing,
+        reason: 'computed.create#3');
+    expect(find.byKey(EditHabitScreen.targetBoxKey), findsNothing,
+        reason: 'computed.create#3');
+    expect(find.byKey(EditHabitScreen.targetTypeBoxKey), findsNothing,
+        reason: 'computed.create#3');
+    expect(find.byKey(EditHabitScreen.frequencyBoxKey), findsNothing,
+        reason: 'computed.create#3');
+    expect(find.byKey(EditHabitScreen.numericalFrequencyPickerKey), findsNothing,
+        reason: 'computed.create#3 — the numerical frequency shares a row with '
+            'the target upstream, and that row is not on this form');
+
+    // And what it keeps: the reminder, off, which is the answer to the spec's
+    // second open question.
+    expect(find.byKey(EditHabitScreen.reminderTimePickerKey), findsOneWidget,
+        reason: 'computed.create#4');
+    expect(find.byKey(EditHabitScreen.reminderDividerKey), findsNothing,
+        reason: 'computed.create#4 — there is nothing to confirm every '
+            'evening, so the reminder starts off');
+  });
+
+  testWidgets('the allowance box carries the target and the unit controllers',
+      (tester) async {
+    // The two boxes above exist; these are the two controllers behind them.
+    // Without this the form could draw an Allowance box over a third, unread
+    // controller and every assertion above would still be green — and the
+    // habit would save with an allowance of zero whatever was typed.
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+    final EditHabitModel model = Provider.of<EditHabitModel>(
+      tester.element(find.byKey(EditHabitScreen.saveButtonKey)),
+      listen: false,
+    );
+
+    await tester.enterText(
+        find.byKey(EditHabitScreen.abstinenceAllowanceFieldKey), '30');
+    await tester.enterText(
+        find.byKey(EditHabitScreen.abstinenceUnitFieldKey), 'minutes');
+
+    expect(model.targetController.text, '30',
+        reason: 'computed.create#6 — `habit.targetValue` IS the allowance, so '
+            'the allowance box is the target controller asked a different '
+            'question');
+    expect(model.unitController.text, 'minutes',
+        reason: 'computed.create#6 — and `habit.unit` IS what it is counted '
+            'in');
+  });
+
+  testWidgets('a word where a number belongs is drawn on the allowance box',
+      (tester) async {
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+    await tester.enterText(
+        find.byKey(EditHabitScreen.nameFieldKey), 'No doomscrolling');
+    await tester.enterText(
+        find.byKey(EditHabitScreen.abstinenceAllowanceFieldKey), 'lots');
+    await tester.tap(find.byKey(EditHabitScreen.saveButtonKey));
+    await tester.pumpAndSettle();
+
+    final TextField allowance = tester.widget<TextField>(find.descendant(
+      of: find.byKey(EditHabitScreen.abstinenceAllowanceFieldKey),
+      matching: find.byType(TextField),
+    ));
+    expect(allowance.decoration!.errorText, 'Cannot be blank',
+        reason: 'computed.create#11 — the refusal has to be drawn where the '
+            'person typed: the target box that carries it upstream is not on '
+            'this form, so an unwired error is a save that fails in silence');
+    expect(scope.habitList.size(), 0,
+        reason: 'computed.create#11 — and nothing was created');
+  });
+
+  testWidgets('the question box has its own example', (tester) async {
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+    final TextField question = tester.widget<TextField>(find.descendant(
+      of: find.byKey(EditHabitScreen.questionFieldKey),
+      matching: find.byType(TextField),
+    ));
+    expect(question.decoration!.hintText, 'e.g. Did you slip today?',
+        reason: 'computed.create#4 — the placeholder is the only thing on the '
+            'form that says what the question is for');
+  });
+
+  testWidgets('the commitment day reads as a date and starts today',
+      (tester) async {
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+    final Text shown = tester.widget<Text>(find
+        .descendant(
+          of: find.byKey(EditHabitScreen.abstinenceCommittedPickerKey),
+          matching: find.byType(Text),
+        )
+        .first);
+    expect(shown.data, IntlLocalDateFormatter('en').longFormat(LocalDate(9000)),
+        reason: 'computed.create#8 — a day number is not a date a person can '
+            'check');
   });
 }
