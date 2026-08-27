@@ -24,6 +24,7 @@ kotlin-js-store
 # Migration docs are tracked despite the blanket *.md rule above
 !GOAL.md
 !docs/**/*.md
+!uhabits-flutter/CHANGELOG.md
 
 # Flutter
 .dart_tool/
