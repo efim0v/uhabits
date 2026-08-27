@@ -3,11 +3,14 @@ import 'package:uhabits_core/src/computed/days_without_lapse.dart';
 import 'package:uhabits_core/src/computed/habit_definition.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/entry_list.dart';
+import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/streak.dart';
+import 'package:uhabits_core/src/gui/theme.dart';
 import 'package:uhabits_core/src/models/streak_list.dart';
+import 'package:uhabits_core/src/ui/screens/habits/show/views/streak_card.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
 
 void main() {
@@ -101,8 +104,7 @@ void main() {
       // отсутствие истории.
       recomputeAtMost(silenceQualifies: true);
 
-      expect(streaks.getCurrent(today),
-          Streak(today.minus(10), today.plus(30)),
+      expect(streaks.getCurrent(today), Streak(today.minus(10), today),
           reason: 'computed.streak#1');
 
       // Срыв четыре дня назад режет её надвое, и молчание по обе стороны
@@ -110,7 +112,7 @@ void main() {
       entries.add(Entry(today.minus(4), 1000));
       recomputeAtMost(silenceQualifies: true);
 
-      expect(streaks.getCurrent(today), Streak(today.minus(3), today.plus(30)),
+      expect(streaks.getCurrent(today), Streak(today.minus(3), today),
           reason: 'computed.streak#1');
       expect(streaks.getCurrent(today.minus(4)), isNull,
           reason: 'computed.streak#1');
@@ -142,6 +144,26 @@ void main() {
       );
       expect(streaks.getBest(10).length, 2, reason: 'computed.streak#2');
     });
+
+    test('#2 a ported habit keeps the future tail of its window', () {
+      // Обрезка хвоста стоит под тем же признаком, что и впуск молчания, и
+      // это обязательное условие, а не осторожность. Хвост есть и у привычки
+      // оригинала: `EntryList.recomputeFrom` заполняет интервал шириной в
+      // знаменатель, то есть при частоте 1/7 отметка сегодня даёт YES_AUTO на
+      // шесть дней вперёд, и котлиновская `StreakList` кладёт их в серию.
+      // Безусловная обрезка сделала бы из семи дней один на карточке всякой
+      // непоследовательной привычки оригинала.
+      final Habit habit = MemoryModelFactory().buildHabit()
+        ..name = 'Weekly'
+        ..type = HabitType.yesNo
+        ..frequency = Frequency(1, 7);
+      habit.originalEntries.add(Entry(today, Entry.yesManual));
+      habit.recompute();
+
+      expect(habit.streaks.getBest(1).single, Streak(today, today.plus(6)),
+          reason: 'computed.streak#2 — умолчание есть паритетное поведение, '
+              'вместе с хвостом (`models.streak-computation#3`)');
+    });
   });
 
   group('computed.streak days without a lapse', () {
@@ -156,15 +178,52 @@ void main() {
             committedFrom: today.minus(committedFromOffset).daysSince2000,
           );
 
-    test('#4 counts up to today and ignores the future tail of the window',
-        () {
+    test('#4 counts elapsed time from the start of the streak', () {
       final Habit habit = buildAbstinence(40);
       habit.recompute();
 
-      // Серия тянется до today + 30, но дней без срыва — сорок.
-      expect(habit.streaks.getCurrent(today)?.end, today.plus(30),
+      expect(habit.streaks.getCurrent(today)?.start, today.minus(40),
           reason: 'computed.streak#4');
       expect(daysWithoutLapse(habit), 40, reason: 'computed.streak#4');
+    });
+
+    test('#6 the streak card and the counter agree, and the date has '
+        'happened', () {
+      // Ревью нашло это на экране: счётчик говорил «10 дней без срыва», а
+      // карточка серий под ним — «41 день, до 19 сентября», даты, которой
+      // ещё не было. Одна и та же `StreakList` отвечала двоим по-разному,
+      // потому что хвост окна в тридцать дней вперёд входил в серию целиком.
+      final Habit habit = buildAbstinence(10);
+      habit.recompute();
+
+      final StreakCardState card =
+          StreakCartPresenter.buildState(habit, LightTheme());
+      final Streak shown = card.bestStreaks.first;
+
+      expect(shown.end, today,
+          reason: 'computed.streak#6 — карточка не вправе показывать дату, '
+              'которой ещё не было');
+      expect(shown.length, 11,
+          reason: 'computed.streak#6 — одиннадцать прожитых дней, а не сорок '
+              'один; тридцать из них ещё не наступили');
+      expect(daysWithoutLapse(habit), 10,
+          reason: 'computed.streak#4 — счётчик считает прошедшее время от '
+              'начала той же серии');
+    });
+
+    test('#6 a lapse still cuts the streak where it happened', () {
+      // Обрезка хвоста ничего не делает с прошлым: срыв четыре дня назад
+      // по-прежнему начинает новую серию на следующий день.
+      final Habit habit = buildAbstinence(40);
+      habit.originalEntries.add(Entry(today.minus(4), 1000));
+      habit.recompute();
+
+      final Streak? current = habit.streaks.getCurrent(today);
+      expect(current, Streak(today.minus(3), today),
+          reason: 'computed.streak#6');
+      expect(habit.streaks.getCurrent(today.minus(5)),
+          Streak(today.minus(40), today.minus(5)),
+          reason: 'computed.streak#6');
     });
 
     test('#4 a lapse restarts the count the next day', () {

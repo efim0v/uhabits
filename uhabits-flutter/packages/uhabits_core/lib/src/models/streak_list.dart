@@ -67,8 +67,19 @@ class StreakList {
     bool silenceQualifies = false,
   }) {
     _list.clear();
+    // Расширение порта, и живёт оно под тем же признаком, что и всё
+    // остальное здесь. Окно пересчёта уходит на тридцать дней вперёд
+    // (`models.habit-recompute#2`); портированные фильтры этот хвост
+    // отбрасывают сами, а [silenceQualifies] его впускает — и впускает
+    // целиком, потому что о дне, который ещё не наступил, тоже ничего не
+    // записано. Карточка серий говорила «41 день, до 19 сентября» рядом со
+    // счётчиком «10 дней без срыва»: одна `StreakList`, два ответа и дата
+    // из будущего. Молчание о завтрашнем дне ничего не обещает
+    // (`computed.streak#6`).
+    final LocalDate today = getToday();
     final dates = getEntriesByInterval(from, to)
         .where((entry) {
+          if (silenceQualifies && entry.date.isNewerThan(today)) return false;
           final value = entry.value;
           if (isNumerical) {
             switch (targetType) {
