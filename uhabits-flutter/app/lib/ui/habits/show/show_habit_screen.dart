@@ -617,7 +617,17 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         goal: sleepGoal,
         day: date.daysSince2000,
         theme: coreThemeOf(context),
-        onChanged: _repaintComputed,
+        // `enterNightByHand` writes through `sleepRepository`/`sleepSync`/
+        // `SkipRange`, the same way the abstinence gesture writes through
+        // `AbstinenceSync`/`DayWriter` above — deliberately outside
+        // `CommandRunner`, so `HistoryEditorDialog`'s own `onCommandFinished`
+        // never hears about it either. Left alone, a night entered by hand
+        // from inside the open calendar would leave its grid showing what it
+        // showed before the sheet opened (`computed.write-paths#6`).
+        onChanged: () {
+          editor.HistoryEditorDialog.current?.refresh();
+          _repaintComputed();
+        },
       );
       return;
     }
