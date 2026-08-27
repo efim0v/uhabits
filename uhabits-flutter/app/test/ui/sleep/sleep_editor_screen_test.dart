@@ -56,7 +56,7 @@ void main() {
                     EditHabitScreen.route(
                       scope: scope,
                       habitType: sleep ? sleepHabitType : HabitType.numerical,
-                      sleep: sleep,
+                      computed: sleep ? ComputedKind.sleep : null,
                     ),
                   ),
                   child: const Text('host'),

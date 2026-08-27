@@ -204,18 +204,18 @@ class EditHabitScreen extends StatelessWidget {
     super.key,
     this.habitId,
     this.habitType = core.HabitType.yesNo,
-    this.sleep = false,
+    this.computed,
   });
 
   final int? habitId;
 
   final core.HabitType habitType;
 
-  /// Start the form as a sleep goal.
+  /// Start the form as a computed habit of this kind.
   ///
-  /// Only ever true for a new habit: an existing one is a sleep habit exactly
-  /// when a goal is already stored for it.
-  final bool sleep;
+  /// Only ever set for a new habit: an existing one carries its kind in its
+  /// definition row, and the form reads it from there.
+  final core.ComputedKind? computed;
 
   static const Key nameFieldKey = Key('editHabit.nameInput');
   static const Key questionFieldKey = Key('editHabit.questionInput');
@@ -261,7 +261,7 @@ class EditHabitScreen extends StatelessWidget {
     required AppScope scope,
     int? habitId,
     core.HabitType habitType = core.HabitType.yesNo,
-    bool sleep = false,
+    core.ComputedKind? computed,
   }) {
     return MaterialPageRoute<void>(
       settings: const RouteSettings(name: 'editHabit'),
@@ -270,7 +270,7 @@ class EditHabitScreen extends StatelessWidget {
         child: EditHabitScreen(
           habitId: habitId,
           habitType: habitType,
-          sleep: sleep,
+          computed: computed,
         ),
       ),
     );
@@ -328,7 +328,7 @@ class EditHabitScreen extends StatelessWidget {
     await navigator.push(route(
       scope: scope,
       habitType: selection.type,
-      sleep: selection.sleep,
+      computed: selection.computed,
     ));
   }
 
@@ -339,7 +339,7 @@ class EditHabitScreen extends StatelessWidget {
         scope: context.read<AppScope>(),
         habitId: habitId,
         habitType: habitType,
-        sleep: sleep,
+        computed: computed,
       ),
       child: const _EditHabitView(),
     );
@@ -1117,20 +1117,22 @@ class _FormDivider extends StatelessWidget {
 
 /// What the type chooser came back with.
 ///
-/// A pair rather than a bare [core.HabitType] because a sleep goal is stored
-/// as a numerical habit: the type alone cannot tell the two apart.
+/// A pair rather than a bare [core.HabitType] because a computed habit is
+/// stored as a numerical one: the type alone cannot tell three kinds apart.
 class HabitTypeSelection {
-  const HabitTypeSelection(this.type, {this.sleep = false});
+  const HabitTypeSelection(this.type, {this.computed});
 
   final core.HabitType type;
-  final bool sleep;
+  final core.ComputedKind? computed;
 
   @override
   bool operator ==(Object other) =>
-      other is HabitTypeSelection && other.type == type && other.sleep == sleep;
+      other is HabitTypeSelection &&
+      other.type == type &&
+      other.computed == computed;
 
   @override
-  int get hashCode => Object.hash(type, sleep);
+  int get hashCode => Object.hash(type, computed);
 }
 
 /// Port of `HabitTypeDialog` and res/layout/select_habit_type.xml.
@@ -1222,7 +1224,7 @@ class HabitTypeDialog extends StatelessWidget {
                   body: l10n.sleepHabitTypeExample,
                   onTap: () => Navigator.of(context).pop(
                       const HabitTypeSelection(core.HabitType.numerical,
-                          sleep: true)),
+                          computed: core.ComputedKind.sleep)),
                 ),
               ],
             ),

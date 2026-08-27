@@ -59,7 +59,7 @@ void main() {
         () async {
       final AppScope real = asyncScope();
       final EditHabitModel model =
-          EditHabitModel(scope: real, sleep: true);
+          EditHabitModel(scope: real, computed: ComputedKind.sleep);
       model.nameController.text = 'Sleep';
       expect(model.save(), isTrue, reason: 'sleep.habit-type#4');
 
@@ -82,7 +82,7 @@ void main() {
     test('the goal that is stored is the one the person set', () async {
       final AppScope real = asyncScope();
       final EditHabitModel model =
-          EditHabitModel(scope: real, sleep: true);
+          EditHabitModel(scope: real, computed: ComputedKind.sleep);
       model.nameController.text = 'Sleep';
       model.setSleepGoal(model.sleepGoal!.copyWith(
         bedMinutes: 1320,
@@ -115,7 +115,7 @@ void main() {
   group('creating one', () {
     test('starts with a goal, so the form has something to edit', () {
       final EditHabitModel model =
-          EditHabitModel(scope: scope, sleep: true);
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       expect(model.isSleep, isTrue, reason: 'sleep.habit-type#4');
       expect(model.sleepGoal, isNotNull, reason: 'sleep.habit-type#4');
       expect(model.sleepGoal!.bedMinutes, 23 * 60,
@@ -131,7 +131,8 @@ void main() {
     });
 
     test('saving settles the numerical parameters the model needs', () {
-      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       model.nameController.text = 'Sleep';
       expect(model.save(), isTrue, reason: 'sleep.habit-type#2');
 
@@ -148,7 +149,8 @@ void main() {
     });
 
     test('saving stores the goal, which is what makes it a sleep habit', () {
-      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       model.nameController.text = 'Sleep';
       model.save();
 
@@ -160,7 +162,8 @@ void main() {
     });
 
     test('a new sleep habit is marked as computed', () {
-      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       model.nameController.text = 'Sleep';
       model.save();
 
@@ -187,7 +190,7 @@ void main() {
 
     setUp(() {
       final EditHabitModel creating =
-          EditHabitModel(scope: scope, sleep: true);
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       creating.nameController.text = 'Sleep';
       creating.save();
       habitId = scope.habitList.getByPosition(0).id!;
@@ -274,14 +277,15 @@ void main() {
       // Not zero: a person in Vladivostok whose goal thinks it is in London
       // would be judged eleven hours off from the first night.
       DateUtils.setFixedTimeZone(const FixedTimeZone(5 * 3600000));
-      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       expect(model.sleepGoal!.homeUtcOffsetMinutes, 300,
           reason: 'sleep.goal#1');
     });
 
     test('the home timezone is part of the goal and survives a save', () {
       final EditHabitModel creating =
-          EditHabitModel(scope: scope, sleep: true);
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       creating.nameController.text = 'Sleep';
       creating.setSleepGoal(
           creating.sleepGoal!.copyWith(homeUtcOffsetMinutes: -480));
@@ -296,7 +300,7 @@ void main() {
       // The person asked for three weighted parts; a goal whose weights
       // cannot be said is not a goal they set.
       final EditHabitModel creating =
-          EditHabitModel(scope: scope, sleep: true);
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       creating.nameController.text = 'Sleep';
       creating.setSleepGoal(creating.sleepGoal!.copyWith(
         weightSleep: 0.6,
@@ -314,7 +318,7 @@ void main() {
 
     test('the half credit points are part of the goal too', () {
       final EditHabitModel creating =
-          EditHabitModel(scope: scope, sleep: true);
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       creating.nameController.text = 'Sleep';
       creating.setSleepGoal(creating.sleepGoal!.copyWith(
         halfCreditTimeMinutes: 45,
@@ -330,7 +334,7 @@ void main() {
 
     test('changed weights change what a night is worth', () {
       final EditHabitModel creating =
-          EditHabitModel(scope: scope, sleep: true);
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       creating.nameController.text = 'Sleep';
       creating.save();
       final int id = scope.habitList.getByPosition(0).id!;
@@ -371,7 +375,8 @@ void main() {
     test('is the ordinary numerical cell, showing a percentage', () {
       // Nothing new is drawn in the list: the value is a number and the unit
       // is a percent sign, which the existing cell already knows how to show.
-      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       model.nameController.text = 'Sleep';
       model.save();
 

@@ -24,6 +24,7 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/edit_habit_model.dart';
 import 'package:uhabits/ui/settings/data_actions.dart' show buildGenericImporter;
+import 'package:uhabits_core/src/computed/habit_definition.dart';
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/database/extension_migrations.dart';
 import 'package:uhabits_core/src/database/sqlite3_database.dart';
@@ -81,7 +82,8 @@ void main() {
     final AppScope scope = AppScope.open(db);
     addTearDown(scope.close);
 
-    final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+    final EditHabitModel model =
+        EditHabitModel(scope: scope, computed: ComputedKind.sleep);
     model.nameController.text = 'Sleep';
     model.save();
     await pumpEventQueue(times: 20);
@@ -124,7 +126,8 @@ void main() {
     final AppScope scope = AppScope.open(db);
     addTearDown(scope.close);
 
-    final EditHabitModel making = EditHabitModel(scope: scope, sleep: true);
+    final EditHabitModel making =
+        EditHabitModel(scope: scope, computed: ComputedKind.sleep);
     making.nameController.text = 'Sleep';
     making.save();
     await pumpEventQueue(times: 20);
@@ -155,7 +158,8 @@ void main() {
     final String backupPath = '${tempDir.path}/backup.db';
     final Database source = AppDatabase.openAndMigrate(backupPath);
     final AppScope there = AppScope.open(source);
-    final EditHabitModel making = EditHabitModel(scope: there, sleep: true);
+    final EditHabitModel making =
+        EditHabitModel(scope: there, computed: ComputedKind.sleep);
     making.nameController.text = 'Sleep';
     making.save();
     await pumpEventQueue(times: 20);

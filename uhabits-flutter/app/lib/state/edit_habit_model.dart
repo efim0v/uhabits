@@ -68,12 +68,17 @@ class EditHabitModel extends ChangeNotifier {
     required this.scope,
     int? habitId,
     HabitType habitType = HabitType.yesNo,
-    bool sleep = false,
+    ComputedKind? computed,
   }) {
     final id = habitId;
     if (id == null) {
-      this.habitType = sleep ? sleepHabitType : habitType;
-      if (sleep) {
+      computedKind = computed;
+      // Every computed kind is a numerical habit — `sleepHabitType` is that
+      // same constant, spelled for sleep. There is no third `HabitType` and
+      // there will not be one: `models.habit-type-enums#1` closes the enum at
+      // two, and both tests on it pass unchanged.
+      this.habitType = computed == null ? habitType : HabitType.numerical;
+      if (computed == ComputedKind.sleep) {
         // A goal has to exist before the form can edit one. The defaults are
         // the model's, so a person who changes nothing is still measured
         // against something sensible.
@@ -108,6 +113,7 @@ class EditHabitModel extends ChangeNotifier {
     // `habit.targetValue.toString()`, so 15.0 shows as the literal "15.0".
     targetController.text = habit.targetValue.toString();
     sleepGoal = scope.sleepRepository.goalFor(id);
+    computedKind = scope.definitions.forHabit(id)?.kind;
   }
 
   final AppScope scope;
@@ -181,6 +187,24 @@ class EditHabitModel extends ChangeNotifier {
   /// Whether the form should show the sleep fields in place of the numerical
   /// ones.
   bool get isSleep => sleepGoal != null;
+
+  /// What computes this habit's days, or null for an ordinary habit.
+  ///
+  /// In CREATE it is what the type chooser came back with. In EDIT it is read
+  /// from the definition row, because the form has no control that could
+  /// change it: a habit's kind is settled when it is created and there is no
+  /// code, in either direction, that would move it (DEVIATIONS.md, "computed:
+  /// вид привычки после создания не меняется").
+  ComputedKind? computedKind;
+
+  bool get isAbstinence => computedKind == ComputedKind.abstinence;
+
+  /// Whether the app computes this habit's days, by either route.
+  ///
+  /// [isSleep] is deliberately still the goal rather than the kind: in CREATE
+  /// the goal exists before any definition row does, and a sleep habit whose
+  /// definition row went missing must keep showing its own fields.
+  bool get isComputed => isSleep || computedKind != null;
 
   void setSleepGoal(SleepGoal value) {
     sleepGoal = value;

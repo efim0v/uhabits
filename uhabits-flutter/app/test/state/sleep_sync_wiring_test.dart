@@ -121,7 +121,8 @@ void main() {
       // goal, so no sync has ever had anything to look for. Left to the
       // foreground sync, the screen a person opens straight after saving
       // shows an empty fortnight until they switch away and back.
-      final EditHabitModel model = EditHabitModel(scope: scope, sleep: true);
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.sleep);
       model.nameController.text = 'Sleep';
       expect(source.reads, 0, reason: 'sleep.sync#7');
 
