@@ -25,6 +25,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:uhabits_core/src/commands/command_runner.dart';
 import 'package:uhabits_core/src/commands/command.dart';
 
@@ -464,7 +465,16 @@ class EditHabitModel extends ChangeNotifier {
     // it is the shape of that bug.
     HabitDefinition? abstinenceRow;
     if (isAbstinence) {
-      final double allowance = double.tryParse(targetController.text) ?? 0;
+      // `math.max(0, ...)`, потому что зеркало обязано совпадать по
+      // построению, а не по договорённости. `abstinenceAllowanceOf`
+      // подтягивает отрицательный допуск к нулю при чтении payload
+      // (`computed.allowance#4`), а `targetValue` — нет, и в оценке
+      // `normalizedRollingSum > targetValue` при допуске −5 давало бы
+      // `0 > -5` в каждый молчаливый день: кольцо гасло за три недели, пока
+      // ячейка, счётчик и подпись клялись, что срывов не было. Минус с
+      // клавиатуры не набрать, а вставкой из буфера — можно.
+      final double allowance =
+          math.max(0, double.tryParse(targetController.text) ?? 0);
       final String unit = unitController.text.trim();
       habit.targetValue = allowance;
       habit.targetType = NumericalHabitType.atMost;

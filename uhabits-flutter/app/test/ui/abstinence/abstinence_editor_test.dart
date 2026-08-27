@@ -281,6 +281,37 @@ void main() {
       expect(scope.habitList.size(), 1,
           reason: 'computed.create#11 — and nothing was created');
     });
+
+    test('a pasted negative allowance is stored as none, on both sides', () {
+      // The keyboard offers no minus sign; the clipboard does. Read back,
+      // `abstinenceAllowanceOf` pulls a negative payload up to zero
+      // (`computed.allowance#4`) — but `targetValue` was stored as written,
+      // and the score compares `normalizedRollingSum > targetValue`. A silent
+      // day contributes `max(0, -1) == 0`, and `0 > -5` is true, so every
+      // single kept day halved the score while the cell, the counter and the
+      // caption all swore there had been no lapse at all.
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'No spending';
+      model.targetController.text = '-5';
+      expect(model.save(), isTrue, reason: 'computed.allowance#1');
+
+      final Habit habit = scope.habitList.getByPosition(0);
+      expect(habit.targetValue, 0.0,
+          reason: 'computed.allowance#1 — the judge the score uses');
+      expect(
+          abstinenceAllowanceOf(scope.definitions.forHabit(habit.id!)!), 0.0,
+          reason: 'computed.allowance#1 — and the judge the interface uses; '
+              'one parse makes them the same number by construction');
+
+      // And the ring stays up: three weeks of silence under this commitment
+      // are three weeks kept, not three weeks of invisible lapses.
+      attachDefinition(habit, scope.definitions);
+      habit.recompute();
+      expect(habit.scores[getToday()].value, 1.0,
+          reason: 'computed.allowance#1 — silence is success, and a number '
+              'nobody can enter must not turn it into failure');
+    });
   });
 
   group('changing the allowance', () {
