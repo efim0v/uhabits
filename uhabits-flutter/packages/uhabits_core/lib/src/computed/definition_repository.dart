@@ -28,24 +28,31 @@ class DefinitionRepository {
         },
       );
 
-  /// [day], unless it is a day nobody could have committed on.
+  /// [day], unless it is a day nobody chose.
   ///
-  /// The column holds a `daysSince2000`, so 0 is 2000-01-01 — the first day
-  /// the type can express, years before anything that writes this table
-  /// existed — and it is also exactly what an unset integer looks like.
-  /// Nothing on the way in rejects it: `DefinitionImporter` copies whatever
-  /// the other device's file held, the table has no `CHECK`, and a database
-  /// can be hand-edited. Taken as a real day it would start every recompute
-  /// window at the epoch and tell the person they have kept a habit for a
-  /// quarter of a century — the streak is the damage here, not the size of
-  /// the loop.
+  /// The column holds a `daysSince2000`, and 0 is exactly what an unset
+  /// integer column reads as — a default, a value copied out of a row that was
+  /// never written, a field some other tool filled with nothing. The date
+  /// itself is not the problem: `LocalDate` handles the epoch and the days
+  /// before it, counting back four hundred years for a negative number. What
+  /// is impossible is the choosing. Nothing in this app has ever offered
+  /// 2000-01-01, or any day before it, as a day to commit on, so a row
+  /// carrying one came from a file rather than from a person:
+  /// `DefinitionImporter` copies whatever the other device's file held, the
+  /// table has no `CHECK`, and a database can be hand-edited. Taken as a real
+  /// day it starts every recompute window at the epoch and tells the person
+  /// they have kept the habit for twenty-six years — the streak is the damage
+  /// here, not the size of the loop.
   ///
-  /// Refused where the row is read rather than where it is used, for the same
-  /// reason [ComputedKind.fromWire] answers null to a kind it does not know:
-  /// a value this build cannot use is nothing to hand out, and one answer to
-  /// one question beats every later reader remembering to check. It also
-  /// stops the import carrying the bad value onward, since the import reads
-  /// through here.
+  /// Refused on the way out as well as on the way in ([save] throws), because
+  /// the two answer different dangers: [save] refuses a caller's mistake,
+  /// which is code and can be fixed, while this refuses a file, which cannot.
+  /// A row already in the database was written by some earlier build, another
+  /// device or another program, and it is here — where the row is read, two
+  /// lines below where [ComputedKind.fromWire] refuses a kind this build does
+  /// not know — that a value nothing can use stops being handed out. It is
+  /// also what keeps the import from carrying the bad value onward, since the
+  /// import reads through here and writes back what it read.
   ///
   /// Only the day is dropped; the kind and the payload are kept. The habit is
   /// still an abstinence habit, it just falls back to the ported window
@@ -72,7 +79,23 @@ class DefinitionRepository {
       ) ??
       false;
 
+  /// Writes [definition] down, replacing whatever this habit had.
+  ///
+  /// Refuses a commitment day at or before the epoch rather than storing one
+  /// [_realCommitmentDay] would then quietly drop on the way back out: a
+  /// caller's choice that disappears between the write and the next read is
+  /// worse than one that never lands. See [_realCommitmentDay] for why such a
+  /// day is nobody's choice (`computed.commitment#6`).
   void save(int habitId, HabitDefinition definition) {
+    final int? committedFrom = definition.committedFrom;
+    if (committedFrom != null && committedFrom <= 0) {
+      throw ArgumentError.value(
+        committedFrom,
+        'committedFrom',
+        'no one commits on a day at or before the epoch; '
+            '0 is an unset integer, not a decision',
+      );
+    }
     _db.run(
       'insert into HabitDefinitions (habit, kind, committed_from, payload) '
       'values (?, ?, ?, ?) '

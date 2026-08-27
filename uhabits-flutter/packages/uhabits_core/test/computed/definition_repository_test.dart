@@ -79,13 +79,16 @@ void main() {
         reason: 'computed.definition#4');
   });
 
-  // The commitment day is a `daysSince2000`, so 0 is 2000-01-01 — the first
-  // day the type can express, and a day nobody committed on. It is also what
-  // an unset integer looks like, and nothing on the write side rejects it:
-  // `DefinitionImporter` copies whatever the other file held, and the table
-  // has no CHECK. Read back as a real day it would pull the lower bound of
-  // every recompute to the epoch and show a quarter of a century without a
-  // lapse.
+  // The commitment day is a `daysSince2000`, so 0 is 2000-01-01. The type has
+  // no trouble with it, or with the days before it — LocalDate counts back
+  // four hundred years for a negative number. What 0 is, is exactly what an
+  // unset integer column reads as: a default, or a copy of a row whose
+  // value was never written. `DefinitionImporter` copies whatever the other
+  // file held and the table has no CHECK, so such a row arrives from a file
+  // rather than from a person — nothing in this app has ever offered
+  // 2000-01-01 or earlier as a day to commit on. Read back as a real day it
+  // would pull the lower bound of every recompute to the epoch and show
+  // twenty-six years without a lapse.
   test('a commitment day at or before the epoch is no commitment day', () {
     db.run("insert into HabitDefinitions (habit, kind, committed_from, payload) "
         "values (1,'abstinence',0,'{}')");
@@ -96,6 +99,43 @@ void main() {
     // written by something that counted from a different zero.
     db.run('update HabitDefinitions set committed_from = -1 where habit = 1');
     expect(repository.forHabit(1)?.committedFrom, isNull,
+        reason: 'computed.commitment#6');
+  });
+
+  test('and such a day is refused on the way in, not quietly dropped', () {
+    // The read side sanitises files this build did not write. This is the
+    // other half: a caller passing a day nobody chose is a mistake in the
+    // code, and swallowing it would turn that mistake into a value that
+    // silently disappears on the next read.
+    expect(
+      () => repository.save(
+        1,
+        const HabitDefinition(kind: ComputedKind.abstinence, committedFrom: 0),
+      ),
+      throwsArgumentError,
+      reason: 'computed.commitment#6',
+    );
+    expect(
+      () => repository.save(
+        1,
+        const HabitDefinition(kind: ComputedKind.abstinence, committedFrom: -1),
+      ),
+      throwsArgumentError,
+      reason: 'computed.commitment#6',
+    );
+  });
+
+  test('and refusing it writes nothing at all', () {
+    try {
+      repository.save(
+        1,
+        const HabitDefinition(kind: ComputedKind.abstinence, committedFrom: 0),
+      );
+    } on ArgumentError {
+      // The refusal itself is the test above; what matters here is the table.
+    }
+
+    expect(db.queryInt('select count(*) from HabitDefinitions'), 0,
         reason: 'computed.commitment#6');
   });
 
