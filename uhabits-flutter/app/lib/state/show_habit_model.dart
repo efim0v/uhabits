@@ -298,8 +298,9 @@ class ShowHabitModel extends ChangeNotifier
       // Nothing a sleep habit stores ever equals `yesManual`, so the ported
       // total would read zero for ever. A perfect night is the thing worth
       // counting: the goal met on every one of its three parts.
-      countsTowardsTotal:
-          _isSleepHabit ? (Entry e) => e.value >= maxStoredValue : null,
+      countsTowardsTotal: _isSleepHabit
+          ? (Entry e) => e.value >= maxStoredValue
+          : abstinenceCountsTowardsTotal(habit),
       // Молчание есть успех, и портированная сетка красит его самым бледным
       // оттенком, какой у неё есть. Свой классификатор — не второй судья: он
       // зовёт ту же `abstinenceCellOf`, что рисует ячейку списка

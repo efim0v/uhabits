@@ -15,6 +15,7 @@ import 'package:uhabits/state/app_scope.dart';
 // same reason sleep_habit_screen_test.dart imports it directly.
 import 'package:uhabits/state/show_habit_model.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_counter.dart';
+import 'package:uhabits/ui/habits/show/cards/overview_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
@@ -256,6 +257,49 @@ void main() {
     expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.overview)),
         findsOneWidget,
         reason: 'computed.abstinence-screen#4');
+  });
+
+  testWidgets('computed.abstinence-screen#4 «Всего» считает срывы, а не ноль',
+      (tester) async {
+    // Портированный счёт складывает дни, равные `Entry.yesManual`, — отметки
+    // рукой. Воздержание их не пишет никогда, и «Всего» показывало ноль
+    // вечно, рядом с кольцом, счётчиком и календарём, которым было что
+    // сказать. Считаются срывы: единственное, что эта привычка записывает.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 40);
+    scope.abstinence.setLapse(habit, LocalDate(today - 5), true);
+    scope.abstinence.setLapse(habit, LocalDate(today - 12), true);
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(
+        tester
+            .widget<Text>(find.byKey(OverviewCardView.totalCountLabelKey))
+            .data,
+        '2',
+        reason: 'computed.abstinence-screen#4 — два срыва под обещанием, и '
+            'это ровно те два дня, которые сетка красит крестом');
+  });
+
+  testWidgets('computed.abstinence-screen#4 день до обещания в «Всего» не '
+      'идёт', (tester) async {
+    // Тот же охранник, что не красит клетку до обещания
+    // (`computed.abstinence-cell#3`): судья один, и счёт спрашивает его же.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 10);
+    scope.abstinence.setLapse(habit, LocalDate(today - 50), true);
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(
+        tester
+            .widget<Text>(find.byKey(OverviewCardView.totalCountLabelKey))
+            .data,
+        '0',
+        reason: 'computed.abstinence-screen#4 — срыв старше обещания не срыв '
+            'этого обещания');
   });
 
   testWidgets('computed.abstinence-screen#5 кнопка пишет и снимает срыв за '
