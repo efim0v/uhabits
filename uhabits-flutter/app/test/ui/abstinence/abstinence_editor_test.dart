@@ -247,4 +247,55 @@ void main() {
           reason: 'computed.create#11 — and nothing was created');
     });
   });
+
+  group('changing the allowance', () {
+    test('re-judges the days already recorded', () {
+      // The day's stored value does not move — the amount is the amount — but
+      // whether that amount counts as a slip does, and that is the score.
+      // Nothing else on this path does it: the sweep writes amounts and stops,
+      // and a lapse row carries no allowance of its own.
+      final EditHabitModel create =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      create.nameController.text = 'Screen time';
+      create.targetController.text = '30';
+      create.unitController.text = 'minutes';
+      expect(create.save(), isTrue, reason: 'computed.allowance#1');
+
+      final Habit habit = scope.habitList.getByPosition(0);
+      const HabitDefinition definition = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 8990,
+      );
+      scope.definitions.save(habit.id!, definition);
+      attachDefinition(habit, scope.definitions);
+      // Twenty minutes on one day. Under a thirty-minute allowance that is
+      // not a slip at all.
+      scope.lapses.save(habit.id!, 8995, amount: 20);
+      scope.abstinence.recomputeAll(habit, definition);
+      final double lenient = habit.scores[LocalDate(9000)].value;
+      expect(lenient, 1.0,
+          reason: 'computed.allowance#1 — pinned, so that the comparison '
+              'below cannot be two degenerate zeroes agreeing with each '
+              'other: a twenty-minute day under a thirty-minute allowance is '
+              'a kept promise, and at-most starts at 1.0');
+
+      final EditHabitModel edit =
+          EditHabitModel(scope: scope, habitId: habit.id);
+      expect(edit.targetController.text, '30',
+          reason: 'computed.allowance#1 — the form opens on the allowance the '
+              'habit is being kept at');
+      edit.targetController.text = '10';
+      expect(edit.save(), isTrue, reason: 'computed.allowance#1');
+
+      final Habit saved = scope.habitList.getById(habit.id!)!;
+      expect(saved.originalEntries.get(LocalDate(8995)).value, 20000,
+          reason: 'computed.allowance#1 — the day itself is untouched: twenty '
+              'minutes happened and no edit to the promise unhappens them');
+      expect(saved.scores[LocalDate(9000)].value, lessThan(lenient),
+          reason: 'computed.allowance#1 — but twenty minutes is now over the '
+              'promise, so the day is a slip and the score says so. Left '
+              'unrecomputed the history would be judged by a commitment '
+              'nobody is keeping any more');
+    });
+  });
 }
