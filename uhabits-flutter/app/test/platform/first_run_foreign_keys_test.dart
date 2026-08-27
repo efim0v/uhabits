@@ -85,6 +85,7 @@ void main() {
         habit.id!, const SleepGoal(bedMinutes: 1380, wakeMinutes: 420));
     scope.definitions
         .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
+    LapseRepository(db).save(habit.id!, 9000, amount: 45);
 
     scope.habitList.remove(habit);
 
@@ -92,6 +93,9 @@ void main() {
         reason: 'computed.schema#2');
     expect(db.queryInt('select count(*) from SleepGoals'), 0,
         reason: 'computed.schema#2 — the goal is on the same cascade');
+    expect(db.queryInt('select count(*) from Lapses'), 0,
+        reason: 'computed.schema#5 — the lapse journal is on the same '
+            'cascade');
   });
 
   test('and no later habit can inherit the mark, because ids are not reused',

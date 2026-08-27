@@ -86,6 +86,7 @@ class AppScope {
     required this.sleepRepository,
     required this.sleepSync,
     required this.definitions,
+    required this.lapses,
   });
 
   final Database database;
@@ -98,6 +99,9 @@ class AppScope {
 
   /// Where a habit says its days are computed. See [DefinitionRepository].
   final DefinitionRepository definitions;
+
+  /// The journal an abstinence habit is scored from. See [LapseRepository].
+  final LapseRepository lapses;
 
   /// Reads sleep from the platform and turns it into scored days.
   final SleepSync sleepSync;
@@ -887,6 +891,7 @@ class AppScope {
     // ни одной записи, посчиталась бы пустой (`computed.commitment#5`).
     final definitions = DefinitionRepository(database);
     attachDefinitions(habitList, definitions);
+    final lapses = LapseRepository(database);
     for (final habit in habitList) {
       habit.recompute();
     }
@@ -927,6 +932,7 @@ class AppScope {
     scope = AppScope._(
       sleepRepository: sleepRepository,
       definitions: definitions,
+      lapses: lapses,
       sleepSync: SleepSync(
         repository: sleepRepository,
         // The resolved one, not the parameter: a bare StandardLogging writes
