@@ -274,4 +274,27 @@ void main() {
         reason: 'computed.create#8 — a day number is not a date a person can '
             'check');
   });
+
+  testWidgets('picking an earlier day moves the commitment back to it',
+      (tester) async {
+    // Today is 2024-08-22. The picker deals in calendar dates and the model
+    // deals in `daysSince2000`, and the conversion between them is exactly
+    // where an off-by-one lives: 2024-08-05 is day 8983.
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+    final EditHabitModel model = Provider.of<EditHabitModel>(
+      tester.element(find.byKey(EditHabitScreen.saveButtonKey)),
+      listen: false,
+    );
+
+    await tester.tap(find.byKey(EditHabitScreen.abstinenceCommittedPickerKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('5'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(model.committedFrom, 8983,
+        reason: 'computed.create#8 — backwards is the whole point: the clean '
+            'stretch before the first slip is counted from this day');
+  });
 }
