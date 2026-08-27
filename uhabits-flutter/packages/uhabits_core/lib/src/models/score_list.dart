@@ -13,6 +13,20 @@ import 'score.dart';
 class ScoreList {
   final Map<LocalDate, Score> _map = {};
 
+  /// Делить ли оценку пополам в день срыва вместо шага порта.
+  ///
+  /// Расширение слоя вычисляемых привычек, а не порт. Ни один портированный
+  /// путь этого поля не пишет: `ModelFactory.buildScoreList()` отдаёт список с
+  /// выключенным полем, и при выключенном поле [recompute] считает ровно то
+  /// же, что Kotlin, — весь портированный набор проходит без правки. Ставит
+  /// его `applyLapseScoring` (`computed/lapse_scoring.dart`), читает — ветвь
+  /// at-most ниже.
+  ///
+  /// Правила: `docs/extensions/COMPUTED.md` `computed.lapse-score`.
+  /// Отклонение: `docs/parity/DEVIATIONS.md`, запись «computed: срыв делит
+  /// оценку пополам мимо формулы порта».
+  bool halvesOnLapse = false;
+
   /// Returns the score for a given day. If the date given happens before the
   /// first repetition of the habit or after the last computed score, returns a
   /// score with value zero.
@@ -96,8 +110,16 @@ class ScoreList {
             }
           }
 
-          previousValue =
-              Score.compute(freq, previousValue, percentageCompleted);
+          // Срыв делит оценку пополам. Шагом порта половину не выразить: он
+          // аффинный, previousValue * multiplier + pct * (1 - multiplier), и
+          // при multiplier 0.948078 один день не может опустить оценку больше
+          // чем на 5.2% — ни при каком значении дня и ни при какой цели.
+          if (halvesOnLapse && isAtMost && normalizedRollingSum > targetValue) {
+            previousValue = previousValue / 2;
+          } else {
+            previousValue =
+                Score.compute(freq, previousValue, percentageCompleted);
+          }
         }
       } else {
         if (values[offset] == Entry.yesManual) {
