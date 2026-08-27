@@ -741,10 +741,10 @@ class AppScope {
     scheduler.startListening();
     tray.startListening();
 
-    // Withdraws a computed habit's question when the habit goes away. Held so
-    // that close() can take it off again.
+    // Withdraws whatever a computed habit armed with the system when the habit
+    // goes away. Held so that close() can take it off again.
     _computedHooks = ComputedHabitHooks(
-      cancelPrompt: (Habit habit) =>
+      withdrawAlarms: (Habit habit) =>
           unawaited(sleepPrompts?.cancel(habit) ?? Future<void>.value()),
     );
     commandRunner.addListener(_computedHooks!);

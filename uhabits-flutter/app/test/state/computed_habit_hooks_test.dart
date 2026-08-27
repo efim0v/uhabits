@@ -23,7 +23,7 @@ void main() {
   setUp(() {
     cancelled = <int>[];
     hooks = ComputedHabitHooks(
-      cancelPrompt: (Habit h) => cancelled.add(h.id!),
+      withdrawAlarms: (Habit h) => cancelled.add(h.id!),
     );
     list = MemoryHabitList();
   });
