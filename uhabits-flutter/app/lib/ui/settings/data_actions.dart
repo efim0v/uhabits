@@ -36,6 +36,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:uhabits_core/src/computed/definition_importer.dart';
+import 'package:uhabits_core/src/computed/lapse_importer.dart';
 import 'package:uhabits_core/src/io/abstract_importer.dart';
 import 'package:uhabits_core/src/io/files.dart';
 import 'package:uhabits_core/src/io/generic_importer.dart';
@@ -49,7 +50,12 @@ import 'package:uhabits_core/src/io/tickmate_db_importer.dart'
     show TickmateDBImporter;
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/uhabits_core.dart'
-    show HabitList, SleepImporter, Sqlite3DatabaseOpener;
+    show
+        Habit,
+        HabitList,
+        SleepImporter,
+        Sqlite3DatabaseOpener,
+        attachDefinitions;
 
 import '../../l10n/app_localizations.dart';
 import '../../platform/bug_reporter.dart';
@@ -554,6 +560,10 @@ GenericImporter buildGenericImporter({
     // recorded; nothing else in the import re-keys those onto this device.
     sleepImporter: SleepImporter(scope.sleepRepository),
     definitionImporter: DefinitionImporter(scope.definitions),
+    // И журнал срывов: строки лежат под идентификатором чужого устройства,
+    // и без этого восстановленная привычка возвращается с днём обязательства
+    // и пустой историей за ним.
+    lapseImporter: LapseImporter(scope.lapses),
   );
   final rewire =
       RewireDBImporter(scope.habitList, scope.modelFactory, opener);
@@ -562,7 +572,22 @@ GenericImporter buildGenericImporter({
   final habitBull =
       HabitBullCSVImporter(scope.habitList, scope.modelFactory, scope.logging);
   return GenericImporter(
-    _FunctionImporter(loop.canHandle, loop.importHabitsFromFile),
+    _FunctionImporter(loop.canHandle, (UserFile file) async {
+      await loop.importHabitsFromFile(file);
+      // Оба сотрудника выше пишут в базу, а не в живую привычку, и пересчёт
+      // внутри импорта проходит раньше их — с `definition == null`. Прикрепить
+      // определения приходится здесь, когда импортёр вернулся: иначе сорок
+      // дней обязательства и деление оценки пополам вернулись бы только после
+      // перезапуска приложения.
+      //
+      // На этом импортёре, а не на всех четырёх: определение и журнал есть
+      // только в нашем же файле базы, а Rewire, Tickmate и HabitBull приносят
+      // обычные привычки, которым прикреплять нечего.
+      attachDefinitions(scope.habitList, scope.definitions);
+      for (final Habit habit in scope.habitList) {
+        habit.recompute();
+      }
+    }),
     _FunctionImporter(rewire.canHandle, rewire.importHabitsFromFile),
     _FunctionImporter(tickmate.canHandle, tickmate.importHabitsFromFile),
     _FunctionImporter(habitBull.canHandle, habitBull.importHabitsFromFile),
