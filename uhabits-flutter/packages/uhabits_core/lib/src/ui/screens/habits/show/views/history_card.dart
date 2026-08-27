@@ -217,19 +217,39 @@ class HistoryCardPresenter extends OnDateClickedListener {
   /// the calendar painted exactly as before. The mapping itself is deliberately
   /// not decided here — what a value is worth is the habit's business, not the
   /// calendar's.
+  ///
+  /// [squareOf] is not upstream either, and it is the same idea one step
+  /// further: given a day's entry it answers which of the five squares that
+  /// day *is*, replacing the two branches below whole. Null for every habit
+  /// the original knows. It exists because those two branches are an answer to
+  /// "did this day go well", and a kind that answers that question elsewhere —
+  /// on its cell, in its score, in its streak — would otherwise be answering it
+  /// here a second time, in different words.
+  ///
+  /// [oldestDay] is not upstream: the first day the grid covers, for a habit
+  /// that knows one its entries do not. The window only widens backwards, so
+  /// null — every habit the original knows — leaves it at the oldest known
+  /// entry exactly as before. A habit whose kept days write nothing has no
+  /// oldest entry at all, and the grid of a promise kept for forty days would
+  /// otherwise be one square wide.
   static HistoryCardState buildState({
     required Habit habit,
     required DayOfWeek firstWeekday,
     required Theme theme,
     double Function(Entry)? intensityOf,
+    Square Function(Entry)? squareOf,
+    LocalDate? oldestDay,
   }) {
     final today = getToday();
     final known = habit.computedEntries.getKnown();
-    final oldest = known.isEmpty ? today : known.last.date;
+    var oldest = known.isEmpty ? today : known.last.date;
+    if (oldestDay != null && oldestDay.isOlderThan(oldest)) oldest = oldestDay;
     final entries = habit.computedEntries.getByInterval(oldest, today);
 
     final List<Square> series;
-    if (habit.isNumerical) {
+    if (squareOf != null) {
+      series = entries.map(squareOf).toList();
+    } else if (habit.isNumerical) {
       // The order of these branches is the contract: UNKNOWN wins over
       // everything, then SKIP, and only then is the target consulted. A SKIP
       // is stored as the value 3, i.e. 0.003 — which would otherwise satisfy

@@ -51,6 +51,11 @@ void main() {
         committedFrom: committedFrom,
       ),
     );
+    // Строка в базе и живая модель — две разные вещи: сетку календарь красит
+    // по `habit.definition`, тому же полю, по которому судит `recompute()`.
+    // В приложении его ставит `attachDefinition` — из `AppScope.open` и из
+    // `_writeAbstinenceRow` (`computed.commitment#5`, `#7`).
+    attachDefinition(habit, scope.definitions);
     habit.recompute();
     return habit;
   }
@@ -82,6 +87,7 @@ void main() {
         payload: abstinencePayload(allowance: allowance, unit: unit),
       ),
     );
+    attachDefinition(habit, scope.definitions);
     habit.recompute();
     return habit;
   }
@@ -99,7 +105,7 @@ void main() {
         Offset(padding + (col + 0.5) * square, padding + (row + 0.5) * square);
   }
 
-  Future<void> openEditorAndTapADay(WidgetTester tester, Habit habit) async {
+  Future<void> openEditor(WidgetTester tester, Habit habit) async {
     await tester.pumpWidget(MaterialApp(
       localizationsDelegates: L10n.localizationsDelegates,
       supportedLocales: L10n.supportedLocales,
@@ -116,6 +122,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(HistoryCardView.editButtonKey));
     await tester.pumpAndSettle();
+  }
+
+  Future<void> openEditorAndTapADay(WidgetTester tester, Habit habit) async {
+    await openEditor(tester, habit);
     await tester.tapAt(cellAt(tester));
     await tester.pumpAndSettle();
   }
@@ -294,5 +304,93 @@ void main() {
         reason: 'computed.abstinence-screen#9 — двадцать минут при допуске '
             'тридцать обещание держат, и календарь обязан согласиться с '
             'ячейкой и кнопкой карточки (computed.abstinence-cell#2)');
+  });
+
+  testWidgets(
+      'computed.abstinence-screen#10 сетка рисует безупречный день цветом '
+      'привычки, а не пустотой', (tester) async {
+    // Сорок дней обещания, один срыв пять дней назад. Портированная числовая
+    // ветка красила бы все тридцать девять чистых дней `Square.off` — самым
+    // бледным оттенком сетки, — и единственным заметным квадратом на экране
+    // был бы провал.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 40);
+    scope.abstinence.setLapse(habit, LocalDate(today - 5), true);
+
+    await openEditor(tester, habit);
+
+    final HistoryChart chart = HistoryEditorDialog.current!.chart!;
+    // Сетка отсчитывается от сегодня назад: `series[0]` есть сегодня.
+    expect(chart.series[0], Square.on,
+        reason: 'computed.abstinence-screen#10 — молчание есть успех, и день '
+            'полного воздержания красится цветом привычки, как чистая '
+            'ячейка списка (computed.abstinence-cell#1)');
+    expect(chart.series[5], Square.grey,
+        reason: 'computed.abstinence-screen#10 — срыв есть тот же '
+            'contrast60, каким его рисует ячейка списка '
+            '(computed.abstinence-cell#2)');
+    // Сорок дней обещания плюс сегодня — сорок один квадрат, и ни одной
+    // записи в них нет: у привычки, которая молчит, пока её держат, старейшей
+    // записи не существует, и сетка была бы шириной в один день.
+    expect(chart.series.length, 41,
+        reason: 'computed.abstinence-screen#10 — сетка начинается в день '
+            'обещания, а не в день первой записи');
+    expect(chart.series[40], Square.on,
+        reason: 'computed.abstinence-screen#10 — день обещания входит в '
+            'сетку последним, и он уже под обещанием');
+  });
+
+  testWidgets(
+      'computed.abstinence-screen#10 день до обещания остаётся пустым',
+      (tester) async {
+    // Тот же охранник, что не даёт нажать ячейку списка до обещания
+    // (`computed.abstinence-cell#3`): приложение не приписывает себе дни, о
+    // которых обещания ещё не было, и не красит их своим цветом.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 10);
+    // Запись старше обещания: сетка тянется до неё, потому что она есть.
+    scope.abstinence.setLapse(habit, LocalDate(today - 50), true);
+
+    await openEditor(tester, habit);
+
+    final HistoryChart chart = HistoryEditorDialog.current!.chart!;
+    expect(chart.series.length, 51,
+        reason: 'computed.abstinence-screen#10 — окно только расширяется '
+            'назад: запись старше дня обещания сетку не теряет');
+    expect(chart.series[50], Square.off,
+        reason: 'computed.abstinence-screen#10 — день до обещания пуст, как '
+            'и ячейка списка в нём');
+    expect(chart.series[11], Square.off,
+        reason: 'computed.abstinence-screen#10 — и любой другой день до '
+            'обещания тоже');
+    expect(chart.series[10], Square.on,
+        reason: 'computed.abstinence-screen#10 — а день обещания уже под ним');
+  });
+
+  testWidgets(
+      'computed.abstinence-screen#10 день под допуском не ярче дня полной '
+      'трезвости', (tester) async {
+    // Ревью нашло: при допуске 30 портированная ветка красила день с
+    // двадцатью минутами `Square.on`, а день, в который человек не тронул
+    // ничего, — `Square.off`. Судья на сетке был четвёртым и противоречил
+    // трём остальным.
+    final Habit habit =
+        addAbstinenceWithAllowance(allowance: 30.0, unit: 'minutes');
+    final int today = getToday().daysSince2000;
+    scope.abstinence.setLapse(habit, LocalDate(today - 3), true, amount: 20);
+    scope.abstinence.setLapse(habit, LocalDate(today - 7), true, amount: 45);
+
+    await openEditor(tester, habit);
+
+    final HistoryChart chart = HistoryEditorDialog.current!.chart!;
+    expect(chart.series[3], chart.series[1],
+        reason: 'computed.abstinence-screen#10 — двадцать минут при допуске '
+            'тридцать обещание держат, и день с записью не может выглядеть '
+            'удачнее дня без неё');
+    expect(chart.series[1], Square.on,
+        reason: 'computed.abstinence-screen#10 — оба они удачные дни');
+    expect(chart.series[7], Square.grey,
+        reason: 'computed.abstinence-screen#10 — сорок пять больше тридцати, '
+            'и только этот день есть срыв (computed.abstinence-cell#2)');
   });
 }

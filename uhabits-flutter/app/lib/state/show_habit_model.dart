@@ -40,6 +40,7 @@ import 'package:uhabits_core/src/ui/views/history_chart.dart'
     show OnDateClickedListener;
 import 'package:uhabits_core/uhabits_core.dart';
 
+import '../ui/habits/abstinence/abstinence_calendar.dart';
 import '../ui/habits/show/show_habit_menu.dart';
 import 'app_scope.dart';
 
@@ -299,6 +300,12 @@ class ShowHabitModel extends ChangeNotifier
       // counting: the goal met on every one of its three parts.
       countsTowardsTotal:
           _isSleepHabit ? (Entry e) => e.value >= maxStoredValue : null,
+      // Молчание есть успех, и портированная сетка красит его самым бледным
+      // оттенком, какой у неё есть. Свой классификатор — не второй судья: он
+      // зовёт ту же `abstinenceCellOf`, что рисует ячейку списка
+      // (`computed.abstinence-screen#10`).
+      squareOf: abstinenceSquareOf(habit),
+      oldestDay: abstinenceOldestDay(habit),
     );
     _visibility.setState(_state);
   }

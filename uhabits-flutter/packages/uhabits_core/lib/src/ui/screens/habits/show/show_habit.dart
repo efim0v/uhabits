@@ -18,6 +18,8 @@ import '../../../../models/habit_list.dart';
 import '../../../../models/palette_color.dart';
 import '../../../../gui/theme.dart';
 import '../../../../preferences/preferences.dart';
+import '../../../../time/local_date.dart';
+import '../../../views/history_chart.dart';
 import 'views/bar_card.dart';
 import 'views/frequency_card.dart';
 import 'views/history_card.dart';
@@ -139,15 +141,18 @@ class ShowHabitPresenter {
   /// `ShowHabitPresenter.buildState(habit, preferences, theme)`. The whole
   /// state is rebuilt from scratch: there is no incremental refresh anywhere
   /// on this screen.
-  /// [intensityOf] is not upstream and is passed straight through to the
-  /// History card; see [HistoryCardPresenter.buildState]. Null for every habit
-  /// the original knows.
+  /// [intensityOf], [squareOf] and [oldestDay] are not upstream and are passed
+  /// straight through to the History card; see
+  /// [HistoryCardPresenter.buildState]. Null for every habit the original
+  /// knows.
   static ShowHabitState buildState({
     required Habit habit,
     required Preferences preferences,
     required Theme theme,
     double Function(Entry)? intensityOf,
     bool Function(Entry)? countsTowardsTotal,
+    Square Function(Entry)? squareOf,
+    LocalDate? oldestDay,
   }) {
     return ShowHabitState(
       title: habit.name,
@@ -188,6 +193,8 @@ class ShowHabitPresenter {
         firstWeekday: preferences.firstWeekday,
         theme: theme,
         intensityOf: intensityOf,
+        squareOf: squareOf,
+        oldestDay: oldestDay,
       ),
       bar: BarCardPresenter.buildState(
         habit: habit,

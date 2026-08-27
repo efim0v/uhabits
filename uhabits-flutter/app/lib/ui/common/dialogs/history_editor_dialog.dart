@@ -52,6 +52,7 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart'
 import 'package:uhabits_core/src/ui/views/history_chart.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
+import '../../habits/abstinence/abstinence_calendar.dart';
 import '../../habits/list/list_header.dart' show IntlLocalDateFormatter;
 import '../../theme/app_theme.dart' show coreThemeOf, toFlutterColor;
 import '../scrollable_chart.dart';
@@ -236,6 +237,13 @@ class HistoryEditorDialog extends StatefulWidget {
       habit: habit,
       firstWeekday: preferences.firstWeekday,
       theme: core.LightTheme(),
+      // Та же сетка, что на карточке под диалогом, и красится она тем же
+      // классификатором: календарь-редактор перерисовывает `series` из
+      // этого вызова, и разойдись он с карточкой — один тап менял бы цвет
+      // клетки на то время, пока диалог открыт
+      // (`computed.abstinence-screen#10`).
+      squareOf: abstinenceSquareOf(habit),
+      oldestDay: abstinenceOldestDay(habit),
     );
   }
 

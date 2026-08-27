@@ -19,6 +19,8 @@ import 'package:uhabits_core/src/ui/screens/habits/show/views/history_card.dart'
 import 'package:uhabits_core/src/ui/screens/habits/show/views/score_card.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/views/target_card.dart';
 
+import '../ui/habits/abstinence/abstinence_calendar.dart';
+
 /// The data half of the Android home-screen widgets
 /// (`uhabits-android/.../widgets/`).
 ///
@@ -671,6 +673,12 @@ class HomeWidgetBridge {
       habit: habit,
       firstWeekday: firstWeekdayOfWeek,
       theme: theme,
+      // Сетка виджета есть та же сетка карточки, собранная тем же
+      // презентером, и красить её вторым способом значило бы показывать на
+      // рабочем столе не то, что на экране привычки
+      // (`computed.abstinence-screen#10`).
+      squareOf: abstinenceSquareOf(habit),
+      oldestDay: abstinenceOldestDay(habit),
     );
     final int historyLength =
         historyCard.series.length < historyDayCount

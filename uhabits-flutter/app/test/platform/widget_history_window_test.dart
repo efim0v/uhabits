@@ -41,6 +41,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/home_widget_bridge.dart';
+import 'package:uhabits_core/src/computed/habit_definition.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
@@ -263,6 +264,39 @@ void main() {
               'cell a launcher offers holds, so the port caps the series there '
               'rather than shipping the unbounded record Kotlin passes '
               'in-process.');
+    });
+
+    test('computed.abstinence-screen#10 the grid a widget publishes is the '
+        'grid the screen draws, for an abstinence habit too', () async {
+      // Тот же презентер, тот же классификатор. Без него виджет показывал бы
+      // сорок безупречных дней самым бледным оттенком, какой у сетки есть, —
+      // и расходился бы с экраном привычки на том же телефоне.
+      final Habit habit = fixtures.createEmptyNumericalHabit(
+        NumericalHabitType.atMost,
+      );
+      habit.targetValue = 0.0;
+      habit.definition = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: today.minus(40).daysSince2000,
+      );
+      habitList.add(habit);
+      habit.originalEntries.add(Entry(today.minus(5), 1000));
+      habit.recompute();
+      registry.addWidget(7, <int>[habit.id!]);
+      await bridge.publish();
+
+      final String series = habitOfWidget(7)['historySeries']! as String;
+      expect(series.length, 41,
+          reason: 'computed.abstinence-screen#10 — сетка начинается в день '
+              'обещания: у привычки, которая молчит, пока её держат, '
+              'старейшая запись — это её единственный срыв');
+      expect(series[0], '0',
+          reason: 'computed.abstinence-screen#10 — Square.on: сегодня чисто, '
+              'и молчание есть успех');
+      expect(series[5], '2',
+          reason: 'computed.abstinence-screen#10 — Square.grey: срыв');
+      expect(series[40], '0',
+          reason: 'computed.abstinence-screen#10 — день обещания уже под ним');
     });
   });
 
