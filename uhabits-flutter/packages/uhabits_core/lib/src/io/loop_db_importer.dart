@@ -17,6 +17,7 @@ import '../commands/command_runner.dart';
 import '../commands/create_habit_command.dart';
 import '../commands/edit_habit_command.dart';
 import '../computed/definition_importer.dart';
+import '../computed/lapse_importer.dart';
 import '../database/database.dart';
 import '../database/habit_repository.dart';
 import '../database/extension_migrations.dart';
@@ -70,6 +71,7 @@ class LoopDBImporter {
     required this.fileOpener,
     this.sleepImporter,
     this.definitionImporter,
+    this.lapseImporter,
   }) : logger = logging.getLogger('LoopDBImporter');
 
   final HabitList habitList;
@@ -97,6 +99,11 @@ class LoopDBImporter {
   /// makes a habit computed is keyed by habit id, and the ids here are not the
   /// ids the file was written with.
   final DefinitionImporter? definitionImporter;
+
+  /// Not upstream, and for the same reason as [sleepImporter]: an abstinence
+  /// habit's journal is keyed by habit id, and the ids here are not the ids
+  /// the file was written with.
+  final LapseImporter? lapseImporter;
 
   Future<bool> canHandle(UserFile file) async {
     if (!await _isSQLite3File(file)) return false;
@@ -189,6 +196,7 @@ class LoopDBImporter {
       // rows are not, and are lost unless they are carried across explicitly.
       sleepImporter?.importFor(db, habitData.id, habit.id!);
       definitionImporter?.importFor(db, habitData.id, habit.id!);
+      lapseImporter?.importFor(db, habitData.id, habit.id!);
     }
     habitList.resort();
     db.close();

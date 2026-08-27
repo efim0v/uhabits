@@ -69,5 +69,6 @@ export 'src/computed/days_without_lapse.dart';
 export 'src/computed/definition_repository.dart';
 export 'src/computed/habit_definition.dart';
 export 'src/computed/lapse_day_value.dart';
+export 'src/computed/lapse_importer.dart';
 export 'src/computed/lapse_repository.dart';
 export 'src/computed/lapse_scoring.dart';
