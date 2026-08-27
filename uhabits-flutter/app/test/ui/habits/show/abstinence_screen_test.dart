@@ -159,6 +159,28 @@ void main() {
             'экране это isAbstinenceLapse, а не «есть ли строка в журнале»');
   });
 
+  testWidgets('computed.streak#7 пропуск не обнуляет счётчик', (tester) async {
+    // Пропуск защищён у оценки (`computed.lapse-score#8`), у свода
+    // (`computed.abstinence-sync#4`), у двери записи (`computed.day-write#4`)
+    // и у ячейки (`computed.abstinence-cell#4`) — и был уронен у серии:
+    // `Entry.skip` есть 3, то есть 0.003, и при допуске ноль числовое
+    // сравнение выбрасывало день из серии. Сегодня сюда не ведёт ни одна
+    // дверь приложения, но пропуск приезжает восстановлением копии из Loop.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 40);
+    habit.originalEntries.add(Entry(LocalDate(today - 3), Entry.skip));
+    habit.recompute();
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.text('40'), findsOneWidget,
+        reason: 'computed.streak#7 — «сегодня меня тут нет» не есть срыв, и '
+            'сорок дней обещания остаются сорока');
+    expect(find.textContaining('Последний срыв'), findsNothing,
+        reason: 'computed.streak#7 — и подпись согласна: срыва не было');
+  });
+
   testWidgets('computed.commitment#2 перенесённый вперёд день обещания '
       'разводил число и подпись', (tester) async {
     // Ревью нашло: подпись ищет срыв в [день обещания, сегодня], счётчик идёт

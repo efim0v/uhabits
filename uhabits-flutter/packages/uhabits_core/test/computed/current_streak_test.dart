@@ -145,6 +145,32 @@ void main() {
       expect(streaks.getBest(10).length, 2, reason: 'computed.streak#2');
     });
 
+    test('#7 a skip does not break a streak where silence is success', () {
+      // Пропуск защищён в четырёх местах — оценкой, сводом, дверью записи,
+      // ячейкой — и был уронен в пятом: `Entry.skip` есть 3, то есть 0.003,
+      // и при допуске ноль числовое сравнение выбрасывало его из серии.
+      entries.add(Entry(today.minus(3), Entry.skip));
+      recomputeAtMost(silenceQualifies: true);
+
+      expect(streaks.getCurrent(today), Streak(today.minus(10), today),
+          reason: 'computed.streak#7 — «сегодня меня тут нет» не есть срыв');
+
+      // И портированное сравнение не сдвинулось: при выключенном признаке
+      // пропуск судится как 0.003 — при цели 5 он в неё укладывается, и
+      // серия из него одного существует (`models.streak-computation#3`).
+      streaks.recompute(
+        entries.getByInterval,
+        today.minus(10),
+        today.plus(30),
+        true,
+        5.0,
+        NumericalHabitType.atMost,
+      );
+      expect(streaks.getCurrent(today.minus(3)),
+          Streak(today.minus(3), today.minus(3)),
+          reason: 'computed.streak#2 — умолчание есть паритетное поведение');
+    });
+
     test('#2 a ported habit keeps the future tail of its window', () {
       // Обрезка хвоста стоит под тем же признаком, что и впуск молчания, и
       // это обязательное условие, а не осторожность. Хвост есть и у привычки
