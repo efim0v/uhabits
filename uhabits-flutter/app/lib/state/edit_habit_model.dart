@@ -341,7 +341,13 @@ class EditHabitModel extends ChangeNotifier {
     // A computed habit is numerical, but its target is settled by the kind and
     // the field that would carry it is never shown. Validating it would refuse
     // to save a form the person was never given a chance to fill in.
-    if (isNumerical && !isComputed) {
+    //
+    // The pair, not [isComputed]: this has to name exactly the states
+    // `_buildForm` hides the target for, and those two differ on one — a sleep
+    // definition row whose goal row is missing, where the form still draws
+    // Unit, Target and Target type. Under [isComputed] a person could fill all
+    // three in and watch the save ignore them without a word.
+    if (isNumerical && !isSleep && !isAbstinence) {
       if (targetController.text.isEmpty) {
         targetError = EditHabitFieldError.blank;
         isValid = false;
@@ -401,8 +407,9 @@ class EditHabitModel extends ChangeNotifier {
     // numerical habit to yes/no leaves the copied target and unit intact
     // (`edit-habit.save#6`, `#16`).
     // Same reason as in validate(): a computed form never shows these, so
-    // there is nothing here to parse.
-    if (habitType == HabitType.numerical && !isComputed) {
+    // there is nothing here to parse — and spelled as the same pair the form
+    // branches on, so the two cannot drift apart.
+    if (habitType == HabitType.numerical && !isSleep && !isAbstinence) {
       habit.targetValue = double.parse(targetController.text);
       habit.targetType = targetType;
       habit.unit = unitController.text.trim();

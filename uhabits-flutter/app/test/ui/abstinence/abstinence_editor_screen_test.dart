@@ -27,6 +27,9 @@ void main() {
   late Database database;
   late AppScope scope;
 
+  final int Function() realClock = core_time.systemCurrentTimeMillis;
+  final core_time.TimeZone Function() realZone = core_time.getDefaultTimeZone;
+
   setUp(() {
     core_time.DateUtils.setFixedTimeZone(const core_time.FixedTimeZone(0));
     // `AppScope.open` stamps today itself, from the wall clock rather than
@@ -34,6 +37,11 @@ void main() {
     // the commitment day the form shows is the day the suite happens to run.
     core_time.systemCurrentTimeMillis =
         () => (9000 + 10957) * 86400000 + 12 * 3600000;
+    // And the zone with it: `computeToday` reads the top-level
+    // `getDefaultTimeZone`, not `DateUtils.fixedTimeZone`, so pinning the
+    // clock is not enough on its own. Noon UTC is one day number in London and
+    // the next one in Kiritimati, and this file asserts on the day number.
+    core_time.getDefaultTimeZone = () => const core_time.FixedTimeZone(0);
     setToday(LocalDate(9000));
     database = Sqlite3Database.memory();
     database.setVersion(8);
@@ -49,7 +57,8 @@ void main() {
   tearDown(() {
     scope.close();
     core_time.DateUtils.setFixedTimeZone(null);
-    core_time.systemCurrentTimeMillis = core_time.defaultCurrentTimeMillis;
+    core_time.systemCurrentTimeMillis = realClock;
+    core_time.getDefaultTimeZone = realZone;
     resetToday();
   });
 
@@ -242,6 +251,11 @@ void main() {
       of: find.byKey(EditHabitScreen.abstinenceAllowanceFieldKey),
       matching: find.byType(TextField),
     ));
+    // "Cannot be blank" on a box that is not blank is not a bug: it is
+    // `R.string.validation_cannot_be_blank`, the ONE validation string the
+    // Android app has, and `notANumber` is the port's own state with no
+    // string of its own, so it borrows that one (`edit-habit.validation#2`,
+    // `#4`, `#9`). `_errorTextOf` maps both errors to it deliberately.
     expect(allowance.decoration!.errorText, 'Cannot be blank',
         reason: 'computed.create#11 — the refusal has to be drawn where the '
             'person typed: the target box that carries it upstream is not on '

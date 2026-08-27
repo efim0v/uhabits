@@ -233,7 +233,7 @@
   "abstinenceQuestionExample": "напр.: Вы сорвались сегодня?",
   "abstinenceAllowance": "Допуск",
   "abstinenceAllowanceExample": "напр.: 30",
-  "abstinenceAllowanceUnit": "Считается в",
+  "abstinenceAllowanceUnit": "Ед. изм.",
   "abstinenceAllowanceUnitExample": "напр.: минуты",
   "abstinenceCommittedFrom": "Обязательство с"
 }

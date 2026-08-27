@@ -859,7 +859,7 @@ class L10nRu extends L10n {
   String get abstinenceAllowanceExample => 'напр.: 30';
 
   @override
-  String get abstinenceAllowanceUnit => 'Считается в';
+  String get abstinenceAllowanceUnit => 'Ед. изм.';
 
   @override
   String get abstinenceAllowanceUnitExample => 'напр.: минуты';
