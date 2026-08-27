@@ -135,6 +135,11 @@ void main() {
     scope.habitList.add(habit);
     scope.sleepRepository
         .saveGoal(habit.id!, const SleepGoal(bedMinutes: 1380, wakeMinutes: 420));
+    // Both rows, because the sweep enumerates by the mark and every path that
+    // makes a sleep habit writes the pair (`computed.definition#8`). Without
+    // it the fixture is a habit the sync would walk straight past.
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
 
     await tester.pumpWidget(UhabitsApp(scope: scope));
     await tester.pumpAndSettle();
