@@ -153,16 +153,17 @@ class Habit {
     final to = today.plus(30);
     final entries = computedEntries.getKnown();
     var from = entries.isEmpty ? today : entries.last.date;
-    // Расширение: у вычисляемой привычки нижняя граница не может опираться на
-    // записи. Привычка, которая ничего не пишет, пока её держат, старейшей
-    // записи не имеет, и её сорок чистых дней не существовали бы
-    // (`computed.commitment#1`). Окно только расширяется назад: запись старше
-    // дня обязательства границу не теряет (`computed.commitment#2`).
+    // Расширение: у вычисляемой привычки нижняя граница не опирается на
+    // записи вовсе. Привычка, которая ничего не пишет, пока её держат,
+    // старейшей записи не имеет, и её сорок чистых дней не существовали бы
+    // (`computed.commitment#1`). День обязательства задаёт границу целиком, в
+    // обе стороны: запись старше него — это день, о котором обязательства
+    // ещё не было, и он не вправе ни начинать серию, ни делить оценку
+    // пополам. Перенесённый вперёд день обязательства иначе разводил бы
+    // счётчик с подписью под ним: «40 дней без срыва / С 1 августа» при
+    // девятнадцати прошедших днях (`computed.commitment#2`).
     final int? committedFrom = definition?.committedFrom;
-    if (committedFrom != null) {
-      final LocalDate committed = LocalDate(committedFrom);
-      if (committed.isOlderThan(from)) from = committed;
-    }
+    if (committedFrom != null) from = LocalDate(committedFrom);
     if (from.isNewerThan(to)) from = to;
 
     scores.recompute(

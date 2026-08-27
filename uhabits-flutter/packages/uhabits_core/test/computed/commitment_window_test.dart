@@ -91,16 +91,27 @@ void main() {
           reason: 'computed.commitment#1');
     });
 
-    test('#2 the commitment day only widens the window backwards', () {
+    test('#2 the commitment day is the whole lower bound, in both directions',
+        () {
       final Habit habit =
           buildAbstinence(committedFrom: today.minus(10).daysSince2000);
       habit.originalEntries.add(Entry(today.minus(50), 1000));
       habit.recompute();
 
-      // Срыв старше дня обязательства историю не теряет: граница осталась на
-      // записи, потому что она старше.
+      // Срыв старше дня обязательства — это день, о котором обязательства ещё
+      // не было. Серия начинается в день решения, а не сорока днями раньше:
+      // иначе счётчик говорил бы «49 дней без срыва» под подписью «С <день
+      // обязательства>», которой десять.
       final Streak? current = habit.streaks.getCurrent(today);
-      expect(current?.start, today.minus(49), reason: 'computed.commitment#2');
+      expect(current?.start, today.minus(10), reason: 'computed.commitment#2');
+
+      // И оценки за те дни не существует: балл вне посчитанного окна есть
+      // ноль, и старый срыв ничего не делит пополам. Сегодняшний — контраст,
+      // он ненулевой.
+      expect(habit.scores[today].value, greaterThan(0.0),
+          reason: 'computed.commitment#2');
+      expect(habit.scores[today.minus(40)].value, 0.0,
+          reason: 'computed.commitment#2');
     });
 
     test('#3 a habit without a definition keeps the ported window', () {

@@ -159,6 +159,34 @@ void main() {
             'экране это isAbstinenceLapse, а не «есть ли строка в журнале»');
   });
 
+  testWidgets('computed.commitment#2 перенесённый вперёд день обещания '
+      'разводил число и подпись', (tester) async {
+    // Ревью нашло: подпись ищет срыв в [день обещания, сегодня], счётчик идёт
+    // от серии, а окно пересчёта расширялось назад до старейшей записи. Срыв
+    // старше обещания тянул границу окна на себя, серия начиналась от него, и
+    // экран показывал «39 дней без срыва» под подписью «С <дата>», которой
+    // девятнадцать. Тот же старый срыв делил оценку пополам, оставаясь при
+    // этом пустой клеткой календаря, — невидимый крест, тянущий кольцо вниз.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 19);
+    scope.abstinence.setLapse(habit, LocalDate(today - 40), true);
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.text('19'), findsOneWidget,
+        reason: 'computed.commitment#2 — счётчик считает от дня обещания, а '
+            'не от срыва, которого обещание не застало');
+    expect(find.text('дней без срыва'), findsOneWidget,
+        reason: 'computed.commitment#2');
+    expect(find.textContaining('С '), findsWidgets,
+        reason: 'computed.commitment#2 — подпись говорит «С <день обещания>», '
+            'и число обязано считаться от того же дня');
+    expect(find.textContaining('Последний срыв'), findsNothing,
+        reason: 'computed.commitment#2 — срыв старше обещания не последний '
+            'срыв обещания');
+  });
+
   testWidgets('computed.abstinence-screen#3 счётчик стоит в шве после '
       'ведущей четвёрки', (tester) async {
     final int today = getToday().daysSince2000;
