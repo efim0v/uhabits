@@ -161,4 +161,47 @@ void main() {
     expect(LapseRepository(hereDb).firstDay(restored.id!), isNull,
         reason: 'computed.backup#4 — and an absent one writes nothing');
   });
+
+  /// A file whose journal holds a row that says nothing.
+  ///
+  /// Written through raw SQL because [LapseRepository.save] refuses it: a zero
+  /// is the trace of another build or of a file edited by hand, never of this
+  /// one. Real days on both sides of it, so that "the rest of the journal
+  /// survives" has something to be true of.
+  UserFile sourceFileWithASilentDay({required String uuid}) {
+    final UserFile file = sourceFileWithHabit(uuid: uuid, sourceId: 41);
+    final Database source = opener.open(file.pathString);
+    LapseRepository(source)
+      ..save(41, 8990, amount: 1)
+      ..save(41, 9007, amount: 12);
+    source.run('insert into Lapses (habit, day, amount) values (41, 9000, 0)');
+    source.close();
+    return file;
+  }
+
+  test('a zero in the file does not tear the restore down', () async {
+    final UserFile file = sourceFileWithASilentDay(uuid: 'abc');
+
+    expect(await thrownBy(() => importFile(file)), isNull,
+        reason: 'computed.backup#4 — импорт ловит бросок и всё равно '
+            'фиксирует сделанное: восстановление разваливается посередине, '
+            'а не откатывается');
+  });
+
+  test('a day that says nothing is skipped, and the days after it are not',
+      () async {
+    final UserFile file = sourceFileWithASilentDay(uuid: 'abc');
+
+    // Брошенное здесь проглочено намеренно: что бросок сносит восстановление,
+    // сказано тестом выше, а этот — о том, что осталось в журнале, и он
+    // обязан дойти до своей проверки.
+    await thrownBy(() => importFile(file));
+
+    final Habit restored = here.getByUUID('abc')!;
+    expect(LapseRepository(hereDb).range(restored.id!, 8990, 9007),
+        <int, int>{8990: 1, 9007: 12},
+        reason: 'computed.backup#4 — день, который ничего не утверждает, '
+            'отсутствующей строкой и представлен; а дни после него — срывы, '
+            'и они переезжают');
+  });
 }

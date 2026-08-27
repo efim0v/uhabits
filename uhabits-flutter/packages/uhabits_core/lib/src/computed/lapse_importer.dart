@@ -34,11 +34,21 @@ class LapseImporter {
 
     for (final MapEntry<int, int> lapse
         in origin.range(sourceHabitId, from, to).entries) {
+      // A row of nothing is read as nothing. `save` refuses one — the floor of
+      // one is its guard (`computed.lapses#2`) — and that refusal is right
+      // where it stands: a caller passing zero is a mistake in code, and code
+      // can be fixed. A file cannot. Left to throw here it would not protect
+      // the database either, because the import catches and commits anyway:
+      // this habit would keep only the lapses before the bad row, every habit
+      // after it would be dropped, no definition would be attached, and the
+      // next attempt would break on the same row for ever.
+      //
+      // Nor is the answer to round it up to one, which would invent a lapse
+      // and break a streak that was never broken. A zero asserts nothing, and
+      // the absent row is already how this journal spells that.
+      if (lapse.value < LapseRepository.minimumAmount) continue;
       // `save` with its named amount, rather than three positional ints past
-      // it: it is the one door carrying the guard that a lapse is at least one
-      // (`computed.lapses#2`). A file holding a zero is refusing to say
-      // anything, and it is refused loudly rather than restored as a lapse of
-      // nothing.
+      // it: the same one door, so that a floor raised there is raised here.
       _destination.save(destinationHabitId, lapse.key, amount: lapse.value);
     }
   }
