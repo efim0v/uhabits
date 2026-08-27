@@ -335,4 +335,34 @@ void main() {
         reason: 'computed.create#8 — backwards is the whole point: the clean '
             'stretch before the first slip is counted from this day');
   });
+
+  testWidgets('the calendar will not offer a day the storage would drop',
+      (tester) async {
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+    await tester.tap(find.byKey(EditHabitScreen.abstinenceCommittedPickerKey));
+    await tester.pumpAndSettle();
+
+    final DatePickerDialog dialog =
+        tester.widget<DatePickerDialog>(find.byType(DatePickerDialog));
+    final LocalDate floor = LocalDate.ymd(
+      dialog.firstDate.year,
+      dialog.firstDate.month,
+      dialog.firstDate.day,
+    );
+
+    // Asserted in `daysSince2000`, the units the rule speaks, rather than as
+    // the calendar date it happens to be: the claim is "the first day the
+    // storage layer will keep", and day 0 is the one it will not.
+    expect(floor.daysSince2000, 1,
+        reason: 'computed.commitment#6 — a stored day of 0 is read back as no '
+            'commitment day at all, because zero is what an unfilled integer '
+            'looks like. Offering 2000-01-01 would let a person pick a day '
+            'that vanishes between the write and the next read, with nothing '
+            'on screen to say the choice was dropped');
+    expect(dialog.firstDate, DateTime(2000, 1, 2),
+        reason: 'computed.commitment#6 — and that day is 2000-01-02');
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
 }
