@@ -235,5 +235,11 @@
   "abstinenceAllowanceExample": "напр.: 30",
   "abstinenceAllowanceUnit": "Ед. изм.",
   "abstinenceAllowanceUnitExample": "напр.: минуты",
-  "abstinenceCommittedFrom": "Обязательство с"
+  "abstinenceCommittedFrom": "Обязательство с",
+  "abstinenceTitle": "Без срывов",
+  "abstinenceCleanDaysLabel": "{days, plural, one {день без срыва} few {дня без срыва} many {дней без срыва} other {дня без срыва}}",
+  "abstinenceSince": "С {date}",
+  "abstinenceLastLapse": "Последний срыв: {date}",
+  "abstinenceLapseToday": "Сегодня сорвался",
+  "abstinenceUndoToday": "Отменить за сегодня"
 }

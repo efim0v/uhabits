@@ -791,10 +791,11 @@ void main() {
                 'named by a prefix rather than by accident');
       }
       expect(extension.where((String k) => k.startsWith('abstinence')).length,
-          8,
+          14,
           reason: 'platform-glue.localization-inventory#4 (deviation) — the '
-              'abstinence editor adds exactly eight strings, and a ninth that '
-              'nobody declared would be one nobody translated');
+              'abstinence kind adds exactly fourteen strings: eight in the '
+              'editor and six on the list cell and the habit screen. A '
+              'fifteenth that nobody declared would be one nobody translated');
     });
   });
 

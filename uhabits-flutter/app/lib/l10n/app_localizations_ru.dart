@@ -866,4 +866,36 @@ class L10nRu extends L10n {
 
   @override
   String get abstinenceCommittedFrom => 'Обязательство с';
+
+  @override
+  String get abstinenceTitle => 'Без срывов';
+
+  @override
+  String abstinenceCleanDaysLabel(num days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'дня без срыва',
+      many: 'дней без срыва',
+      few: 'дня без срыва',
+      one: 'день без срыва',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String abstinenceSince(String date) {
+    return 'С $date';
+  }
+
+  @override
+  String abstinenceLastLapse(String date) {
+    return 'Последний срыв: $date';
+  }
+
+  @override
+  String get abstinenceLapseToday => 'Сегодня сорвался';
+
+  @override
+  String get abstinenceUndoToday => 'Отменить за сегодня';
 }

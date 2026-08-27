@@ -1657,6 +1657,42 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Committed since'**
   String get abstinenceCommittedFrom;
+
+  /// No description provided for @abstinenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Without a lapse'**
+  String get abstinenceTitle;
+
+  /// Label beside the big counter on an abstinence habit's screen.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, one {day without a lapse} other {days without a lapse}}'**
+  String abstinenceCleanDaysLabel(num days);
+
+  /// The day the person committed, shown when they have never lapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Since {date}'**
+  String abstinenceSince(String date);
+
+  /// No description provided for @abstinenceLastLapse.
+  ///
+  /// In en, this message translates to:
+  /// **'Last lapse: {date}'**
+  String abstinenceLastLapse(String date);
+
+  /// No description provided for @abstinenceLapseToday.
+  ///
+  /// In en, this message translates to:
+  /// **'I lapsed today'**
+  String get abstinenceLapseToday;
+
+  /// No description provided for @abstinenceUndoToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo today'**
+  String get abstinenceUndoToday;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

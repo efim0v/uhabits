@@ -851,4 +851,34 @@ class L10nIs extends L10n {
 
   @override
   String get abstinenceCommittedFrom => 'Committed since';
+
+  @override
+  String get abstinenceTitle => 'Without a lapse';
+
+  @override
+  String abstinenceCleanDaysLabel(num days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'days without a lapse',
+      one: 'day without a lapse',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String abstinenceSince(String date) {
+    return 'Since $date';
+  }
+
+  @override
+  String abstinenceLastLapse(String date) {
+    return 'Last lapse: $date';
+  }
+
+  @override
+  String get abstinenceLapseToday => 'I lapsed today';
+
+  @override
+  String get abstinenceUndoToday => 'Undo today';
 }
