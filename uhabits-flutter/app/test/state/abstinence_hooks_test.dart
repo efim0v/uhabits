@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/computed_habit_hooks.dart';
+import 'package:uhabits/state/edit_habit_model.dart';
 import 'package:uhabits/state/show_habit_model.dart';
 import 'package:uhabits/state/widget_sync.dart' show WidgetBehavior;
 import 'package:uhabits_core/src/commands/archive_habits_command.dart';
@@ -157,6 +158,45 @@ void main() {
         reason: 'computed.write-paths#5 — третий вид обязан пройти здесь');
     expect(sleepHabitType, HabitType.numerical,
         reason: 'computed.write-paths#5');
+
+    // И воздержание — заведённое тем путём, которым его заводит приложение, а
+    // не построенное тестом. Прежняя редакция дальше двух строк выше не шла,
+    // а DEVIATIONS.md уже утверждал, что тип воздержания ставит ветка
+    // `isAbstinence` в `save()`. Не ставит: она пишет `targetValue`,
+    // `targetType`, `unit` и `frequency`, а `type` держат конструктор
+    // `EditHabitModel` (на любой непустой `computed` — `HabitType.numerical`)
+    // и строка `habit.type = habitType` в конце `save()`. Здесь это и
+    // проверяется — на привычке, вышедшей из редактора.
+    //
+    // Сон сюда не идёт своим ходом: его тип закрыт константой выше, а
+    // заведение сна в этой обвязке упирается в ненаполненный
+    // `HabitCardListCache` — шум харнесса, а не правило.
+    // Кэш списка в этой обвязке пуст: `quit` из `setUp` положен прямо в
+    // `habitList`, мимо него. `_writeAbstinenceRow` объявляет об изменении, а
+    // объявление идёт в `cache.refreshHabit`, который вставляет карточку по
+    // её позиции, — и вставка второй в пустой кэш падает `RangeError`. Один
+    // проход кэша перед сохранением снимает этот шум харнесса; правило здесь
+    // ни при чём.
+    scope.cache.refreshAllHabits();
+
+    const String name = 'kind abstinence';
+    final EditHabitModel model =
+        EditHabitModel(scope: scope, computed: ComputedKind.abstinence)
+          ..nameController.text = name;
+    addTearDown(model.dispose);
+    expect(model.save(), isTrue, reason: 'computed.write-paths#5');
+
+    Habit? created;
+    for (int i = 0; i < scope.habitList.size(); i++) {
+      final Habit candidate = scope.habitList.getByPosition(i);
+      if (candidate.name == name) created = candidate;
+    }
+    expect(created, isNotNull,
+        reason: 'computed.write-paths#5 — воздержание завелось');
+    expect(created!.type, HabitType.numerical,
+        reason: 'computed.write-paths#5 — воздержание заводится числовым, и '
+            'пока это так, неохраняемое переключение да/нет-привычки до него '
+            'не достаёт');
   });
 
   // Хук 7. Презентер строится тем же путём, которым его строит приложение —
