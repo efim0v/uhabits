@@ -138,6 +138,15 @@ void main() {
     );
     final int days = daysWithoutLapse(habit);
     final double score = habit.scores[getToday()].value;
+    // Сторожа для сторожей. Обе проверки после перезапуска спрашивают «то же
+    // ли самое», и сами по себе они одинаково зелены на верном ответе и на
+    // двух одинаковых неверных: два нуля равны друг другу не хуже двух двоек,
+    // а два портовых балла — не хуже двух делённых. Эти две строки говорят,
+    // что именно будет сравниваться.
+    expect(days, 2,
+        reason: 'computed.streak#4 — два чистых дня после срыва, а не ноль');
+    expect(score, lessThan(0.9),
+        reason: 'computed.lapse-score#11 — деление включено ещё до закрытия');
     final String uuid = habit.uuid!;
     await closeScope(first);
 
@@ -170,14 +179,18 @@ void main() {
     expect(model.save(), isTrue);
     // Команда ушла в очередь настоящего диспетчера, и до этой строки привычки
     // в списке нет. Убрать её нельзя — и в этом весь смысл: строка стоит там
-    // же, где на телефоне стоит ожидание, и определение пишется слушателем
-    // команды, а не «следующей строкой» (`computed.commitment#7`).
+    // же, где на телефоне стоит кадр ожидания.
     await scope.taskRunner.awaitAll();
     Habit habit = scope.habitList.getByPosition(0);
     final String uuid = habit.uuid!;
 
     // 2. Счётчик существует до первой записи — ради этого весь раздел серий.
-    expect(daysWithoutLapse(habit), 40, reason: 'computed.streak#4');
+    // Сорок он показывает только если определение прикрепилось к живой
+    // привычке уже при сохранении: написанное «следующей строкой» после
+    // `run(command)`, оно на настоящем диспетчере не пишется вовсе, окно
+    // пересчёта начинается сегодняшним днём, и счёт становится нулём.
+    expect(daysWithoutLapse(habit), 40,
+        reason: 'computed.streak#4, computed.commitment#7');
 
     // 3. Срыв и 4. отмена.
     setLapseDay(scope, habit: habit, date: getToday(), lapsed: true);
@@ -218,6 +231,12 @@ void main() {
     ).importHabitsFromFile(backup);
 
     final Habit restored = fresh.habitList.getByUUID(uuid)!;
+    // Устройство пусто, поэтому восстановленная привычка получает тот же
+    // идентификатор, под которым журнал лежит в файле. Значит **перекладку**
+    // журнала на новый идентификатор этот тест не проверяет — она проверена
+    // на непустом устройстве в
+    // `app/test/state/computed_guard_wiring_test.dart`. Здесь проверяется, что
+    // журнал вообще переехал.
     expect(fresh.lapses.lastDay(restored.id!), getToday().minus(3).daysSince2000,
         reason: 'computed.backup#4');
     expect(restored.definition?.committedFrom, today - 40,
