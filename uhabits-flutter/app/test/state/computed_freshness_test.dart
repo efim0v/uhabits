@@ -11,6 +11,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/src/ui/screens/habits/list/habit_card_list_cache.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
@@ -32,6 +33,7 @@ void main() {
 
   setUp(() {
     setToday(LocalDate(9000));
+    DateUtils.setFixedTimeZone(const FixedTimeZone(0));
     database = Sqlite3Database.memory();
     database.setVersion(8);
     database.migrateTo(appDatabaseVersion, (int v) => migrationSqlFor(v) ?? '');
@@ -48,6 +50,7 @@ void main() {
   tearDown(() {
     scope.close();
     resetToday();
+    DateUtils.setFixedTimeZone(null);
   });
 
   Habit computedHabit() {
@@ -104,5 +107,41 @@ void main() {
     expect(listener.changes, 0,
         reason: 'computed.freshness#1 — refreshing a cache whose database is '
             'gone is a crash, not a redraw');
+  });
+
+  test('a sweep announces once for the whole run, and only through the door',
+      () async {
+    final Habit habit = scope.modelFactory.buildHabit()
+      ..name = 'Sleep'
+      ..type = sleepHabitType
+      ..targetValue = sleepTargetValue
+      ..unit = sleepUnit;
+    scope.habitList.add(habit);
+    scope.sleepRepository.saveGoal(
+        habit.id!, const SleepGoal(bedMinutes: 1390, wakeMinutes: 400));
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
+    scope.cache.setListener(listener);
+    scope.cache.onAttached();
+    listener.changes = 0;
+
+    // Three nights land in one sweep. One announcement, not three — and not
+    // four, which is what a hand-written call in the loop would add.
+    for (final int day in <int>[8998, 8999, 9000]) {
+      scope.sleepRepository.upsert(
+        habit.id!,
+        day,
+        SleepEpisode(
+          bedStartMillis: (day + 10956) * 86400000 + 23 * 3600000,
+          wakeEndMillis: (day + 10957) * 86400000 + 7 * 3600000,
+          asleepMinutes: 460,
+          utcOffsetMinutes: 0,
+        ),
+        manual: true,
+      );
+    }
+    scope.sleepSync.recomputeDays(habit, 8998, 9000);
+
+    expect(listener.changes, 1, reason: 'computed.freshness#2');
   });
 }

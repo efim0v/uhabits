@@ -222,7 +222,6 @@ class AppScope {
       final RecentNights? nights = await sleepSync.readRecent(habit);
       if (_closed) return;
       if (nights != null) sleepSync.applyRecent(nights);
-      onComputedDataChanged(id);
       scheduleSleepPrompt(habit);
     }
   }
@@ -916,7 +915,12 @@ class AppScope {
       () => DateTime.now().millisecondsSinceEpoch,
     );
     final definitions = DefinitionRepository(database);
-    return AppScope._(
+    // The announcement is handed to the door that writes days rather than left
+    // for each kind to remember. It has to close over the scope, which does
+    // not exist until the next statement — hence `late`, and hence a callback
+    // rather than the scope itself.
+    late final AppScope scope;
+    scope = AppScope._(
       sleepRepository: sleepRepository,
       definitions: definitions,
       sleepSync: SleepSync(
@@ -926,6 +930,9 @@ class AppScope {
         // only account of why Health went quiet. They belong in the buffer the
         // bug report carries.
         source: sleepSource ?? defaultSleepDataSource(logging: resolvedLogging),
+        writer: DayWriter(
+          onChanged: (int habitId) => scope.onComputedDataChanged(habitId),
+        ),
       ),
       database: database,
       databasePath: databasePath,
@@ -940,6 +947,7 @@ class AppScope {
       cache: cache,
       adapter: adapter,
     );
+    return scope;
   }
 
   /// Whether [close] has run.

@@ -45,10 +45,17 @@ class SleepSync {
     required this.repository,
     required this.source,
     TimeZone Function()? timeZone,
+    this.writer = const DayWriter(),
   }) : _timeZone = timeZone ?? (() => DateUtils.currentTimeZone);
 
   final SleepSessionRepository repository;
   final SleepDataSource source;
+
+  /// The one door a computed day goes through, and — when the application
+  /// built it — the thing that tells the list and the widgets about it. The
+  /// default writes and says nothing, which is what every core test wants.
+  final DayWriter writer;
+
   final TimeZone Function() _timeZone;
 
   /// The day a sleep habit is currently on.
@@ -210,7 +217,12 @@ class SleepSync {
 
     final Map<int, SleepEpisode> nights =
         repository.range(habit.id!, fromDay, toDay);
-    var wrote = false;
+    // Scored first, written second. `DayWriter` owns the rules the write has
+    // to keep — a day the person marked as not applicable stays that way even
+    // though a night is on record for it, the note survives, an unchanged
+    // value is not rewritten — and, since the run is handed over whole, it
+    // also owns the recompute and the one announcement that follow it.
+    final Map<int, int?> scored = <int, int?>{};
     for (final MapEntry<int, SleepEpisode> night in nights.entries) {
       final SleepBreakdown? breakdown = scoreNight(
         night.value,
@@ -218,17 +230,9 @@ class SleepSync {
         offsets[night.key] ?? goal.homeUtcOffsetMinutes,
       );
       if (breakdown == null) continue;
-      // A day the person marked as not applicable stays that way, even
-      // though a night is on record for it — `DayWriter` owns that rule now,
-      // along with keeping the note and never overwriting with the same
-      // value. Scoring over the mark would quietly erase the judgement they
-      // made about their own week — and would do it on the next sync after
-      // the trip, nowhere near the moment they marked it.
-      if (const DayWriter().write(habit, night.key, breakdown.storedValue)) {
-        wrote = true;
-      }
+      scored[night.key] = breakdown.storedValue;
     }
-    if (wrote) habit.recompute();
+    writer.writeDays(habit, scored);
   }
 
   /// Rescores every day the habit has a night for.
