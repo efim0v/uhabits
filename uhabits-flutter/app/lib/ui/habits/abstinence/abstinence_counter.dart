@@ -34,7 +34,13 @@ class AbstinenceCounterCard extends StatelessWidget {
   /// Сегодняшний день уже отмечен срывом.
   final bool lapsedToday;
 
-  final VoidCallback onToggleToday;
+  /// Что делает кнопка, или `null` — кнопка не нажимается.
+  ///
+  /// Нажать нечего в единственном случае: сегодня стоит пропуск. Это отметка
+  /// человека, которую дверь записи не переписывает (`computed.day-write#4`),
+  /// и кнопка, предлагающая её переписать, обещает то, чего не будет
+  /// (`computed.abstinence-screen#5`).
+  final VoidCallback? onToggleToday;
 
   static const Key cardKey = Key('abstinence.counter');
   static const Key todayButtonKey = Key('abstinence.today');

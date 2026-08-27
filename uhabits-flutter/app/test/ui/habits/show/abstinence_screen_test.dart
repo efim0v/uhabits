@@ -160,6 +160,87 @@ void main() {
             'экране это isAbstinenceLapse, а не «есть ли строка в журнале»');
   });
 
+  testWidgets('computed.abstinence-screen#2 строка журнала без дня подписи не '
+      'даёт', (tester) async {
+    // Ревью нашло: судья был один — `isAbstinenceLapse`, — а входа два.
+    // Подпись спрашивала журнал, а число, ячейка, сетка календаря и «Всего» —
+    // значения дней. Расходятся они на пропуске: он приезжает восстановлением
+    // копии из Loop, `DayWriter` его не переписывает
+    // (`computed.day-write#4`), и строка журнала, поданная на такой день,
+    // остаётся строкой без дня. Карточка говорила разом «40 дней без срыва» и
+    // «Последний срыв: <дата>», пока сетка показывала пропуск, а «Всего» —
+    // ноль. Снять этот призрак человеку было нечем: обе двери записи пропуск
+    // охраняют, и кнопка карточки не стала бы «Отменить срыв» никогда.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 40);
+    habit.originalEntries.add(Entry(LocalDate(today - 5), Entry.skip));
+    habit.recompute();
+
+    // Ровно то, что делал тап по такому дню: строка журнала появляется,
+    // значение дня — нет.
+    scope.abstinence.setLapse(habit, LocalDate(today - 5), true);
+    expect(scope.lapses.lastDay(habit.id!), today - 5,
+        reason: 'вход номер два: журнал строку принял');
+    expect(habit.computedEntries.get(LocalDate(today - 5)).value, Entry.skip,
+        reason: 'вход номер один: день остался пропуском');
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Последний срыв'), findsNothing,
+        reason: 'computed.abstinence-screen#2 — подпись читает те же значения '
+            'дней, что и всё остальное на экране: один судья и один вход '
+            '(`computed.abstinence-cell#2`, `computed.lapse-score#5`)');
+    expect(find.textContaining('С '), findsWidgets,
+        reason: 'computed.abstinence-screen#2 — срыва не было, и подпись '
+            'говорит «С <день обещания>», как число рядом с ней');
+    expect(find.text('40'), findsOneWidget,
+        reason: 'computed.abstinence-screen#2 — сорок дней без срыва, и '
+            'подпись не вправе называть их иначе');
+    expect(
+        tester
+            .widget<Text>(find.byKey(OverviewCardView.totalCountLabelKey))
+            .data,
+        '0',
+        reason: 'computed.abstinence-screen#4 — «Всего» считает те же дни, и '
+            'этого дня среди них нет');
+  });
+
+  testWidgets('computed.abstinence-screen#5 кнопка не предлагает переписать '
+      'пропуск', (tester) async {
+    // Вторая половина того же дефекта. Кнопка на пропущенном дне читалась
+    // «Отметить срыв» и нажималась; нажатие писало строку журнала, `DayWriter`
+    // отказывался переписать отметку человека, `setLapse` честно отвечал
+    // `false` — и на экране не менялось ничего, кроме появившегося призрака.
+    // Тот же охранник, что закрывает ячейку списка (`entry_panel.dart`) и
+    // клетку календаря (`computed.abstinence-screen#8`), закрывает и кнопку.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 40);
+    habit.originalEntries.add(Entry(LocalDate(today), Entry.skip));
+    habit.recompute();
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(
+        tester
+            .widget<TextButton>(
+                find.byKey(AbstinenceCounterCard.todayButtonKey))
+            .enabled,
+        isFalse,
+        reason: 'computed.abstinence-screen#5 — сегодня стоит пропуск, и '
+            'кнопка не обещает того, чего дверь записи не сделает');
+
+    await tester.tap(find.byKey(AbstinenceCounterCard.todayButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(scope.lapses.lastDay(habit.id!), isNull,
+        reason: 'computed.abstinence-screen#5 — нажатие не оставило в журнале '
+            'строки, которую потом нечем снять');
+    expect(find.textContaining('Последний срыв'), findsNothing,
+        reason: 'computed.abstinence-screen#5 — и подпись осталась при своём');
+  });
+
   testWidgets('computed.streak#7 пропуск не обнуляет счётчик', (tester) async {
     // Пропуск защищён у оценки (`computed.lapse-score#8`), у свода
     // (`computed.abstinence-sync#4`), у двери записи (`computed.day-write#4`)
