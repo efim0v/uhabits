@@ -88,12 +88,16 @@ class NumberDialogResult {
 /// ORIGINAL value and the new notes (`number-dialog.popup#12`).
 ///
 /// [value] is the existing entry value already divided by 1000.
+///
+/// [showNotes] is [NumberDialog.showNotes]. It defaults to true, so every
+/// ported caller keeps the field it has always had.
 Future<NumberDialogResult?> showNumberDialog(
   BuildContext context, {
   required double value,
   required String notes,
   required core.Color color,
   required core.Preferences preferences,
+  bool showNotes = true,
 }) async {
   final draft = NotesDraft(notes);
   final result = await showDialog<NumberDialogResult>(
@@ -104,6 +108,10 @@ Future<NumberDialogResult?> showNumberDialog(
       notes: notes,
       color: color,
       preferences: preferences,
+      showNotes: showNotes,
+      // Черновик остаётся и при спрятанном поле, и он тогда пуст: писать в
+      // него некому, так что восстанавливать после закрытия нечего и хвост
+      // ниже возвращает null.
       draft: draft,
     ),
   );
@@ -122,6 +130,7 @@ class NumberDialog extends StatefulWidget {
     required this.notes,
     required this.color,
     required this.preferences,
+    this.showNotes = true,
     this.draft,
   });
 
@@ -143,6 +152,21 @@ class NumberDialog extends StatefulWidget {
   final core.Color color;
 
   final core.Preferences preferences;
+
+  /// Whether the notes field is part of the popup at all.
+  ///
+  /// True everywhere the original has this popup — the notes travel with the
+  /// entry, and `CreateRepetitionCommand` carries them. False for the one
+  /// caller whose store has nowhere to put them: the abstinence amount
+  /// (`abstinence_amount_dialog.dart`), where `Lapses` has no notes column.
+  ///
+  /// A field is removed rather than ignored deliberately. A control that takes
+  /// a sentence, closes as if it had been accepted, and drops it is the exact
+  /// shape of `audit7.numeric-entry-popup-throws-away-a#1`, and a person
+  /// writing down *why* they slipped would lose it with nothing to say so.
+  /// Wiring the notes through instead would need a column in `Lapses`, which
+  /// is a migration, not a dialog argument.
+  final bool showNotes;
 
   /// Written on every keystroke so [showNumberDialog] can recover the text
   /// after a dismissal. Null when the widget is hosted directly.
@@ -329,9 +353,11 @@ class _NumberDialogState extends State<NumberDialog> {
       backgroundColor: Colors.transparent,
       elevation: 0,
       child: Container(
-        constraints: const BoxConstraints(
+        constraints: BoxConstraints(
           minWidth: EntryPopupMetrics.minWidth,
-          minHeight: EntryPopupMetrics.minHeight,
+          // Эти 128 логических пикселей есть высота, которую держит открытой
+          // поле заметок. Без поля они стали бы пустотой под рядом кнопок.
+          minHeight: widget.showNotes ? EntryPopupMetrics.minHeight : 0.0,
           maxWidth: EntryPopupMetrics.minWidth,
         ),
         // The same `@drawable/checkmark_dialog_bg` the boolean popup uses —
@@ -349,33 +375,35 @@ class _NumberDialogState extends State<NumberDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Flexible(
-              child: Padding(
-                padding: EntryPopupMetrics.notesPadding,
-                child: TextField(
-                  key: const ValueKey<String>('number_notes'),
-                  controller: _notes,
-                  textAlign: TextAlign.center,
-                  maxLines: null,
-                  keyboardType: TextInputType.multiline,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: l10n.notes,
+            if (widget.showNotes) ...<Widget>[
+              Flexible(
+                child: Padding(
+                  padding: EntryPopupMetrics.notesPadding,
+                  child: TextField(
+                    key: const ValueKey<String>('number_notes'),
+                    controller: _notes,
+                    textAlign: TextAlign.center,
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: l10n.notes,
+                    ),
+                    // The IME action inside the notes field also saves
+                    // (`number-dialog.popup#8`).
+                    onSubmitted: (_) => _save(),
                   ),
-                  // The IME action inside the notes field also saves
-                  // (`number-dialog.popup#8`).
-                  onSubmitted: (_) => _save(),
                 ),
               ),
-            ),
-            // `@drawable/checkmark_dialog_divider`: `<solid ?contrast40>`
-            // (`audit8.entry-popups-paint-themselves-cardbgcolor-over#1`).
-            Divider(
-              height: EntryPopupMetrics.borderWidth,
-              thickness: EntryPopupMetrics.borderWidth,
-              color: toFlutterColor(theme.contrast40),
-            ),
+              // `@drawable/checkmark_dialog_divider`: `<solid ?contrast40>`
+              // (`audit8.entry-popups-paint-themselves-cardbgcolor-over#1`).
+              Divider(
+                height: EntryPopupMetrics.borderWidth,
+                thickness: EntryPopupMetrics.borderWidth,
+                color: toFlutterColor(theme.contrast40),
+              ),
+            ],
             SizedBox(
               height: EntryPopupMetrics.buttonRowHeight,
               child: Row(

@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/ui/common/dialogs/current_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_button_view.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
@@ -55,6 +56,10 @@ void main() {
 
   setUp(() {
     resetToday();
+    // Слот текущего диалога живёт в процессе, а процесс между тестами
+    // не пересоздаётся: иначе попап одного теста попал бы под
+    // `dismissCurrentAndShow` следующего.
+    resetCurrentDialog();
     tempDir = Directory.systemTemp.createTempSync('uhabits_allowance');
     scope = AppScope.open(
       AppDatabase.openAndMigrate('${tempDir.path}/habits.db'),
@@ -72,6 +77,7 @@ void main() {
   });
 
   tearDown(() {
+    resetCurrentDialog();
     scope.close();
     tempDir.deleteSync(recursive: true);
   });
@@ -229,5 +235,53 @@ void main() {
             'имеет');
     expect(scope.lapses.forDay(habit.id!, todayDay()), isNull,
         reason: 'computed.abstinence-cell#5');
+  });
+
+  testWidgets('computed.abstinence-cell#8 вопрос спрашивает только «сколько»',
+      (tester) async {
+    await tapToday(tester);
+
+    expect(find.byType(NumberDialog), findsOneWidget,
+        reason: 'computed.abstinence-cell#8');
+    // Поле заметок у портированного попапа есть, и здесь его быть не должно:
+    // журналу срывов заметку хранить негде — в `Lapses` нет такого столбца, —
+    // и поле, которое принимает текст и молча его теряет, хуже отсутствующего
+    // (`audit7.numeric-entry-popup-throws-away-a#1` заведён ровно на эту
+    // форму: попап закрывается как ни в чём не бывало, а написанного нет).
+    expect(find.byKey(const ValueKey<String>('number_notes')), findsNothing,
+        reason: 'computed.abstinence-cell#8 — спрашивают величину, и только '
+            'её; поле, которому нечего сделать с ответом, не показывают');
+    // Спрошено и то, чем диалог остался: `findsNothing` зелено и тогда, когда
+    // от попапа не осталось ничего.
+    expect(find.byKey(const ValueKey<String>('number_value')), findsOneWidget,
+        reason: 'computed.abstinence-cell#8 — величину по-прежнему вводят');
+    expect(find.byKey(const ValueKey<String>('number_save_button')),
+        findsOneWidget,
+        reason: 'computed.abstinence-cell#8');
+  });
+
+  testWidgets('number-dialog.popup#18 вопрос о величине занимает тот же слот, '
+      'что и портированный попап', (tester) async {
+    await tapToday(tester);
+
+    expect(find.byType(NumberDialog), findsOneWidget,
+        reason: 'number-dialog.popup#18');
+    expect(hasCurrentDialog, isTrue,
+        reason: 'number-dialog.popup#18 — второй вход к тому же попапу встаёт '
+            'в тот же слот: иначе второй тап положил бы второй диалог поверх '
+            'первого, а уход приложения в фон оставил бы его висеть '
+            '(`platform-glue.transient-ui-helpers#4`, `#5`)');
+
+    // Ровно то, что делает `onPause` обоих экранов.
+    dismissCurrentDialog();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NumberDialog), findsNothing,
+        reason: 'number-dialog.popup#18');
+    expect(scope.lapses.forDay(habit.id!, todayDay()), isNull,
+        reason: 'computed.abstinence-cell#8 — закрытый чужой рукой вопрос '
+            'фактом не становится');
+    expect(cellToday(tester), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#5 — и оптимистичная краска снята');
   });
 }

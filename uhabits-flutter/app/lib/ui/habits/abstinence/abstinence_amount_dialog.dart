@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:uhabits_core/src/preferences/preferences.dart' as core;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
+import '../../common/dialogs/current_dialog.dart';
 import '../../common/dialogs/number_dialog.dart';
 
 /// Спрашивает величину дня и отдаёт её в целых единицах привычки, или null,
@@ -24,25 +25,44 @@ import '../../common/dialogs/number_dialog.dart';
 ///
 /// Виджет тот же самый — портированный [NumberDialog], со своими надписями и
 /// своей клавиатурой. Новых строк локализации ввод не приносит.
+///
+/// Определение сюда не едет, и это решение, а не упущение. Спросить у него
+/// можно было бы ровно одно — допуск, — и класть допуск в поле нельзя:
+/// предзаполненные «30» человек подтвердил бы не глядя, и получилась бы
+/// величина, которая обещание **держит**, в ответ на «я сорвался». Отсутствие
+/// параметра держит это лучше комментария: подставить туда допуск не из чего.
+/// Кому нужен допуск — тот в [toggleLapseDay], и он решает не что показать, а
+/// спрашивать ли вообще.
 Future<int?> askLapseAmount(
   BuildContext context, {
-  required core.HabitDefinition definition,
   required core.Preferences preferences,
   required core.Color color,
 }) async {
-  final NumberDialogResult? result = await showNumberDialog(
+  // Тот же слот, что у портированного попапа числа (`number-dialog.popup#18`,
+  // `platform-glue.transient-ui-helpers#4`, `#5`). Без него этот вход был бы
+  // единственным в файле, который в слот не встаёт: `EntryPanel.onTap` на
+  // время ожидания не заперт, и второй тап положил бы второй диалог поверх
+  // первого, а `onPause` экрана оставил бы открытый вопрос висеть.
+  final NumberDialogResult? result =
+      await dismissCurrentAndShow<NumberDialogResult>(
     context,
-    // Открывается на нуле, как всякая незаполненная запись
-    // (`number-dialog.popup#4`), а не на допуске: предзаполненные «30» человек
-    // подтвердил бы не глядя, и получилась бы величина, которая обещание
-    // держит, в ответ на «я сорвался».
-    value: 0,
-    notes: '',
-    // NumberDialog красит только кнопки булевого ряда, которого здесь нет;
-    // цвет передаётся тем же, каким его передаёт портированный попап числа
-    // (`number-dialog.popup#1`).
-    color: color,
-    preferences: preferences,
+    () => showNumberDialog(
+      context,
+      // Открывается на нуле, как всякая незаполненная запись
+      // (`number-dialog.popup#4`).
+      value: 0,
+      notes: '',
+      // Поля заметок здесь нет: в `Lapses` нет столбца под них, а поле,
+      // которое принимает текст и молча его теряет, хуже отсутствующего
+      // (`audit7.numeric-entry-popup-throws-away-a#1`). Провести заметку
+      // насквозь — это миграция схемы, а не аргумент диалога.
+      showNotes: false,
+      // NumberDialog красит только кнопки булевого ряда, которого здесь нет;
+      // цвет передаётся тем же, каким его передаёт портированный попап числа
+      // (`number-dialog.popup#1`).
+      color: color,
+      preferences: preferences,
+    ),
   );
   if (result == null) return null;
 

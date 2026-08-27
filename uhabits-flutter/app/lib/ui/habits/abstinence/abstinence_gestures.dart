@@ -66,7 +66,6 @@ Future<bool> toggleLapseDay(
   }
   final int? amount = await askLapseAmount(
     context,
-    definition: definition,
     preferences: scope.preferences,
     color: theme.colorOf(const core.PaletteColor(0)),
   );
