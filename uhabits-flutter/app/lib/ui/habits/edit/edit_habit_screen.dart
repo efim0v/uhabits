@@ -1375,8 +1375,8 @@ class HabitTypeDialog extends StatelessWidget {
                     onTap: () => Navigator.of(context).pop(
                         const HabitTypeSelection(core.HabitType.numerical,
                             computed: core.ComputedKind.abstinence)),
-                    ),
-                  ],
+                  ),
+                ],
               ),
             ),
           ),
