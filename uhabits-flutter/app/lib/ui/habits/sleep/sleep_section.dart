@@ -217,7 +217,7 @@ void applyTravelSuggestion(
 /// app is told — the habit list keeps its own copy of every value — and the
 /// screen that made the change repaints.
 void _wrote(AppScope scope, core.Habit habit, VoidCallback onChanged) {
-  scope.onSleepDataChanged(habit.id!);
+  scope.onComputedDataChanged(habit.id!);
   onChanged();
 }
 

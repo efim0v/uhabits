@@ -146,7 +146,7 @@ void main() {
       manual: true,
     );
     scope.sleepSync.recomputeDays(habit, day, day);
-    scope.onSleepDataChanged(habit.id!);
+    scope.onComputedDataChanged(habit.id!);
 
     expect(listener.changes, greaterThan(0), reason: 'sleep.freshness#1');
   });
@@ -156,7 +156,7 @@ void main() {
     scope.close();
     listener.changes = 0;
 
-    scope.onSleepDataChanged(habit.id!);
+    scope.onComputedDataChanged(habit.id!);
 
     expect(listener.changes, 0,
         reason: 'sleep.freshness#2 — refreshing a cache whose database is '

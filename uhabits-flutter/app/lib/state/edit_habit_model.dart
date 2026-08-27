@@ -436,7 +436,7 @@ class _SleepGoalWriter implements CommandRunnerListener {
     // Changing a goal changes what every past night was worth. Rescoring only
     // from today would leave the history a mixture of two scales.
     scope.sleepSync.recomputeAll(saved);
-    scope.onSleepDataChanged(saved.id!);
+    scope.onComputedDataChanged(saved.id!);
     // And a habit that has just become a sleep habit has never been synced:
     // without this it shows nothing until the app is backgrounded once.
     unawaited(scope.syncSleepHabits());

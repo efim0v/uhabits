@@ -148,19 +148,22 @@ class AppScope {
   static int _goalSuggestionValue(int? bedMinutes, int? wakeMinutes) =>
       (bedMinutes ?? 1441) * 2000 + (wakeMinutes ?? 1441);
 
-  /// Announces that a sleep habit's stored values changed.
+  /// Announces that a computed habit's stored values changed.
   ///
-  /// Sleep writes do not go through a Command: the values are computed from a
-  /// night rather than chosen, so there is nothing to undo and no command to
-  /// carry. But everything that shows those values refreshes on a command —
-  /// the habit list holds its own copy of every checkmark and score, and the
+  /// A computed day does not travel on a Command: the value is worked out
+  /// rather than chosen, so there is nothing to undo and no command to carry
+  /// it. But everything that shows those values refreshes on a command — the
+  /// habit list holds its own copy of every checkmark and score, and the
   /// home-screen widgets are republished from the same signal. Without this
-  /// the list keeps showing the value it had before the sync, and re-entering
+  /// the list keeps showing the value it had before the write, and re-entering
   /// the screen does not help.
   ///
-  /// One place rather than one call per write site: a rule spread across five
-  /// call sites is a rule that will be carried to four of them.
-  void onSleepDataChanged(int habitId) {
+  /// Not named after a kind. The first kind's writes called this by hand from
+  /// three places of its own; the second kind writes from three places of its
+  /// own too, and none of them would have had any reason to remember a method
+  /// called `onSleepDataChanged`. One name for the whole layer, and — see
+  /// [DayWriter] — a door that calls it without being asked.
+  void onComputedDataChanged(int habitId) {
     if (_closed) return;
     cache.refreshHabit(habitId);
     unawaited(_started?.sync.updateWidgets(habitId) ?? Future<void>.value());
@@ -219,7 +222,7 @@ class AppScope {
       final RecentNights? nights = await sleepSync.readRecent(habit);
       if (_closed) return;
       if (nights != null) sleepSync.applyRecent(nights);
-      onSleepDataChanged(id);
+      onComputedDataChanged(id);
       scheduleSleepPrompt(habit);
     }
   }
