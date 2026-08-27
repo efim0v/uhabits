@@ -87,6 +87,7 @@ class AppScope {
     required this.sleepSync,
     required this.definitions,
     required this.lapses,
+    required this.abstinence,
   });
 
   final Database database;
@@ -102,6 +103,9 @@ class AppScope {
 
   /// The journal an abstinence habit is scored from. See [LapseRepository].
   final LapseRepository lapses;
+
+  /// Журнал срывов → значения дней. См. [AbstinenceSync].
+  final AbstinenceSync abstinence;
 
   /// Reads sleep from the platform and turns it into scored days.
   final SleepSync sleepSync;
@@ -954,6 +958,16 @@ class AppScope {
       sleepRepository: sleepRepository,
       definitions: definitions,
       lapses: lapses,
+      abstinence: AbstinenceSync(
+        lapses: lapses,
+        // Тот же объявляющий писатель, что у сна: тогда объявление списку идёт
+        // даром, привычка пересчитывается до объявления
+        // (`computed.freshness#4`), и жесту UI не нужно звать
+        // `onComputedDataChanged` вторым вызовом.
+        writer: DayWriter(
+          onChanged: (int habitId) => scope.onComputedDataChanged(habitId),
+        ),
+      ),
       sleepSync: SleepSync(
         repository: sleepRepository,
         // The resolved one, not the parameter: a bare StandardLogging writes
