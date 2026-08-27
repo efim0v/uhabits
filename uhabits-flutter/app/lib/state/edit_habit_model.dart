@@ -596,11 +596,11 @@ void _writeAbstinenceRow(
 ) {
   scope.definitions.save(saved.id!, definition);
   // The row in the database and the live model are two different things: a
-  // recompute reads the field, not the repository, and `attachDefinition` is
-  // also what turns the halving on (`computed.lapse-score#11`). Without these
-  // two lines an abstinence habit created or edited in this session would go
-  // on being scored from today, with the ported decay, until the app is
-  // restarted.
+  // recompute reads the field, not the repository (`computed.commitment#7`),
+  // and `attachDefinition` is also what turns the halving on
+  // (`computed.lapse-score#11`). Without these two lines an abstinence habit
+  // created or edited in this session would go on being scored from today,
+  // with the ported decay, until the app is restarted.
   attachDefinition(saved, scope.definitions);
   saved.recompute();
   scope.onComputedDataChanged(saved.id!);

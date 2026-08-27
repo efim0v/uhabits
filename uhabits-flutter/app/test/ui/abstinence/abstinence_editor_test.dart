@@ -370,8 +370,9 @@ void main() {
               'old one they both happen to agree on');
       final HabitDefinition? live = saved.definition;
       expect(live, isNotNull,
-          reason: 'computed.commitment#5 — the definition lives on the habit '
-              'itself and not only in the database: a recompute reads the '
+          reason: 'computed.commitment#7 — the definition lives on the habit '
+              'itself and not only in the database, and it gets there on the '
+              'save rather than on the next app start: a recompute reads the '
               'field');
       expect(abstinenceAllowanceOf(live!), 10.0,
           reason: 'computed.allowance#1 — and the live habit carries the new '
@@ -566,7 +567,7 @@ void main() {
 
       final Habit habit = scope.habitList.getByPosition(0);
       expect(habit.definition?.committedFrom, 8960,
-          reason: 'computed.commitment#5 — без перезапуска');
+          reason: 'computed.commitment#7 — без перезапуска');
       expect(habit.scores.halvesOnLapse, isTrue,
           reason: 'computed.lapse-score#11');
       expect(daysWithoutLapse(habit), 40, reason: 'computed.streak#4');
