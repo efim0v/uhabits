@@ -117,6 +117,23 @@ void main() {
 
       expect(seen, 60000, reason: 'computed.freshness#4');
     });
+
+    test('a habit that was never saved is refused before anything is written',
+        () {
+      // The announcement carries the id, and a habit with no id has none. The
+      // first assertion holds either way; the second is the one that matters,
+      // and it is why the id is read on the way in rather than on the way out.
+      final Habit unsaved = MemoryModelFactory().buildHabit();
+
+      expect(
+          () => DayWriter(onChanged: (_) {})
+              .writeDays(unsaved, <int, int?>{9000: 60000}),
+          throwsA(isA<TypeError>()),
+          reason: 'a door that cannot announce must not write either');
+      expect(unsaved.originalEntries.get(LocalDate(9000)).value, Entry.unknown,
+          reason: 'failing on the way out would leave the day written and '
+              'nobody told');
+    });
   });
 
   group('taking a computed day back', () {
@@ -163,6 +180,22 @@ void main() {
     test('a day that was already silent is not written again', () {
       expect(const DayWriter().clear(habit, 9000), isFalse,
           reason: 'computed.day-write#8');
+    });
+
+    test('a habit that was never saved is refused before the day is cleared',
+        () {
+      // The same invariant as [writeDays], on the other method: the id is
+      // read first, so a door that cannot announce leaves the day exactly as
+      // it found it.
+      final Habit unsaved = MemoryModelFactory().buildHabit();
+      unsaved.originalEntries.add(Entry(LocalDate(9000), 45000));
+
+      expect(() => DayWriter(onChanged: (_) {}).clear(unsaved, 9000),
+          throwsA(isA<TypeError>()),
+          reason: 'a door that cannot announce must not write either');
+      expect(unsaved.originalEntries.get(LocalDate(9000)).value, 45000,
+          reason: 'failing on the way out would leave the day cleared and '
+              'nobody told');
     });
 
     test('announces the same way a write does, once and after the recompute',

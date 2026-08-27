@@ -11,6 +11,7 @@
 library;
 
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/computed/day_writer.dart';
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/database/extension_migrations.dart';
 import 'package:uhabits_core/src/database/migrations.g.dart';
@@ -84,7 +85,12 @@ void main() {
     repository.saveGoal(
         habit.id!, const SleepGoal(bedMinutes: 1380, wakeMinutes: 420));
     source = WindowRecorder();
-    sync = SleepSync(repository: repository, source: source);
+    sync = SleepSync(
+      repository: repository,
+      source: source,
+      // Writes, tells nobody: there is no application here to tell.
+      writer: const DayWriter(),
+    );
   });
 
   tearDown(() {

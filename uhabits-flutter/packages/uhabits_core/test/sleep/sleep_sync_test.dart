@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/computed/day_writer.dart';
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
@@ -99,7 +100,12 @@ void main() {
     repo = SleepSessionRepository(db, () => 1000);
     repo.saveGoal(1, goal);
     source = RecordingSource();
-    sync = SleepSync(repository: repo, source: source);
+    sync = SleepSync(
+      repository: repo,
+      source: source,
+      // Writes, tells nobody: there is no application here to tell.
+      writer: const DayWriter(),
+    );
 
     habit = MemoryModelFactory().buildHabit()..id = 1;
   });

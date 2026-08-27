@@ -213,9 +213,21 @@ void applyTravelSuggestion(
 
 /// Everything in this file that writes sleep data ends here.
 ///
-/// Two things always follow a write, and neither is optional: the rest of the
-/// app is told — the habit list keeps its own copy of every value — and the
-/// screen that made the change repaints.
+/// Two things follow a write. The screen that made the change repaints, which
+/// is nobody's job but this file's. And the rest of the app is told, because
+/// the habit list keeps its own copy of every value.
+///
+/// The telling is no longer only ours. `DayWriter` now announces the days it
+/// writes, so on the paths that go through `recomputeDays` or `recomputeAll`
+/// the app has already heard, and this call costs one more refresh that finds
+/// nothing changed and is dropped.
+///
+/// It stays because the other writes on this screen never reach that door.
+/// [SkipRange] marks and unmarks days by hand: [applyTravelSuggestion] writes
+/// nothing else at all, and in [enterNightByHand] the skip is applied *after*
+/// the recompute, so whatever the door announced, it announced before the last
+/// write landed. One suppressed refresh is cheaper than a row that goes on
+/// showing a day the person has just excused.
 void _wrote(AppScope scope, core.Habit habit, VoidCallback onChanged) {
   scope.onComputedDataChanged(habit.id!);
   onChanged();
@@ -348,6 +360,8 @@ void _applyGoalSuggestion({
   scope.sleepRepository.saveGoal(habit.id!, moved);
   // A different goal makes every past night worth something different.
   scope.sleepSync.recomputeAll(habit);
-  // Announcing it is the caller's, through [_wrote]: one seam, or the rule
-  // has two homes and they will disagree.
+  // Announcing the days it rewrote is `DayWriter`'s, from inside that call.
+  // Announcing the goal itself is still the caller's, through [_wrote]: a goal
+  // moved onto a habit with no nights on record rewrites no day at all, so the
+  // door has nothing to announce and the card would keep its old band.
 }

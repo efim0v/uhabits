@@ -45,15 +45,22 @@ class SleepSync {
     required this.repository,
     required this.source,
     TimeZone Function()? timeZone,
-    this.writer = const DayWriter(),
+    required this.writer,
   }) : _timeZone = timeZone ?? (() => DateUtils.currentTimeZone);
 
   final SleepSessionRepository repository;
   final SleepDataSource source;
 
   /// The one door a computed day goes through, and — when the application
-  /// built it — the thing that tells the list and the widgets about it. The
-  /// default writes and says nothing, which is what every core test wants.
+  /// built it — the thing that tells the list and the widgets about it.
+  ///
+  /// Required, with no default, on purpose. A default of `const DayWriter()`
+  /// would let a kind be assembled with a door that says nothing: it would
+  /// compile, its tests would be green, and its days would land on disk with
+  /// the list still showing what it showed before. That is the deviation this
+  /// layer just closed, growing back through a defaulted parameter. A caller
+  /// that genuinely wants silence — every core test here — writes
+  /// `const DayWriter()` and can be read to have chosen it.
   final DayWriter writer;
 
   final TimeZone Function() _timeZone;

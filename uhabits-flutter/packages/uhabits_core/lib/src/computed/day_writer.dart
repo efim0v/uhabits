@@ -8,18 +8,38 @@ import '../time/local_date.dart';
 /// announcement, not the app. Core cannot see the app anyway.
 typedef ComputedDataChanged = void Function(int habitId);
 
-/// The one way a computed habit writes a day.
+/// The one way a computed habit writes a day, takes one back, and tells the
+/// rest of the app that it did.
 ///
-/// Four rules live here rather than at each call site, because there is more
-/// than one call site and a rule spread across several of them is a rule that
-/// will be carried to some and not the rest:
+/// Six rules live on [write] rather than at each call site, because there is
+/// more than one call site and a rule spread across several of them is a rule
+/// that will be carried to some and not the rest:
 ///
-///  * the note belongs to the person and survives;
-///  * a day with nothing to say stays absent — a written zero freezes it, and
-///    data arriving later can no longer heal it;
-///  * a day the person marked skipped is theirs, whatever was measured;
+///  * the note belongs to the person and survives (`computed.day-write#1`);
+///  * what was computed is written down (`#2`);
+///  * a day there is *nothing to say* about stays absent — that is a null
+///    `storedValue`, not a zero, and writing a zero for such a day would
+///    freeze it where data arriving later could no longer heal it (`#3`). A
+///    zero that was actually measured is a value like any other and is
+///    written down: sleep collapses every score below `minStoredValue` to
+///    exactly zero (`sleep.stored-value#3`), and the next sync over the same
+///    night overwrites it;
+///  * a day the person marked skipped is theirs, whatever was measured (`#4`);
+///  * a value equal to the one already there is not rewritten, because every
+///    write is a DELETE and an INSERT (`#5`);
 ///  * a computed value never lands on 1, 2 or 3, which mean yesAuto,
-///    yesManual and skip and would read as something a person did.
+///    yesManual and skip and would read as something a person did (`#6`).
+///
+/// Two more responsibilities sit on the other two methods, and they are here
+/// for the same reason the rules are — a kind asked to remember them is a kind
+/// that will forget one:
+///
+///  * [writeDays] takes a whole run, and once the last day is written it
+///    recomputes the habit and announces it exactly once, in that order
+///    (`computed.freshness#2`, `#3`, `#4`);
+///  * [clear] takes a computed day back, returning it to silence without
+///    touching the person's note or their skip (`computed.day-write#8`). It
+///    ends in the same two lines, in the same order.
 class DayWriter {
   const DayWriter({ComputedDataChanged? onChanged}) : _onChanged = onChanged;
 
@@ -71,13 +91,19 @@ class DayWriter {
   /// would announce values nothing had recomputed
   /// (`computed.freshness#2`, `#3`, `#4`).
   bool writeDays(Habit habit, Map<int, int?> valuesByDay) {
+    // Read before anything is written, not on the way out. It is what the
+    // announcement carries, and a habit that has never been saved has none —
+    // so reading it at the end would throw between the write and the telling,
+    // leaving the days changed and nobody told. Failing first leaves nothing
+    // half done.
+    final int habitId = habit.id!;
     var changed = false;
     for (final MapEntry<int, int?> day in valuesByDay.entries) {
       if (write(habit, day.key, day.value)) changed = true;
     }
     if (!changed) return false;
     habit.recompute();
-    _onChanged?.call(habit.id!);
+    _onChanged?.call(habitId);
     return true;
   }
 
@@ -97,6 +123,8 @@ class DayWriter {
   /// объявление снаружи значило бы завести второе место, где живёт одно
   /// правило (`computed.freshness#2`, `#4`).
   bool clear(Habit habit, int day) {
+    // Before the write, for the reason given in [writeDays].
+    final int habitId = habit.id!;
     final LocalDate date = LocalDate(day);
     final Entry existing = habit.originalEntries.get(date);
     if (existing.value == Entry.skip) return false;
@@ -104,7 +132,7 @@ class DayWriter {
     habit.originalEntries
         .add(Entry(date, Entry.unknown, notes: existing.notes));
     habit.recompute();
-    _onChanged?.call(habit.id!);
+    _onChanged?.call(habitId);
     return true;
   }
 }
