@@ -27,6 +27,8 @@ library;
 // yet; until it does, these are the documented import paths.
 // ignore_for_file: implementation_imports
 
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 // `Theme.focusColor` is the Material counterpart of
@@ -39,6 +41,7 @@ import 'package:uhabits_core/src/preferences/preferences.dart' as core;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../core_view.dart';
+import '../abstinence/abstinence_button_view.dart';
 import 'entry_button_views.dart';
 
 /// Kotlin: `(LocalDate, Int, String) -> Unit`, the `onToggle` of
@@ -52,6 +55,22 @@ typedef EntryToggleCallback = void Function(
 
 /// Kotlin: `(LocalDate) -> Unit`, the `onEdit` of both panels.
 typedef EntryEditCallback = void Function(core.LocalDate date);
+
+/// Тап по ячейке привычки-воздержания. [lapsed] — состояние, в которое день
+/// переходит: true — «в этот день я сорвался», false — снять срыв.
+///
+/// Отдельно от [EntryToggleCallback], а не «ещё одно значение» в нём: тот
+/// уходит в `CreateRepetitionCommand`, а человек вычисляемой привычке значения
+/// дня не пишет (`computed.write-paths#3`). Срыв — факт журнала, значение дня
+/// из него считает приложение.
+///
+/// Отвечает, записала ли дверь хоть что-нибудь. Панель красит ячейку до
+/// ответа — иначе тап выглядит как ничего, — и ответ «нет» обязана уметь
+/// отменить: дверь может ничего не записать (человек закрыл ввод величины,
+/// охрана отказала), а перерисовки списка в этом случае не будет, и крест
+/// остался бы висеть враньём.
+typedef EntryLapseCallback = Future<bool> Function(
+    core.LocalDate date, bool lapsed);
 
 /// Reports which cell was just pressed, together with the centre of that cell
 /// in the panel's own coordinates.
@@ -149,6 +168,8 @@ class EntryPanel extends StatefulWidget {
     this.onToggle,
     this.onEdit,
     this.onPressed,
+    this.abstinenceDefinition,
+    this.onLapse,
     super.key,
   });
 
@@ -194,6 +215,25 @@ class EntryPanel extends StatefulWidget {
   /// `HabitCardView` uses it to place the ripple hotspot.
   final EntryPressedCallback? onPressed;
 
+  /// Определение привычки-воздержания, или null для любой другой привычки.
+  ///
+  /// Оно же и признак вида: воздержание — числовая привычка, и по [isNumerical]
+  /// её от «прочитано страниц» не отличить. Признаком считается вид
+  /// `abstinence` **с непустым** `committedFrom`; неполное определение
+  /// признаком не считается — судить день как чистый или сорванный тогда не от
+  /// чего, — и такая привычка остаётся числовой
+  /// (`computed.abstinence-cell#7`). Считает признак поставщик,
+  /// `HabitListModel.abstinenceDefinitionOf`; панель получает уже готовый
+  /// ответ.
+  ///
+  /// Едет определение целиком, а не один день обещания, потому что срывом день
+  /// называет `isAbstinenceLapse(definition, величина)` — тот же судья, что и
+  /// у оценки, — и допуск он берёт отсюда.
+  final core.HabitDefinition? abstinenceDefinition;
+
+  /// Куда уходит тап по ячейке воздержания.
+  final EntryLapseCallback? onLapse;
+
   /// The key of the button standing for [date], so callers and tests can reach
   /// one cell without depending on its position in the row (which
   /// [core.Preferences.isCheckmarkSequenceReversed] flips).
@@ -211,6 +251,10 @@ class _EntryPanelState extends State<EntryPanel> {
   /// Keyed by [core.LocalDate.daysSince2000]. A rebind clears it, exactly as
   /// `ButtonPanelView.setupButtons` overwrites `button.value` on every refresh.
   final Map<int, int> _optimisticValues = <int, int>{};
+
+  /// То же, что [_optimisticValues], для ячейки воздержания: тап обязан
+  /// перекрасить ячейку до того, как пересчёт вернётся через кэш списка.
+  final Map<int, bool> _optimisticLapses = <int, bool>{};
 
   late final _PanelPreferencesListener _preferencesListener;
 
@@ -235,6 +279,7 @@ class _EntryPanelState extends State<EntryPanel> {
     // button, which is what discards an optimistic value once the command has
     // been through the cache.
     _optimisticValues.clear();
+    _optimisticLapses.clear();
   }
 
   @override
@@ -285,6 +330,69 @@ class _EntryPanelState extends State<EntryPanel> {
         : index;
     void reportPress() =>
         widget.onPressed?.call(date, _centerOf(position));
+
+    // Воздержание проверяется раньше числа: оно числовое, и обратный порядок
+    // отдал бы его числовой панели.
+    final core.HabitDefinition? definition = widget.abstinenceDefinition;
+    if (definition != null) {
+      final int stored = offset < widget.values.length
+          ? widget.values[offset]
+          : core.Entry.unknown;
+      final AbstinenceCell stated = abstinenceCellOf(
+        definition: definition,
+        storedValue: stored,
+        day: date.daysSince2000,
+      );
+      final bool? optimistic = _optimisticLapses[date.daysSince2000];
+      final AbstinenceCell cell = optimistic == null ||
+              stated == AbstinenceCell.beforeCommitment ||
+              stated == AbstinenceCell.skipped
+          ? stated
+          : (optimistic ? AbstinenceCell.lapse : AbstinenceCell.clean);
+
+      // Нажимаются только те два состояния, которые тап умеет менять. День до
+      // обещания менять нечему (`#3`), а пропуск — отметка человека, которую
+      // `DayWriter` всё равно не перепишет (`#4`).
+      final bool tappable =
+          cell == AbstinenceCell.clean || cell == AbstinenceCell.lapse;
+
+      Future<void> lapse() async {
+        final bool next = cell != AbstinenceCell.lapse;
+        reportPress();
+        setState(() => _optimisticLapses[date.daysSince2000] = next);
+        performToggleFeedback();
+        // Красим до ответа и снимаем краску, если ответ «ничего не записано»:
+        // перерисовки списка в этом случае не будет, и оставленный крест
+        // соврал бы до следующего чужого повода перестроить строку.
+        final bool written = await widget.onLapse?.call(date, next) ?? false;
+        if (!written && mounted) {
+          setState(() => _optimisticLapses.remove(date.daysSince2000));
+        }
+      }
+
+      // Долгое нажатие остаётся тем же жестом, что и у числовой ячейки, и
+      // упирается в тот же запрет: числа человек здесь не вводит
+      // (`computed.abstinence-cell#6`).
+      void editFromLongPress() {
+        reportPress();
+        widget.onEdit?.call(date);
+        performLongPressFeedback();
+      }
+
+      return EntryButton(
+        key: key,
+        size: size,
+        view: AbstinenceButtonView(
+          cell: cell,
+          color: widget.color,
+          theme: widget.theme,
+          notes: note,
+          textScaler: MediaQuery.textScalerOf(context),
+        ),
+        onTap: tappable ? () => unawaited(lapse()) : null,
+        onLongPress: tappable ? editFromLongPress : null,
+      );
+    }
 
     if (widget.isNumerical) {
       // NumberPanelView.setupButtons: out of range is 0.0, not UNKNOWN.

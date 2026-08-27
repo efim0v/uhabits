@@ -98,6 +98,8 @@ class HabitCard extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.onEntryPressed,
+    this.abstinenceDefinition,
+    this.onLapse,
     super.key,
   });
 
@@ -142,6 +144,13 @@ class HabitCard extends StatefulWidget {
   /// coordinates — `HabitCardView.getAbsoluteButtonLocation(date)`. Fires
   /// before [onToggle] / [onEdit], just as `triggerRipple(date)` does.
   final EntryPressedCallback? onEntryPressed;
+
+  /// Определение, если это привычка-воздержание; иначе null. Карточка его не
+  /// добывает — [HabitListModel.abstinenceDefinitionOf] её кормит.
+  final core.HabitDefinition? abstinenceDefinition;
+
+  /// Ячейка воздержания сообщила о срыве.
+  final EntryLapseCallback? onLapse;
 
   /// `copyAttributesFrom`'s local `getActiveColor`: an archived habit is drawn
   /// in `?attr/contrast60`, which is [core.Theme.mediumContrastTextColor].
@@ -362,6 +371,8 @@ class _HabitCardState extends State<HabitCard> {
       dataOffset: widget.dataOffset,
       onToggle: widget.onToggle,
       onEdit: widget.onEdit,
+      abstinenceDefinition: widget.abstinenceDefinition,
+      onLapse: widget.onLapse,
       // Both `onToggle` and `onEdit` call `triggerRipple(date)` first, and
       // both read `getAbsoluteButtonLocation(date)` for the confetti origin.
       onPressed: _onEntryPressed,
