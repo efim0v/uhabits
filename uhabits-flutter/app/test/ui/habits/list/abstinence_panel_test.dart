@@ -135,6 +135,18 @@ void main() {
 
     expect(lapses, isEmpty, reason: 'computed.abstinence-cell#3');
     expect(edits, isEmpty, reason: 'computed.abstinence-cell#3');
+
+    // Долгое нажатие — тот же запрет, что и у тапа: день до обещания не
+    // нажимается ни одним жестом, и не открывает редактор в обход тапа
+    // (`computed.abstinence-cell#6` — общая дверь числа закрыта и здесь).
+    await tester.longPress(find.byKey(EntryPanel.buttonKey(before)));
+    await tester.pump();
+
+    expect(lapses, isEmpty, reason: 'computed.abstinence-cell#3');
+    expect(edits, isEmpty,
+        reason: 'computed.abstinence-cell#3 — долгое нажатие тоже не '
+            'приписывает себе день до обещания '
+            '(computed.abstinence-cell#6)');
   });
 
   testWidgets('computed.abstinence-cell#4 пропуск тапом в срыв не переводится',
