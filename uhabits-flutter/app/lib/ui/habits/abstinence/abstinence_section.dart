@@ -46,9 +46,19 @@ List<Widget> buildAbstinenceSection(
           : l10n.abstinenceLastLapse(
               formatter.longFormat(core.LocalDate(lastLapse))),
       lapsedToday: lapsedToday,
-      onToggleToday: () {
-        setLapseDay(scope, habit: habit, date: today, lapsed: !lapsedToday);
-        onChanged();
+      // `onChanged` под условием: перерисовывать экран, когда ничего не
+      // записано, незачем, и надпись на кнопке от этого не поменяется.
+      onToggleToday: () async {
+        final bool written = await toggleLapseDay(
+          context,
+          scope,
+          habit: habit,
+          definition: definition,
+          date: today,
+          lapsed: !lapsedToday,
+          theme: theme,
+        );
+        if (written) onChanged();
       },
     ),
   ];

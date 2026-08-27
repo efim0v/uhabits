@@ -1007,11 +1007,17 @@ class _HabitListViewState extends State<_HabitListView>
       dataOffset: dataOffset,
       isSelected: data.selected,
       abstinenceDefinition: model.abstinenceDefinitionOf(habit),
-      onLapse: (core.LocalDate date, bool lapsed) async => setLapseDay(
+      // `!` здесь безопасен и назван: колбэк существует только у карточки,
+      // которой `abstinenceDefinitionOf` уже ответил не-null — тем же вызовом,
+      // что двумя строками выше отдаёт `abstinenceDefinition:`.
+      onLapse: (core.LocalDate date, bool lapsed) => toggleLapseDay(
+        context,
         _model.scope,
         habit: habit,
+        definition: model.abstinenceDefinitionOf(habit)!,
         date: date,
         lapsed: lapsed,
+        theme: theme,
       ),
       // `HabitCardView` passes `getAbsoluteButtonLocation(date)` into both
       // presenter calls; that is what places the confetti burst.
