@@ -240,6 +240,6 @@
   "abstinenceCleanDaysLabel": "{days, plural, one {день без срыва} few {дня без срыва} many {дней без срыва} other {дня без срыва}}",
   "abstinenceSince": "С {date}",
   "abstinenceLastLapse": "Последний срыв: {date}",
-  "abstinenceLapseToday": "Сегодня сорвался",
+  "abstinenceLapseToday": "Отметить срыв",
   "abstinenceUndoToday": "Отменить за сегодня"
 }
