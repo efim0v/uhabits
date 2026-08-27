@@ -79,6 +79,51 @@ void main() {
         reason: 'computed.definition#4');
   });
 
+  // The commitment day is a `daysSince2000`, so 0 is 2000-01-01 — the first
+  // day the type can express, and a day nobody committed on. It is also what
+  // an unset integer looks like, and nothing on the write side rejects it:
+  // `DefinitionImporter` copies whatever the other file held, and the table
+  // has no CHECK. Read back as a real day it would pull the lower bound of
+  // every recompute to the epoch and show a quarter of a century without a
+  // lapse.
+  test('a commitment day at or before the epoch is no commitment day', () {
+    db.run("insert into HabitDefinitions (habit, kind, committed_from, payload) "
+        "values (1,'abstinence',0,'{}')");
+    expect(repository.forHabit(1)?.committedFrom, isNull,
+        reason: 'computed.commitment#6');
+
+    // And a day before the epoch even more so: a hand-edited row, or a file
+    // written by something that counted from a different zero.
+    db.run('update HabitDefinitions set committed_from = -1 where habit = 1');
+    expect(repository.forHabit(1)?.committedFrom, isNull,
+        reason: 'computed.commitment#6');
+  });
+
+  test('but the day after the epoch is a real day, and survives', () {
+    // The boundary is the epoch itself, not a guess at how old a habit may
+    // be. Someone else's twenty-year-old commitment is theirs to keep.
+    db.run("insert into HabitDefinitions (habit, kind, committed_from, payload) "
+        "values (1,'abstinence',1,'{}')");
+
+    expect(repository.forHabit(1)?.committedFrom, 1,
+        reason: 'computed.commitment#6');
+  });
+
+  test('dropping the impossible day keeps the kind and the payload', () {
+    // Only the day is unusable. Dropping the whole definition would be a lie
+    // in the other direction: the habit would stop being an abstinence one,
+    // lose the halving and the silent-day streak, and merely fall back to the
+    // ported window instead (`computed.commitment#3`).
+    db.run("insert into HabitDefinitions (habit, kind, committed_from, payload) "
+        "values (1,'abstinence',0,'{\"allowance\":30}')");
+
+    final HabitDefinition? definition = repository.forHabit(1);
+    expect(definition?.kind, ComputedKind.abstinence,
+        reason: 'computed.commitment#6');
+    expect(definition?.payload['allowance'], 30,
+        reason: 'computed.commitment#6');
+  });
+
   test('removing one leaves the habit alone', () {
     repository.save(1, const HabitDefinition(kind: ComputedKind.sleep));
     repository.remove(1);
