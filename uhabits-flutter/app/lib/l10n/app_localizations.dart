@@ -1609,6 +1609,54 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'UTC{sign}{hours}:{minutes}'**
   String sleepTimezoneOffset(String sign, String hours, String minutes);
+
+  /// Title of the habit-type card for "I commit not to do X".
+  ///
+  /// In en, this message translates to:
+  /// **'Abstinence'**
+  String get abstinenceHabitType;
+
+  /// No description provided for @abstinenceHabitTypeExample.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. No alcohol. No doomscrolling. Silence is a clean day — you only mark the days you slipped.'**
+  String get abstinenceHabitTypeExample;
+
+  /// Placeholder for the question an abstinence habit asks.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Did you slip today?'**
+  String get abstinenceQuestionExample;
+
+  /// Label of the field holding how much a day may hold before it counts as a slip.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowance'**
+  String get abstinenceAllowance;
+
+  /// No description provided for @abstinenceAllowanceExample.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 30'**
+  String get abstinenceAllowanceExample;
+
+  /// No description provided for @abstinenceAllowanceUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'Counted in'**
+  String get abstinenceAllowanceUnit;
+
+  /// No description provided for @abstinenceAllowanceUnitExample.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. minutes'**
+  String get abstinenceAllowanceUnitExample;
+
+  /// No description provided for @abstinenceCommittedFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Committed since'**
+  String get abstinenceCommittedFrom;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

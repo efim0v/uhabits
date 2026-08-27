@@ -90,16 +90,16 @@ final Map<String, Object?> template = arbs['en']!;
 Set<String> messagesOf(Map<String, Object?> arb) =>
     arb.keys.where((String k) => !k.startsWith('@')).toSet();
 
-/// The prefix every message belonging to an extension carries.
+/// The prefixes a message of an extension carries — one per extension.
 ///
-/// The sleep goal has no counterpart in the original, so its copy has none in
-/// `strings.xml` either. The inventory rules below are about how faithfully
-/// the original's copy was carried over, and counting messages the original
-/// never had would turn an exact claim into an approximate one.
-const String extensionPrefix = 'sleep';
+/// A set rather than a string: `sleep` was the only extension for exactly as
+/// long as there was one computed kind, and a filter that names one of them is
+/// a filter that quietly re-counts the second as ported.
+const Set<String> extensionPrefixes = <String>{'sleep', 'abstinence'};
 
 /// Whether [key] is a message the original defines.
-bool isPorted(String key) => !key.startsWith(extensionPrefix);
+bool isPorted(String key) =>
+    !extensionPrefixes.any((String prefix) => key.startsWith(prefix));
 
 /// The ported half of an ARB's messages.
 Set<String> portedMessagesOf(Map<String, Object?> arb) =>
@@ -776,6 +776,25 @@ void main() {
         contains('showTimePicker('),
         reason: '$rule The one screen that ever raised the radial picker.',
       );
+    });
+
+    test('every extension message is behind a declared prefix', () {
+      final Set<String> extension =
+          messagesOf(template).difference(portedMessagesOf(template));
+      expect(extension, isNotEmpty,
+          reason: 'platform-glue.localization-inventory#4 (deviation) — the '
+              'port has extensions, and their strings are counted apart');
+      for (final String key in extension) {
+        expect(extensionPrefixes.any(key.startsWith), isTrue,
+            reason: 'platform-glue.localization-inventory#4 (deviation) — '
+                '$key is excluded from the ported count, so it has to be '
+                'named by a prefix rather than by accident');
+      }
+      expect(extension.where((String k) => k.startsWith('abstinence')).length,
+          8,
+          reason: 'platform-glue.localization-inventory#4 (deviation) — the '
+              'abstinence editor adds exactly eight strings, and a ninth that '
+              'nobody declared would be one nobody translated');
     });
   });
 

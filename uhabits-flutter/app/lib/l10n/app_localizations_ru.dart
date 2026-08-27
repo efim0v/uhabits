@@ -841,4 +841,29 @@ class L10nRu extends L10n {
   String sleepTimezoneOffset(String sign, String hours, String minutes) {
     return 'UTC$sign$hours:$minutes';
   }
+
+  @override
+  String get abstinenceHabitType => 'Воздержание';
+
+  @override
+  String get abstinenceHabitTypeExample =>
+      'напр.: Не пить. Не листать ленту. Молчание — чистый день; отмечать нужно только срывы.';
+
+  @override
+  String get abstinenceQuestionExample => 'напр.: Были срывы сегодня?';
+
+  @override
+  String get abstinenceAllowance => 'Допуск';
+
+  @override
+  String get abstinenceAllowanceExample => 'напр.: 30';
+
+  @override
+  String get abstinenceAllowanceUnit => 'Считается в';
+
+  @override
+  String get abstinenceAllowanceUnitExample => 'напр.: минуты';
+
+  @override
+  String get abstinenceCommittedFrom => 'Обязательство с';
 }

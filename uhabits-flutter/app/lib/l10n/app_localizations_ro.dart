@@ -831,4 +831,29 @@ class L10nRo extends L10n {
   String sleepTimezoneOffset(String sign, String hours, String minutes) {
     return 'UTC$sign$hours:$minutes';
   }
+
+  @override
+  String get abstinenceHabitType => 'Abstinence';
+
+  @override
+  String get abstinenceHabitTypeExample =>
+      'e.g. No alcohol. No doomscrolling. Silence is a clean day — you only mark the days you slipped.';
+
+  @override
+  String get abstinenceQuestionExample => 'e.g. Did you slip today?';
+
+  @override
+  String get abstinenceAllowance => 'Allowance';
+
+  @override
+  String get abstinenceAllowanceExample => 'e.g. 30';
+
+  @override
+  String get abstinenceAllowanceUnit => 'Counted in';
+
+  @override
+  String get abstinenceAllowanceUnitExample => 'e.g. minutes';
+
+  @override
+  String get abstinenceCommittedFrom => 'Committed since';
 }

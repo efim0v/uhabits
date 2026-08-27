@@ -397,5 +397,22 @@
         "type": "String"
       }
     }
-  }
+  },
+  "abstinenceHabitType": "Abstinence",
+  "@abstinenceHabitType": {
+    "description": "Title of the habit-type card for \"I commit not to do X\"."
+  },
+  "abstinenceHabitTypeExample": "e.g. No alcohol. No doomscrolling. Silence is a clean day — you only mark the days you slipped.",
+  "abstinenceQuestionExample": "e.g. Did you slip today?",
+  "@abstinenceQuestionExample": {
+    "description": "Placeholder for the question an abstinence habit asks."
+  },
+  "abstinenceAllowance": "Allowance",
+  "@abstinenceAllowance": {
+    "description": "Label of the field holding how much a day may hold before it counts as a slip."
+  },
+  "abstinenceAllowanceExample": "e.g. 30",
+  "abstinenceAllowanceUnit": "Counted in",
+  "abstinenceAllowanceUnitExample": "e.g. minutes",
+  "abstinenceCommittedFrom": "Committed since"
 }
