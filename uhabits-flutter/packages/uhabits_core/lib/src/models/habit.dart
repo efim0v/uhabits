@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../computed/habit_definition.dart';
 import '../time/local_date.dart';
 import 'entry.dart';
 import 'entry_list.dart';
@@ -20,7 +21,8 @@ import 'streak_list.dart';
 ///
 /// `equals`/`hashCode` are hand written in Kotlin too: they cover the fourteen
 /// model fields and deliberately ignore [computedEntries], [originalEntries],
-/// [scores], [streaks] and [observable].
+/// [scores], [streaks] and [observable] — and [definition], which the Kotlin
+/// data class does not have at all.
 class Habit {
   Habit({
     this.color = const PaletteColor(8),
@@ -89,6 +91,21 @@ class Habit {
   /// Kotlin declares this as `var observable = ModelObservable()`, so it is a
   /// fresh observable per habit and can be replaced.
   ModelObservable observable = ModelObservable();
+
+  /// Определение, по которому приложение считает дни этой привычки, или null
+  /// у обычной.
+  ///
+  /// Едет на модели, а не спрашивается у репозитория, потому что [recompute]
+  /// зовут пятнадцать мест — команды, импорт, смена суток, — и ни одно из них
+  /// репозитория не видит. Прикрепляется одной дверью,
+  /// `computed/attach_definition.dart`.
+  ///
+  /// Не участвует ни в [==], ни в [hashCode], ни в [copyFrom] — ровно как
+  /// четыре сотрудника выше. Для `copyFrom` это не только паритет:
+  /// `EditHabitCommand` делает `habit.copyFrom(modified)`, где `modified`
+  /// собран формой и определения не несёт, так что копирование стирало бы
+  /// день обязательства живой привычки (`computed.commitment#4`).
+  HabitDefinition? definition;
 
   bool get isNumerical => type == HabitType.numerical;
 

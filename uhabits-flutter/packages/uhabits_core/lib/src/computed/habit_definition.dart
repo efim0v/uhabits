@@ -5,12 +5,19 @@ import 'dart:convert';
 /// The name goes to the database, so it is written out rather than derived
 /// from the Dart identifier: renaming a field must never re-key a table.
 enum ComputedKind {
-  sleep('sleep'),
-  abstinence('abstinence');
+  sleep('sleep', silenceQualifies: false),
+  abstinence('abstinence', silenceQualifies: true);
 
-  const ComputedKind(this.wireName);
+  const ComputedKind(this.wireName, {required this.silenceQualifies});
 
   final String wireName;
+
+  /// Считается ли день, о котором ничего не записано, удавшимся.
+  ///
+  /// Свойство вида, а не привычки: непрослеженная ночь — не хорошая ночь, а
+  /// день, в который человек не отметил срыв, — это ровно тот день, ради
+  /// которого он и обязался. В базу не идёт: туда идёт только [wireName].
+  final bool silenceQualifies;
 
   /// Null for a name this build does not know — a file written by a newer
   /// one. Guessing would be worse than admitting there is nothing here.
