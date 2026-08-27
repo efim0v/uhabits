@@ -293,14 +293,18 @@ dart test test/database/extension_migrations_test.dart
 ```
 
 Ожидается: группа `migration 103` — PASS; группа `migration 102` — FAIL,
-`Expected: <102> Actual: <103>` на `extension_migrations_test.dart:166`. Это
+`Expected: <102> Actual: <103>` на строке `expect(db.getVersion(), 102, reason:
+'computed.schema#1');` — сегодня это `extension_migrations_test.dart:166`, а
+после импорта, дописанного шагом 1, — `:167`. Это
 единственное место во всём репозитории, где 102 прибито литералом (проверено
 `grep -rn "getVersion(), 102"`); всё остальное считает от `appDatabaseVersion`.
 
 - [ ] **Шаг 5: снять переуточнение в тесте 102**
 
 Утверждение о версии в тесте 102 никогда не было про 102: оно означало «мы
-доехали до этой миграции». Заменить в `extension_migrations_test.dart:166`
+доехали до этой миграции». Заменить в `extension_migrations_test.dart`,
+в первом тесте группы `migration 102` (сегодня строка 166, после импорта
+шага 1 — 167),
 
 ```dart
       expect(db.getVersion(), 102, reason: 'computed.schema#1');
@@ -1038,7 +1042,7 @@ dart tool/parity_coverage.dart --verify
 тестами, что написаны выше; префикс `computed.` тест
 `parity_coverage_test.dart:108` требует, и он соблюдён. Правил
 `computed.backup#4` и `#5` здесь ещё нет: перенос журнала при восстановлении
-копии — Задача 22, CSV-экспорт — Задача 41.
+копии — Задача 22, CSV-экспорт — Задача 42.
 
 - [ ] **Шаг 3: полный прогон**
 
@@ -1071,7 +1075,7 @@ git commit -m "Record the lapse journal's schema bump as a deviation"
 
 - **CSV-экспорта журнала.** Спецификация требует протянуть боковую таблицу во
   все три точки экспорта. Это работа не схемы, а экспорта, и она в плане есть —
-  Задача 41. Копия — побайтовый файл — берёт `Lapses` даром уже сейчас.
+  Задача 42. Копия — побайтовый файл — берёт `Lapses` даром уже сейчас.
 - **Кто и когда пишет в журнал.** Тап по ячейке списка, редактор «не более 30
   минут» и снятие — двери, а `LapseRepository` есть замок. Двери вешают
   Задача 24 (`AbstinenceSync`, арифметика дня) и задачи раздела списка.
@@ -1189,7 +1193,7 @@ s' = s * multiplier + pct * (1 - multiplier),   multiplier = 0.5^(sqrt(freq)/13)
 2. `computed.lapse-score#2` День срыва хранится как `amount * 1000` — обычная числовая конвенция, а не проценты сна; минимальный срыв есть 1 и даёт 1000, поэтому значение никогда не попадает на 1, 2 или 3. Дня без срыва не существует: `lapseDayValue` отдаёт null, а не ноль.
 3. `computed.lapse-score#3` Срыв делит оценку пополам: `previousValue = previousValue / 2` вместо шага порта. Не 5% затухания порта и не обнуление.
 4. `computed.lapse-score#4` Срыв есть факт, а не величина: любое превышение допуска делит ровно пополам — 45 минут при допуске 30 наказываются как 4500.
-5. `computed.lapse-score#5` Срыв есть превышение допуска: `normalizedRollingSum > targetValue`. При допуске 0 срывом становится любая запись.
+5. `computed.lapse-score#5` Срыв есть превышение допуска, и судья у него один на всю привычку: в оценке это `normalizedRollingSum > targetValue`, в интерфейсе — `isAbstinenceLapse(definition, величина)`, и это одно сравнение, названное дважды (`targetValue` есть зеркало допуска, `computed.allowance#1`). При допуске 0 срывом становится любая запись; при допуске 30 — только величина больше тридцати, и так же её рисует ячейка (`computed.abstinence-cell#2`).
 6. `computed.lapse-score#6` Деление включает поле `ScoreList.halvesOnLapse`; по умолчанию оно выключено, и тогда оценка совпадает с портом до последнего бита.
 7. `computed.lapse-score#7` Деление действует только для at-most: на at-least привычке включённое поле не меняет ничего.
 8. `computed.lapse-score#8` Пропуск не есть срыв: `Entry.skip` переносит оценку предыдущего дня, как в порте.
@@ -2212,8 +2216,10 @@ void main() {
    `cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && flutter test test/state/computed_freshness_test.dart`
    → `Error: The method 'onComputedDataChanged' isn't defined for the type 'AppScope'.`
 
-3. Переименовать объявление в `app/lib/state/app_scope.dart` (строка 163) вместе с
-   докой — она названа по сну от первого до последнего слова:
+3. Переименовать объявление в `app/lib/state/app_scope.dart` вместе с докой —
+   она названа по сну от первого до последнего слова. Доккомментарий начинается
+   на `app_scope.dart:151` (`/// Announces that a sleep habit's stored values
+   changed.`), сама сигнатура — на `:163`:
 
 ```dart
   /// Announces that a computed habit's stored values changed.
@@ -2239,8 +2245,10 @@ void main() {
 ```
 
 4. Обратным текстовым заменом (не `git checkout`) поправить пять оставшихся мест:
-   - `app/lib/state/app_scope.dart`, в `_syncSleepHabits`:
-     `onSleepDataChanged(habit.id!);` → `onComputedDataChanged(habit.id!);`
+   - `app/lib/state/app_scope.dart:222`, в `_syncSleepHabits`. Там стоит `id`, а
+     не `habit.id!` — цикл идёт по `sleepRepository.sleepHabitIds()`, и
+     переменной `habit` в этой строке нет:
+     `onSleepDataChanged(id);` → `onComputedDataChanged(id);`
    - `app/lib/ui/habits/sleep/sleep_section.dart:220`:
      `scope.onSleepDataChanged(habit.id!);` → `scope.onComputedDataChanged(habit.id!);`
    - `app/lib/state/edit_habit_model.dart:439`:
@@ -2412,8 +2420,11 @@ void main() {
   });
 ```
 
-   Файл уже импортирует `LocalDate`; добавить `import 'package:uhabits_core/src/time/date_utils.dart';`
-   ради `setToday`/`resetToday`.
+   Новых импортов не нужно ни одного: `setToday`, `resetToday` и `getToday`
+   живут в `packages/uhabits_core/lib/src/time/local_date.dart` (строки 11–21),
+   а `import 'package:uhabits_core/src/time/local_date.dart';` в этом файле уже
+   стоит — им же приезжает `LocalDate`. Импорт `date_utils.dart` сюда не
+   добавлять.
 
 2. Запустить:
    `cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core && dart test test/computed/day_writer_test.dart`
@@ -2585,8 +2596,11 @@ typedef ComputedDataChanged = void Function(int habitId);
    `app/lib/state/app_scope.dart`, в `_syncSleepHabits`, удалить строку
 
 ```dart
-      onComputedDataChanged(habit.id!);
+      onComputedDataChanged(id);
 ```
+
+   (это строка `app_scope.dart:222`, переименованная Задачей 10; аргумент там —
+   `id`, а не `habit.id!`)
 
    Она объявляла безусловно — в том числе когда свод ничего не записал; теперь
    объявляет дверь, и только когда есть о чём.
@@ -3021,7 +3035,7 @@ git commit -m "Ask the streak list which streak covers a given day"
           Streak(today.minus(10), today.plus(30)),
           reason: 'computed.streak#1');
 
-      // Срыв десять дней назад режет её надвое, и молчание по обе стороны
+      // Срыв четыре дня назад режет её надвое, и молчание по обе стороны
       // остаётся успехом.
       entries.add(Entry(today.minus(4), 1000));
       recomputeAtMost(silenceQualifies: true);
@@ -4161,7 +4175,7 @@ void attachDefinitions(Iterable<Habit> habits, DefinitionRepository definitions)
 - Ячейка списка и экран привычки зовут ядровую `daysWithoutLapse(habit)` —
   своей копии в приложении нет, — а за датой начала
   `habit.streaks.getCurrent(getToday())?.start`. Это **Задача 36**.
-- Обе стороны закрыты сквозным тестом **Задачи 42**: путь целиком, на одном
+- Обе стороны закрыты сквозным тестом **Задачи 43**: путь целиком, на одном
   файле базы, с перезапуском посередине.
 
 ### Task 19: журнал вешается на `AppScope` (1-schema.3, шаг 5)
@@ -4461,8 +4475,9 @@ void main() {
     for (final Habit habit in computedHabits(ComputedKind.sleep)) {
 ```
 
-   и в теле цикла заменить `onSleepDataChanged(id);` на
-   `onSleepDataChanged(habit.id!);`.
+   Тело цикла не трогается вовсе: строку объявления (`onComputedDataChanged(id);`,
+   бывшая `app_scope.dart:222`) Задача 11 уже удалила отсюда — объявляет дверь
+   записи, — и переменной `id` в теле не осталось ни одной.
 
 6. Прогнать соседей:
    `flutter test test/state/computed_archive_sweep_test.dart test/state/sleep_sync_wiring_test.dart test/state/sleep_freshness_test.dart test/state/computed_sleep_pairing_test.dart`
@@ -4662,7 +4677,27 @@ void main() {
     // whose signature is closed by parity rules. It is out of reach only
     // while every computed habit is numerical, and this is where that stops
     // being a hope (см. DEVIATIONS.md, «переключение да/нет-привычки»).
+    //
+    // Страховка, а не доказательство: привычку выше построил числовой сам
+    // тест, и при удалённой фиче эта строка останется зелёной. Настоящая
+    // проверка правила — следующим тестом.
     expect(quit.isNumerical, isTrue, reason: 'computed.write-paths#5');
+  });
+
+  test('the kinds this build can create are numerical by construction', () {
+    // Тип берётся у продакшна, а не у привычки, которую тест построил себе
+    // сам, — этим он и отличается от страховки выше. `sleepHabitType` есть
+    // константа, которой заводится сон (`sleep/stored_value.dart:68`);
+    // воздержание заводится редактором, и его тип прибит там же, в наборе
+    // Задачи 29, той же цитатой.
+    //
+    // Длина `ComputedKind.values` закреплена намеренно: третий вычисляемый вид
+    // обязан пройти этой строкой и назвать свой тип, а не проскользнуть мимо
+    // правила молча.
+    expect(ComputedKind.values, hasLength(2),
+        reason: 'computed.write-paths#5 — третий вид обязан пройти здесь');
+    expect(sleepHabitType, HabitType.numerical,
+        reason: 'computed.write-paths#5');
   });
 
   // Хук 7. Презентер строится тем же путём, которым его строит приложение —
@@ -4761,9 +4796,25 @@ class ComputedHabitHooks implements CommandRunnerListener {
   → падает «the widget, the notification and the queue write nothing here»;
 - убрать `if (id != null && (_isComputed?.call(id) ?? false)) return;` в
   `onRandomize` → падает «randomise does nothing at all»;
-- задать привычке `type = HabitType.boolean` → падает «and it is numerical» и,
+- задать привычке `type = HabitType.yesNo` → падает «and it is numerical» и,
   следом, третья запись отклонений перестаёт быть верной — что и есть смысл
-  этого теста.
+  этого теста;
+- `const HabitType sleepHabitType = HabitType.numerical;` → `= HabitType.yesNo;`
+  (`sleep/stored_value.dart:68`) → падает «the kinds this build can create are
+  numerical by construction», и падает у **продакшн**-константы, а не у
+  тестовой привычки;
+- завести третью запись в `ComputedKind` → падает он же на `hasLength(2)`.
+
+**Что из этого страховка, а что доказательство.** Тест «and it is numerical, so
+the unguarded yes/no toggle cannot reach it» зелен и при **удалённой** фиче: он
+утверждает отсутствие — «привычка числовая», — а привычку эту построил числовой
+сам тест. Убрать из `lib/` всё воздержание целиком, и он останется зелёным.
+Выбрасывать его не надо: он падает в тот день, когда кто-нибудь заведёт
+вычисляемый вид как да/нет. Но закрывать им правило `computed.write-paths#5`
+нельзя — правило держалось бы на утверждении, которое ничего не проверяет.
+Поэтому у `#5` есть вторая цитата, настоящая: «the kinds this build can create
+are numerical by construction» здесь и `expect(habit.type, HabitType.numerical)`
+в наборе Задачи 29, где привычку строит редактор, а не тест.
 
 ---
 
@@ -4974,10 +5025,47 @@ class LapseImporter {
    является: она зелена и без строки `lapseImporter:`. Поэтому — сквозной:
 
 ```dart
+  /// Копия, снятая той же сборкой: побайтовый файл базы, а не выгрузка.
+  ///
+  /// Пишется настоящей миграцией (`AppDatabase.openAndMigrate`), закрывается,
+  /// копируется целиком — `File.copySync` и есть то, что делает «снять копию»,
+  /// — и оборачивается в `LocalUserFile`, потому что импортёр принимает
+  /// `UserFile`, а не путь.
+  UserFile backupWithLapses({required String uuid}) {
+    final String source = '${tempDir.path}/source.db';
+    final Database db = AppDatabase.openAndMigrate(source);
+    db.run("insert into Habits (id, name, uuid, description, freq_num, "
+        "freq_den, color, position, archived, highlight, type, target_value, "
+        "target_type, unit, question) "
+        "values (1, 'Sober', '$uuid', '', 1, 1, 0, 0, 0, 0, 1, 0, 1, '', '')");
+    DefinitionRepository(db).save(
+      1,
+      const HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 8960,
+      ),
+    );
+    LapseRepository(db)
+      ..save(1, 8990, amount: 1)
+      ..save(1, 9000, amount: 45)
+      ..save(1, 9007, amount: 12);
+    db.close();
+
+    final String backup = '${tempDir.path}/backup.db';
+    File(source).copySync(backup);
+    return LocalUserFile(backup);
+  }
+
   test('a restored abstinence habit comes back with its journal', () async {
     final UserFile file = backupWithLapses(uuid: 'abst-uuid');
-    await buildGenericImporter(scope: scope, fileOpener: FlutterFileOpener())
-        .importHabitsFromFile(file);
+    // `userDataDir` у опенера обязателен и в тесте, и в продакшне. В продакшне
+    // это `directories.filesDir` — `app/lib/ui/settings/data_actions.dart:138`,
+    // `FlutterFileOpener(userDataDir: directories.filesDir)`; здесь тот же
+    // временный каталог, в котором лежит копия.
+    await buildGenericImporter(
+      scope: scope,
+      fileOpener: FlutterFileOpener(userDataDir: tempDir.path),
+    ).importHabitsFromFile(file);
 
     final Habit restored = scope.habitList.getByUUID('abst-uuid')!;
     expect(scope.lapses.range(restored.id!, 8990, 9007),
@@ -4992,9 +5080,15 @@ class LapseImporter {
   });
 ```
 
-   `backupWithLapses` — файл с одной привычкой-воздержанием и тремя днями
-   журнала (`8990: 1`, `9000: 45`, `9007: 12`), снятый той же сборкой; форма
-   взята из `packages/uhabits_core/test/io/definition_import_test.dart`.
+   Тело `backupWithLapses` выписано выше целиком и намеренно: «копия» здесь
+   значит побайтовый файл базы, а не выгрузку, и подменить его сборкой в памяти
+   нельзя — вопрос ровно в том, переживают ли строки настоящий файл. Три дня
+   журнала (`8990: 1`, `9000: 45`, `9007: 12`) — те же, что в проверке ниже.
+   Импорты, которых требует это тело: `dart:io` (ради `File`),
+   `package:uhabits/platform/app_database.dart`,
+   `package:uhabits/platform/flutter_files.dart` (`FlutterFileOpener`) и
+   `package:uhabits_core/uhabits_core.dart` (`LocalUserFile`,
+   `DefinitionRepository`, `LapseRepository`, `HabitDefinition`).
 
 9. Правило в `docs/extensions/COMPUTED.md`, в блок `computed.backup`:
 
@@ -5265,6 +5359,16 @@ void main() {
   id»;
 - заменить в `habitList.update` архивацию на `habitList.remove` → падает
   «archiving keeps everything».
+
+**Что из этого страховка, а что доказательство.** Тест «and nothing of it is kept
+in preferences under its id» зелен и при **удалённой** фиче: он утверждает
+отсутствие ключей, а отсутствуют они и тогда, когда воздержания в `lib/` нет
+вовсе. Выбрасывать его не надо — он падает в тот день, когда кто-нибудь положит
+допуск или «подсказку, которую закрыли» в `Preferences` под `$habitId`, как это
+уже сделано у сна двумя ключами. Но правило `computed.lifecycle#6` им **не**
+закрывается: настоящая его цитата — «deleting one leaves no row anywhere», где
+строки сперва пишутся, потом ищутся и не находятся, и где страховкой служит
+отдельный тест «the file has more than one table keyed by habit».
 
 ---
 
@@ -5614,7 +5718,9 @@ payload. Всё, кроме имени, имеет значение по умо�
   карточек станет четыре;
 - паритетный тест, который сегодня меряет вертикальное центрирование колонки
   по `first.top .. third.bottom`
-  (`app/test/ui/habits/edit/edit_habit_screen_test.dart:3026-3047`), обязан
+  (`app/test/ui/habits/edit/edit_habit_screen_test.dart:3034-3047` — от
+  комментария «The port adds a third card of its own…» до закрывающей
+  `moreOrLessEquals(screen.height / 2, epsilon: 0.5)`), обязан
   мерить по `first.top .. fourth.bottom` — иначе он падает, и падает
   правильно: колонка действительно стала выше;
 - цитата `sleep.ui#6` в том же тесте («карточка порта идёт последней») больше
@@ -6883,6 +6989,15 @@ bool isPorted(String key) =>
           reason: 'computed.create#7');
       expect(scope.definitions.isComputed(habit.id!), isTrue,
           reason: 'computed.create#7');
+      // Настоящая цитата `computed.write-paths#5`: тип у привычки не тот, что
+      // ей выставил тест, а тот, с которым её завёл редактор. Неохраняемая
+      // дверь переключения да/нет живёт под `!habit.isNumerical`, и достать
+      // воздержание она не может ровно потому, что вот эта строка зелёная.
+      expect(habit.type, HabitType.numerical,
+          reason: 'computed.write-paths#5 — вычисляемая привычка числовая по '
+              'построению, и переключить её нечем');
+      expect(habit.targetType, NumericalHabitType.atMost,
+          reason: 'computed.create#7 — «не более допуска»');
     });
 
     test('the allowance in the row and the target on the habit are one number',
@@ -7328,7 +7443,7 @@ is zero» — шаг 1 напечатает `computed.create#11`, шаг 3 ве�
 
 ### Что этот раздел потребляет от предыдущих
 
-Ровно четыре имени. Ничего больше из ядра воздержания UI не знает.
+Ровно шесть имён. Ничего больше из ядра воздержания UI не знает.
 
 ```dart
 // AppScope (app/lib/state/app_scope.dart), Задача 10:
@@ -7342,17 +7457,28 @@ void setLapse(core.Habit habit, core.LocalDate date, bool lapsed, {int? amount})
 
 // package:uhabits_core/uhabits_core.dart, Задача 16:
 int daysWithoutLapse(core.Habit habit, {core.LocalDate? asOf});
+
+// package:uhabits_core/uhabits_core.dart, Задача 2 — СУДЬЯ СРЫВА:
+bool isAbstinenceLapse(core.HabitDefinition definition, num amount);
+double abstinenceAllowanceOf(core.HabitDefinition definition);
 ```
 
 Контракт `setLapse`, на который здесь опирается всё остальное:
 
 1. идемпотентен — `setLapse(h, d, true)` дважды даёт один срыв;
 2. пишет журнал **и** пересчитывает день через `DayWriter`;
-3. значение дня-срыва есть величина срыва × 1000, то есть **строго больше 3**
-   (минимум — одна единица допуска = 1000); чистый день не пишется вовсе
-   (`computed.day-write#3`);
+3. значение записанного дня есть величина × 1000, то есть **строго больше 3**
+   (минимум — одна единица = 1000); день, о котором ничего не записано, не
+   пишется вовсе (`computed.day-write#3`);
 4. на день с пропуском `DayWriter` не пишет ничего — поэтому ячейка-пропуск
    здесь не нажимается.
+
+Пункт 3 говорит «записанного дня», а не «дня-срыва», и разница существенна с
+того момента, как допуск перестал быть нулём: при допуске 30 запись «20 минут»
+в дне есть, а срыва нет. Журнал хранит **замер**, срывом его называет
+`isAbstinenceLapse(definition, величина)` — и называет заново каждый раз, когда
+спрашивают (`computed.allowance#1`). Отсюда и правило интерфейса: рисует,
+считает и подписывает всё тот же предикат, а не «есть ли в дне запись».
 
 `daysWithoutLapse` потребляется **ядровая**, и своей копии в приложении нет.
 Функций с этим именем было две — в ядре и здесь, — и на одних данных они давали
@@ -7370,22 +7496,26 @@ int daysWithoutLapse(core.Habit habit, {core.LocalDate? asOf});
 ```dart
 // app/lib/ui/habits/abstinence/abstinence_button_view.dart
 enum AbstinenceCell { beforeCommitment, clean, lapse, skipped }
-bool isLapseValue(int storedValue);
-AbstinenceCell abstinenceCellOf({required int storedValue, required int day, required int committedFrom});
+bool isAbstinenceLapseDay(core.HabitDefinition definition, int storedValue);
+AbstinenceCell abstinenceCellOf({required core.HabitDefinition definition, required int storedValue, required int day});
 class AbstinenceButtonView extends core.View { ... }
 
 // app/lib/ui/habits/abstinence/abstinence_gestures.dart
-void setLapseDay(AppScope scope, {required core.Habit habit, required core.LocalDate date, required bool lapsed});
+void setLapseDay(AppScope scope, {required core.Habit habit, required core.LocalDate date, required bool lapsed, int? amount});
+Future<bool> toggleLapseDay(BuildContext context, AppScope scope, {required core.Habit habit, required core.HabitDefinition definition, required core.LocalDate date, required bool lapsed, required core.Theme theme});
+
+// app/lib/ui/habits/abstinence/abstinence_amount_dialog.dart
+Future<int?> askLapseAmount(BuildContext context, {required core.HabitDefinition definition, required core.Preferences preferences, required core.Color color});
 
 // app/lib/ui/habits/abstinence/abstinence_section.dart
-List<Widget> buildAbstinenceSection(BuildContext context, {required AppScope scope, required core.Habit habit, required int committedFrom, required core.Theme theme, required VoidCallback onChanged});
+List<Widget> buildAbstinenceSection(BuildContext context, {required AppScope scope, required core.Habit habit, required core.HabitDefinition definition, required core.Theme theme, required VoidCallback onChanged});
 
 // app/lib/ui/habits/list/entry_panel.dart
-typedef EntryLapseCallback = void Function(core.LocalDate date, bool lapsed);
-// EntryPanel/HabitCard: + final int? abstinenceCommittedFrom; + final EntryLapseCallback? onLapse;
+typedef EntryLapseCallback = Future<bool> Function(core.LocalDate date, bool lapsed);
+// EntryPanel/HabitCard: + final core.HabitDefinition? abstinenceDefinition; + final EntryLapseCallback? onLapse;
 
 // app/lib/state/habit_list_model.dart
-int? abstinenceCommitmentOf(core.Habit habit);
+core.HabitDefinition? abstinenceDefinitionOf(core.Habit habit);
 ```
 
 ### Опорное решение: признаком воздержания в UI служит `committedFrom`
@@ -7404,6 +7534,16 @@ int? abstinenceCommitmentOf(core.Habit habit);
   зелёными дословно, а неполное определение ведёт себя как любая другая
   вычисляемая привычка: числовое окно не открывается, ничего не пишется.
 
+**Едет вниз, однако, всё определение целиком, а не один день обещания.** Признак
+остаётся прежним — вид `abstinence` **и** непустой `committed_from`, — но
+считает его поставщик (`HabitListModel.abstinenceDefinitionOf`,
+`ShowHabitScreen._abstinenceDefinition`), а ячейке, кнопке и календарю
+передаётся `HabitDefinition?`. Причина одна: судья срыва —
+`isAbstinenceLapse(definition, величина)`, и допуск он берёт из определения.
+Довезти до ячейки только день обещания значит оставить ей своё суждение о
+срыве — а своего у неё быть не должно. `null` по-прежнему означает «это не
+воздержание», и обе ветки, и оба зелёных теста выше, остаются дословно теми же.
+
 ### Task 32: правила и строки интерфейса (4-ui-list.1)
 
 **Files:**
@@ -7416,8 +7556,13 @@ int? abstinenceCommitmentOf(core.Habit habit);
 **Interfaces:** Consumes — ничего. Produces — `L10n.abstinenceTitle`,
 `L10n.abstinenceCleanDaysLabel(num days)`, `L10n.abstinenceSince(String date)`,
 `L10n.abstinenceLastLapse(String date)`, `L10n.abstinenceLapseToday`,
-`L10n.abstinenceUndoToday`; правила `computed.abstinence-cell#1..#7`,
+`L10n.abstinenceUndoToday`; правила `computed.abstinence-cell#1..#8`,
 `computed.abstinence-screen#1..#6`.
+
+Строк ровно шесть, и восьмое правило ячейки новых не приносит: ввод величины
+строится на портированном числовом диалоге и берёт его надписи («Сохранить»,
+«Заметки») как есть. Число `14` в инвентаре локализации от этой задачи не
+меняется.
 
 1. Дописать в конец `docs/extensions/COMPUTED.md` две группы. Пока `- [ ]`:
    `--verify` требует цитат только с закрытых групп, и флажок ставится в
@@ -7426,12 +7571,13 @@ int? abstinenceCommitmentOf(core.Habit habit);
 ```markdown
 - [ ] `computed.abstinence-cell`
 1. `computed.abstinence-cell#1` День без записи рисуется удачным: полая галочка, а не «0» и не вопрос.
-2. `computed.abstinence-cell#2` День со срывом рисуется крестом.
+2. `computed.abstinence-cell#2` Крестом рисуется день, который есть срыв по тому же судье, что и оценка: величина дня больше допуска, `isAbstinenceLapse(definition, величина)` (`computed.lapse-score#5`, `computed.allowance#3`). При допуске ноль это любая записанная величина; при допуске 30 — только большая тридцати, а тридцать и меньше рисуются галочкой. Своего порога у интерфейса нет.
 3. `computed.abstinence-cell#3` День до дня обязательства пуст и не нажимается: приложение не приписывает себе дни до обещания.
 4. `computed.abstinence-cell#4` Пропуск остаётся пропуском и не переводится тапом в срыв: вычисленное значение не затирает отметку человека.
 5. `computed.abstinence-cell#5` Тап по ячейке записывает срыв за этот день, повторный тап его снимает.
 6. `computed.abstinence-cell#6` Ни тап, ни долгое нажатие не открывают числовое окно и не пишут значение дня напрямую.
 7. `computed.abstinence-cell#7` Определение без дня обязательства не превращает ячейку в воздержание: привычка остаётся числовой и упирается в общий отказ.
+8. `computed.abstinence-cell#8` Величину спрашивают ровно тогда, когда допуск её требует: при допуске ноль тап пишет одну единицу и лишнего шага нет, при допуске больше нуля тап спрашивает «сколько сегодня» и без ответа не пишет ничего. Снятие срыва величины не спрашивает никогда.
 
 - [ ] `computed.abstinence-screen`
 1. `computed.abstinence-screen#1` Экран воздержания показывает то число, которое отдаёт ядровая `daysWithoutLapse`, и подпись «С {дата}» под ним, пока срывов не было. Арифметику счёта держит `computed.streak#4`, а не это правило.
@@ -7536,13 +7682,29 @@ grep -n "abstinenceUndoToday\|abstinenceTitle" lib/l10n/app_localizations_ru.dar
 - Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/test/ui/habits/abstinence/abstinence_button_view_test.dart`
 
 **Interfaces:** Consumes — `core.View`, `core.Canvas`, `core.FontAwesome`,
-`core.Entry`, и из `ui/habits/list/entry_button_views.dart` уже публичные
-`drawNotesIndicator`, `smallTextSize`, `yesAutoTextSize`, `yesAutoStrokeWidth`.
-Produces — `enum AbstinenceCell`, `bool isLapseValue(int)`,
-`AbstinenceCell abstinenceCellOf({required int storedValue, required int day, required int committedFrom})`,
+`core.Entry`, `core.HabitDefinition` и `core.isAbstinenceLapse` (Задача 2), и из
+`ui/habits/list/entry_button_views.dart` уже публичные `drawNotesIndicator`,
+`smallTextSize`, `yesAutoTextSize`, `yesAutoStrokeWidth`.
+Produces — `enum AbstinenceCell`,
+`bool isAbstinenceLapseDay(core.HabitDefinition definition, int storedValue)`,
+`AbstinenceCell abstinenceCellOf({required core.HabitDefinition definition, required int storedValue, required int day})`,
 `class AbstinenceButtonView extends core.View` с чистыми геттерами
 `String? get glyph`, `core.Color get glyphColor`, `bool get isHollow`,
 `double get fontSize`.
+
+**Опорное решение: судья один, и он не свой.** Срывом день называет
+`isAbstinenceLapse(definition, величина)` из Задачи 2 — тот самый предикат, по
+которому судит оценка. Своего порога у интерфейса нет и быть не может: «не более
+30 минут» на ячейке и «не более 30 минут» в балле обязаны означать одно, а два
+предиката расходятся молча и расходятся не сразу.
+
+Предикат берёт **величину**, а ячейке приходит хранимое значение дня — величина
+× 1000 (`computed.lapse-score#2`). Перевод шкалы записан один раз, в
+`isAbstinenceLapseDay`, и это единственное, что тот добавляет: он не второй
+судья, а первый, переведённый в единицы дня. Прежнего
+`isLapseValue(stored) => stored > Entry.skip` в роли судьи нет нигде — он давал
+«срыв» на величине 1 при допуске 30, то есть красил крестом день, который
+обещание держал, и не совпадал ни со счётчиком дней, ни с баллом.
 
 1. Сначала тест. Создать
 `app/test/ui/habits/abstinence/abstinence_button_view_test.dart`:
@@ -7563,6 +7725,19 @@ void main() {
   final core.Theme theme = core.LightTheme();
   final core.Color habitColor = theme.colorOf(const core.PaletteColor(7));
 
+  /// Обязательство с допуском — то самое, по которому судит и оценка.
+  core.HabitDefinition commitment({double allowance = 0.0, int from = 10}) =>
+      core.HabitDefinition(
+        kind: core.ComputedKind.abstinence,
+        committedFrom: from,
+        payload: core.abstinencePayload(
+          allowance: allowance,
+          unit: allowance == 0.0
+              ? core.abstinenceUnitCount
+              : core.abstinenceUnitMinutes,
+        ),
+      );
+
   AbstinenceButtonView view(AbstinenceCell cell) => AbstinenceButtonView(
         cell: cell,
         color: habitColor,
@@ -7573,7 +7748,8 @@ void main() {
     // Сегодня, вчера, день за пределами прочитанного окна: везде тишина.
     for (final int stored in <int>[core.Entry.unknown, -1, 0]) {
       expect(
-        abstinenceCellOf(storedValue: stored, day: 100, committedFrom: 10),
+        abstinenceCellOf(
+            definition: commitment(), storedValue: stored, day: 100),
         AbstinenceCell.clean,
         reason: 'computed.abstinence-cell#1 — молчание есть успех, '
             'stored=$stored',
@@ -7588,29 +7764,69 @@ void main() {
             'приложение, а не человек');
   });
 
-  test('computed.abstinence-cell#2 день со срывом рисуется крестом', () {
-    // Величина срыва × 1000: одна единица допуска и тридцать минут.
+  test('computed.abstinence-cell#2 крестом рисуется превышение допуска', () {
+    // Допуск ноль — умолчание: любая записанная величина есть срыв. Значение
+    // дня несёт величину × 1000.
     for (final int stored in <int>[1000, 30000]) {
       expect(
-        abstinenceCellOf(storedValue: stored, day: 100, committedFrom: 10),
+        abstinenceCellOf(
+            definition: commitment(), storedValue: stored, day: 100),
         AbstinenceCell.lapse,
-        reason: 'computed.abstinence-cell#2 — stored=$stored',
+        reason: 'computed.abstinence-cell#2 — stored=$stored при допуске 0',
       );
     }
+
+    // Допуск 30: тридцать минут обещание держат, тридцать одна — нет. Ровно
+    // та граница, по которой судит оценка (`computed.lapse-score#5`), и
+    // прежний `stored > Entry.skip` назвал бы срывом все три.
+    final core.HabitDefinition lenient = commitment(allowance: 30.0);
+    expect(
+        abstinenceCellOf(
+            definition: lenient, storedValue: 29000, day: 100),
+        AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#2');
+    expect(
+        abstinenceCellOf(
+            definition: lenient, storedValue: 30000, day: 100),
+        AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#2 — «не более допуска» обещание '
+            'держит');
+    expect(
+        abstinenceCellOf(
+            definition: lenient, storedValue: 31000, day: 100),
+        AbstinenceCell.lapse,
+        reason: 'computed.abstinence-cell#2');
+
     expect(view(AbstinenceCell.lapse).glyph, core.FontAwesome.times,
         reason: 'computed.abstinence-cell#2');
     expect(view(AbstinenceCell.lapse).isHollow, isFalse,
         reason: 'computed.abstinence-cell#2');
   });
 
+  test('computed.abstinence-cell#2 судья тот же, что у оценки', () {
+    // `isAbstinenceLapseDay` не второй предикат, а первый, переведённый со
+    // шкалы дня: значение дня есть величина × 1000, а `isAbstinenceLapse`
+    // берёт величину. Расхождение здесь означало бы, что ячейка и балл
+    // считают срывы по-разному.
+    final core.HabitDefinition lenient = commitment(allowance: 30.0);
+    for (final int amount in <int>[1, 20, 29, 30, 31, 45]) {
+      expect(isAbstinenceLapseDay(lenient, amount * 1000),
+          core.isAbstinenceLapse(lenient, amount),
+          reason: 'computed.abstinence-cell#2 — интерфейс и оценка судят одним '
+              'сравнением (`computed.lapse-score#5`), amount=$amount');
+    }
+  });
+
   test('computed.abstinence-cell#3 до дня обязательства ячейка пуста', () {
     expect(
-      abstinenceCellOf(storedValue: core.Entry.unknown, day: 9, committedFrom: 10),
+      abstinenceCellOf(
+          definition: commitment(), storedValue: core.Entry.unknown, day: 9),
       AbstinenceCell.beforeCommitment,
       reason: 'computed.abstinence-cell#3',
     );
     expect(
-      abstinenceCellOf(storedValue: core.Entry.unknown, day: 10, committedFrom: 10),
+      abstinenceCellOf(
+          definition: commitment(), storedValue: core.Entry.unknown, day: 10),
       AbstinenceCell.clean,
       reason: 'computed.abstinence-cell#3 — сам день обещания уже считается',
     );
@@ -7620,16 +7836,19 @@ void main() {
 
   test('computed.abstinence-cell#4 пропуск остаётся пропуском', () {
     expect(
-      abstinenceCellOf(storedValue: core.Entry.skip, day: 100, committedFrom: 10),
+      abstinenceCellOf(
+          definition: commitment(), storedValue: core.Entry.skip, day: 100),
       AbstinenceCell.skipped,
       reason: 'computed.abstinence-cell#4',
     );
     expect(view(AbstinenceCell.skipped).glyph, core.FontAwesome.skipped,
         reason: 'computed.abstinence-cell#4');
     // Ступеньки 1 и 2 занял бы человек; вычисленному значению туда нельзя, и
-    // сюда они попасть не могут — но если попадут, это не срыв.
+    // сюда они попасть не могут — но если попадут, это не срыв. Делить их на
+    // тысячу нельзя: при допуске ноль `yesAuto` дал бы 0.001 и стал бы
+    // «срывом» — отметка человека, прочитанная как замер.
     for (final int stored in <int>[core.Entry.yesAuto, core.Entry.yesManual]) {
-      expect(isLapseValue(stored), isFalse,
+      expect(isAbstinenceLapseDay(commitment(), stored), isFalse,
           reason: 'computed.abstinence-cell#4 — stored=$stored');
     }
   });
@@ -7673,24 +7892,52 @@ import '../list/entry_button_views.dart'
 /// Что ячейка говорит про день.
 enum AbstinenceCell { beforeCommitment, clean, lapse, skipped }
 
-/// Значит ли хранимое значение дня «в этот день был срыв».
+/// Был ли в этот день срыв — по тому же судье, что и у оценки.
 ///
-/// День-срыв несёт величину срыва × 1000 — минимум одну единицу допуска, то
-/// есть 1000. Ступеньки 1, 2 и 3 заняты `yesAuto`, `yesManual` и `skip`, а
-/// отсутствие записи есть -1. Поэтому «строго больше skip» отделяет срыв и от
-/// отметок человека, и от тишины.
-bool isLapseValue(int storedValue) => storedValue > core.Entry.skip;
+/// Судья один на всю привычку: `isAbstinenceLapse(definition, величина)` из
+/// `computed/abstinence_payload.dart`. Оценка сравнивает
+/// `normalizedRollingSum > targetValue`, а `targetValue` есть зеркало допуска
+/// (`computed.allowance#1`), то есть это буквально одно сравнение, записанное
+/// дважды (`computed.lapse-score#5`). Своего порога у интерфейса нет: «не более
+/// 30 минут» на ячейке и «не более 30 минут» в балле обязаны означать одно.
+///
+/// Всё, что добавляет эта функция, — перевод шкалы. Предикат берёт величину, а
+/// сюда приходит хранимое значение дня, то есть величина × 1000
+/// (`computed.lapse-score#2`).
+///
+/// Ступеньки 1, 2 и 3 заняты `yesAuto`, `yesManual` и `skip`, а тишина есть -1.
+/// Ни одна из них не величина, и делить их на тысячу бессмысленно: при допуске
+/// ноль `yesAuto` дал бы 0.001 и стал бы «срывом» — отметка человека,
+/// прочитанная как замер. Поэтому они отсеиваются до сравнения, а не им.
+bool isAbstinenceLapseDay(core.HabitDefinition definition, int storedValue) {
+  if (storedValue == core.Entry.unknown ||
+      storedValue == core.Entry.skip ||
+      storedValue == core.Entry.yesAuto ||
+      storedValue == core.Entry.yesManual) {
+    return false;
+  }
+  return core.isAbstinenceLapse(definition, storedValue / 1000.0);
+}
 
-/// Состояние дня по хранимому значению и дню обязательства.
+/// Состояние дня по определению привычки и хранимому значению.
+///
+/// День обязательства спрашивается у определения, а не приезжает отдельным
+/// числом: определение и так здесь, а два источника одного факта расходятся.
+/// Пустой `committedFrom` — неполное обязательство, судить по нему нечего, и
+/// ячейка ведёт себя как до обещания (`computed.abstinence-cell#7`).
 AbstinenceCell abstinenceCellOf({
+  required core.HabitDefinition definition,
   required int storedValue,
   required int day,
-  required int committedFrom,
 }) {
-  if (day < committedFrom) return AbstinenceCell.beforeCommitment;
+  final int? committedFrom = definition.committedFrom;
+  if (committedFrom == null || day < committedFrom) {
+    return AbstinenceCell.beforeCommitment;
+  }
   if (storedValue == core.Entry.skip) return AbstinenceCell.skipped;
-  if (isLapseValue(storedValue)) return AbstinenceCell.lapse;
-  return AbstinenceCell.clean;
+  return isAbstinenceLapseDay(definition, storedValue)
+      ? AbstinenceCell.lapse
+      : AbstinenceCell.clean;
 }
 
 class AbstinenceButtonView extends core.View {
@@ -7775,8 +8022,10 @@ class AbstinenceButtonView extends core.View {
 |---|---|
 | `AbstinenceCell.clean` → `return core.FontAwesome.times;` в `glyph` | `#1` |
 | `bool get isHollow => false;` | `#1` |
-| `isLapseValue` → `storedValue > 0` | `#4` (yesAuto=1 станет срывом) |
-| `day < committedFrom` → `day < committedFrom - 1` | `#3` |
+| тело `isAbstinenceLapseDay` → `storedValue > core.Entry.skip` (прежний `isLapseValue`) | `#2`: при допуске 30 величина 1 станет срывом, а обещание она держит; и «судья тот же, что у оценки» разойдётся на четырёх величинах из шести |
+| `core.isAbstinenceLapse(definition, storedValue / 1000.0)` → `(definition, storedValue)` | `#2`: 29000 при допуске 30 станет срывом |
+| убрать отсев `core.Entry.yesAuto` / `core.Entry.yesManual` | `#4` (yesAuto=1 даст 0.001 и станет срывом при допуске 0) |
+| `committedFrom == null \|\| day < committedFrom` → `day < committedFrom - 1` | `#3` |
 | убрать ветку `storedValue == core.Entry.skip` | `#4` |
 
 6. Коммит: `abstinence: рисунок ячейки списка`.
@@ -7790,10 +8039,10 @@ class AbstinenceButtonView extends core.View {
 - Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_card.dart`
 - Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/test/ui/habits/list/abstinence_panel_test.dart`
 
-**Interfaces:** Consumes — Task 4-ui-list.2. Produces —
-`typedef EntryLapseCallback = void Function(core.LocalDate date, bool lapsed);`,
-поля `EntryPanel.abstinenceCommittedFrom` (`int?`), `EntryPanel.onLapse`
-(`EntryLapseCallback?`) и такие же два поля у `HabitCard`.
+**Interfaces:** Consumes — Task 4-ui-list.2, `core.HabitDefinition`. Produces —
+`typedef EntryLapseCallback = Future<bool> Function(core.LocalDate date, bool lapsed);`,
+поля `EntryPanel.abstinenceDefinition` (`core.HabitDefinition?`),
+`EntryPanel.onLapse` (`EntryLapseCallback?`) и такие же два поля у `HabitCard`.
 
 1. Тест первым. `app/test/ui/habits/list/abstinence_panel_test.dart`:
 
@@ -7822,18 +8071,38 @@ void main() {
       <({core.LocalDate date, bool lapsed})>[];
   final List<core.LocalDate> edits = <core.LocalDate>[];
 
+  /// Ответ двери записи: `true` — «записал», `false` — «ничего не записано».
+  /// В этих двух случаях панель обязана вести себя по-разному.
+  late bool writeSucceeds;
+
   setUp(() {
     core.setToday(core.LocalDate.ymd(2020, 1, 15));
     preferences = core.Preferences(core.MemoryStorage());
     lapses.clear();
     edits.clear();
+    writeSucceeds = true;
   });
 
   tearDown(core.resetToday);
 
+  /// Обязательство с допуском — то же, чем кормит панель список.
+  ///
+  /// Панели едет определение целиком, а не один день обещания: срывом день
+  /// называет `isAbstinenceLapse(definition, величина)`, и допуск он берёт
+  /// отсюда.
+  core.HabitDefinition commitment({
+    required int from,
+    double allowance = 0.0,
+  }) =>
+      core.HabitDefinition(
+        kind: core.ComputedKind.abstinence,
+        committedFrom: from,
+        payload: core.abstinencePayload(allowance: allowance),
+      );
+
   Widget panel({
     required List<int> values,
-    required int committedFrom,
+    required core.HabitDefinition definition,
   }) =>
       Directionality(
         textDirection: TextDirection.ltr,
@@ -7845,9 +8114,11 @@ void main() {
             theme: theme,
             preferences: preferences,
             isNumerical: true,
-            abstinenceCommittedFrom: committedFrom,
-            onLapse: (core.LocalDate date, bool lapsed) =>
-                lapses.add((date: date, lapsed: lapsed)),
+            abstinenceDefinition: definition,
+            onLapse: (core.LocalDate date, bool lapsed) async {
+              lapses.add((date: date, lapsed: lapsed));
+              return writeSucceeds;
+            },
             onEdit: edits.add,
           ),
         ),
@@ -7862,7 +8133,7 @@ void main() {
     final core.LocalDate today = core.getToday();
     await tester.pumpWidget(panel(
       values: <int>[core.Entry.unknown],
-      committedFrom: today.daysSince2000 - 30,
+      definition: commitment(from: today.daysSince2000 - 30),
     ));
 
     expect(viewAt(tester, today).cell, AbstinenceCell.clean,
@@ -7874,7 +8145,7 @@ void main() {
     final core.LocalDate today = core.getToday();
     await tester.pumpWidget(panel(
       values: <int>[core.Entry.unknown],
-      committedFrom: today.daysSince2000 - 30,
+      definition: commitment(from: today.daysSince2000 - 30),
     ));
 
     await tester.tap(find.byKey(EntryPanel.buttonKey(today)));
@@ -7901,7 +8172,7 @@ void main() {
     // Обещание дано вчера: позавчерашняя ячейка вне обязательства.
     await tester.pumpWidget(panel(
       values: <int>[core.Entry.unknown, core.Entry.unknown, core.Entry.unknown],
-      committedFrom: today.daysSince2000 - 1,
+      definition: commitment(from: today.daysSince2000 - 1),
     ));
 
     final core.LocalDate before = today.minus(2);
@@ -7920,7 +8191,7 @@ void main() {
     final core.LocalDate today = core.getToday();
     await tester.pumpWidget(panel(
       values: <int>[core.Entry.skip],
-      committedFrom: today.daysSince2000 - 30,
+      definition: commitment(from: today.daysSince2000 - 30),
     ));
 
     await tester.tap(find.byKey(EntryPanel.buttonKey(today)));
@@ -7941,7 +8212,7 @@ void main() {
     // отличает «признак не сработал» от «кода нет».
     await tester.pumpWidget(panel(
       values: <int>[core.Entry.unknown],
-      committedFrom: today.daysSince2000 - 30,
+      definition: commitment(from: today.daysSince2000 - 30),
     ));
     expect(viewAt(tester, today).cell, AbstinenceCell.clean,
         reason: 'computed.abstinence-cell#7 — с признаком ячейка воздержания '
@@ -7963,22 +8234,70 @@ void main() {
       ),
     ));
 
-    final Widget view =
-        tester.widget<EntryButton>(find.byKey(EntryPanel.buttonKey(today))).view
-            as Widget? ?? const SizedBox.shrink();
-    expect(view, isNot(isA<AbstinenceButtonView>()),
+    expect(
+        tester
+            .widget<EntryButton>(find.byKey(EntryPanel.buttonKey(today)))
+            .view,
+        isNot(isA<AbstinenceButtonView>()),
         reason: 'computed.abstinence-cell#7');
+  });
+
+  testWidgets('computed.abstinence-cell#5 не записанный срыв ячейку не '
+      'перекрашивает', (tester) async {
+    // Оптимистичная краска есть обещание, а не факт. Дверь записи отвечает,
+    // записала ли она что-нибудь; ответ «нет» — это и передумавший человек, и
+    // отказ охраны, и в обоих случаях крест на ячейке был бы враньём до
+    // ближайшей перерисовки списка, которой в этом случае не будет.
+    final core.LocalDate today = core.getToday();
+    writeSucceeds = false;
+    await tester.pumpWidget(panel(
+      values: <int>[core.Entry.unknown],
+      definition: commitment(from: today.daysSince2000 - 30),
+    ));
+
+    await tester.tap(find.byKey(EntryPanel.buttonKey(today)));
+    await tester.pumpAndSettle();
+
+    expect(lapses.single.lapsed, isTrue,
+        reason: 'computed.abstinence-cell#5 — спросили дверь');
+    expect(viewAt(tester, today).cell, AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#5 — и вернулись к галочке, потому '
+            'что дверь ничего не записала');
+  });
+
+  testWidgets('computed.abstinence-cell#2 панель судит допуском, а не «есть '
+      'запись»', (tester) async {
+    // Двадцать минут при допуске тридцать: запись в дне есть, срыва нет.
+    // Прежний `stored > Entry.skip` нарисовал бы здесь крест, а счётчик дней
+    // без срыва при этом не сбросился бы — интерфейс спорил бы сам с собой.
+    final core.LocalDate today = core.getToday();
+    await tester.pumpWidget(panel(
+      values: <int>[20000],
+      definition: commitment(
+        from: today.daysSince2000 - 30,
+        allowance: 30.0,
+      ),
+    ));
+
+    expect(viewAt(tester, today).cell, AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#2 — «не более 30» обещание держит');
+
+    await tester.pumpWidget(panel(
+      values: <int>[31000],
+      definition: commitment(
+        from: today.daysSince2000 - 30,
+        allowance: 30.0,
+      ),
+    ));
+
+    expect(viewAt(tester, today).cell, AbstinenceCell.lapse,
+        reason: 'computed.abstinence-cell#2');
   });
 }
 ```
 
-> Последний тест сравнивает тип нарисованного вида; если приведение к `Widget`
-> не компилируется (вид есть `core.View`, а не виджет), заменить тело на
-> `expect(tester.widget<EntryButton>(find.byKey(EntryPanel.buttonKey(today))).view, isNot(isA<AbstinenceButtonView>()), reason: 'computed.abstinence-cell#7');`
-> — проверяется ровно это.
-
 2. Запустить — падает на неизвестных именованных аргументах
-   `abstinenceCommittedFrom` и `onLapse` (`No named parameter with the name`).
+   `abstinenceDefinition` и `onLapse` (`No named parameter with the name`).
 
 3. Правки в `app/lib/ui/habits/list/entry_panel.dart`. Рядом с
    `typedef EntryEditCallback`:
@@ -7991,22 +8310,35 @@ void main() {
 /// уходит в `CreateRepetitionCommand`, а человек вычисляемой привычке значения
 /// дня не пишет (`computed.write-paths#3`). Срыв — факт журнала, значение дня
 /// из него считает приложение.
-typedef EntryLapseCallback = void Function(core.LocalDate date, bool lapsed);
+///
+/// Отвечает, записала ли дверь хоть что-нибудь. Панель красит ячейку до
+/// ответа — иначе тап выглядит как ничего, — и ответ «нет» обязана уметь
+/// отменить: дверь может ничего не записать (человек закрыл ввод величины,
+/// охрана отказала), а перерисовки списка в этом случае не будет, и крест
+/// остался бы висеть враньём.
+typedef EntryLapseCallback = Future<bool> Function(
+    core.LocalDate date, bool lapsed);
 ```
 
-В конструктор `EntryPanel` добавить `this.abstinenceCommittedFrom,` и
+В конструктор `EntryPanel` добавить `this.abstinenceDefinition,` и
 `this.onLapse,`, а к полям:
 
 ```dart
-  /// День обязательства привычки-воздержания в `daysSince2000`, или null для
-  /// любой другой привычки.
+  /// Определение привычки-воздержания, или null для любой другой привычки.
   ///
-  /// Он же и признак вида: воздержание — числовая привычка, и по [isNumerical]
-  /// её от «прочитано страниц» не отличить. Определение без дня обязательства
+  /// Оно же и признак вида: воздержание — числовая привычка, и по [isNumerical]
+  /// её от «прочитано страниц» не отличить. Признаком считается вид
+  /// `abstinence` **с непустым** `committedFrom`; неполное определение
   /// признаком не считается — судить день как чистый или сорванный тогда не от
   /// чего, — и такая привычка остаётся числовой
-  /// (`computed.abstinence-cell#7`).
-  final int? abstinenceCommittedFrom;
+  /// (`computed.abstinence-cell#7`). Считает признак поставщик,
+  /// `HabitListModel.abstinenceDefinitionOf`; панель получает уже готовый
+  /// ответ.
+  ///
+  /// Едет определение целиком, а не один день обещания, потому что срывом день
+  /// называет `isAbstinenceLapse(definition, величина)` — тот же судья, что и
+  /// у оценки, — и допуск он берёт отсюда.
+  final core.HabitDefinition? abstinenceDefinition;
 
   /// Куда уходит тап по ячейке воздержания.
   final EntryLapseCallback? onLapse;
@@ -8031,15 +8363,15 @@ typedef EntryLapseCallback = void Function(core.LocalDate date, bool lapsed);
 ```dart
     // Воздержание проверяется раньше числа: оно числовое, и обратный порядок
     // отдал бы его числовой панели.
-    final int? committedFrom = widget.abstinenceCommittedFrom;
-    if (committedFrom != null) {
+    final core.HabitDefinition? definition = widget.abstinenceDefinition;
+    if (definition != null) {
       final int stored = offset < widget.values.length
           ? widget.values[offset]
           : core.Entry.unknown;
       final AbstinenceCell stated = abstinenceCellOf(
+        definition: definition,
         storedValue: stored,
         day: date.daysSince2000,
-        committedFrom: committedFrom,
       );
       final bool? optimistic = _optimisticLapses[date.daysSince2000];
       final AbstinenceCell cell = optimistic == null ||
@@ -8054,12 +8386,18 @@ typedef EntryLapseCallback = void Function(core.LocalDate date, bool lapsed);
       final bool tappable =
           cell == AbstinenceCell.clean || cell == AbstinenceCell.lapse;
 
-      void lapse() {
+      Future<void> lapse() async {
         final bool next = cell != AbstinenceCell.lapse;
         reportPress();
         setState(() => _optimisticLapses[date.daysSince2000] = next);
-        widget.onLapse?.call(date, next);
         performToggleFeedback();
+        // Красим до ответа и снимаем краску, если ответ «ничего не записано»:
+        // перерисовки списка в этом случае не будет, и оставленный крест
+        // соврал бы до следующего чужого повода перестроить строку.
+        final bool written = await widget.onLapse?.call(date, next) ?? false;
+        if (!written && mounted) {
+          setState(() => _optimisticLapses.remove(date.daysSince2000));
+        }
       }
 
       // Долгое нажатие остаётся тем же жестом, что и у числовой ячейки, и
@@ -8081,25 +8419,27 @@ typedef EntryLapseCallback = void Function(core.LocalDate date, bool lapsed);
           notes: note,
           textScaler: MediaQuery.textScalerOf(context),
         ),
-        onTap: tappable ? lapse : null,
+        onTap: tappable ? () => unawaited(lapse()) : null,
         onLongPress: tappable ? editFromLongPress : null,
       );
     }
 ```
 
-и импорт вверху файла:
+и импорты вверху файла:
 
 ```dart
+import 'dart:async' show unawaited;
+
 import '../abstinence/abstinence_button_view.dart';
 ```
 
 4. В `app/lib/ui/habits/list/habit_card.dart` добавить в конструктор
-   `this.abstinenceCommittedFrom,` и `this.onLapse,`, к полям:
+   `this.abstinenceDefinition,` и `this.onLapse,`, к полям:
 
 ```dart
-  /// День обязательства, если это привычка-воздержание; иначе null. Карточка
-  /// его не добывает — [HabitListModel.abstinenceCommitmentOf] её кормит.
-  final int? abstinenceCommittedFrom;
+  /// Определение, если это привычка-воздержание; иначе null. Карточка его не
+  /// добывает — [HabitListModel.abstinenceDefinitionOf] её кормит.
+  final core.HabitDefinition? abstinenceDefinition;
 
   /// Ячейка воздержания сообщила о срыве.
   final EntryLapseCallback? onLapse;
@@ -8108,7 +8448,7 @@ import '../abstinence/abstinence_button_view.dart';
 а в `_buildPanel`, в конструктор `EntryPanel`, рядом с `onEdit:`:
 
 ```dart
-      abstinenceCommittedFrom: widget.abstinenceCommittedFrom,
+      abstinenceDefinition: widget.abstinenceDefinition,
       onLapse: widget.onLapse,
 ```
 
@@ -8121,9 +8461,11 @@ import '../abstinence/abstinence_button_view.dart';
 | Мутация | Падает |
 |---|---|
 | перенести блок воздержания **после** `if (widget.isNumerical)` | `#1` |
-| `onTap: tappable ? lapse : null` → `onTap: lapse` | `#3`, `#4` |
+| `onTap: tappable ? () => unawaited(lapse()) : null` → `onTap: () => unawaited(lapse())` | `#3`, `#4` |
 | убрать `setState(() => _optimisticLapses[...] = next);` | `#5` (ячейка не перекрашивается) |
 | `final bool next = cell != AbstinenceCell.lapse;` → `= true` | `#5` (второй тап не отменяет) |
+| убрать `if (!written && mounted) { setState(...remove...); }` | «не записанный срыв ячейку не перекрашивает» |
+| `abstinenceCellOf(definition: definition, …)` → судить прежним `stored > core.Entry.skip` | «панель судит допуском, а не «есть запись»» |
 | убрать `_optimisticLapses.clear()` из `didUpdateWidget` | не ловится здесь — ловится в Task 4-ui-list.4 |
 
 7. Коммит: `abstinence: панель дней рисует воздержание и уводит тап в журнал`.
@@ -8141,8 +8483,8 @@ import '../abstinence/abstinence_button_view.dart';
 **Interfaces:** Consumes — `AppScope.abstinence.setLapse` (Задача 24; он же и
 объявляет об изменении, изнутри `DayWriter`), `AppScope.lapses`,
 `DefinitionRepository.forHabit`. Produces —
-`void setLapseDay(AppScope scope, {required core.Habit habit, required core.LocalDate date, required bool lapsed})`,
-`int? HabitListModel.abstinenceCommitmentOf(core.Habit habit)`.
+`bool setLapseDay(AppScope scope, {required core.Habit habit, required core.LocalDate date, required bool lapsed, int? amount})`,
+`core.HabitDefinition? HabitListModel.abstinenceDefinitionOf(core.Habit habit)`.
 
 1. Тест первым. `app/test/ui/habits/list/abstinence_cell_test.dart` — тот же
    каркас, что у соседнего `computed_list_edit_test.dart`:
@@ -8232,6 +8574,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Срыв ли этот день — спрошено у того же судьи, что судит оценку.
+  ///
+  /// Не `значение > Entry.skip`: при допуске больше нуля запись в дне есть, а
+  /// срыва нет, и «есть запись» ответило бы не на тот вопрос.
+  bool lapsedOn(AppScope scope, Habit habit, LocalDate date) =>
+      isAbstinenceLapseDay(scope.definitions.forHabit(habit.id!)!,
+          habit.originalEntries.get(date).value);
+
   testWidgets('computed.abstinence-cell#5 тап записывает срыв, повторный '
       'снимает', (tester) async {
     final AppScope scope = openScope();
@@ -8244,7 +8594,7 @@ void main() {
 
     expect(scope.lapses.lastDay(habit.id!), today,
         reason: 'computed.abstinence-cell#5');
-    expect(isLapseValue(habit.originalEntries.get(getToday()).value), isTrue,
+    expect(lapsedOn(scope, habit, getToday()), isTrue,
         reason: 'computed.abstinence-cell#5 — день пересчитан, а не только '
             'записан в журнал');
 
@@ -8252,7 +8602,7 @@ void main() {
 
     expect(scope.lapses.lastDay(habit.id!), isNull,
         reason: 'computed.abstinence-cell#5');
-    expect(isLapseValue(habit.originalEntries.get(getToday()).value), isFalse,
+    expect(lapsedOn(scope, habit, getToday()), isFalse,
         reason: 'computed.abstinence-cell#5 — отмена возвращает день в тишину');
   });
 
@@ -8312,33 +8662,40 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../state/app_scope.dart';
 
-/// Записывает или снимает срыв за [date].
+/// Записывает или снимает срыв за [date]. Отвечает, записала ли.
 ///
 /// Одна функция, а не вызов на каждом жесте: путей записи два — ячейка списка
 /// и календарь на экране привычки, — и правило, размазанное по обоим, будет
 /// донесено до одного.
+///
+/// [amount] — измеренная величина дня в единице привычки. `null` значит «одна
+/// единица»: при допуске ноль тап и есть весь факт, спрашивать нечего
+/// (`computed.lapses#2`). Когда допуск больше нуля, величину спрашивают —
+/// но спрашивают выше, в [toggleLapseDay]; эта дверь только пишет.
 ///
 /// Об изменении **не объявляет**: это делает `DayWriter`, которым собран
 /// `AbstinenceSync` в `AppScope.open` (Задача 24). Второй вызов
 /// `onComputedDataChanged` отсюда дал бы два объявления на один тап — и, что
 /// хуже, снял бы вопрос «а пересчитана ли привычка до объявления»
 /// (`computed.freshness#2`, `#4`).
-void setLapseDay(
+bool setLapseDay(
   AppScope scope, {
   required core.Habit habit,
   required core.LocalDate date,
   required bool lapsed,
+  int? amount,
 }) {
   final int? id = habit.id;
-  if (id == null) return;
-  scope.abstinence.setLapse(habit, date, lapsed);
+  if (id == null) return false;
+  scope.abstinence.setLapse(habit, date, lapsed, amount: amount);
+  return true;
 }
 ```
 
 4. В `app/lib/state/habit_list_model.dart` — признак для карточки:
 
 ```dart
-  /// День обязательства привычки-воздержания, или null для любой другой.
+  /// Определение привычки-воздержания, или null для любой другой.
   ///
   /// Читается из базы, но не на каждый кадр: строка списка перестраивается на
   /// каждой прокрутке, а определение меняется только вместе с моделью — и
@@ -8347,23 +8704,27 @@ void setLapseDay(
   ///
   /// `kind` спрашивается наравне с днём: у сна `committed_from` есть null, и
   /// «непустой день» без проверки вида был бы признаком, который однажды
-  /// поймает не того.
-  int? abstinenceCommitmentOf(Habit habit) {
+  /// поймает не того. Признак считается здесь, один раз, и ниже едет уже
+  /// готовый ответ — определение целиком, потому что срывом день называет
+  /// `isAbstinenceLapse(definition, величина)`, и допуск он берёт оттуда.
+  HabitDefinition? abstinenceDefinitionOf(Habit habit) {
     final int? id = habit.id;
     if (id == null) return null;
-    return _abstinenceCommitments.putIfAbsent(id, () {
+    return _abstinenceDefinitions.putIfAbsent(id, () {
       final HabitDefinition? definition = scope.definitions.forHabit(id);
       if (definition == null) return null;
       if (definition.kind != ComputedKind.abstinence) return null;
-      return definition.committedFrom;
+      if (definition.committedFrom == null) return null;
+      return definition;
     });
   }
 
-  final Map<int, int?> _abstinenceCommitments = <int, int?>{};
+  final Map<int, HabitDefinition?> _abstinenceDefinitions =
+      <int, HabitDefinition?>{};
 
   @override
   void notifyListeners() {
-    _abstinenceCommitments.clear();
+    _abstinenceDefinitions.clear();
     super.notifyListeners();
   }
 ```
@@ -8372,8 +8733,8 @@ void setLapseDay(
    `onEdit:` (сам блок `onEdit` не трогается — запрет остаётся дословно):
 
 ```dart
-      abstinenceCommittedFrom: model.abstinenceCommitmentOf(habit),
-      onLapse: (core.LocalDate date, bool lapsed) => setLapseDay(
+      abstinenceDefinition: model.abstinenceDefinitionOf(habit),
+      onLapse: (core.LocalDate date, bool lapsed) async => setLapseDay(
         _model.scope,
         habit: habit,
         date: date,
@@ -8403,7 +8764,8 @@ cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && flutter test \
 | собрать `AbstinenceSync` в `AppScope.open` с `const DayWriter()` вместо объявляющего | «список перерисовывается сам» |
 | убрать `scope.abstinence.setLapse(...)` | `#5` |
 | `if (definition.kind != ComputedKind.abstinence) return null;` убрать | `computed_list_edit_test` (сон получит ячейку воздержания) |
-| `notifyListeners` без `_abstinenceCommitments.clear()` | `#5` для привычки, чей день обещания изменили на ходу — не ловится этим набором; оставить как известный предел мемо |
+| `if (definition.committedFrom == null) return null;` убрать | `computed_list_edit_test` и `calendar_editor_guard_test`: их определение сохранено без дня обещания и обязано остаться числовой привычкой (`computed.abstinence-cell#7`) |
+| `notifyListeners` без `_abstinenceDefinitions.clear()` | `#5` для привычки, чей допуск или день обещания изменили на ходу — не ловится этим набором; оставить как известный предел мемо |
 | `onLapse` не передан в `HabitCard` | `#5` |
 
 8. Коммит: `abstinence: тап по ячейке списка пишет срыв`.
@@ -8420,11 +8782,18 @@ cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && flutter test \
 - Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/test/ui/habits/show/abstinence_screen_test.dart`
 
 **Interfaces:** Consumes — `AppScope.lapses.lastDay`, `setLapseDay`,
-`isLapseValue`, ядровая `daysWithoutLapse(core.Habit, {core.LocalDate? asOf})`
-(Задача 16), L10n из Задачи 32. Produces —
-`class AbstinenceCounterCard` с `static const Key cardKey` и
-`static const Key todayButtonKey`,
-`List<Widget> buildAbstinenceSection(BuildContext, {required AppScope scope, required core.Habit habit, required int committedFrom, required core.Theme theme, required VoidCallback onChanged})`.
+`isAbstinenceLapseDay` (Задача 33), ядровая
+`daysWithoutLapse(core.Habit, {core.LocalDate? asOf})` (Задача 16), L10n из
+Задачи 32. Produces — `class AbstinenceCounterCard` с
+`static const Key cardKey` и `static const Key todayButtonKey`,
+`List<Widget> buildAbstinenceSection(BuildContext, {required AppScope scope, required core.Habit habit, required core.HabitDefinition definition, required core.Theme theme, required VoidCallback onChanged})`.
+
+Определение приезжает целиком, а не одним днём обязательства: «сорвался ли я
+сегодня» — вопрос к тому же судье, что судит оценку
+(`isAbstinenceLapse(definition, величина)`), и надпись на кнопке обязана
+совпадать с крестом в ячейке и с числом на счётчике. День обязательства
+берётся из него же — `definition.committedFrom!`, непустой по построению
+признака.
 
 Место в колонке: счётчик идёт **первым**, выше портированных карточек. У сна
 портированная четвёрка стоит выше его блоков, потому что те блоки — механика.
@@ -8820,7 +9189,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import '../list/list_header.dart' show IntlLocalDateFormatter;
-import 'abstinence_button_view.dart' show isLapseValue;
+import 'abstinence_button_view.dart' show isAbstinenceLapseDay;
 import 'abstinence_counter.dart';
 import 'abstinence_gestures.dart';
 
@@ -8831,16 +9200,21 @@ List<Widget> buildAbstinenceSection(
   BuildContext context, {
   required AppScope scope,
   required core.Habit habit,
-  required int committedFrom,
+  required core.HabitDefinition definition,
   required core.Theme theme,
   required VoidCallback onChanged,
 }) {
   final int id = habit.id!;
+  final int committedFrom = definition.committedFrom!;
   final core.LocalDate today = core.getToday();
   // Из журнала берётся только подпись: какое число показать, знает ядро.
   final int? lastLapse = scope.lapses.lastDay(id);
+  // Тот же судья, что у ячейки и у оценки. «Есть запись в дне» ответило бы не
+  // на тот вопрос: при допуске 30 двадцать минут записаны, а срыва нет, и
+  // кнопка предложила бы «Отменить за сегодня» там, где счётчик показывает
+  // сорок дней без срыва.
   final bool lapsedToday =
-      isLapseValue(habit.originalEntries.get(today).value);
+      isAbstinenceLapseDay(definition, habit.originalEntries.get(today).value);
   final IntlLocalDateFormatter formatter = IntlLocalDateFormatter.of(context);
   final L10n l10n = L10n.of(context);
 
@@ -8875,20 +9249,25 @@ cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && \
    б) Новый геттер рядом с `_isComputed`:
 
 ```dart
-  /// День обязательства, если это привычка-воздержание; иначе null.
+  /// Определение, если это привычка-воздержание; иначе null.
   ///
-  /// Признаком служит именно непустой день обещания, а не вид: определение без
-  /// него неполно — судить день как чистый или сорванный не от чего, — и такая
-  /// привычка ведёт себя как любая другая вычисляемая
+  /// Признаком служит вид `abstinence` **с непустым** днём обещания, а не один
+  /// вид: определение без дня неполно — судить день как чистый или сорванный
+  /// не от чего, — и такая привычка ведёт себя как любая другая вычисляемая
   /// (`computed.abstinence-cell#7`).
-  int? get _abstinenceCommittedFrom {
+  ///
+  /// Отдаётся определение целиком, а не день: срывом день называет
+  /// `isAbstinenceLapse(definition, величина)`, и допуск он берёт отсюда. Тот
+  /// же ответ, что кормит ячейку списка, — и считается он тем же способом.
+  core.HabitDefinition? get _abstinenceDefinition {
     final int? id = widget.habit.id;
     if (id == null) return null;
     final core.HabitDefinition? definition =
         widget.scope.definitions.forHabit(id);
     if (definition == null) return null;
     if (definition.kind != core.ComputedKind.abstinence) return null;
-    return definition.committedFrom;
+    if (definition.committedFrom == null) return null;
+    return definition;
   }
 ```
 
@@ -8916,13 +9295,13 @@ cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && \
   /// решает ячейка списка.
   List<Widget> _buildAbstinenceCards(
       BuildContext context, ShowHabitModel model) {
-    final int? committedFrom = _abstinenceCommittedFrom;
-    if (committedFrom == null) return const <Widget>[];
+    final core.HabitDefinition? definition = _abstinenceDefinition;
+    if (definition == null) return const <Widget>[];
     return buildAbstinenceSection(
       context,
       scope: widget.scope,
       habit: widget.habit,
-      committedFrom: committedFrom,
+      definition: definition,
       theme: model.state.theme,
       onChanged: _repaintComputed,
     );
@@ -8940,11 +9319,23 @@ cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && \
     // `computed.abstinence-screen#4`).
     final bool swapsTargetForOverview = (habitId != null &&
             widget.scope.sleepRepository.goalFor(habitId) != null) ||
-        _abstinenceCommittedFrom != null;
+        _abstinenceDefinition != null;
 ```
 
-и всюду в этом методе и в `_isVisible` переименовать именованный параметр
-`isSleep` в `swapsTargetForOverview` (три места: объявление, вызов, тело).
+и всюду в этом методе и в `_isVisible` переименовать `isSleep` в
+`swapsTargetForOverview`. Мест ровно **четыре**, и на диске они такие
+(`app/lib/ui/habits/show/show_habit_screen.dart`):
+
+| Строка | Что там |
+|---|---|
+| `:900` | объявление в `_buildCards`: `final bool isSleep = habitId != null &&` |
+| `:907` | аргумент в вызове: `if (!_isVisible(model, card, isSleep: isSleep)) continue;` |
+| `:927` | параметр `_isVisible`: `required bool isSleep,` |
+| `:929` | тело `_isVisible`: `if (!isSleep) return model.isVisible(card);` |
+
+`grep -n "isSleep" app/lib/ui/habits/show/show_habit_screen.dart` после правки
+обязан не найти ничего: четвёртое место — тело — забывается легче остальных
+трёх, и забытое даёт привычке-воздержанию карточку цели обратно.
 
 Скрывается **только** карточка цели. Bar и Frequency остаются и продолжают
 складывать значения дней как проценты — спецификация выносит решение по ним
@@ -8982,14 +9373,505 @@ cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && \
 
 ---
 
-### Task 37: календарь-редактор пишет срыв (4-ui-list.6)
+### Task 37: величину спрашивают, когда допуск её требует (4-ui-list.9)
+
+**Files:**
+- Create: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/abstinence/abstinence_amount_dialog.dart`
+- Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/abstinence/abstinence_gestures.dart`
+- Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/list/habit_list_screen.dart`
+- Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/abstinence/abstinence_section.dart`
+- Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/test/ui/habits/abstinence/abstinence_allowance_test.dart` (create)
+
+**Interfaces:**
+- Потребляет: `abstinenceAllowanceOf` (Задача 2), `isAbstinenceLapseDay` и
+  `abstinenceCellOf` (Задача 33), `setLapseDay` (Задача 35),
+  `AbstinenceCounterCard` (Задача 36), портированный
+  `showNumberDialog` (`app/lib/ui/common/dialogs/number_dialog.dart`),
+  ядровая `daysWithoutLapse` (Задача 16).
+- Даёт:
+
+```dart
+// app/lib/ui/habits/abstinence/abstinence_amount_dialog.dart
+Future<int?> askLapseAmount(BuildContext context, {required core.HabitDefinition definition, required core.Preferences preferences, required core.Color color});
+
+// app/lib/ui/habits/abstinence/abstinence_gestures.dart
+Future<bool> toggleLapseDay(BuildContext context, AppScope scope, {required core.Habit habit, required core.HabitDefinition definition, required core.LocalDate date, required bool lapsed, required core.Theme theme});
+```
+
+- Даёт правило `computed.abstinence-cell#8`. Новых строк локализации — ни
+  одной: диалог портированный и говорит своими.
+
+**Зачем.** Допуск ноль — умолчание, и на нём тап есть весь факт: «закурил» не
+имеет количества, спрашивать нечего, и лишний шаг на самом частом жесте был бы
+не строгостью, а налогом. Но допуск бывает и не ноль: «не более 30 минут» — это
+про число, и без числа оно не выражается. Молчаливый `amount = 1` при допуске
+30 записал бы день, который обещание **держит**, и оставил бы приложение
+спорить с самим собой: ячейка (после Задачи 33) нарисовала бы галочку, потому
+что 1 ≤ 30, а человек только что сказал «я сорвался» и не увидел никакого
+следа. Либо число спрашивают, либо жест врёт.
+
+Дверь для этого заводится **своя**. Общая дверь ввода числа — `showNumberPopup`
+на экране привычки и в списке — закрыта охраной вычисляемых привычек
+(`computed.write-paths#3`), и она обязана остаться закрытой: человек не пишет
+вычисляемой привычке значение дня. Здесь он пишет не значение дня, а **величину
+в журнал**; значение дня из неё считает приложение. Виджет диалога берётся тот
+же — портированный `NumberDialog`, — а вход другой.
+
+- [ ] **Шаг 1: написать падающий тест**
+
+Создать `app/test/ui/habits/abstinence/abstinence_allowance_test.dart`. Это и
+есть тест на согласие троих: ячейка списка, кнопка карточки и счётчик дней без
+срыва спрошены об одном и том же дне и обязаны ответить одно.
+
+```dart
+/// Допуск больше нуля: жест спрашивает величину, и трое отвечают одинаково.
+///
+/// «Не более 30 минут» без числа не выражается. Молчаливый `amount = 1` при
+/// допуске 30 записал бы день, который обещание держит, а покрасил бы его как
+/// срыв — и тогда ячейка говорила бы «сорвался», счётчик «сорок дней без
+/// срыва», а балл не шелохнулся бы. Здесь эти трое спрошены об одном дне.
+library;
+
+// ignore_for_file: implementation_imports
+
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:uhabits/l10n/app_localizations.dart';
+import 'package:uhabits/platform/app_database.dart';
+import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
+import 'package:uhabits/ui/habits/abstinence/abstinence_button_view.dart';
+import 'package:uhabits/ui/habits/list/entry_panel.dart';
+import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
+import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
+import 'package:uhabits_core/uhabits_core.dart';
+
+void main() {
+  late Directory tempDir;
+  late AppScope scope;
+  late Habit habit;
+
+  /// «Не более [allowance] минут в день», обещание дано сорок дней назад.
+  ///
+  /// Допуск пишется в двух местах одним движением, потому что судьи два лица
+  /// одного числа: `payload` читает интерфейс, `targetValue` — оценка
+  /// (`computed.allowance#1`).
+  void commit({required double allowance}) {
+    habit.targetValue = allowance;
+    scope.habitList.update(<Habit>[habit]);
+    scope.definitions.save(
+      habit.id!,
+      HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: getToday().daysSince2000 - 40,
+        payload: abstinencePayload(
+          allowance: allowance,
+          unit: allowance == 0.0
+              ? abstinenceUnitCount
+              : abstinenceUnitMinutes,
+        ),
+      ),
+    );
+    attachDefinition(habit, scope.definitions);
+    habit.recompute();
+  }
+
+  setUp(() {
+    resetToday();
+    tempDir = Directory.systemTemp.createTempSync('uhabits_allowance');
+    scope = AppScope.open(
+      AppDatabase.openAndMigrate('${tempDir.path}/habits.db'),
+    );
+    scope.preferences.isFirstRun = false;
+
+    habit = scope.modelFactory.buildHabit()
+      ..name = 'Screen time'
+      ..type = HabitType.numerical
+      ..targetType = NumericalHabitType.atMost
+      ..targetValue = 30
+      ..unit = 'minutes';
+    scope.habitList.add(habit);
+    commit(allowance: 30.0);
+  });
+
+  tearDown(() {
+    scope.close();
+    tempDir.deleteSync(recursive: true);
+  });
+
+  Widget list() => MaterialApp(
+        localizationsDelegates: L10n.localizationsDelegates,
+        supportedLocales: L10n.supportedLocales,
+        locale: const Locale('ru'),
+        home: Provider<AppScope>.value(
+          value: scope,
+          child: const HabitListScreen(),
+        ),
+      );
+
+  Widget screen() => MaterialApp(
+        localizationsDelegates: L10n.localizationsDelegates,
+        supportedLocales: L10n.supportedLocales,
+        locale: const Locale('ru'),
+        home: Provider<AppScope>.value(
+          value: scope,
+          child: ShowHabitScreen(
+            key: ValueKey<String?>(habit.uuid),
+            habit: habit,
+          ),
+        ),
+      );
+
+  AbstinenceCell cellToday(WidgetTester tester) => (tester
+          .widget<EntryButton>(find.byKey(EntryPanel.buttonKey(getToday())))
+          .view as AbstinenceButtonView)
+      .cell;
+
+  Future<void> tapToday(WidgetTester tester) async {
+    await tester.pumpWidget(list());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> answer(WidgetTester tester, String amount) async {
+    expect(find.byType(NumberDialog), findsOneWidget,
+        reason: 'computed.abstinence-cell#8 — при допуске больше нуля тап '
+            'спрашивает величину');
+    await tester.enterText(
+        find.byKey(const ValueKey<String>('number_value')), amount);
+    await tester.tap(find.byKey(const ValueKey<String>('number_save_button')));
+    await tester.pumpAndSettle();
+  }
+
+  int get todayDay => getToday().daysSince2000;
+
+  testWidgets('computed.abstinence-cell#8 двадцать минут при допуске тридцать '
+      'обещание держат, и трое согласны', (tester) async {
+    await tapToday(tester);
+    await answer(tester, '20');
+
+    // Журнал записал двадцать, а не «единицу»: величина есть факт дня.
+    expect(scope.lapses.forDay(habit.id!, todayDay), 20,
+        reason: 'computed.abstinence-cell#8');
+
+    // Первый из троих — ячейка списка.
+    expect(cellToday(tester), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#2 — «не более 30» обещание держит');
+
+    await tester.pumpWidget(screen());
+    await tester.pumpAndSettle();
+
+    // Второй — кнопка карточки.
+    expect(find.text('Сегодня сорвался'), findsOneWidget,
+        reason: 'computed.abstinence-screen#5 — предлагать «Отменить за '
+            'сегодня» там, где срыва не было, значит спорить с ячейкой');
+    // Третий — счётчик.
+    expect(find.text('40'), findsOneWidget,
+        reason: 'computed.streak#4 — двадцать минут серию не рвут');
+  });
+
+  testWidgets('computed.abstinence-cell#8 сорок пять минут — срыв, и трое '
+      'согласны с этим', (tester) async {
+    await tapToday(tester);
+    await answer(tester, '45');
+
+    expect(scope.lapses.forDay(habit.id!, todayDay), 45,
+        reason: 'computed.abstinence-cell#8');
+    expect(cellToday(tester), AbstinenceCell.lapse,
+        reason: 'computed.abstinence-cell#2');
+
+    await tester.pumpWidget(screen());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Отменить за сегодня'), findsOneWidget,
+        reason: 'computed.abstinence-screen#5');
+    expect(find.text('0'), findsWidgets,
+        reason: 'computed.streak#5 — срыв сегодня обнуляет счётчик');
+  });
+
+  testWidgets('computed.abstinence-cell#8 вопрос без ответа фактом не '
+      'становится', (tester) async {
+    await tapToday(tester);
+
+    expect(find.byType(NumberDialog), findsOneWidget,
+        reason: 'computed.abstinence-cell#8');
+    Navigator.of(tester.element(find.byType(NumberDialog))).pop();
+    await tester.pumpAndSettle();
+
+    expect(scope.lapses.forDay(habit.id!, todayDay), isNull,
+        reason: 'computed.abstinence-cell#8');
+    expect(cellToday(tester), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#5 — и оптимистичная краска снята: '
+            'перерисовать список тут нечему, и крест остался бы висеть');
+  });
+
+  testWidgets('computed.abstinence-cell#8 ноль — это молчание, а не срыв',
+      (tester) async {
+    // Ноль удовлетворяет «не больше допуска» при любом допуске, то есть
+    // означает «ничего не было». Молчание есть отсутствие строки
+    // (`computed.lapses#1`, `#2`), поэтому ноль в ответе равен отказу.
+    await tapToday(tester);
+    await answer(tester, '0');
+
+    expect(scope.lapses.forDay(habit.id!, todayDay), isNull,
+        reason: 'computed.abstinence-cell#8');
+    expect(cellToday(tester), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#8');
+  });
+
+  testWidgets('computed.abstinence-cell#8 при допуске ноль вопроса нет',
+      (tester) async {
+    commit(allowance: 0.0);
+
+    await tapToday(tester);
+
+    expect(find.byType(NumberDialog), findsNothing,
+        reason: 'computed.abstinence-cell#6 — общая дверь числа закрыта, и на '
+            'умолчании лишнего шага нет');
+    expect(scope.lapses.forDay(habit.id!, todayDay),
+        LapseRepository.minimumAmount,
+        reason: 'computed.abstinence-cell#8 — тап пишет одну единицу, как и '
+            'было');
+    expect(cellToday(tester), AbstinenceCell.lapse,
+        reason: 'computed.abstinence-cell#2');
+  });
+
+  testWidgets('computed.abstinence-cell#8 снятие срыва величины не спрашивает',
+      (tester) async {
+    await tapToday(tester);
+    await answer(tester, '45');
+
+    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NumberDialog), findsNothing,
+        reason: 'computed.abstinence-cell#8 — «этого не было» количества не '
+            'имеет');
+    expect(scope.lapses.forDay(habit.id!, todayDay), isNull,
+        reason: 'computed.abstinence-cell#5');
+  });
+}
+```
+
+- [ ] **Шаг 2: запустить, убедиться что падает**
+
+```bash
+cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app
+flutter test test/ui/habits/abstinence/abstinence_allowance_test.dart
+```
+Ожидается FAIL на первом же тесте: `Expected: exactly one matching candidate
+Actual: _TypeWidgetFinder:<Found 0 widgets with type NumberDialog>` — тап
+сегодня молча пишет единицу и ничего не спрашивает.
+
+- [ ] **Шаг 3: написать вопрос**
+
+Создать `app/lib/ui/habits/abstinence/abstinence_amount_dialog.dart`:
+
+```dart
+/// «Сколько сегодня?» — величина срыва, когда допуск её требует.
+library;
+
+import 'package:flutter/widgets.dart';
+import 'package:uhabits_core/uhabits_core.dart' as core;
+
+import '../../common/dialogs/number_dialog.dart';
+
+/// Спрашивает величину дня и отдаёт её в целых единицах привычки, или null,
+/// когда ответа не было.
+///
+/// Свой маршрут, а не общая дверь числа. `showNumberPopup` — и в списке, и на
+/// экране привычки — закрыт охраной вычисляемых привычек
+/// (`computed.write-paths#3`), и открывать его ради воздержания значило бы
+/// снять запрет со всех: человек начал бы писать вычисленное значение дня
+/// руками, а следующий пересчёт молча его затирал бы. Здесь пишется не
+/// значение дня, а величина в журнал; значение дня из неё считает приложение
+/// (`computed.lapse-score#2`).
+///
+/// Виджет тот же самый — портированный [NumberDialog], со своими надписями и
+/// своей клавиатурой. Новых строк локализации ввод не приносит.
+Future<int?> askLapseAmount(
+  BuildContext context, {
+  required core.HabitDefinition definition,
+  required core.Preferences preferences,
+  required core.Color color,
+}) async {
+  final NumberDialogResult? result = await showNumberDialog(
+    context,
+    // Открывается на нуле, как всякая незаполненная запись
+    // (`number-dialog.popup#4`), а не на допуске: предзаполненные «30» человек
+    // подтвердил бы не глядя, и получилась бы величина, которая обещание
+    // держит, в ответ на «я сорвался».
+    value: 0,
+    notes: '',
+    // NumberDialog красит только кнопки булевого ряда, которого здесь нет;
+    // цвет передаётся тем же, каким его передаёт портированный попап числа
+    // (`number-dialog.popup#1`).
+    color: color,
+    preferences: preferences,
+  );
+  if (result == null) return null;
+
+  // Журнал хранит целые единицы, и меньше одной он не хранит вовсе
+  // (`computed.lapses#2`): ноль удовлетворяет «не больше допуска» при любом
+  // допуске, то есть означает «ничего не было», а это молчание — отсутствие
+  // строки, а не строка с нулём. Ответ «ноль» поэтому равен отказу.
+  final int amount = result.value.round();
+  return amount < core.LapseRepository.minimumAmount ? null : amount;
+}
+```
+
+- [ ] **Шаг 4: одна дверь на все три жеста**
+
+В `app/lib/ui/habits/abstinence/abstinence_gestures.dart`, рядом с
+`setLapseDay`:
+
+```dart
+/// Жест «сорвался» / «не сорвался» целиком: спрашивает величину, когда допуск
+/// её требует, пишет и отвечает, записал ли.
+///
+/// Одна дверь на все три жеста — ячейку списка, кнопку карточки и день в
+/// календаре, — потому что «спрашивать или не спрашивать» есть правило
+/// привычки, а не свойство места, откуда по ней попали. Развести это по трём
+/// местам значит завести три правила, из которых совпадать будут два.
+///
+/// Ответ нужен вызывающему: панель красит ячейку до записи, и «ничего не
+/// записано» она обязана уметь отменить.
+Future<bool> toggleLapseDay(
+  BuildContext context,
+  AppScope scope, {
+  required core.Habit habit,
+  required core.HabitDefinition definition,
+  required core.LocalDate date,
+  required bool lapsed,
+  required core.Theme theme,
+}) async {
+  // Снятие величины не имеет: «этого не было» — не количество.
+  if (!lapsed) {
+    return setLapseDay(scope, habit: habit, date: date, lapsed: false);
+  }
+  // Допуск ноль — умолчание: тап и есть весь факт, и одна единица есть всё,
+  // что он может значить (`computed.lapses#2`).
+  if (core.abstinenceAllowanceOf(definition) <= 0) {
+    return setLapseDay(scope, habit: habit, date: date, lapsed: true);
+  }
+  final int? amount = await askLapseAmount(
+    context,
+    definition: definition,
+    preferences: scope.preferences,
+    color: theme.colorOf(const core.PaletteColor(0)),
+  );
+  if (amount == null) return false;
+  return setLapseDay(
+    scope,
+    habit: habit,
+    date: date,
+    lapsed: true,
+    amount: amount,
+  );
+}
+```
+
+и импорты `package:flutter/widgets.dart` и `abstinence_amount_dialog.dart`.
+
+- [ ] **Шаг 5: перевести оба существующих жеста на неё**
+
+Календарь на неё встанет сразу, Задачей 38. Здесь переводятся два, которые уже
+написаны.
+
+В `app/lib/ui/habits/list/habit_list_screen.dart`, в `_buildCard`, заменить
+колбэк:
+
+```dart
+      onLapse: (core.LocalDate date, bool lapsed) => toggleLapseDay(
+        context,
+        _model.scope,
+        habit: habit,
+        definition: model.abstinenceDefinitionOf(habit)!,
+        date: date,
+        lapsed: lapsed,
+        theme: theme,
+      ),
+```
+
+`!` здесь безопасен и назван: колбэк существует только у карточки, которой
+`abstinenceDefinitionOf` уже ответил не-null — тем же вызовом, что двумя
+строками выше отдаёт `abstinenceDefinition:`.
+
+В `app/lib/ui/habits/abstinence/abstinence_section.dart`, в
+`AbstinenceCounterCard`:
+
+```dart
+      onToggleToday: () async {
+        final bool written = await toggleLapseDay(
+          context,
+          scope,
+          habit: habit,
+          definition: definition,
+          date: today,
+          lapsed: !lapsedToday,
+          theme: theme,
+        );
+        if (written) onChanged();
+      },
+```
+
+`onChanged` теперь под условием: перерисовывать экран, когда ничего не
+записано, незачем, и надпись на кнопке от этого не поменяется.
+
+- [ ] **Шаг 6: запустить всё, что могло сдвинуться**
+
+```bash
+cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && flutter test \
+  test/ui/habits/abstinence/ \
+  test/ui/habits/list/ \
+  test/ui/habits/show/ \
+  test/ui/sleep/calendar_editor_guard_test.dart
+```
+Ожидается PASS. `computed_list_edit_test.dart` и `calendar_editor_guard_test.dart`
+обязаны остаться зелёными **дословно**: их определение сохранено без
+`committedFrom`, признака нет, и ни один жест воздержания не включается.
+
+- [ ] **Шаг 7: мутации**
+
+| Мутация | Что обязано упасть |
+|---|---|
+| `if (core.abstinenceAllowanceOf(definition) <= 0)` → `if (true)` (никогда не спрашивать) | «двадцать минут… обещание держат»: `NumberDialog` не найден, а в журнал уедет 1 |
+| та же строка → `if (false)` (спрашивать всегда) | «при допуске ноль вопроса нет» |
+| убрать раннюю ветку `if (!lapsed)` | «снятие срыва величины не спрашивает» |
+| `return amount < core.LapseRepository.minimumAmount ? null : amount;` → `return amount;` | «ноль — это молчание, а не срыв»: `save` бросит `ArgumentError` (`computed.lapses#2`) |
+| `if (result == null) return null;` → `return 1;` | «вопрос без ответа фактом не становится» |
+| `amount: amount` в `setLapseDay` → без него | «двадцать минут… обещание держат»: в журнал уедет 1, ячейка станет крестом, счётчик — нулём, и разойдутся все трое |
+| `value: 0` → `value: core.abstinenceAllowanceOf(definition)` | не ловится набором — предзаполнение видно только человеку; решение записано в доке `askLapseAmount` и мутацией не закрывается |
+| `if (written) onChanged();` → `onChanged();` безусловно | не ловится — лишняя перерисовка не видна; оставить как известный предел |
+
+- [ ] **Шаг 8: коммит**
+
+```bash
+cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter
+git add app
+git commit -m "Ask for the amount when the allowance calls for one"
+```
+
+---
+
+### Task 38: календарь-редактор пишет срыв (4-ui-list.6)
 
 **Files:**
 - Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart`
 - Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/test/ui/habits/show/abstinence_calendar_test.dart`
 
-**Interfaces:** Consumes — `_lastClickedDate`, `_abstinenceCommittedFrom`,
-`setLapseDay`, `isLapseValue`. Produces — ничего нового.
+**Interfaces:** Consumes — `_lastClickedDate`, `_abstinenceDefinition`,
+`toggleLapseDay` (Задача 37), `isAbstinenceLapseDay` (Задача 33). Produces —
+ничего нового.
+
+Календарь — третье и последнее место, где жест решает «срыв или нет», и судит
+он тем же предикатом, что ячейка и кнопка карточки. Ввод величины он получает
+даром: жест уходит в ту же `toggleLapseDay`, которая при ненулевом допуске
+спрашивает «сколько», а при нулевом не спрашивает ничего.
 
 1. Тест первым. Геометрия ячейки взята у соседа —
    `app/test/ui/sleep/calendar_editor_guard_test.dart:130-142`; здесь она
@@ -9128,27 +10010,40 @@ void main() {
       // Воздержание: тот же жест, что и в ячейке списка. Числа человек не
       // вводит, но «в этот день я сорвался» — не измерение, а факт, и его
       // дверь — журнал срывов (`computed.abstinence-screen#6`).
-      final int? committedFrom = _abstinenceCommittedFrom;
-      if (committedFrom != null) {
+      final core.HabitDefinition? definition = _abstinenceDefinition;
+      if (definition != null) {
         final core.LocalDate? day = _lastClickedDate;
-        if (day == null || day.daysSince2000 < committedFrom) return;
+        if (day == null || day.daysSince2000 < definition.committedFrom!) {
+          return;
+        }
         final int stored = widget.habit.originalEntries.get(day).value;
         // Пропуск — отметка человека; `DayWriter` его не перепишет, и здесь
         // тоже (`computed.abstinence-cell#4`).
         if (stored == core.Entry.skip) return;
-        setLapseDay(
+        // Тот же судья, что у ячейки и у кнопки карточки: «есть запись в дне»
+        // при допуске 30 сняло бы двадцать минут, которые срывом не были.
+        unawaited(toggleLapseDay(
+          context,
           widget.scope,
           habit: widget.habit,
+          definition: definition,
           date: day,
-          lapsed: !isLapseValue(stored),
-        );
-        _repaintComputed();
+          lapsed: !isAbstinenceLapseDay(definition, stored),
+          // `coreThemeOf(context)` — тот же способ, каким тему берут соседние
+          // `showNumberPopup` и `_showCheckmarkPopup` в этом же файле
+          // (`show_habit_screen.dart:553`, `:559`).
+          theme: coreThemeOf(context),
+        ).then((bool written) {
+          if (written && mounted) _repaintComputed();
+        }));
         return;
       }
 ```
 
-и импорты `import '../abstinence/abstinence_button_view.dart' show isLapseValue;`,
-`import '../abstinence/abstinence_gestures.dart';`.
+и импорты
+`import '../abstinence/abstinence_button_view.dart' show isAbstinenceLapseDay;`,
+`import '../abstinence/abstinence_gestures.dart';` (плюс `dart:async` ради
+`unawaited`, если его в файле ещё нет).
 
 4. Прогнать новый тест и `test/ui/sleep/calendar_editor_guard_test.dart`.
    Второй остаётся зелёным дословно: его воздержание сохранено без
@@ -9159,15 +10054,16 @@ void main() {
 | Мутация | Падает |
 |---|---|
 | `date: day` → `date: core.getToday()` | `#6` (день не тот) |
-| `lapsed: !isLapseValue(stored)` → `lapsed: true` | `#6` (второй тап не снимает) |
-| убрать проверку `day.daysSince2000 < committedFrom` | не ловится этим тестом (обещание 400 дней назад) — оставить, её ловит `computed.abstinence-cell#3` в панели |
+| `lapsed: !isAbstinenceLapseDay(definition, stored)` → `lapsed: true` | `#6` (второй тап не снимает) |
+| `isAbstinenceLapseDay(definition, stored)` → прежний `stored > core.Entry.skip` | не ловится этим тестом (допуск ноль) — ловится тестом допуска 30 из Задачи 37, где календарь спрошен третьим |
+| убрать проверку `day.daysSince2000 < definition.committedFrom!` | не ловится этим тестом (обещание 400 дней назад) — оставить, её ловит `computed.abstinence-cell#3` в панели |
 | поставить блок воздержания **после** ветки сна | не ловится — у воздержания нет цели сна; порядок оставить как написано |
 
 6. Коммит: `abstinence: календарь-редактор пишет срыв за выбранный день`.
 
 ---
 
-### Task 38: отступления секции списка и экрана привычки (4-ui-list.8)
+### Task 39: отступления секции списка и экрана привычки (4-ui-list.8)
 
 **Files:**
 - Modify: `/Users/artemefimov/Desktop/uhabits/docs/parity/DEVIATIONS.md`
@@ -9175,12 +10071,13 @@ void main() {
 **Interfaces:** ничего не даёт коду; закрывает бухгалтерию секции списка и
 экрана привычки.
 
-Семь задач секции правят портированный UI, и до этой задачи ни одна не пишет в
-реестр отступлений ни строки. При этом `entry_panel.dart` получает третий вид
+Восемь задач секции правят портированный UI, и до этой задачи ни одна не пишет
+в реестр отступлений ни строки. При этом `entry_panel.dart` получает третий вид
 ячейки и второй колбэк (правила `list-habits.entry-panels#5` и `#10` описывают
-ровно две панели), `habit_card.dart` — новые поля, а карточка «дней без срыва»
-встаёт **выше** Subtitle, хотя `show-habit.card-order-and-visibility#1`
-перечисляет порядок дословно.
+ровно две панели), `habit_card.dart` — новые поля, портированный `NumberDialog`
+получает второй, необщий вход (Задача 37), а карточка «дней без срыва» встаёт
+**выше** Subtitle, хотя `show-habit.card-order-and-visibility#1` перечисляет
+порядок дословно.
 
 - [ ] **Шаг 1: записать отступление секции**
 
@@ -9205,7 +10102,11 @@ void main() {
 второй колбэк, `onLapse`. Включает его непустой `committedFrom` у определения
 вида `abstinence` — не `isNumerical`, потому что воздержание **есть** числовая
 привычка и по типу неотличимо от «прочитано страниц». Экран привычки ставит
-карточку «дней без срыва» выше Subtitle.
+карточку «дней без срыва» выше Subtitle. Портированный `NumberDialog` получает
+второй вход — `askLapseAmount`, — минуя `showNumberPopup`: та дверь закрыта
+охраной вычисляемых привычек и остаётся закрытой, а здесь человек вводит не
+значение дня, а величину в журнал (`computed.abstinence-cell#8`). Сам виджет
+диалога не меняется ни строкой.
 
 **Почему нельзя было обойтись портом:** числовая ячейка нарисовала бы «0» серым
 в каждый день, которого человек не отмечал, — величину, которой он не вводил, в
@@ -9281,12 +10182,12 @@ git commit -m "Record the abstinence cell, the card order and both refusals"
 
 ---
 
-### Task 39: закрыть правила ячейки и экрана (4-ui-list.7)
+### Task 40: закрыть правила ячейки и экрана (4-ui-list.7)
 
 **Files:**
 - Modify: `/Users/artemefimov/Desktop/uhabits/docs/extensions/COMPUTED.md`
 
-**Interfaces:** Consumes — тесты задач 2–6. Produces — закрытые группы
+**Interfaces:** Consumes — тесты Задач 33–39. Produces — закрытые группы
 `computed.abstinence-cell`, `computed.abstinence-screen`.
 
 1. Поменять `- [ ]` на `- [x]` у обеих групп.
@@ -9294,8 +10195,9 @@ git commit -m "Record the abstinence cell, the card order and both refusals"
 2. Проверить, что каждое правило действительно процитировано:
 
 ```bash
-cd /Users/artemefimov/Desktop/uhabits && dart tool/parity_coverage.dart --verify
-cd /Users/artemefimov/Desktop/uhabits && dart tool/parity_coverage.dart --uncited | grep abstinence
+cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter
+dart tool/parity_coverage.dart --verify
+dart tool/parity_coverage.dart --uncited | grep abstinence
 ```
 
 Первая команда обязана напечатать `Every checked feature is fully cited.`,
@@ -9313,7 +10215,7 @@ cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && flutter analyze && 
 
 5. Коммит: `docs: правила ячейки и экрана воздержания закрыты тестами`.
 
-### Task 40: хук 8 — «смена вида невозможна» перестаёт быть про сон (6-hooks.7)
+### Task 41: хук 8 — «смена вида невозможна» перестаёт быть про сон (6-hooks.7)
 
 **Files:**
 - Modify: `/Users/artemefimov/Desktop/uhabits/docs/parity/DEVIATIONS.md`
@@ -9440,11 +10342,21 @@ void main() {
 
 ```
 Привычка становится вычисляемой ровно в одном месте — при сохранении новой
-привычки, выбранной как вычисляемый вид (`state/edit_habit_model.dart:428-434`):
-у сна цель и определение пишутся вместе, у воздержания — определение с днём
-обязательства и допуском. Место одно на оба вида, и добавление третьего его не
-раздваивает.
+привычки, выбранной как вычисляемый вид. Это хвост `EditHabitModel.save()`
+(`state/edit_habit_model.dart`, ветка `if (goal != null) … else if
+(isAbstinence) …`): он вешает на `CommandRunner` слушателя `_AfterCommand`, и
+боковые строки пишет уже тот, когда команда отработала. У сна цель и
+определение пишутся вместе — в `_writeSleepGoal`, куда переехали строки,
+стоявшие на `:428-434` до обобщения слушателя; у воздержания — определение с
+днём обязательства и допуском. Место одно на оба вида, и добавление третьего
+его не раздваивает.
 ```
+
+**Постановление о ссылке.** Номер `:428-434` остаётся только в **цитируемом**
+куске — том, который заменяют; в новом тексте его нет. Задача 29 переносит эти
+семь строк из `save()` в `_writeSleepGoal` и заводит рядом ветку воздержания,
+после чего диапазон указывает не туда, а имена — туда. Запись отклонения живёт
+дольше номеров строк.
 
    и заменить последний абзац
 
@@ -9493,187 +10405,514 @@ void main() {
   find the call if it were there», а не второй тест: без первой проверки эта
   опечатка сделала бы набор вечнозелёным.
 
-### Task 41: CSV-экспорт журнала срывов (1-schema.6)
+### Task 42: CSV-экспорт журнала срывов (1-schema.6)
 
 **Files:**
 - Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core/lib/src/io/habits_csv_exporter.dart`
-- Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core/lib/src/models/habit_list.dart`
+- Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/lib/ui/settings/data_actions.dart`
+- Modify: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/test/ui/settings/data_actions_test.dart`
 - Modify: `/Users/artemefimov/Desktop/uhabits/docs/extensions/COMPUTED.md`
-- Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core/test/io/habits_csv_exporter_test.dart`
+- Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core/test/io/lapse_export_test.dart` (create)
 
 **Interfaces:**
-- Потребляет: `LapseRepository.range/firstDay/lastDay` (Задача 3),
-  `DefinitionRepository.habitIdsOfKind` — чтобы знать, у какой привычки журнал
-  вообще может быть.
-- Даёт: условный файл `Lapses.csv` в архиве экспорта, во **всех трёх** точках.
-  `Habits.csv` остаётся двенадцатиколоночным и не меняется ни на колонку.
+- Потребляет: `LapseRepository.firstDay/lastDay/range` (Задача 3),
+  `AppScope.lapses` (Задача 19).
+- Даёт: необязательный параметр `LapseRepository? lapseRepository` у
+  `HabitsCSVExporter` и у `ExportCSVTask` — ровно той же формы, что уже стоящий
+  рядом `SleepSessionRepository? sleepRepository`, — и условный файл
+  `Lapses.csv` в собираемом архиве. `Habits.csv` остаётся двенадцатиколоночным
+  и не меняется ни на колонку.
 
 **Почему это в плане, а не в долгах.** Срывы — данные человека. Побайтовая копия
 несёт их даром, а CSV — нет, и журнал, который нельзя вынести, есть данные в
-заложниках. Точек экспорта три (`io/habits_csv_exporter.dart:54-120`,
-`models/habit_list.dart:112-155`), и сегодня две из них теряют боковую таблицу
-целиком; протянуть надо во все три, иначе «экспорт» будет означать разное в
-зависимости от того, откуда его позвали.
+заложниках.
+
+**Дверь одна, и это проверено.** Экспортёр собирается ровно в одном месте на весь
+репозиторий — `packages/uhabits_core/lib/src/io/habits_csv_exporter.dart:278`,
+внутри `ExportCSVTask.doInBackground`:
+
+```dart
+      final exporter = HabitsCSVExporter(
+        _habitList,
+        _selectedHabits,
+        sleepRepository: _sleepRepository,
+      );
+```
+
+`grep -rn "HabitsCSVExporter(" --include="*.dart" packages/uhabits_core/lib app/lib`
+находит только его. `HabitList.writeCSV()` дверью не является: это **содержимое**
+`Habits.csv`, одна строка на привычку с двенадцатью колонками
+(`models/habit_list.dart:112-158`), и экспортёр зовёт его сам —
+`zip.addEntry('Habits.csv', allHabits.writeCSV());`. Трёх точек экспорта нет;
+есть одна, и весь вопрос в том, доезжает ли до неё репозиторий.
+
+Сама `ExportCSVTask` строится в двух местах, и они разные:
+
+* `app/lib/ui/settings/data_actions.dart:295` — «Экспорт в CSV» из настроек, все
+  привычки. Сюда репозиторий передаётся; сюда же уже передан
+  `sleepRepository: scope.sleepRepository`.
+* `packages/uhabits_core/lib/src/ui/screens/habits/show/show_habit_menu_presenter.dart:194`
+  — «экспортировать эту привычку» из меню экрана. Портированный презентер, чья
+  подпись закрыта паритетными правилами; он не передаёт и `sleepRepository`, то
+  есть ночей из него сегодня тоже не выносится. Трогать его здесь не будем: это
+  правка формы порта, и она принадлежит той же работе, что вернёт туда сон, а не
+  этой.
+
+**Форма файла взята у соседа, а не выдумана.** `_writeSleepSessions`
+(`habits_csv_exporter.dart:74-120`) — единственный существующий пример «боковая
+таблица едет своим файлом», и второй такой файл обязан читаться так же: тот же
+разделитель `_delimiter`, тот же `zip.addEntry`, тот же способ напечатать день —
+`LocalDate(day).toString()`.
+
+**Про дату — прямо, потому что она удивляет.** `LocalDate.toString()` есть
+`'LocalDate($year-$month-$day)'` (`time/local_date.dart:227`), без ведущих нулей
+и вместе со словом `LocalDate`. Значит колонка `Day` в `SleepSessions.csv` уже
+сегодня выглядит как `LocalDate(2024-8-12)`, а не как `2024-08-12`, и
+`sleep_export_test.dart:168-171` это закрепляет. Второй файл того же архива
+обязан печатать день **так же**: две колонки `Day` в одном архиве, набранные
+по-разному, — это два формата у одного слова. Красивее было бы `toCSVString()`,
+им набраны `Checkmarks.csv` и `Scores.csv`; но менять из-за нового файла формат
+уже отгруженного `SleepSessions.csv` — работа не этой задачи, а её нельзя
+сделать наполовину.
+
+День 8990 — это **12 августа 2024 года** (8766 дней приходятся на конец 2023
+года, остаток 224 при отсчёте от 1 января 2024 попадает в август високосного
+года), и печатается он как `LocalDate(2024-8-12)`.
 
 - [ ] **Шаг 1: написать падающий тест**
 
-Дописать в `packages/uhabits_core/test/io/habits_csv_exporter_test.dart` группу:
+Создать `packages/uhabits_core/test/io/lapse_export_test.dart`. Обвязка взята у
+соседнего `packages/uhabits_core/test/io/sleep_export_test.dart` дословно —
+`entriesOf`, `contentOf`, `openAppSchemaDatabase`, `MemoryHabitList` с двумя
+привычками; предмет другой, а форма та же:
 
 ```dart
-  group('the lapse journal leaves with the rest', () {
-    /// Все три двери экспорта, названные так, как их зовёт приложение.
-    /// Список именно перечисляется: тест, проверяющий одну, зелен и тогда,
-    /// когда две другие молча теряют таблицу, — а сегодня они её и теряют.
-    late List<Future<String> Function()> exportPaths;
+/// `Lapses.csv` — журнал срывов в архиве экспорта.
+///
+/// Обвязка — та же, что у `sleep_export_test.dart` по соседству: архив
+/// собирается в память, `entriesOf` даёт имена записей, `contentOf` — их
+/// содержимое.
+library;
 
-    test('every export path carries Lapses.csv', () async {
-      for (final Future<String> Function() export in exportPaths) {
-        final String archive = await export();
+import 'dart:typed_data';
 
-        expect(entryNamesOf(archive), contains('Lapses.csv'),
-            reason: 'computed.backup#5 — журнал, который нельзя вынести, есть '
-                'данные в заложниках');
-        expect(readEntry(archive, 'Lapses.csv').trim().split('\n'),
-            <String>['Habit,Date,Amount', 'Sober,2024-08-16,45'],
-            reason: 'computed.backup#5 — день человеческой датой и величина, '
-                'а не habit id и не «1»');
-      }
+import 'package:test/test.dart';
+import 'package:uhabits_core/src/computed/lapse_repository.dart';
+import 'package:uhabits_core/src/database/database.dart';
+import 'package:uhabits_core/src/io/habits_csv_exporter.dart';
+import 'package:uhabits_core/src/io/zip.dart';
+import 'package:uhabits_core/src/models/habit.dart';
+import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_habit_list.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
+import 'package:uhabits_core/src/time/local_date.dart';
+
+import '../helpers/test_database.dart';
+
+/// The names of the entries in an exported archive.
+Future<Set<String>> entriesOf(Uint8List bytes) async => <String>{
+      for (final ZipEntry e in await ZipReader(bytes).entries()) e.name,
+    };
+
+Future<String> contentOf(Uint8List bytes, String name) async =>
+    (await ZipReader(bytes).entries())
+        .firstWhere((ZipEntry e) => e.name == name)
+        .content;
+
+void main() {
+  late Database db;
+  late LapseRepository lapses;
+  late MemoryHabitList habits;
+  late Habit sober;
+  late Habit run;
+
+  setUp(() {
+    setToday(LocalDate(9000));
+    db = openAppSchemaDatabase();
+    // Строки журнала висят на внешнем ключе, поэтому привычки должны быть в
+    // базе, а не только в списке в памяти.
+    db.run("insert into Habits (id, name, uuid) values (1, 'Sober', 'u1')");
+    db.run("insert into Habits (id, name, uuid) values (2, 'Run', 'u2')");
+    lapses = LapseRepository(db);
+
+    habits = MemoryHabitList();
+    final MemoryModelFactory factory = MemoryModelFactory();
+    sober = factory.buildHabit()
+      ..id = 1
+      ..name = 'Sober'
+      ..type = HabitType.numerical
+      ..targetType = NumericalHabitType.atMost
+      ..targetValue = 30
+      ..unit = 'minutes';
+    run = factory.buildHabit()
+      ..id = 2
+      ..name = 'Run';
+    habits.add(sober);
+    habits.add(run);
+  });
+
+  tearDown(() {
+    db.close();
+    resetToday();
+  });
+
+  group('an archive with nothing to add', () {
+    test('is exactly what it was before', () async {
+      final Uint8List withRepository = await HabitsCSVExporter(
+        habits,
+        <Habit>[run],
+        lapseRepository: lapses,
+      ).writeArchive();
+      final Uint8List without =
+          await HabitsCSVExporter(habits, <Habit>[run]).writeArchive();
+
+      expect(await entriesOf(withRepository), await entriesOf(without),
+          reason: 'computed.backup#5');
+      expect(await entriesOf(withRepository), isNot(contains('Lapses.csv')),
+          reason: 'computed.backup#5 — условный файл: пустая таблица в каждом '
+              'архиве была бы налогом на всех ради немногих');
     });
 
-    test('a file with no abstinence habit gains no empty sheet', () async {
-      // Условный файл: у привычек оригинала его нет вовсе, иначе каждый
-      // экспорт таскал бы пустую таблицу про фичу, которой человек не
-      // пользуется.
-      final String archive = await exportOfPlainHabitsOnly();
+    test('no repository at all is not an error', () async {
+      lapses.save(1, 8990, amount: 45);
 
-      expect(entryNamesOf(archive), isNot(contains('Lapses.csv')),
+      final Uint8List bytes =
+          await HabitsCSVExporter(habits, <Habit>[sober]).writeArchive();
+
+      expect(await entriesOf(bytes), isNot(contains('Lapses.csv')),
+          reason: 'computed.backup#5 — экспортёр без журнала обязан вести '
+              'себя как upstream, байт в байт');
+    });
+  });
+
+  group('an archive with lapses in it', () {
+    setUp(() => lapses.save(1, 8990, amount: 45));
+
+    test('carries a file of its own', () async {
+      final Uint8List bytes = await HabitsCSVExporter(
+        habits,
+        <Habit>[sober],
+        lapseRepository: lapses,
+      ).writeArchive();
+
+      expect(await entriesOf(bytes), contains('Lapses.csv'),
+          reason: 'computed.backup#5');
+    });
+
+    test('names its columns, and the row is the habit, the day, the amount',
+        () async {
+      final Uint8List bytes = await HabitsCSVExporter(
+        habits,
+        <Habit>[sober],
+        lapseRepository: lapses,
+      ).writeArchive();
+
+      final List<String> rows =
+          (await contentOf(bytes, 'Lapses.csv')).trim().split('\n');
+
+      expect(rows, <String>[
+        'Habit,Day,Amount',
+        'Sober,LocalDate(2024-8-12),45',
+      ],
+          reason: 'computed.backup#5 — имя привычки, день и величина; не '
+              'habit id, по которому снаружи ничего не найти, и не «1», '
+              'потому что «не более 30 минут» без числа не выражается');
+    });
+
+    test('the day is spelled the way SleepSessions.csv already spells it', () {
+      // Не отдельная договорённость, а та же самая: `_writeSleepSessions`
+      // печатает день через `LocalDate(day).toString()`, а `toString()` есть
+      // `'LocalDate($year-$month-$day)'` без ведущих нулей
+      // (`time/local_date.dart:227`). Две колонки `Day` в одном архиве,
+      // набранные по-разному, — это два формата у одного слова.
+      expect(LocalDate(8990).toString(), 'LocalDate(2024-8-12)',
+          reason: 'computed.backup#5 — 8990-й день от 1 января 2000 года есть '
+              '12 августа 2024 года');
+    });
+
+    test('a habit that was not selected is left out', () async {
+      final Uint8List bytes = await HabitsCSVExporter(
+        habits,
+        <Habit>[run],
+        lapseRepository: lapses,
+      ).writeArchive();
+
+      expect(await entriesOf(bytes), isNot(contains('Lapses.csv')),
           reason: 'computed.backup#5');
     });
 
     test('Habits.csv is still twelve columns', () async {
-      final String archive = await exportPaths.first();
+      final Uint8List bytes = await HabitsCSVExporter(
+        habits,
+        <Habit>[sober],
+        lapseRepository: lapses,
+      ).writeArchive();
 
-      expect(readEntry(archive, 'Habits.csv').split('\n').first.split(',').length,
-          12,
+      final String header =
+          (await contentOf(bytes, 'Habits.csv')).split('\n').first;
+
+      expect(header.split(',').length, 12,
           reason: 'computed.backup#5 — боковая таблица едет отдельным файлом; '
               'колонка, дописанная в Habits.csv, сломала бы всякий парсер '
               'снаружи');
     });
   });
+}
 ```
-
-Хелперы `entryNamesOf`, `readEntry`, `exportOfPlainHabitsOnly` и заполнение
-`exportPaths` брать у соседних тестов того же файла — они уже собирают архив и
-читают из него записи; предмет тут другой, а обвязка та же.
 
 - [ ] **Шаг 2: запустить, убедиться что падает**
 
 ```bash
 cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core
-dart test test/io/habits_csv_exporter_test.dart
+dart test test/io/lapse_export_test.dart
 ```
-Ожидается FAIL: `Expected: contains 'Lapses.csv'` — и падает он **на первой же
-двери**, потому что файла не пишет ни одна.
+Ожидается FAIL с именем: `Error: No named parameter with the name
+'lapseRepository'.` — параметра у экспортёра ещё нет.
 
 - [ ] **Шаг 3: написать выгрузку**
 
-В `habits_csv_exporter.dart` добавить приватный метод рядом с тем, что пишет
-`Checkmarks.csv`:
+В `packages/uhabits_core/lib/src/io/habits_csv_exporter.dart` — импорт рядом с
+`import '../sleep/sleep_session_repository.dart';`:
 
 ```dart
-  /// `Lapses.csv`, или ничего, когда выносить нечего.
+import '../computed/lapse_repository.dart';
+```
+
+конструктор `HabitsCSVExporter` — второй необязательный сотрудник рядом с
+первым:
+
+```dart
+  HabitsCSVExporter(
+    this.allHabits,
+    this.selectedHabits, {
+    this.sleepRepository,
+    this.lapseRepository,
+  });
+```
+
+и поле сразу за `sleepRepository`:
+
+```dart
+  /// The journal of lapses, when this build has one to export.
   ///
-  /// Условный файл, а не колонка в `Habits.csv`: у привычек оригинала журнала
-  /// нет, и пустая таблица в каждом архиве была бы налогом на всех ради
-  /// немногих. Дата человеческая, как и в `Checkmarks.csv`, — `daysSince2000`
-  /// снаружи никому ничего не говорит.
-  String? _lapsesCsv(List<Habit> habits) {
-    final StringBuffer out = StringBuffer('Habit,Date,Amount\n');
+  /// Optional for the same reason [sleepRepository] is: a database with no
+  /// abstinence habit must produce exactly the archive the original produces,
+  /// byte for byte. A file the original never writes must not appear in an
+  /// archive that has nothing to put in it.
+  final LapseRepository? lapseRepository;
+```
+
+В `writeArchive`, следующей строкой за ночами:
+
+```dart
+    final String? sessions = _writeSleepSessions();
+    if (sessions != null) zip.addEntry('SleepSessions.csv', sessions);
+    final String? lapses = _writeLapses();
+    if (lapses != null) zip.addEntry('Lapses.csv', lapses);
+    return zip.toBytes();
+```
+
+и сам метод — сразу под `_writeSleepSessions`, потому что это его близнец:
+
+```dart
+  /// The lapses of every selected abstinence habit, or null when there are
+  /// none.
+  ///
+  /// A file of its own rather than a column in `Habits.csv`: the habits of the
+  /// original have no journal, and an empty table in every archive would be a
+  /// tax on everybody for the sake of a few. `Checkmarks.csv` already carries
+  /// the day values these were computed into; what cannot be reconstructed
+  /// from those is the amount as it was measured, in the unit the commitment
+  /// names.
+  ///
+  /// Written exactly as [_writeSleepSessions] is written, down to printing the
+  /// day with `LocalDate.toString()`: two `Day` columns in one archive that
+  /// disagree about what a day looks like would be two formats for one word.
+  /// The fields go in raw, unquoted, for the same reason the sleep rows and
+  /// the combined header do — upstream never quotes them, and a habit name
+  /// holding a comma corrupts the row. Reproduced deliberately.
+  String? _writeLapses() {
+    final LapseRepository? repository = lapseRepository;
+    if (repository == null) return null;
+
+    final rows = StringBuffer();
     var any = false;
-    for (final Habit habit in habits) {
+    for (final Habit habit in selectedHabits) {
       final int? id = habit.id;
       if (id == null) continue;
-      final int? from = lapses?.firstDay(id);
-      final int? to = lapses?.lastDay(id);
+      final int? from = repository.firstDay(id);
+      final int? to = repository.lastDay(id);
       if (from == null || to == null) continue;
-      for (final MapEntry<int, int> lapse
-          in lapses!.range(id, from, to).entries) {
+
+      final Map<int, int> amounts = repository.range(id, from, to);
+      for (final int day in amounts.keys.toList()..sort()) {
         any = true;
-        out.write('${escape(habit.name)},'
-            '${formatDate(LocalDate(lapse.key))},${lapse.value}\n');
+        rows.write(<String>[
+          habit.name,
+          LocalDate(day).toString(),
+          '${amounts[day]}',
+        ].join(_delimiter));
+        rows.write('\n');
       }
     }
-    return any ? out.toString() : null;
+    if (!any) return null;
+
+    return <String>[
+      <String>['Habit', 'Day', 'Amount'].join(_delimiter),
+      '\n',
+      rows.toString(),
+    ].join();
   }
 ```
 
-и в месте сборки архива — там же, где кладётся `Checkmarks.csv`:
+Тем же файлом, в `ExportCSVTask`, — второй необязательный сотрудник и его
+передача в единственную дверь (`habits_csv_exporter.dart:278`):
 
 ```dart
-    final String? lapsesCsv = _lapsesCsv(habits);
-    if (lapsesCsv != null) writeEntry('Lapses.csv', lapsesCsv);
+  ExportCSVTask(
+    this._habitList,
+    this._selectedHabits,
+    this._outputDir,
+    this._listener, {
+    SleepSessionRepository? sleepRepository,
+    LapseRepository? lapseRepository,
+  })  : _sleepRepository = sleepRepository,
+        _lapseRepository = lapseRepository;
 ```
 
-Репозиторий приезжает необязательным параметром конструктора
-(`LapseRepository? lapses`) — ровно как `lapseImporter` у `LoopDBImporter`
-(Задача 22): экспорт без журнала обязан вести себя как upstream.
+```dart
+  /// Optional, so that a caller with nothing to add produces exactly the
+  /// archive the original produces.
+  final SleepSessionRepository? _sleepRepository;
 
-- [ ] **Шаг 4: протянуть во все три двери**
+  final LapseRepository? _lapseRepository;
+```
 
-Две другие точки экспорта живут в `models/habit_list.dart:112-155`. В каждой из
-них экспортёр собирается заново — там и передать `lapses:`. Проверить, что не
-осталось ни одной без него:
+```dart
+      final exporter = HabitsCSVExporter(
+        _habitList,
+        _selectedHabits,
+        sleepRepository: _sleepRepository,
+        lapseRepository: _lapseRepository,
+      );
+```
+
+- [ ] **Шаг 4: запустить ядро**
 
 ```bash
-cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter
-grep -rn "HabitsCSVExporter(" --include="*.dart" packages/uhabits_core/lib app/lib
+cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core
+dart test test/io/
 ```
-Каждое найденное место обязано нести `lapses:`.
+Ожидается PASS целиком, включая портированные наборы экспорта **без единой
+правки**: `Habits.csv` не изменился, а нового файла в их архивах не появляется —
+`lapseRepository` там не передан.
 
-Проводка приложения — там же, где стоит `lapseImporter: LapseImporter(scope.lapses)`
-(`app/lib/ui/settings/data_actions.dart`): передать `scope.lapses`.
+- [ ] **Шаг 5: провести репозиторий до двери**
 
-- [ ] **Шаг 5: запустить**
+Проводка есть половина двери: без неё экспортёр молча соберёт архив без журнала,
+и ядровой набор выше об этом ничего не скажет. В
+`app/lib/ui/settings/data_actions.dart`, в `exportCsv()` (строки 294–310), рядом
+со стоящим там `sleepRepository:`:
+
+```dart
+      ExportCSVTask(
+        scope.habitList,
+        selected,
+        outputDir,
+        // The nights themselves, which the percentages in Checkmarks.csv
+        // cannot be turned back into.
+        sleepRepository: scope.sleepRepository,
+        // And the amounts themselves, which the day values cannot be turned
+        // back into either: 45000 is a number, "45 minutes" is the fact.
+        lapseRepository: scope.lapses,
+        _ExportCsvListener((String? filename) {
+```
+
+Портированный презентер (`show_habit_menu_presenter.dart:194`) не трогается: он
+не передаёт и `sleepRepository`, его подпись закрыта паритетными правилами, и
+экспорт одной привычки из меню экрана боковых файлов не несёт — ни сна, ни
+срывов. Это ограничение называется в правиле, а не замалчивается.
+
+Тест проводки — в `app/test/ui/settings/data_actions_test.dart`, рядом с уже
+стоящими там тестами `exportCsv()`:
+
+```dart
+    test('computed.backup#5 the exported archive carries the lapse journal',
+        () async {
+      final scope = openScope();
+      final habit = scope.modelFactory.buildHabit()
+        ..name = 'Sober'
+        ..type = HabitType.numerical
+        ..targetType = NumericalHabitType.atMost
+        ..targetValue = 0
+        ..unit = '';
+      scope.habitList.add(habit);
+      scope.lapses.save(habit.id!, getToday().daysSince2000, amount: 45);
+
+      final sharer = _RecordingSharer();
+      final built = buildActions(scope, pickedPath: null, fileSharer: sharer);
+      await built.actions.exportCsv();
+
+      final Uint8List bytes = File(sharer.shared.single.path).readAsBytesSync();
+      final Set<String> names = <String>{
+        for (final ZipEntry e in await ZipReader(bytes).entries()) e.name,
+      };
+
+      expect(names, contains('Lapses.csv'),
+          reason: 'computed.backup#5 — «экспортёр умеет» и «экспорт выносит» '
+              'это разные утверждения, и второе держится на этой строке');
+    });
+```
+
+Импорты для него: `dart:typed_data` и `package:uhabits_core/src/io/zip.dart`
+(файл уже несёт `dart:io` и `// ignore_for_file: implementation_imports`).
+
+- [ ] **Шаг 6: запустить обе сборки**
 
 ```bash
 cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/packages/uhabits_core && dart test test/io/
 cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter/app && flutter test test/ui/settings/
 ```
-Ожидается PASS, включая портированные наборы экспорта без правок: `Habits.csv`
-не изменился.
+Ожидается PASS.
 
-- [ ] **Шаг 6: мутации**
+- [ ] **Шаг 7: мутации**
+
+Каждую вносить обратной текстовой заменой и такой же заменой возвращать.
 
 | Мутация | Что обязано упасть |
 |---|---|
-| убрать `lapses:` из **одной** из трёх дверей | «every export path carries Lapses.csv» — и назовёт именно ту дверь, потому что цикл идёт по всем трём |
-| `return any ? out.toString() : null;` → `return out.toString();` | «a file with no abstinence habit gains no empty sheet» |
-| писать `1` вместо `lapse.value` | «every export path carries Lapses.csv» — вторая строка станет `Sober,2024-08-16,1` |
-| дописать колонку в `Habits.csv` | «Habits.csv is still twelve columns» |
+| убрать `lapseRepository: scope.lapses,` из `data_actions.dart` | «the exported archive carries the lapse journal» — ядровой набор остаётся зелёным, и в этом весь смысл отдельного теста проводки |
+| убрать `lapseRepository: _lapseRepository,` из вызова на `habits_csv_exporter.dart:278` | она же: репозиторий доехал до задачи и не доехал до двери |
+| `return any ? … : null;` → `return out;` (писать файл всегда) | «is exactly what it was before» и «a habit that was not selected is left out» |
+| `LocalDate(day).toString()` → `LocalDate(day).toCSVString()` | «names its columns, and the row is the habit, the day, the amount»: строка станет `Sober,2024-08-12,45` |
+| `'${amounts[day]}'` → `'1'` | она же: строка станет `Sober,LocalDate(2024-8-12),1` |
+| `habit.name` → `'$id'` | она же: строка станет `1,LocalDate(2024-8-12),45` |
+| `.join(_delimiter)` → `.join(';')` | она же: разделитель у двух файлов одного архива обязан быть один |
+| дописать тринадцатую колонку в `HabitList.writeCSV` | «Habits.csv is still twelve columns» |
 
-- [ ] **Шаг 7: записать правило**
+- [ ] **Шаг 8: записать правило**
 
 В `docs/extensions/COMPUTED.md`, в блок `computed.backup`, дописать:
 
 ```markdown
-5. `computed.backup#5` CSV-экспорт выносит журнал срывов отдельным файлом `Lapses.csv` из всех трёх точек экспорта; `Habits.csv` не меняется, а файл не появляется, когда журнала нет.
+5. `computed.backup#5` CSV-экспорт из настроек выносит журнал срывов отдельным файлом `Lapses.csv` — имя привычки, день и величина; `Habits.csv` не меняется ни на колонку, а файла не появляется, когда журнала нет. Экспорт одной привычки из меню её экрана боковых файлов не несёт — ни этого, ни `SleepSessions.csv`: подпись портированного презентера закрыта паритетом.
 ```
 
 **Постановление:** номер `#5` в блоке `computed.backup` свободен — сверка
 постановила не заводить его для «величины срыва» (она вошла в текст `#4`), — и
 занимается здесь. Двух правил с одним номером не возникает.
 
-- [ ] **Шаг 8: коммит**
+- [ ] **Шаг 9: коммит**
 
 ```bash
 cd /Users/artemefimov/Desktop/uhabits/uhabits-flutter
 git add packages/uhabits_core app ../docs/extensions/COMPUTED.md
-git commit -m "Export the lapse journal to CSV from all three doors"
+git commit -m "Export the lapse journal to CSV"
 ```
 
 ---
 
-### Task 42: путь целиком: заведение → срыв → отмена → перезапуск → копия → удаление (6-hooks.9)
+### Task 43: путь целиком: заведение → срыв → отмена → перезапуск → копия → удаление (6-hooks.9)
 
 **Files:**
 - Test: `/Users/artemefimov/Desktop/uhabits/uhabits-flutter/app/test/state/abstinence_lifecycle_test.dart` (create)
@@ -9773,13 +11012,21 @@ scope и не открывает его заново на том же файле
     expect(daysWithoutLapse(habit), 2, reason: 'computed.streak#4');
 
     // 7. Копия и 8. восстановление на пустое устройство.
-    final UserFile backup = backupOf(path);
+    // Копия снимается с закрытого файла: открытая база держит журнал WAL, и
+    // побайтовая копия под ней — копия половины.
     scope.close();
+    final UserFile backup = backupOf(path);
     final AppScope fresh =
         AppScope.open(AppDatabase.openAndMigrate('${tempDir.path}/other.db'));
     addTearDown(fresh.close);
-    await buildGenericImporter(scope: fresh, fileOpener: FlutterFileOpener())
-        .importHabitsFromFile(backup);
+    // `userDataDir` обязателен: в продакшне это `directories.filesDir`
+    // (`app/lib/ui/settings/data_actions.dart:138` —
+    // `FlutterFileOpener(userDataDir: directories.filesDir)`), здесь — тот же
+    // временный каталог, в котором лежит копия.
+    await buildGenericImporter(
+      scope: fresh,
+      fileOpener: FlutterFileOpener(userDataDir: tempDir.path),
+    ).importHabitsFromFile(backup);
 
     final Habit restored = fresh.habitList.getByUUID(uuid)!;
     expect(fresh.lapses.lastDay(restored.id!),
@@ -9803,8 +11050,27 @@ scope и не открывает его заново на том же файле
 ```
 
 `backupOf` — побайтовая копия файла базы во временный путь, как её снимает
-экспорт: `File(path).copySync('${tempDir.path}/backup.db')` и
-`LocalUserFile(...)` поверх.
+экспорт. Тело выписано целиком, потому что «копия» здесь и есть предмет
+проверки:
+
+```dart
+  /// Копия базы — побайтовый файл, а не выгрузка: ровно то, что кладёт себе в
+  /// облако человек. Зовётся на **закрытой** базе.
+  ///
+  /// `LocalUserFile` поверх пути — потому что импортёр принимает `UserFile`, а
+  /// не строку.
+  UserFile backupOf(String path) {
+    final String backup = '${tempDir.path}/backup.db';
+    File(path).copySync(backup);
+    return LocalUserFile(backup);
+  }
+```
+
+Импорты, которых требует это тело: `dart:io` (ради `File`) и
+`package:uhabits_core/uhabits_core.dart` (`LocalUserFile`). Опенер, которым
+импортёр открывает эту копию, требует `userDataDir`: в продакшне —
+`directories.filesDir` (`app/lib/ui/settings/data_actions.dart:138`), в тесте —
+`tempDir.path`.
 
 - [ ] **Шаг 3: запустить**
 
@@ -9835,7 +11101,7 @@ git commit -m "Walk the whole abstinence path on one database file"
 
 ---
 
-### Task 43: закрытие реестров, CHANGELOG и полный прогон (0-final)
+### Task 44: закрытие реестров, CHANGELOG и полный прогон (0-final)
 
 **Files:**
 - Modify: `/Users/artemefimov/Desktop/uhabits/docs/extensions/COMPUTED.md`
