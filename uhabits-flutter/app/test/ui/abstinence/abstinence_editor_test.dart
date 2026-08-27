@@ -282,6 +282,37 @@ void main() {
           reason: 'computed.create#11 — and nothing was created');
     });
 
+    test('a pasted "Infinity" leaves no half a habit behind', () {
+      // Ревью нашло: `double.tryParse` берёт «Infinity», «-Infinity», «NaN» и
+      // «1e400», `validate()` их пропускала, а падало уже **после**
+      // `CreateHabitCommand` — `HabitDefinition.encodedPayload` бросал
+      // `JsonUnsupportedObjectError` из слушателя команды. Привычка
+      // оставалась в базе с `targetValue = Infinity` и без строки
+      // определения: заведена как воздержание и не воздержание. С клавиатуры
+      // такого не набрать, а вставкой из буфера — можно, той же дверью, что
+      // и минус (`computed.allowance#4`).
+      for (final String written in <String>[
+        'Infinity',
+        '-Infinity',
+        'NaN',
+        '1e400',
+      ]) {
+        final EditHabitModel model =
+            EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+        model.nameController.text = 'No $written';
+        model.targetController.text = written;
+
+        expect(model.save(), isFalse,
+            reason: 'computed.create#11 — «$written» не число');
+        expect(model.allowanceError, EditHabitFieldError.notANumber,
+            reason: 'computed.create#11 — отказ рисуется в том поле, куда это '
+                'вставили, а не в цели, которой форма не показывала');
+        expect(scope.habitList.size(), 0,
+            reason: 'computed.create#11 — «$written»: половины привычки не '
+                'осталось');
+      }
+    });
+
     test('a pasted negative allowance is stored as none, on both sides', () {
       // The keyboard offers no minus sign; the clipboard does. Read back,
       // `abstinenceAllowanceOf` pulls a negative payload up to zero

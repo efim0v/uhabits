@@ -342,6 +342,26 @@ class EditHabitModel extends ChangeNotifier {
   // validate() and save()
   // -----------------------------------------------------------------------
 
+  /// Whether [text] is a number the rest of the app can do arithmetic with.
+  ///
+  /// `double.tryParse` takes «Infinity», «-Infinity», «NaN» and «1e400» —
+  /// exactly as Kotlin's `String.toDouble()` does — and each of them passed
+  /// validation and blew up further down, after the habit had already been
+  /// created: `HabitDefinition.encodedPayload` threw
+  /// `JsonUnsupportedObjectError` out of a command listener and left an
+  /// abstinence habit with `targetValue = Infinity` and no definition row, and
+  /// «NaN» hit a NOT NULL constraint in SQLite on an ordinary numerical habit
+  /// too. A refusal in the box the text was typed into is the same answer
+  /// `edit-habit.validation#9` gives to «1,5», one step further on
+  /// (DEVIATIONS.md, «Бесконечность и NaN не проходят проверку цели»).
+  ///
+  /// Финитность, а не длина: `1e30` — обычное большое число, и оно
+  /// сохраняется по-прежнему (`edit-habit.validation#8`).
+  static bool _isFiniteNumber(String text) {
+    final double? parsed = double.tryParse(text);
+    return parsed != null && parsed.isFinite;
+  }
+
   /// Port of `EditHabitActivity.validate()`.
   ///
   /// Both fields are checked in one pass, so a numerical habit with an empty
@@ -373,7 +393,7 @@ class EditHabitModel extends ChangeNotifier {
       if (targetController.text.isEmpty) {
         targetError = EditHabitFieldError.blank;
         isValid = false;
-      } else if (double.tryParse(targetController.text) == null) {
+      } else if (!_isFiniteNumber(targetController.text)) {
         // Kotlin gets here and throws NumberFormatException out of save();
         // `edit-habit.validation#9` asks the port to reject instead.
         targetError = EditHabitFieldError.notANumber;
@@ -387,7 +407,7 @@ class EditHabitModel extends ChangeNotifier {
     // `edit-habit.validation#9` gives about the target.
     if (isAbstinence &&
         targetController.text.isNotEmpty &&
-        double.tryParse(targetController.text) == null) {
+        !_isFiniteNumber(targetController.text)) {
       allowanceError = EditHabitFieldError.notANumber;
       isValid = false;
     }
@@ -473,8 +493,15 @@ class EditHabitModel extends ChangeNotifier {
       // `0 > -5` в каждый молчаливый день: кольцо гасло за три недели, пока
       // ячейка, счётчик и подпись клялись, что срывов не было. Минус с
       // клавиатуры не набрать, а вставкой из буфера — можно.
-      final double allowance =
-          math.max(0, double.tryParse(targetController.text) ?? 0);
+      //
+      // Тем же буфером приезжает и «Infinity», которое `double.tryParse`
+      // берёт, а `jsonEncode` — нет: [validate] такую строку до сюда уже не
+      // пускает ([_isFiniteNumber]), и этот отбой — вторая половина того же
+      // зеркала. Ноль здесь недостижим, и это намеренно: строка, которая
+      // ухитрится сюда дойти, обязана дать число, а не уронить запись
+      // определения после того, как привычка уже создана.
+      final double parsed = double.tryParse(targetController.text) ?? 0;
+      final double allowance = parsed.isFinite ? math.max(0, parsed) : 0;
       final String unit = unitController.text.trim();
       habit.targetValue = allowance;
       habit.targetType = NumericalHabitType.atMost;

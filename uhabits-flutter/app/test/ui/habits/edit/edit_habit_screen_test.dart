@@ -484,6 +484,30 @@ void main() {
           reason: 'edit-habit.validation#9');
     });
 
+    test('#9: "Infinity" and "NaN" are words, not targets', () {
+      // `double.tryParse` takes both, exactly as Kotlin's `String.toDouble()`
+      // does, so validate() waved them through and save() went on to store a
+      // target no arithmetic can use. This is a departure from the original,
+      // recorded in DEVIATIONS.md: the rule asks the port to reject what
+      // cannot be parsed, and a number that is not a number is the same
+      // refusal one step further on. `1e30` stays accepted
+      // (`edit-habit.validation#8`); `1e400` is `Infinity` spelled with
+      // digits.
+      final scope = openScope();
+      for (final target in <String>['Infinity', '-Infinity', 'NaN', '1e400']) {
+        final model = createModel(scope, habitType: HabitType.numerical)
+          ..nameController.text = 'Run'
+          ..targetController.text = target;
+        expect(model.save(), isFalse,
+            reason: 'edit-habit.validation#9 — "$target"');
+        expect(model.targetError, EditHabitFieldError.notANumber,
+            reason: 'edit-habit.validation#9 — "$target" refused inline, in '
+                'the box it was typed into');
+      }
+      expect(scope.habitList.isEmpty, isTrue,
+          reason: 'edit-habit.validation#9 — and nothing was created');
+    });
+
     test('#1: nothing is validated before Save is pressed', () {
       final model = createModel(openScope());
       expect(model.nameError, isNull, reason: 'edit-habit.validation#1');
