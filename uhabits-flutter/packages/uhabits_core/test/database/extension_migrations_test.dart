@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:uhabits_core/src/database/database.dart';
 import 'package:uhabits_core/src/database/extension_migrations.dart';
 import 'package:uhabits_core/src/database/migrations.g.dart';
+import 'package:uhabits_core/src/database/sqlite3_database.dart';
 
 import '../helpers/test_database.dart';
 
@@ -163,7 +164,10 @@ void main() {
       final Database db = openAppSchemaDatabase();
       addTearDown(db.close);
 
-      expect(db.getVersion(), 102, reason: 'computed.schema#1');
+      // Not an equality: this test is about what 102 creates, and pinning the
+      // current version here would make every later migration break it.
+      expect(db.getVersion(), greaterThanOrEqualTo(102),
+          reason: 'computed.schema#1');
       expect(
         db.queryInt("select count(*) from sqlite_master "
             "where type = 'table' and name = 'HabitDefinitions'"),
@@ -199,6 +203,75 @@ void main() {
           1,
           reason: 'computed.schema#3 — an existing sleep habit is not left '
               'unmarked');
+    });
+  });
+
+  group('migration 103', () {
+    test('creates the lapse journal, and a habit takes it with it', () {
+      final Database db = openAppSchemaDatabase();
+      addTearDown(db.close);
+
+      expect(appDatabaseVersion, 103, reason: 'computed.schema#4');
+      expect(db.getVersion(), appDatabaseVersion, reason: 'computed.schema#4');
+      expect(
+        db.queryInt("select count(*) from sqlite_master "
+            "where type = 'table' and name = 'Lapses'"),
+        1,
+        reason: 'computed.schema#4',
+      );
+
+      // The cascade, exercised rather than read off the DDL.
+      db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
+      db.run('insert into Lapses (habit, day, amount) values (1, 9000, 1)');
+      db.run('delete from Habits where id = 1');
+
+      expect(db.queryInt('select count(*) from Lapses'), 0,
+          reason: 'computed.schema#5 — a habit takes its lapses with it');
+    });
+
+    test('a day carries at most one row, and neither key may be missing', () {
+      final Database db = openAppSchemaDatabase();
+      addTearDown(db.close);
+      db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
+      db.run('insert into Lapses (habit, day, amount) values (1, 9000, 1)');
+
+      expect(
+        () => db.run(
+            'insert into Lapses (habit, day, amount) values (1, 9000, 7)'),
+        throwsA(isA<SqliteException>().having((SqliteException e) => e.message,
+            'message', contains('UNIQUE constraint failed'))),
+        reason: 'computed.schema#6',
+      );
+
+      // SQLite lets a NULL sit in a PRIMARY KEY column of a rowid table — the
+      // one place its constraint handling differs from every other engine — so
+      // `not null` is written out on both key columns and has to be checked.
+      expect(
+        () => db.run(
+            'insert into Lapses (habit, day, amount) values (1, null, 1)'),
+        throwsA(isA<SqliteException>().having((SqliteException e) => e.message,
+            'message', contains('NOT NULL constraint failed'))),
+        reason: 'computed.schema#7',
+      );
+    });
+
+    test('an existing database gains the journal empty', () {
+      // Nothing in this build has ever written an abstinence habit, so there
+      // is nothing to backfill: unlike 102, migration 103 carries no
+      // `insert ... select`, and the proof is that the table arrives empty on
+      // a file that already had habits and definitions in it.
+      final Database db = openAppSchemaDatabaseAt(102);
+      addTearDown(db.close);
+      db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
+      db.run("insert into HabitDefinitions (habit, kind, payload) "
+          "values (1,'sleep','{}')");
+
+      db.migrateTo(103, (int v) => migrationSqlFor(v) ?? '');
+
+      expect(db.queryInt('select count(*) from Lapses'), 0,
+          reason: 'computed.schema#4');
+      expect(db.queryInt('select count(*) from HabitDefinitions'), 1,
+          reason: 'computed.schema#4 — 103 does not disturb 102');
     });
   });
 }

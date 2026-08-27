@@ -65,6 +65,13 @@ create table HabitDefinitions (
 
 insert into HabitDefinitions (habit, kind, payload)
     select habit, 'sleep', '{}' from SleepGoals;""",
+  103: r"""
+create table Lapses (
+    habit integer not null references Habits(id) on delete cascade,
+    day integer not null,
+    amount integer not null,
+    primary key (habit, day)
+);""",
 };
 
 /// The schema version this build ships.
@@ -74,7 +81,7 @@ insert into HabitDefinitions (habit, kind, payload)
 /// asks "is this file newer than we understand" or "bring this file up to
 /// date" means this one; anything still asking [databaseVersion] would refuse
 /// our own database.
-const int appDatabaseVersion = 102;
+const int appDatabaseVersion = 103;
 
 /// Whether a database at [version] is one this build can bring up to date.
 ///
