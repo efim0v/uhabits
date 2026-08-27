@@ -241,5 +241,5 @@
   "abstinenceSince": "С {date}",
   "abstinenceLastLapse": "Последний срыв: {date}",
   "abstinenceLapseToday": "Отметить срыв",
-  "abstinenceUndoToday": "Отменить за сегодня"
+  "abstinenceUndoToday": "Отменить срыв"
 }

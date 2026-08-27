@@ -147,7 +147,7 @@
 - [ ] `computed.abstinence-screen`
 1. `computed.abstinence-screen#1` Экран воздержания показывает то число, которое отдаёт ядровая `daysWithoutLapse`, и подпись «С {дата}» под ним, пока срывов не было. Арифметику счёта держит `computed.streak#4`, а не это правило.
 2. `computed.abstinence-screen#2` После срыва подпись меняется на «Последний срыв: {дата}», а число идёт за `daysWithoutLapse` — срыв сегодня даёт ноль (`computed.streak#5`).
-3. `computed.abstinence-screen#3` Счётчик стоит выше портированных карточек: это и есть привычка, а не её механика.
+3. `computed.abstinence-screen#3` Счётчик стоит в том же шве, что и блоки сна: после ведущей четвёрки (`subtitle`, `notes`, `overview`, `score`) и до всего остального (`_sleepLeadingCards` в `show_habit_screen.dart`). Не выше всего экрана: подпись и заметки — это тоже привычка, а не её механика, и человек читает их первыми. Порядок прочих карточек при этом остаётся портированным (`show-habit.card-order-and-visibility#1`).
 4. `computed.abstinence-screen#4` Карточка цели скрыта, кольцо Overview показано — как у сна.
 5. `computed.abstinence-screen#5` Кнопка на карточке пишет и снимает срыв за сегодня, и её надпись меняется вместе с днём.
 6. `computed.abstinence-screen#6` Тап по дню в календаре-редакторе записывает срыв за этот день вместо числового окна.

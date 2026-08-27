@@ -897,5 +897,5 @@ class L10nRu extends L10n {
   String get abstinenceLapseToday => 'Отметить срыв';
 
   @override
-  String get abstinenceUndoToday => 'Отменить за сегодня';
+  String get abstinenceUndoToday => 'Отменить срыв';
 }
