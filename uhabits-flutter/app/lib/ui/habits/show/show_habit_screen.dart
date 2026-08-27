@@ -62,6 +62,7 @@ import '../../common/dialogs/number_dialog.dart';
 import '../../common/show_message.dart' as messages;
 import '../../common/window_insets.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
+import '../abstinence/abstinence_section.dart';
 import '../edit/edit_habit_screen.dart';
 import 'cards/bar_card_view.dart';
 import '../sleep/sleep_section.dart';
@@ -361,7 +362,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
             widget.scope,
             widget.habit,
             travel,
-            onChanged: _repaintSleep,
+            onChanged: _repaintComputed,
           ),
         ),
       ),
@@ -526,6 +527,27 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     return id != null && widget.scope.definitions.isComputed(id);
   }
 
+  /// Определение, если это привычка-воздержание; иначе null.
+  ///
+  /// Признаком служит вид `abstinence` **с непустым** днём обещания, а не один
+  /// вид: определение без дня неполно — судить день как чистый или сорванный
+  /// не от чего, — и такая привычка ведёт себя как любая другая вычисляемая
+  /// (`computed.abstinence-cell#7`).
+  ///
+  /// Отдаётся определение целиком, а не день: срывом день называет
+  /// `isAbstinenceLapse(definition, величина)`, и допуск он берёт отсюда. Тот
+  /// же ответ, что кормит ячейку списка, — и считается он тем же способом.
+  core.HabitDefinition? get _abstinenceDefinition {
+    final int? id = widget.habit.id;
+    if (id == null) return null;
+    final core.HabitDefinition? definition =
+        widget.scope.definitions.forHabit(id);
+    if (definition == null) return null;
+    if (definition.kind != core.ComputedKind.abstinence) return null;
+    if (definition.committedFrom == null) return null;
+    return definition;
+  }
+
   @override
   Future<void> showNumberPopup(
     double value,
@@ -551,7 +573,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         goal: sleepGoal,
         day: date.daysSince2000,
         theme: coreThemeOf(context),
-        onChanged: _repaintSleep,
+        onChanged: _repaintComputed,
       );
       return;
     }
@@ -832,6 +854,13 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   /// declaration order (`show-habit.card-order-and-visibility#1`). A sleep
   /// habit splits that order in two and puts its own blocks in the seam.
   List<Widget> _buildColumn(BuildContext context, ShowHabitModel model) {
+    // Воздержание кладёт свою карточку НАД портированными, а сон — под
+    // четвёркой: у сна собственные блоки есть механика, а «сорок дней без
+    // срыва» есть сама привычка (`computed.abstinence-screen#3`).
+    final List<Widget> abstinence = _buildAbstinenceCards(context, model);
+    if (abstinence.isNotEmpty) {
+      return <Widget>[...abstinence, ..._buildCards(context, model)];
+    }
     final List<Widget> sleep = _buildSleepCards(context, model);
     if (sleep.isEmpty) return _buildCards(context, model);
     return <Widget>[
@@ -839,6 +868,22 @@ class _ShowHabitViewState extends State<_ShowHabitView>
       ...sleep,
       ..._buildCards(context, model, except: _sleepLeadingCards),
     ];
+  }
+
+  /// Пусто для всякой привычки без дня обязательства — тот же признак, каким
+  /// решает ячейка списка.
+  List<Widget> _buildAbstinenceCards(
+      BuildContext context, ShowHabitModel model) {
+    final core.HabitDefinition? definition = _abstinenceDefinition;
+    if (definition == null) return const <Widget>[];
+    return buildAbstinenceSection(
+      context,
+      scope: widget.scope,
+      habit: widget.habit,
+      definition: definition,
+      theme: model.state.theme,
+      onChanged: _repaintComputed,
+    );
   }
 
   /// Pull to refresh, for a sleep habit only.
@@ -855,7 +900,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     return RefreshIndicator(
       onRefresh: () async {
         await widget.scope.syncSleepHabits();
-        _repaintSleep();
+        _repaintComputed();
       },
       child: child,
     );
@@ -878,14 +923,14 @@ class _ShowHabitViewState extends State<_ShowHabitView>
       habit: widget.habit,
       goal: goal,
       theme: model.state.theme,
-      onChanged: _repaintSleep,
+      onChanged: _repaintComputed,
     );
   }
 
   /// The sleep blocks read straight from the database rather than from the
   /// model, so nothing rebuilds them on its own. Everything that writes a
   /// night, a goal or a skip calls this.
-  void _repaintSleep() {
+  void _repaintComputed() {
     if (mounted) setState(() {});
   }
 
@@ -897,14 +942,29 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     Set<ShowHabitCard>? except,
   }) {
     final int? habitId = widget.habit.id;
-    final bool isSleep = habitId != null &&
-        widget.scope.sleepRepository.goalFor(habitId) != null;
+    // Карточка цели складывает значения за неделю и месяц. Для доли ночи это
+    // бессмыслица, и для срывов тоже: неделя без срывов — не «0% в неделю».
+    // Обе получают взамен кольцо Overview
+    // (`show-habit.card-order-and-visibility#2`,
+    // `computed.abstinence-screen#4`).
+    //
+    // Прячется только цель. Bar и Frequency остаются намеренно: спецификация
+    // требует решать по ним отдельно, решение отложено и записано в
+    // DEVIATIONS.md («computed: воздержание не трогает виджеты, Bar и
+    // Frequency»). Тест «Bar и Frequency остаются на экране намеренно»
+    // держит это как решение, а не как забывчивость.
+    final bool swapsTargetForOverview = (habitId != null &&
+            widget.scope.sleepRepository.goalFor(habitId) != null) ||
+        _abstinenceDefinition != null;
 
     final widgets = <Widget>[];
     for (final card in model.cards) {
       if (only != null && !only.contains(card)) continue;
       if (except != null && except.contains(card)) continue;
-      if (!_isVisible(model, card, isSleep: isSleep)) continue;
+      if (!_isVisible(model, card,
+          swapsTargetForOverview: swapsTargetForOverview)) {
+        continue;
+      }
       widgets.add(_buildCard(context, model: model, card: card));
     }
     return widgets;
@@ -920,13 +980,15 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   /// nights are not "700% per week", they are seven nights. Hiding it left the
   /// habit with neither, so the pair is swapped rather than emptied: a sleep
   /// habit gets the overview a boolean habit gets, because a ring showing how
-  /// well the habit is kept is exactly what a nightly percentage supports.
+  /// well the habit is kept is exactly what a nightly percentage supports. An
+  /// abstinence habit is numerical too, and the same swap applies to it for
+  /// the same reason (`computed.abstinence-screen#4`).
   bool _isVisible(
     ShowHabitModel model,
     ShowHabitCard card, {
-    required bool isSleep,
+    required bool swapsTargetForOverview,
   }) {
-    if (!isSleep) return model.isVisible(card);
+    if (!swapsTargetForOverview) return model.isVisible(card);
     if (card == ShowHabitCard.target) return false;
     if (card == ShowHabitCard.overview) return true;
     return model.isVisible(card);
