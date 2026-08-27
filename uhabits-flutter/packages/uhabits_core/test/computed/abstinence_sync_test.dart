@@ -76,6 +76,26 @@ void main() {
     }
   });
 
+  test('but it is not master of the range: a value with no row survives', () {
+    lapses.save(1, 8990, amount: 1);
+    sync.recomputeDays(habit, 8985, 8995);
+    lapses.remove(1, 8990);
+
+    expect(sync.recomputeDays(habit, 8985, 8995), isFalse,
+        reason: 'computed.abstinence-sync#3');
+    // Не защита ценности, а честная граница. Свод добавляет и меняет, но не
+    // снимает: снятие есть отдельное высказывание, и у него своя дверь —
+    // `setLapse(..., false)`, где на один день приходится одно объявление.
+    expect(habit.originalEntries.get(LocalDate(8990)).value, 1000,
+        reason: 'computed.abstinence-sync#3 — пустой журнал молчит, а не '
+            'говорит «ничего не было»');
+
+    sync.setLapse(habit, LocalDate(8990), false);
+
+    expect(habit.originalEntries.get(LocalDate(8990)).value, Entry.unknown,
+        reason: 'computed.abstinence-sync#3 — а дверь снятия есть');
+  });
+
   test('the sweep does not touch a skip', () {
     habit.originalEntries.add(Entry(today, Entry.skip));
     sync.setLapse(habit, today, true);
@@ -97,8 +117,27 @@ void main() {
 
     expect(wrote, isTrue, reason: 'computed.abstinence-sync#5');
     expect(habit.originalEntries.get(LocalDate(8961)).value, 45000,
-        reason: 'computed.abstinence-sync#5 — понижение допуска обязано '
-            'переоценить уже записанные дни (`computed.allowance#1`)');
+        reason: 'computed.abstinence-sync#5 — проход начинается со дня '
+            'обязательства, а не с сегодняшнего дня');
+  });
+
+  test('a second pass over the same journal writes nothing and says nothing',
+      () {
+    lapses.save(1, 8961, amount: 45);
+    const HabitDefinition definition = HabitDefinition(
+      kind: ComputedKind.abstinence,
+      committedFrom: 8960,
+    );
+    sync.recomputeAll(habit, definition);
+
+    // Это и есть та граница, из-за которой правило #5 больше не обещает
+    // переоценки после смены допуска: значение дня есть величина, допуск на
+    // неё не влияет, и второй проход по тому же журналу двигать нечему. Ни
+    // пересчёта привычки, ни объявления списку отсюда не будет — их делает
+    // тот, кто допуск поменял.
+    expect(sync.recomputeAll(habit, definition), isFalse,
+        reason: 'computed.abstinence-sync#5 — не изменилось ничего, значит не '
+            'объявляется ничего (`computed.freshness#3`)');
   });
 
   test('a definition with no commitment day has no commitment to rescore', () {
