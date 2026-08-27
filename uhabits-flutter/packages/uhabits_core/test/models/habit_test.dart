@@ -119,6 +119,7 @@ class SpyStreakList extends StreakList {
   bool? capturedIsNumerical;
   double? capturedTargetValue;
   NumericalHabitType? capturedTargetType;
+  bool? capturedSilenceQualifies;
 
   @override
   void recompute(
@@ -127,8 +128,9 @@ class SpyStreakList extends StreakList {
     LocalDate to,
     bool isNumerical,
     double targetValue,
-    NumericalHabitType targetType,
-  ) {
+    NumericalHabitType targetType, {
+    bool silenceQualifies = false,
+  }) {
     log.calls.add('streaks.recompute');
     capturedEntries = getEntriesByInterval;
     capturedFrom = from;
@@ -136,6 +138,7 @@ class SpyStreakList extends StreakList {
     capturedIsNumerical = isNumerical;
     capturedTargetValue = targetValue;
     capturedTargetType = targetType;
+    capturedSilenceQualifies = silenceQualifies;
     super.recompute(
       getEntriesByInterval,
       from,
@@ -143,6 +146,7 @@ class SpyStreakList extends StreakList {
       isNumerical,
       targetValue,
       targetType,
+      silenceQualifies: silenceQualifies,
     );
   }
 }

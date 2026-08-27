@@ -77,4 +77,66 @@ void main() {
           reason: 'computed.streak#3');
     });
   });
+
+  group('computed.streak silence', () {
+    void recomputeAtMost({required bool silenceQualifies}) {
+      streaks.recompute(
+        entries.getByInterval,
+        today.minus(10),
+        today.plus(30),
+        true,
+        0.0,
+        NumericalHabitType.atMost,
+        silenceQualifies: silenceQualifies,
+      );
+    }
+
+    test('#1 with silenceQualifies a day holding nothing extends the streak',
+        () {
+      // Ни одной записи вообще: для воздержания это сорок чистых дней, а не
+      // отсутствие истории.
+      recomputeAtMost(silenceQualifies: true);
+
+      expect(streaks.getCurrent(today),
+          Streak(today.minus(10), today.plus(30)),
+          reason: 'computed.streak#1');
+
+      // Срыв четыре дня назад режет её надвое, и молчание по обе стороны
+      // остаётся успехом.
+      entries.add(Entry(today.minus(4), 1000));
+      recomputeAtMost(silenceQualifies: true);
+
+      expect(streaks.getCurrent(today), Streak(today.minus(3), today.plus(30)),
+          reason: 'computed.streak#1');
+      expect(streaks.getCurrent(today.minus(4)), isNull,
+          reason: 'computed.streak#1');
+      expect(streaks.getCurrent(today.minus(5)),
+          Streak(today.minus(10), today.minus(5)),
+          reason: 'computed.streak#1');
+    });
+
+    test('#2 by default silence still breaks an at-most streak', () {
+      entries.add(Entry(today, Entry.no));
+      entries.add(Entry(today.minus(2), Entry.no));
+      recomputeAtMost(silenceQualifies: false);
+
+      expect(streaks.getCurrent(today), Streak(today, today),
+          reason: 'computed.streak#2');
+      expect(streaks.getCurrent(today.minus(1)), isNull,
+          reason: 'computed.streak#2');
+      expect(streaks.getBest(10).length, 2, reason: 'computed.streak#2');
+
+      // И то же самое, когда параметр не передан вовсе: умолчание есть
+      // паритетное поведение (`models.streak-computation#3`).
+      streaks.recompute(
+        entries.getByInterval,
+        today.minus(10),
+        today.plus(30),
+        true,
+        0.0,
+        NumericalHabitType.atMost,
+      );
+      expect(streaks.getBest(10).length, 2, reason: 'computed.streak#2');
+    });
+  });
 }

@@ -52,14 +52,20 @@ class StreakList {
   /// EntryList is not ported yet, so the callable is passed in directly
   /// (`streaks.recompute(computedEntries.getByInterval, ...)`) rather than the
   /// list itself.
+  ///
+  /// [silenceQualifies] — расширение порта, выключенное по умолчанию, чтобы
+  /// каждая портированная привычка считалась дословно как в Kotlin. Его
+  /// включает вид, для которого день без записи и есть успех: воздержание
+  /// ничего не пишет, пока его держат (`computed.streak#1`, `#2`).
   void recompute(
     List<Entry> Function(LocalDate from, LocalDate to) getEntriesByInterval,
     LocalDate from,
     LocalDate to,
     bool isNumerical,
     double targetValue,
-    NumericalHabitType targetType,
-  ) {
+    NumericalHabitType targetType, {
+    bool silenceQualifies = false,
+  }) {
     _list.clear();
     final dates = getEntriesByInterval(from, to)
         .where((entry) {
@@ -69,7 +75,13 @@ class StreakList {
               case NumericalHabitType.atLeast:
                 return value / 1000.0 >= targetValue;
               case NumericalHabitType.atMost:
-                return value != Entry.unknown && value / 1000.0 <= targetValue;
+                // Оригинал исключает UNKNOWN безусловно
+                // (`models.streak-computation#3`), и для «не больше двух
+                // сигарет» это верно: день, о котором ничего не известно,
+                // ничего не подтверждает. Для вида, где молчание и есть
+                // успех, — ровно наоборот.
+                if (value == Entry.unknown) return silenceQualifies;
+                return value / 1000.0 <= targetValue;
             }
           } else {
             return value > 0;
