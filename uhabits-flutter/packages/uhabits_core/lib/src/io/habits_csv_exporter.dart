@@ -16,6 +16,7 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../computed/lapse_repository.dart';
 import '../models/entry_list.dart';
 import '../models/habit.dart';
 import '../models/habit_list.dart';
@@ -34,6 +35,7 @@ class HabitsCSVExporter {
     this.allHabits,
     this.selectedHabits, {
     this.sleepRepository,
+    this.lapseRepository,
   });
 
   final HabitList allHabits;
@@ -46,6 +48,14 @@ class HabitsCSVExporter {
   /// archive the original produces, byte for byte: a file the original never
   /// writes must not appear in an archive that has nothing to put in it.
   final SleepSessionRepository? sleepRepository;
+
+  /// The journal of lapses, when this build has one to export.
+  ///
+  /// Optional for the same reason [sleepRepository] is: a database with no
+  /// abstinence habit must produce exactly the archive the original produces,
+  /// byte for byte. A file the original never writes must not appear in an
+  /// archive that has nothing to put in it.
+  final LapseRepository? lapseRepository;
 
   final String _delimiter = ',';
 
@@ -63,6 +73,8 @@ class HabitsCSVExporter {
     zip.addEntry('Checkmarks.csv', _writeMultipleHabitsCheckmarks());
     final String? sessions = _writeSleepSessions();
     if (sessions != null) zip.addEntry('SleepSessions.csv', sessions);
+    final String? lapses = _writeLapses();
+    if (lapses != null) zip.addEntry('Lapses.csv', lapses);
     return zip.toBytes();
   }
 
@@ -114,6 +126,55 @@ class HabitsCSVExporter {
         'DerivedFromAsleep',
         'Source',
       ].join(_delimiter),
+      '\n',
+      rows.toString(),
+    ].join();
+  }
+
+  /// The lapses of every selected abstinence habit, or null when there are
+  /// none.
+  ///
+  /// A file of its own rather than a column in `Habits.csv`: the habits of the
+  /// original have no journal, and an empty table in every archive would be a
+  /// tax on everybody for the sake of a few. `Checkmarks.csv` already carries
+  /// the day values these were computed into; what cannot be reconstructed
+  /// from those is the amount as it was measured, in the unit the commitment
+  /// names.
+  ///
+  /// Written exactly as [_writeSleepSessions] is written, down to printing the
+  /// day with `LocalDate.toString()`: two `Day` columns in one archive that
+  /// disagree about what a day looks like would be two formats for one word.
+  /// The fields go in raw, unquoted, for the same reason the sleep rows and
+  /// the combined header do — upstream never quotes them, and a habit name
+  /// holding a comma corrupts the row. Reproduced deliberately.
+  String? _writeLapses() {
+    final LapseRepository? repository = lapseRepository;
+    if (repository == null) return null;
+
+    final rows = StringBuffer();
+    var any = false;
+    for (final Habit habit in selectedHabits) {
+      final int? id = habit.id;
+      if (id == null) continue;
+      final int? from = repository.firstDay(id);
+      final int? to = repository.lastDay(id);
+      if (from == null || to == null) continue;
+
+      final Map<int, int> amounts = repository.range(id, from, to);
+      for (final int day in amounts.keys.toList()..sort()) {
+        any = true;
+        rows.write(<String>[
+          habit.name,
+          LocalDate(day).toString(),
+          '${amounts[day]}',
+        ].join(_delimiter));
+        rows.write('\n');
+      }
+    }
+    if (!any) return null;
+
+    return <String>[
+      <String>['Habit', 'Day', 'Amount'].join(_delimiter),
       '\n',
       rows.toString(),
     ].join();
@@ -259,7 +320,9 @@ class ExportCSVTask implements Task {
     this._outputDir,
     this._listener, {
     SleepSessionRepository? sleepRepository,
-  }) : _sleepRepository = sleepRepository;
+    LapseRepository? lapseRepository,
+  })  : _sleepRepository = sleepRepository,
+        _lapseRepository = lapseRepository;
 
   final HabitList _habitList;
   final List<Habit> _selectedHabits;
@@ -270,6 +333,8 @@ class ExportCSVTask implements Task {
   /// archive the original produces.
   final SleepSessionRepository? _sleepRepository;
 
+  final LapseRepository? _lapseRepository;
+
   String? _archiveFilename;
 
   @override
@@ -279,6 +344,7 @@ class ExportCSVTask implements Task {
         _habitList,
         _selectedHabits,
         sleepRepository: _sleepRepository,
+        lapseRepository: _lapseRepository,
       );
       final bytes = await exporter.writeArchive();
       final date = getToday().toCSVString();
