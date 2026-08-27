@@ -18,9 +18,10 @@ class ScoreList {
   /// Расширение слоя вычисляемых привычек, а не порт. Ни один портированный
   /// путь этого поля не пишет: `ModelFactory.buildScoreList()` отдаёт список с
   /// выключенным полем, и при выключенном поле [recompute] считает ровно то
-  /// же, что Kotlin, — весь портированный набор проходит без правки. Ставит
-  /// его `applyLapseScoring` (`computed/lapse_scoring.dart`), читает — ветвь
-  /// at-most ниже.
+  /// же, что Kotlin, — весь портированный набор проходит без правки. Сегодня
+  /// поле не включает никто: включателя `applyLapseScoring`
+  /// (`computed/lapse_scoring.dart`) ещё нет, он появится вместе с
+  /// подключением воздержания. Читает поле ветвь at-most ниже.
   ///
   /// Правила: `docs/extensions/COMPUTED.md` `computed.lapse-score`.
   /// Отклонение: `docs/parity/DEVIATIONS.md`, запись «computed: срыв делит
@@ -114,7 +115,19 @@ class ScoreList {
           // аффинный, previousValue * multiplier + pct * (1 - multiplier), и
           // при multiplier 0.948078 один день не может опустить оценку больше
           // чем на 5.2% — ни при каком значении дня и ни при какой цели.
-          if (halvesOnLapse && isAtMost && normalizedRollingSum > targetValue) {
+          //
+          // Только при окне в один день. `normalizedRollingSum` есть сумма за
+          // `denominator` дней, и делить по ней можно, лишь когда она есть
+          // значение самого дня. При 1/7 одна запись держится в окне семь
+          // дней и была бы наказана семь раз (1/128), а тройка `Entry.skip`,
+          // попадающая в сумму выше по циклу, при допуске 0 сама читалась бы
+          // срывом. Частота приходит и из восстановленного файла, поэтому
+          // охрана стоит здесь, у арифметики, а не только на пути создания.
+          // Отказ безопасен: день уходит шагу порта.
+          if (halvesOnLapse &&
+              isAtMost &&
+              frequency.denominator == 1 &&
+              normalizedRollingSum > targetValue) {
             previousValue = previousValue / 2;
           } else {
             previousValue =

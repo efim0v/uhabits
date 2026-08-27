@@ -11,6 +11,9 @@ import 'package:uhabits_core/src/time/local_date.dart';
 /// Множитель порта для ежедневной привычки, выписанный независимо от Score.
 final double m = pow(0.5, sqrt(1.0) / 13.0).toDouble();
 
+/// Он же для недельной: у неё окно шире дня, и деление к ней не применяется.
+final double m7 = pow(0.5, sqrt(1.0 / 7.0) / 13.0).toDouble();
+
 /// Тот же обход, что у `EntryList.getByInterval`: по одной записи на каждый
 /// день из [from, to], новейший первым, UNKNOWN за день без записи.
 class FakeEntries {
@@ -57,10 +60,11 @@ void main() {
     double targetValue = 0.0,
     bool halvesOnLapse = true,
     NumericalHabitType targetType = NumericalHabitType.atMost,
+    Frequency frequency = Frequency.daily,
   }) {
     scores.halvesOnLapse = halvesOnLapse;
     scores.recompute(
-      frequency: Frequency.daily,
+      frequency: frequency,
       isNumerical: true,
       numericalHabitType: targetType,
       targetValue: targetValue,
@@ -256,5 +260,47 @@ void main() {
     // `scores[...]`.
     expect(decayed, closeTo(0.974039, 1e-6));
     expect(1.0 - decayed, lessThan(0.03));
+  });
+
+  test('a window wider than a day falls back to the port step', () {
+    // Скользящая сумма считается за `denominator` дней, а не за день, и
+    // делить по ней можно, лишь когда она есть значение самого дня. При 1/7
+    // одна запись держится в окне семь дней подряд, и деление без охраны
+    // наказало бы за неё семь раз: 1/128 вместо половины.
+    lapse(6);
+    recompute(days: 20, frequency: Frequency.weekly);
+    expect(scores[today.minus(6)].value, closeTo(m7, 1e-12),
+        reason: 'computed.lapse-score#13');
+    // Запись не выходит из окна до конца диапазона: семь дней подряд с
+    // pct 0, то есть ровно m7^7 = 0.868430.
+    expect(scores[today].value, closeTo(pow(m7, 7).toDouble(), 1e-9),
+        reason: 'computed.lapse-score#13');
+    expect(scores[today].value, greaterThan(0.8),
+        reason: 'computed.lapse-score#13 — не 1/128');
+
+    // Охрана про ширину окна, а не про выключение деления: при 1/1 та же
+    // запись делит пополам, как и прежде.
+    reset();
+    lapse(6);
+    recompute(days: 20);
+    expect(scores[today.minus(6)].value, closeTo(0.5, 1e-12),
+        reason: 'computed.lapse-score#13');
+  });
+
+  test('a wide window does not read a skip as a lapse', () {
+    // Второй раз то же окно врёт про пропуск: `Entry.skip` есть 3, она
+    // попадает в скользящую сумму выше по циклу, и при допуске 0 даёт
+    // 0.003 > 0 — то есть сам пропуск читался бы срывом три дня подряд и
+    // увёл бы оценку в 0.125. С охраной остаётся ровно то, что делает порт
+    // со своей известной особенностью SKIP == 3: три дня с pct 0, то есть
+    // m7^3 = 0.941333.
+    entries.put(today.minus(3), Entry.skip);
+    recompute(days: 20, frequency: Frequency.weekly);
+    expect(scores[today.minus(3)].value, closeTo(1.0, 1e-12),
+        reason: 'computed.lapse-score#13');
+    expect(scores[today].value, closeTo(pow(m7, 3).toDouble(), 1e-9),
+        reason: 'computed.lapse-score#13');
+    expect(scores[today].value, greaterThan(0.9),
+        reason: 'computed.lapse-score#13 — не 0.125');
   });
 }
