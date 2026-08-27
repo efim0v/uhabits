@@ -65,3 +65,4 @@ export 'src/sleep/sleep_suggestions.dart';
 export 'src/computed/abstinence_payload.dart';
 export 'src/computed/definition_repository.dart';
 export 'src/computed/habit_definition.dart';
+export 'src/computed/lapse_repository.dart';
