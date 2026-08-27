@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/score.dart';
 import 'package:uhabits_core/src/models/score_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
 
@@ -176,5 +177,84 @@ void main() {
         reason: 'computed.lapse-score#8');
     expect(scores[today].value, closeTo(0.525961, 1e-6),
         reason: 'computed.lapse-score#8');
+  });
+
+  test('a lapse every two weeks parks the ring at two thirds, not below half',
+      () {
+    // Четыреста циклов по четырнадцать дней: срыв, затем тринадцать чистых.
+    // Сегодня есть последний день цикла, срыв — в offset 13.
+    const int cycles = 400;
+    const int period = 14;
+    for (int c = 0; c < cycles; c++) {
+      lapse(13 + c * period);
+    }
+    recompute(days: cycles * period);
+
+    expect(scores[today.minus(13)].value, closeTo(1 / 3, 1e-9),
+        reason: 'computed.lapse-score#9');
+    expect(scores[today].value, closeTo(2 / 3, 1e-9),
+        reason: 'computed.lapse-score#9');
+
+    int belowHalf = 0;
+    for (int d = 0; d < period; d++) {
+      if (scores[today.minus(d)].value < 0.5) belowHalf++;
+    }
+    expect(belowHalf, 6, reason: 'computed.lapse-score#9');
+
+    // Почему не обнуление — тот же цикл, посчитанный здесь же и независимо.
+    // Оно даёт равновесие ровно 1/2 и держит кольцо ниже половины тринадцать
+    // дней из четырнадцати: шкала перестаёт что-либо различать.
+    double zeroed = 1.0;
+    for (int c = 0; c < cycles; c++) {
+      zeroed = 0.0;
+      for (int d = 0; d < period - 1; d++) {
+        zeroed = Score.compute(1.0, zeroed, 1.0);
+      }
+    }
+    // Контрольная величина отвергнутого варианта: кода фичи не касается.
+    expect(zeroed, closeTo(0.5, 1e-9));
+
+    int zeroedBelowHalf = 0;
+    double v = 0.0;
+    for (int d = 0; d < period; d++) {
+      if (v < 0.5) zeroedBelowHalf++;
+      v = Score.compute(1.0, v, 1.0);
+    }
+    // Контрольная величина отвергнутого варианта: кода фичи не касается.
+    expect(zeroedBelowHalf, 13);
+
+    // Срыв раз в три недели — 0.792086, тоже уверенно выше половины.
+    reset();
+    const int longPeriod = 21;
+    for (int c = 0; c < 300; c++) {
+      lapse(20 + c * longPeriod);
+    }
+    recompute(days: 300 * longPeriod);
+    expect(scores[today].value, closeTo(0.792086, 1e-6),
+        reason: 'computed.lapse-score#9');
+  });
+
+  test('thirteen clean days after a lapse return exactly three quarters', () {
+    lapse(13);
+    recompute(days: 20);
+    expect(scores[today.minus(13)].value, closeTo(0.5, 1e-12),
+        reason: 'computed.lapse-score#10');
+    // m^13 = 0.5 по построению множителя, поэтому 1 - 0.5 * m^13 = 0.75 точно.
+    expect(scores[today].value, closeTo(0.75, 1e-9),
+        reason: 'computed.lapse-score#10');
+
+    // А теперь затухание порта на том же самом срыве, посчитанное независимо:
+    // 0.974039 против идеальной единицы. Разницы на кольце не видно — ради
+    // этого 5% и отвергнуты.
+    double decayed = Score.compute(1.0, 1.0, 0.0);
+    for (int d = 0; d < 13; d++) {
+      decayed = Score.compute(1.0, decayed, 1.0);
+    }
+    // Контрольная величина отвергнутого варианта: кода фичи не касается.
+    // Обе цифры считаются здесь же из портированного `Score.compute`, поэтому
+    // цитаты правила на них нет — правило держат те `expect`, что читают
+    // `scores[...]`.
+    expect(decayed, closeTo(0.974039, 1e-6));
+    expect(1.0 - decayed, lessThan(0.03));
   });
 }
