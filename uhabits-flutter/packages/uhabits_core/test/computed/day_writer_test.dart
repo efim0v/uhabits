@@ -56,6 +56,25 @@ void main() {
     }
   });
 
+  // Zero is 1, 2 and 3's neighbour and is not one of them. `storedValueOf`
+  // collapses every score below `minStoredValue` to exactly zero
+  // (`sleep.stored-value#3`), so a night that scored nothing arrives here as 0
+  // and has to be written down. The freeze this class guards against is a zero
+  // written for a day with *no* data — which is what a null `storedValue`
+  // means (`computed.day-write#3`) — and not a measured zero, which the next
+  // sync over the same night overwrites like any other value. The two tests
+  // are apart on purpose: one refuses the zero loudly and the other drops it
+  // quietly, and each has to fail through its own assertion.
+  test('a measured zero is not refused', () {
+    expect(() => writer.write(habit, 9000, Entry.no), returnsNormally,
+        reason: 'computed.day-write#2');
+  });
+
+  test('a measured zero is written down', () {
+    writer.write(habit, 9000, Entry.no);
+    expect(valueOn(9000), Entry.no, reason: 'computed.day-write#2');
+  });
+
   group('a run of days', () {
     late List<int> announced;
 
@@ -120,11 +139,22 @@ void main() {
           reason: 'computed.day-write#8 — заметка человека остаётся');
     });
 
-    test('does not take a skip off', () {
+    // Split in two against the brief's single body. Dropping the skip guard
+    // makes `clear` answer `true`, which is the first assertion — so the one
+    // that matters, that the skip is still there afterwards, would never have
+    // run under the very mutation it exists to catch.
+    test('does not say it took a skip off', () {
       habit.originalEntries.add(Entry(LocalDate(9000), Entry.skip));
 
       expect(const DayWriter().clear(habit, 9000), isFalse,
           reason: 'computed.day-write#8');
+    });
+
+    test('does not take a skip off', () {
+      habit.originalEntries.add(Entry(LocalDate(9000), Entry.skip));
+
+      const DayWriter().clear(habit, 9000);
+
       expect(habit.originalEntries.get(LocalDate(9000)).value, Entry.skip,
           reason: 'computed.day-write#8 — пропуск есть отметка человека '
               '(`computed.day-write#4`)');
