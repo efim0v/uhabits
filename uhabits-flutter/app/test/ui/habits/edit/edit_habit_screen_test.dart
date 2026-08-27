@@ -3031,17 +3031,21 @@ void main() {
       expect(second.top, greaterThan(first.top),
           reason: 'habit-type-dialog.select-type#3 — a column, in order');
 
-      // The port adds a third card of its own, below those two, for a goal the
-      // original cannot express. That is a deliberate departure from
-      // `habit-type-dialog.select-type#4`, which says exactly two, and it is
-      // recorded in DEVIATIONS.md. The centring below therefore measures the
-      // column the port actually shows.
+      // The port adds a card of its own per computed kind, below those two,
+      // for goals the original cannot express. That is a deliberate departure
+      // from `habit-type-dialog.select-type#4`, which says exactly two, and it
+      // is recorded in DEVIATIONS.md. The centring below therefore measures
+      // the column the port actually shows.
       final third = tester.getRect(find.byKey(EditHabitScreen.sleepTypeCardKey));
+      final fourth =
+          tester.getRect(find.byKey(EditHabitScreen.abstinenceTypeCardKey));
       expect(third.top, greaterThan(second.top),
-          reason: 'sleep.ui#6 — the port\'s own card comes last, so the two '
-              'ported cards keep the positions the rule gives them');
+          reason: 'computed.create#1 — the port\'s own cards come last, so the '
+              'two ported cards keep the positions the rule gives them');
+      expect(fourth.top, greaterThan(third.top),
+          reason: 'computed.create#1 — and they are in a column too');
       expect(
-        (first.top + third.bottom) / 2,
+        (first.top + fourth.bottom) / 2,
         moreOrLessEquals(screen.height / 2, epsilon: 0.5),
         reason: 'habit-type-dialog.select-type#3 — vertically centred',
       );

@@ -222,6 +222,7 @@ class EditHabitScreen extends StatelessWidget {
   static const Key notesFieldKey = Key('editHabit.notesInput');
   static const Key unitFieldKey = Key('editHabit.unitInput');
   static const Key sleepTypeCardKey = Key('habitType.sleepCard');
+  static const Key abstinenceTypeCardKey = Key('habitType.abstinenceCard');
   static const Key targetFieldKey = Key('editHabit.targetInput');
   static const Key colorButtonKey = Key('editHabit.colorButton');
   static const Key frequencyBoxKey = Key('editHabit.frequencyOuterBox');
@@ -1225,6 +1226,22 @@ class HabitTypeDialog extends StatelessWidget {
                   onTap: () => Navigator.of(context).pop(
                       const HabitTypeSelection(core.HabitType.numerical,
                           computed: core.ComputedKind.sleep)),
+                ),
+                const SizedBox(height: 16),
+                // The port's fourth card. `habit-type-dialog.select-type#4`
+                // says exactly two, and the port has departed from it once
+                // already, for sleep; this does not depart from it a second
+                // time, it makes the first departure a shape: one card per
+                // computed kind, all of them after the two the original has.
+                // DEVIATIONS.md carries the entry, widened from "the third
+                // card" to this.
+                _HabitTypeCard(
+                  key: EditHabitScreen.abstinenceTypeCardKey,
+                  title: l10n.abstinenceHabitType,
+                  body: l10n.abstinenceHabitTypeExample,
+                  onTap: () => Navigator.of(context).pop(
+                      const HabitTypeSelection(core.HabitType.numerical,
+                          computed: core.ComputedKind.abstinence)),
                 ),
               ],
             ),
