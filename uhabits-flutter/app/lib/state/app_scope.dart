@@ -954,20 +954,23 @@ class AppScope {
     // not exist until the next statement — hence `late`, and hence a callback
     // rather than the scope itself.
     late final AppScope scope;
+    // One writer, not one per kind. `DayWriter` holds nothing, so two of them
+    // would work — but "every kind writes through the same announcing door" is
+    // the claim this layer makes, and a claim stated by two identical
+    // constructions is a claim that stops being true the moment one of them is
+    // edited.
+    final DayWriter announcing = DayWriter(
+      onChanged: (int habitId) => scope.onComputedDataChanged(habitId),
+    );
     scope = AppScope._(
       sleepRepository: sleepRepository,
       definitions: definitions,
       lapses: lapses,
-      abstinence: AbstinenceSync(
-        lapses: lapses,
-        // Тот же объявляющий писатель, что у сна: тогда объявление списку идёт
-        // даром, привычка пересчитывается до объявления
-        // (`computed.freshness#4`), и жесту UI не нужно звать
-        // `onComputedDataChanged` вторым вызовом.
-        writer: DayWriter(
-          onChanged: (int habitId) => scope.onComputedDataChanged(habitId),
-        ),
-      ),
+      // Собран тем же объявляющим писателем, что и сон: объявление списку
+      // идёт даром, привычка пересчитывается до объявления
+      // (`computed.freshness#4`), и жесту UI не нужно звать
+      // `onComputedDataChanged` вторым вызовом.
+      abstinence: AbstinenceSync(lapses: lapses, writer: announcing),
       sleepSync: SleepSync(
         repository: sleepRepository,
         // The resolved one, not the parameter: a bare StandardLogging writes
@@ -975,9 +978,7 @@ class AppScope {
         // only account of why Health went quiet. They belong in the buffer the
         // bug report carries.
         source: sleepSource ?? defaultSleepDataSource(logging: resolvedLogging),
-        writer: DayWriter(
-          onChanged: (int habitId) => scope.onComputedDataChanged(habitId),
-        ),
+        writer: announcing,
       ),
       database: database,
       databasePath: databasePath,
