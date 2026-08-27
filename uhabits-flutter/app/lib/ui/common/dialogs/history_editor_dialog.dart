@@ -127,6 +127,22 @@ abstract interface class HistoryEditorHandle {
 
   /// The `chart` field. Null only before `onCreateDialog` has run.
   HistoryChart? get chart;
+
+  /// Re-reads the habit and repaints the grid, for a write that
+  /// [onCommandFinished] never hears about.
+  ///
+  /// Not upstream, and not `refreshData()` itself — this dialog already has
+  /// that, private, and driven by `CommandRunner` (`history-editor.dialog#6`).
+  /// The abstinence gestures write through `AbstinenceSync`/`DayWriter`
+  /// instead, deliberately outside the command bus
+  /// (`abstinence_gestures.dart`), so no command ever finishes for them and
+  /// `onCommandFinished` never fires. Left alone, a lapse recorded through
+  /// this very dialog — at an allowance above zero, where the tap opens a
+  /// second popup on top of this one — would leave the grid showing what it
+  /// showed before the popup opened, one write behind the journal, until some
+  /// unrelated command happened to run. [ShowHabitScreen] calls this the same
+  /// way it already calls its own `_repaintComputed` after such a write.
+  void refresh();
 }
 
 class HistoryEditorDialog extends StatefulWidget {
@@ -310,6 +326,11 @@ class _HistoryEditorDialogState extends State<HistoryEditorDialog>
   /// (`history-editor.dialog#6`).
   @override
   void onCommandFinished(Command command) => _refreshData();
+
+  /// [HistoryEditorHandle.refresh]: the same repaint, called by hand for a
+  /// write [onCommandFinished] does not hear.
+  @override
+  void refresh() => _refreshData();
 
   /// `refreshData()`: rebuild the state, push the three data fields into the
   /// live chart and invalidate.

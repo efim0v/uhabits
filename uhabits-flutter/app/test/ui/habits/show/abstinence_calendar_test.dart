@@ -55,6 +55,37 @@ void main() {
     return habit;
   }
 
+  /// Обещание «не более [allowance] [unit] в день», данное 400 дней назад —
+  /// тот же запас, что у `addAbstinence`, ради той же причины: любая видимая
+  /// клетка уже под обязательством, и день обязательства этому тесту не
+  /// интересен.
+  ///
+  /// Допуск пишется дважды одним движением: `targetValue` читает оценка и
+  /// рисунок ячейки числового календаря, `payload` — `toggleLapseDay`,
+  /// спрашивающий величину (`computed.allowance#1`).
+  Habit addAbstinenceWithAllowance({
+    required double allowance,
+    String unit = 'minutes',
+  }) {
+    final Habit habit = scope.modelFactory.buildHabit()
+      ..name = 'Screen time'
+      ..type = HabitType.numerical
+      ..targetType = NumericalHabitType.atMost
+      ..targetValue = allowance
+      ..unit = unit;
+    scope.habitList.add(habit);
+    scope.definitions.save(
+      habit.id!,
+      HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: getToday().daysSince2000 - 400,
+        payload: abstinencePayload(allowance: allowance, unit: unit),
+      ),
+    );
+    habit.recompute();
+    return habit;
+  }
+
   final Finder chartFinder = find.descendant(
     of: find.byType(HistoryEditorDialog),
     matching: find.byType(CoreView),
@@ -166,5 +197,102 @@ void main() {
     expect(habit.originalEntries.get(skippedDay).value, Entry.skip,
         reason: 'computed.abstinence-screen#8 — вычисленное значение не '
             'затирает отметку человека');
+  });
+
+  // Допуск больше нуля: тап в календаре открывает второй попап поверх уже
+  // открытого `HistoryEditorDialog` — вложение, которого нет ни у ячейки
+  // списка, ни у кнопки карточки, потому что ни там, ни там в момент жеста
+  // никакой диалог не открыт. `abstinence_allowance_test.dart` спрашивает
+  // тех же троих судей через список и карточку; здесь — тот же вопрос через
+  // календарь, третьим.
+  testWidgets(
+      'computed.abstinence-screen#6 календарь спрашивает величину, и её '
+      'ответ решает день', (tester) async {
+    final Habit habit =
+        addAbstinenceWithAllowance(allowance: 30.0, unit: 'minutes');
+
+    await openEditorAndTapADay(tester, habit);
+
+    // Второй диалог действительно открылся на этой глубине, и первый его не
+    // уступил: `HistoryEditorDialog` держит свой собственный слот отдельно
+    // от общего `dismissCurrentAndShow`, которым здесь открыт попап
+    // (`history-editor.dialog#10`, `#16`).
+    expect(find.byType(NumberDialog), findsOneWidget,
+        reason: 'computed.abstinence-cell#8 — при допуске больше нуля тап '
+            'спрашивает величину, и через календарь тоже');
+    expect(find.byType(HistoryEditorDialog), findsOneWidget,
+        reason: 'computed.abstinence-screen#6 — календарь не уступает место '
+            'вложенному попапу, а держит его поверх себя');
+
+    await tester.enterText(
+        find.byKey(const ValueKey<String>('number_value')), '45');
+    await tester.tap(find.byKey(const ValueKey<String>('number_save_button')));
+    await tester.pumpAndSettle();
+
+    // Попап закрылся, календарь пережил вложение и остался на экране.
+    expect(find.byType(NumberDialog), findsNothing);
+    expect(find.byType(HistoryEditorDialog), findsOneWidget,
+        reason: 'computed.abstinence-screen#6 — закрытие вложенного попапа '
+            'не роняет календарь под ним');
+
+    // Что стало с днём: журнал хранит ответ как факт, а не «единицу».
+    final int? day = scope.lapses.lastDay(habit.id!);
+    expect(day, isNotNull, reason: 'computed.abstinence-screen#6');
+    expect(scope.lapses.forDay(habit.id!, day!), 45,
+        reason: 'computed.abstinence-cell#8 — журнал хранит введённую '
+            'величину, а не единицу');
+
+    // Что показывает календарь: сорок пять больше тридцати — тот же
+    // числовой at-most, которым порт красит любой день, — и сетка обязана
+    // это показать сразу, не дожидаясь чужой команды
+    // (`computed.abstinence-screen#9`). Запись срыва идёт через
+    // `AbstinenceSync`/`DayWriter`, а не через `CommandRunner`, так что без
+    // ручного `refresh()` кэш календаря остался бы на состоянии до тапа.
+    final int daysAgo = getToday().daysSince2000 - day;
+    final HistoryChart? chart = HistoryEditorDialog.current?.chart;
+    expect(chart, isNotNull);
+    expect(daysAgo, lessThan(chart!.series.length),
+        reason: 'computed.abstinence-screen#9 — свежая запись обязана войти '
+            'в перерисованную сетку');
+    expect(chart.series[daysAgo], Square.grey,
+        reason: 'computed.abstinence-screen#9 — сорок пять минут при '
+            'допуске тридцать красятся так же, как любой день числовой '
+            'привычки, не уложившийся в цель at-most');
+  });
+
+  testWidgets(
+      'computed.abstinence-screen#6 календарь: величина в пределах допуска '
+      'оставляет день чистым', (tester) async {
+    final Habit habit =
+        addAbstinenceWithAllowance(allowance: 30.0, unit: 'minutes');
+
+    await openEditorAndTapADay(tester, habit);
+    await tester.enterText(
+        find.byKey(const ValueKey<String>('number_value')), '20');
+    await tester.tap(find.byKey(const ValueKey<String>('number_save_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HistoryEditorDialog), findsOneWidget,
+        reason: 'computed.abstinence-screen#6 — закрытие вложенного попапа '
+            'не роняет календарь под ним');
+
+    final int? day = scope.lapses.lastDay(habit.id!);
+    expect(day, isNotNull, reason: 'computed.abstinence-screen#6');
+    // Журнал хранит двадцать — обещание тридцати это держит, но запись есть
+    // запись: величина, а не отсутствие строки (computed.lapses#1 говорит
+    // про молчание, а тут человек ответил).
+    expect(scope.lapses.forDay(habit.id!, day!), 20,
+        reason: 'computed.abstinence-cell#8');
+
+    // День остаётся чистым и на календаре: двадцать не больше тридцати.
+    final int daysAgo = getToday().daysSince2000 - day;
+    final HistoryChart? chart = HistoryEditorDialog.current?.chart;
+    expect(chart, isNotNull);
+    expect(daysAgo, lessThan(chart!.series.length),
+        reason: 'computed.abstinence-screen#9');
+    expect(chart.series[daysAgo], Square.on,
+        reason: 'computed.abstinence-screen#9 — двадцать минут при допуске '
+            'тридцать обещание держат, и календарь обязан согласиться с '
+            'ячейкой и кнопкой карточки (computed.abstinence-cell#2)');
   });
 }

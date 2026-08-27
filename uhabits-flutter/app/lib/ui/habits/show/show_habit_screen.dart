@@ -593,7 +593,16 @@ class _ShowHabitViewState extends State<_ShowHabitView>
           // `showNumberPopup` и `_showCheckmarkPopup` в этом же файле.
           theme: coreThemeOf(context),
         ).then((bool written) {
-          if (written && mounted) _repaintComputed();
+          if (!written) return;
+          // `_repaintComputed` rebuilds this screen, but the calendar the tap
+          // came from is a separate route: `HistoryEditorDialog` only hears
+          // about a write through `CommandRunner`
+          // (`history-editor.dialog#6`), and this one goes through
+          // `AbstinenceSync`/`DayWriter` instead, deliberately outside the
+          // command bus. Left alone, the grid under the popup that just
+          // closed would still be showing the day it had before the tap.
+          editor.HistoryEditorDialog.current?.refresh();
+          if (mounted) _repaintComputed();
         }));
         return;
       }
