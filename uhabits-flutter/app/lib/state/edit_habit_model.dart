@@ -90,6 +90,12 @@ class EditHabitModel extends ChangeNotifier {
                   60000,
         );
       }
+      if (computed == ComputedKind.abstinence) {
+        // Everything this form asks for has a default, so it can be saved with
+        // nothing but a name: today, and no allowance at all.
+        committedFrom = getToday().daysSince2000;
+        targetController.text = '0';
+      }
       return;
     }
 
@@ -113,7 +119,19 @@ class EditHabitModel extends ChangeNotifier {
     // `habit.targetValue.toString()`, so 15.0 shows as the literal "15.0".
     targetController.text = habit.targetValue.toString();
     sleepGoal = scope.sleepRepository.goalFor(id);
-    computedKind = scope.definitions.forHabit(id)?.kind;
+    final HabitDefinition? definition = scope.definitions.forHabit(id);
+    computedKind = definition?.kind;
+    committedFrom = definition?.committedFrom ?? getToday().daysSince2000;
+    if (computedKind == ComputedKind.abstinence) {
+      // `targetValue.toString()` renders 30 as "30.0", which is what the
+      // ported line above does and what its rule asks for. An allowance is a
+      // count of minutes or of drinks, and "30.0 minutes" is not how anyone
+      // writes one down.
+      final double allowance = habit.targetValue;
+      targetController.text = allowance == allowance.roundToDouble()
+          ? allowance.round().toString()
+          : allowance.toString();
+    }
   }
 
   final AppScope scope;
@@ -167,6 +185,20 @@ class EditHabitModel extends ChangeNotifier {
   /// `targetInput.error`.
   EditHabitFieldError? targetError;
 
+  /// The allowance field's error. Its own rather than [targetError]: the form
+  /// that shows the allowance never shows the target, so an error on the one
+  /// would be drawn on a box that is not on screen.
+  EditHabitFieldError? allowanceError;
+
+  /// The day the person committed, as `daysSince2000`.
+  ///
+  /// Only an abstinence habit has one, and it is what the recompute range
+  /// starts from. It cannot come from the entries: a habit that records
+  /// nothing while it is being kept has no oldest entry, and the first row it
+  /// ever gets is the first slip — which would make the clean stretch before
+  /// it not exist.
+  int committedFrom = 0;
+
   // -----------------------------------------------------------------------
   // Derived state the view asks for
   // -----------------------------------------------------------------------
@@ -208,6 +240,17 @@ class EditHabitModel extends ChangeNotifier {
 
   void setSleepGoal(SleepGoal value) {
     sleepGoal = value;
+    notifyListeners();
+  }
+
+  /// The commitment day, never in the future.
+  ///
+  /// The picker's `lastDate` already refuses tomorrow; this refuses it again,
+  /// because the picker is one of three ways this value can be set and the
+  /// other two are a restored backup and a future build.
+  void setCommittedFrom(int day) {
+    final int today = getToday().daysSince2000;
+    committedFrom = day > today ? today : day;
     notifyListeners();
   }
 
@@ -289,15 +332,16 @@ class EditHabitModel extends ChangeNotifier {
     var isValid = true;
     nameError = null;
     targetError = null;
+    allowanceError = null;
 
     if (nameController.text.isEmpty) {
       nameError = EditHabitFieldError.blank;
       isValid = false;
     }
-    // A sleep habit is numerical, but its target is settled by the model and
+    // A computed habit is numerical, but its target is settled by the kind and
     // the field that would carry it is never shown. Validating it would refuse
     // to save a form the person was never given a chance to fill in.
-    if (isNumerical && !isSleep) {
+    if (isNumerical && !isComputed) {
       if (targetController.text.isEmpty) {
         targetError = EditHabitFieldError.blank;
         isValid = false;
@@ -307,6 +351,17 @@ class EditHabitModel extends ChangeNotifier {
         targetError = EditHabitFieldError.notANumber;
         isValid = false;
       }
+    }
+
+    // The allowance is the same control asked a different question. Blank is
+    // not an error here — it means no allowance, which is the default — but a
+    // word where a number belongs still refuses the save, for the reason
+    // `edit-habit.validation#9` gives about the target.
+    if (isAbstinence &&
+        targetController.text.isNotEmpty &&
+        double.tryParse(targetController.text) == null) {
+      allowanceError = EditHabitFieldError.notANumber;
+      isValid = false;
     }
 
     notifyListeners();
@@ -345,9 +400,9 @@ class EditHabitModel extends ChangeNotifier {
     // Only numerical habits write these three, so switching an existing
     // numerical habit to yes/no leaves the copied target and unit intact
     // (`edit-habit.save#6`, `#16`).
-    // Same reason as in validate(): the sleep form never shows these, so
+    // Same reason as in validate(): a computed form never shows these, so
     // there is nothing here to parse.
-    if (habitType == HabitType.numerical && !isSleep) {
+    if (habitType == HabitType.numerical && !isComputed) {
       habit.targetValue = double.parse(targetController.text);
       habit.targetType = targetType;
       habit.unit = unitController.text.trim();
@@ -362,6 +417,18 @@ class EditHabitModel extends ChangeNotifier {
       habit.targetValue = sleepTargetValue;
       habit.targetType = NumericalHabitType.atLeast;
       habit.unit = sleepUnit;
+      habit.frequency = Frequency(1, 1);
+    }
+
+    // An abstinence habit is an at-most numerical habit whose target is the
+    // day's allowance. Nothing new is needed for "silence is success": the
+    // ported at-most branch starts its score at 1.0 and counts a day with no
+    // entry through `max(0, -1)`, which is exactly "innocent until proven
+    // otherwise".
+    if (isAbstinence) {
+      habit.targetValue = double.tryParse(targetController.text) ?? 0;
+      habit.targetType = NumericalHabitType.atMost;
+      habit.unit = unitController.text.trim();
       habit.frequency = Frequency(1, 1);
     }
 
