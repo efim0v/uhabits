@@ -34,9 +34,11 @@ class LapseImporter {
 
     for (final MapEntry<int, int> lapse
         in origin.range(sourceHabitId, from, to).entries) {
-      // `save`, not a three-int upsert: it is the one door carrying the guard
-      // that a lapse is at least one (`computed.lapses#2`), and a file written
-      // by some other build has no claim on this device's floor.
+      // `save` with its named amount, rather than three positional ints past
+      // it: it is the one door carrying the guard that a lapse is at least one
+      // (`computed.lapses#2`). A file holding a zero is refusing to say
+      // anything, and it is refused loudly rather than restored as a lapse of
+      // nothing.
       _destination.save(destinationHabitId, lapse.key, amount: lapse.value);
     }
   }
