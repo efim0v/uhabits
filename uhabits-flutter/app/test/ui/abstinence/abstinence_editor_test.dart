@@ -18,8 +18,15 @@ void main() {
   late Database database;
   late AppScope scope;
 
+  final TimeZone Function() realZone = getDefaultTimeZone;
+
   setUp(() {
     DateUtils.setFixedTimeZone(const FixedTimeZone(0));
+    // `computeToday` reads the top-level `getDefaultTimeZone`, not
+    // `DateUtils.fixedTimeZone`, so pinning the clock is not enough on its
+    // own: under a machine set to UTC+14 the stamped today is 9001 and every
+    // commitment day here is off by one.
+    getDefaultTimeZone = () => const FixedTimeZone(0);
     // `AppScope.open` stamps today itself, from the wall clock rather than
     // from `setToday` — so the clock is what has to be pinned. Without this
     // the form's default commitment day is the day the suite happens to run.
@@ -39,6 +46,7 @@ void main() {
   tearDown(() {
     scope.close();
     DateUtils.setFixedTimeZone(null);
+    getDefaultTimeZone = realZone;
     systemCurrentTimeMillis = defaultCurrentTimeMillis;
     resetToday();
   });
@@ -296,6 +304,171 @@ void main() {
               'promise, so the day is a slip and the score says so. Left '
               'unrecomputed the history would be judged by a commitment '
               'nobody is keeping any more');
+    });
+
+    test('the row moves with the target it mirrors', () {
+      // The other half of the same edit, and the half no other test here can
+      // see: every one of them creates a habit, and the payload of a habit
+      // that has just been created cannot disagree with its target yet. Two
+      // copies of one number drift apart silently — `EditHabitCommand` moves
+      // `targetValue` and never touches the payload — so the write that keeps
+      // them together is asserted on the path that could break it. What breaks
+      // when they drift is not pedantry: the score judges by `targetValue`
+      // and the list cell by the payload, so the ring would call a day a slip
+      // with no cross drawn on it.
+      final EditHabitModel create =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      create.nameController.text = 'Screen time';
+      create.targetController.text = '30';
+      create.unitController.text = 'minutes';
+      create.setCommittedFrom(8990);
+      expect(create.save(), isTrue, reason: 'computed.allowance#1');
+
+      final Habit habit = scope.habitList.getByPosition(0);
+      final EditHabitModel edit =
+          EditHabitModel(scope: scope, habitId: habit.id);
+      edit.targetController.text = '10';
+      expect(edit.save(), isTrue, reason: 'computed.allowance#1');
+
+      final Habit saved = scope.habitList.getById(habit.id!)!;
+      final HabitDefinition definition =
+          scope.definitions.forHabit(habit.id!)!;
+      expect(saved.targetValue, 10.0, reason: 'computed.allowance#1');
+      expect(abstinenceAllowanceOf(definition), saved.targetValue,
+          reason: 'computed.allowance#1 — обе записи ставит один save: строка '
+              'с прежним допуском вернула бы форме тридцать, а ячейке — своё '
+              'представление о том, где начинается срыв');
+      expect(abstinenceAllowanceOf(definition), 10.0,
+          reason: 'computed.allowance#1 — и это новое число, а не старое, на '
+              'которое согласились оба');
+      final HabitDefinition? live = saved.definition;
+      expect(live, isNotNull,
+          reason: 'computed.commitment#5 — определение живёт и на самой '
+              'привычке, а не только в базе: пересчёт читает поле');
+      expect(abstinenceAllowanceOf(live ?? definition), 10.0,
+          reason: 'computed.allowance#1 — и на живой привычке новое число: до '
+              'перезапуска все читают его отсюда');
+      expect(definition.committedFrom, 8990,
+          reason: 'computed.create#8 — правка допуска не есть новое '
+              'обязательство: сдвинутый на сегодня день стёр бы человеку все '
+              'накопленные чистые дни, ради счёта которых всё и затевалось');
+    });
+  });
+
+  group('the definition row', () {
+    test('is written with the day and the allowance', () {
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'Screen time';
+      model.targetController.text = '30';
+      model.unitController.text = 'minutes';
+      model.setCommittedFrom(8960);
+      expect(model.save(), isTrue, reason: 'computed.create#7');
+
+      final Habit habit = scope.habitList.getByPosition(0);
+      final HabitDefinition? definition = scope.definitions.forHabit(habit.id!);
+      expect(definition, isNotNull, reason: 'computed.create#7');
+      expect(definition!.kind, ComputedKind.abstinence,
+          reason: 'computed.create#7 — the row is what makes a habit '
+              'computed; without it nothing outside the app is kept away '
+              'from its days');
+      expect(definition.committedFrom, 8960,
+          reason: 'computed.create#7 — the recompute range starts here, not '
+              'at the oldest entry: there is no oldest entry while the habit '
+              'is being kept');
+      expect(abstinenceAllowanceOf(definition), 30.0,
+          reason: 'computed.create#7');
+      expect(abstinenceUnitOf(definition), 'minutes',
+          reason: 'computed.create#7');
+      expect(scope.definitions.isComputed(habit.id!), isTrue,
+          reason: 'computed.create#7');
+      // Настоящая цитата `computed.write-paths#5`: тип у привычки не тот, что
+      // ей выставил тест, а тот, с которым её завёл редактор. Неохраняемая
+      // дверь переключения да/нет живёт под `!habit.isNumerical`, и достать
+      // воздержание она не может ровно потому, что вот эта строка зелёная.
+      expect(habit.type, HabitType.numerical,
+          reason: 'computed.write-paths#5 — вычисляемая привычка числовая по '
+              'построению, и переключить её нечем');
+      expect(habit.targetType, NumericalHabitType.atMost,
+          reason: 'computed.create#7 — «не более допуска»');
+    });
+
+    test('the allowance in the row and the target on the habit are one number',
+        () {
+      // Две копии одного числа разъезжаются молча: `EditHabitCommand` может
+      // изменить `targetValue`, не тронув payload. Их пишет один save, и это
+      // проверяется, а не подразумевается.
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'Screen time';
+      model.targetController.text = '30';
+      model.setCommittedFrom(8960);
+      model.save();
+
+      final Habit habit = scope.habitList.getByPosition(0);
+      expect(abstinenceAllowanceOf(scope.definitions.forHabit(habit.id!)!),
+          habit.targetValue,
+          reason: 'computed.allowance#1 — допуск назван один раз, иначе '
+              'вчерашний день судится вчерашним правилом');
+    });
+
+    test('the default habit gets a row too, with today and no allowance', () {
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'No alcohol';
+      model.save();
+
+      final HabitDefinition definition =
+          scope.definitions.forHabit(scope.habitList.getByPosition(0).id!)!;
+      expect(definition.committedFrom, 9000, reason: 'computed.create#8');
+      expect(abstinenceAllowanceOf(definition), 0.0,
+          reason: 'computed.create#5 — zero allowance means one tap is a slip');
+      expect(definition.payload['unit'], abstinenceUnitCount,
+          reason: 'computed.create#5 — единица названа один раз, и пустая '
+              'строка в базу не уезжает (`computed.allowance#2`)');
+    });
+
+    test('an ordinary habit gets no row on this path', () {
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, habitType: HabitType.numerical);
+      model.nameController.text = 'Pages';
+      model.unitController.text = 'pages';
+      model.targetController.text = '30';
+      model.save();
+
+      expect(scope.definitions.forHabit(scope.habitList.getByPosition(0).id!),
+          isNull,
+          reason: 'computed.create#10 — an ordinary habit is not made '
+              'computed by any path of this editor');
+    });
+  });
+
+  group('on a device, not in a harness', () {
+    /// A scope on the dispatchers production uses: a command handed to the
+    /// real task runner has NOT run when `save()` returns.
+    AppScope asyncScope() {
+      final AppScope s = AppScope.open(database);
+      addTearDown(s.close);
+      return s;
+    }
+
+    test('the definition is stored even though the command has not run yet',
+        () async {
+      final AppScope real = asyncScope();
+      final EditHabitModel model =
+          EditHabitModel(scope: real, computed: ComputedKind.abstinence);
+      model.nameController.text = 'No alcohol';
+      expect(model.save(), isTrue, reason: 'computed.create#9');
+
+      await pumpEventQueue(times: 20);
+
+      expect(real.habitList.size(), 1, reason: 'computed.create#9');
+      final Habit habit = real.habitList.getByPosition(0);
+      expect(real.definitions.forHabit(habit.id!)?.kind,
+          ComputedKind.abstinence,
+          reason: 'computed.create#9 — reading the command\'s result on the '
+              'next line works in every test and silently does nothing on a '
+              'phone');
     });
   });
 }

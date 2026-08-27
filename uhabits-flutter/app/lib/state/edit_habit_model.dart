@@ -446,23 +446,51 @@ class EditHabitModel extends ChangeNotifier {
         ? EditHabitCommand(scope.habitList, habitId, habit)
         : CreateHabitCommand(scope.modelFactory, scope.habitList, habit);
 
-    // The goal is written once the command has actually run, not on the next
-    // line. `CommandRunner.run` hands the command to a task runner; the
-    // dispatcher a test uses executes it at once, the one a device uses does
-    // not. Reading the result immediately worked in every test and silently
-    // did nothing on a phone — the habit was created and the goal that makes
-    // it a sleep habit was never stored.
+    // The side rows a computed habit needs are written once the command has
+    // actually run, not on the next line. `CommandRunner.run` hands the
+    // command to a task runner; the dispatcher a test uses executes it at
+    // once, the one a device uses does not. Reading the result immediately
+    // worked in every test and silently did nothing on a phone — the habit was
+    // created and the row that makes it computed was never stored.
     final SleepGoal? goal = sleepGoal;
     if (goal != null) {
-      scope.commandRunner.addListener(
-        _SleepGoalWriter(
-          scope: scope,
-          command: command,
-          habitId: habitId,
-          uuid: habit.uuid,
-          goal: goal,
+      scope.commandRunner.addListener(_AfterCommand(
+        scope: scope,
+        command: command,
+        habitId: habitId,
+        uuid: habit.uuid,
+        apply: (AppScope scope, Habit saved) =>
+            _writeSleepGoal(scope, saved, goal),
+      ));
+    } else if (isAbstinence) {
+      // Payload собирается дверью ядра, а не литералами: ключи названы один
+      // раз (`computed/abstinence_payload.dart`), тип допуска — `double`, и
+      // пустая единица сама становится `count`.
+      final HabitDefinition definition = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: committedFrom,
+        payload: abstinencePayload(
+          allowance: double.tryParse(targetController.text) ?? 0,
+          unit: unitController.text.trim(),
         ),
       );
+      scope.commandRunner.addListener(_AfterCommand(
+        scope: scope,
+        command: command,
+        habitId: habitId,
+        uuid: habit.uuid,
+        apply: (AppScope scope, Habit saved) {
+          scope.definitions.save(saved.id!, definition);
+          // Строка в базе и живая модель — разные вещи: пересчёт читает поле,
+          // а не репозиторий (`computed.commitment#5`), и `attachDefinition`
+          // заодно включает деление пополам (`computed.lapse-score#11`). Без
+          // этих двух строк только что созданное воздержание до перезапуска
+          // считалось бы с сегодняшнего дня и затуханием порта.
+          attachDefinition(saved, scope.definitions);
+          saved.recompute();
+          scope.onComputedDataChanged(saved.id!);
+        },
+      ));
     }
 
     scope.commandRunner.run(command);
@@ -480,18 +508,19 @@ class EditHabitModel extends ChangeNotifier {
   }
 }
 
-/// Stores a sleep goal once the command that creates or edits its habit has
-/// finished.
+/// Runs [apply] once the command that creates or edits its habit has finished.
 ///
 /// A listener rather than a line after `run`: the command goes through a task
-/// runner, so on a device the habit is not in the list yet when `save` returns.
-class _SleepGoalWriter implements CommandRunnerListener {
-  _SleepGoalWriter({
+/// runner, so on a device the habit is not in the list yet when `save`
+/// returns. It was written for the sleep goal and is now shared, which is what
+/// a second computed kind is for.
+class _AfterCommand implements CommandRunnerListener {
+  _AfterCommand({
     required this.scope,
     required this.command,
     required this.habitId,
     required this.uuid,
-    required this.goal,
+    required this.apply,
   });
 
   final AppScope scope;
@@ -503,7 +532,7 @@ class _SleepGoalWriter implements CommandRunnerListener {
   /// what identifies the one that did enter the list.
   final String? uuid;
 
-  final SleepGoal goal;
+  final void Function(AppScope scope, Habit saved) apply;
 
   bool _done = false;
 
@@ -522,22 +551,7 @@ class _SleepGoalWriter implements CommandRunnerListener {
     final Habit? saved =
         habitId >= 0 ? scope.habitList.getById(habitId) : _byUuid();
     if (saved?.id == null) return;
-
-    scope.sleepRepository.saveGoal(saved!.id!, goal);
-    // The goal is what sleep needs; the definition is what the app needs to
-    // know there is anything to compute at all. Written together because a
-    // habit with one and not the other is a habit half of the app can see.
-    scope.definitions.save(
-      saved.id!,
-      const HabitDefinition(kind: ComputedKind.sleep),
-    );
-    // Changing a goal changes what every past night was worth. Rescoring only
-    // from today would leave the history a mixture of two scales.
-    scope.sleepSync.recomputeAll(saved);
-    scope.onComputedDataChanged(saved.id!);
-    // And a habit that has just become a sleep habit has never been synced:
-    // without this it shows nothing until the app is backgrounded once.
-    unawaited(scope.syncSleepHabits());
+    apply(scope, saved!);
   }
 
   Habit? _byUuid() {
@@ -548,4 +562,28 @@ class _SleepGoalWriter implements CommandRunnerListener {
     }
     return null;
   }
+}
+
+/// Everything a sleep habit needs beside its row in `Habits`.
+void _writeSleepGoal(AppScope scope, Habit saved, SleepGoal goal) {
+  scope.sleepRepository.saveGoal(saved.id!, goal);
+  // The goal is what sleep needs; the definition is what the app needs to know
+  // there is anything to compute at all. Written together because a habit with
+  // one and not the other is a habit half of the app can see.
+  scope.definitions.save(
+    saved.id!,
+    const HabitDefinition(kind: ComputedKind.sleep),
+  );
+  // And onto the live model, not only into the database — the same two lines
+  // abstinence needs, and the same hole without them: a habit created in this
+  // session would compute by the ported window until the app restarts.
+  attachDefinition(saved, scope.definitions);
+  saved.recompute();
+  // Changing a goal changes what every past night was worth. Rescoring only
+  // from today would leave the history a mixture of two scales.
+  scope.sleepSync.recomputeAll(saved);
+  scope.onComputedDataChanged(saved.id!);
+  // And a habit that has just become a sleep habit has never been synced:
+  // without this it shows nothing until the app is backgrounded once.
+  unawaited(scope.syncSleepHabits());
 }
