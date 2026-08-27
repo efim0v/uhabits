@@ -890,4 +890,14 @@ class L10nCs extends L10n {
 
   @override
   String get abstinenceUndoToday => 'Undo today';
+
+  @override
+  String abstinenceAmountPrompt(String allowance, String unit) {
+    return 'No more than $allowance $unit a day';
+  }
+
+  @override
+  String abstinenceAmountPromptNoUnit(String allowance) {
+    return 'No more than $allowance a day';
+  }
 }

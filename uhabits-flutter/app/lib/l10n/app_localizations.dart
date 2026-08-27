@@ -1693,6 +1693,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Undo today'**
   String get abstinenceUndoToday;
+
+  /// Caption over the field where the amount of a lapse is typed. States the promise the number is measured against, so the question is not a bare box. The unit is the person's own word, entered in the editor, and is inserted verbatim.
+  ///
+  /// In en, this message translates to:
+  /// **'No more than {allowance} {unit} a day'**
+  String abstinenceAmountPrompt(String allowance, String unit);
+
+  /// The same caption for a commitment whose unit was left blank, where `count` is the mark of that rather than a word to show.
+  ///
+  /// In en, this message translates to:
+  /// **'No more than {allowance} a day'**
+  String abstinenceAmountPromptNoUnit(String allowance);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

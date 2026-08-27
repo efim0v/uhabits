@@ -55,6 +55,12 @@ import '../../../platform/device_locale.dart';
 import '../../theme/app_theme.dart';
 import 'checkmark_dialog.dart' show EntryPopupMetrics, NotesDraft;
 
+/// Отступы строки-подсказки. Своего размера у неё в порте нет и быть не
+/// может: этой строки в оригинале не существует — она нужна второму входу,
+/// которого там тоже нет.
+const EdgeInsets _promptPadding =
+    EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+
 /// What the dialog reports: the amount in display units and the trimmed notes.
 class NumberDialogResult {
   const NumberDialogResult(this.value, this.notes);
@@ -90,7 +96,8 @@ class NumberDialogResult {
 /// [value] is the existing entry value already divided by 1000.
 ///
 /// [showNotes] is [NumberDialog.showNotes]. It defaults to true, so every
-/// ported caller keeps the field it has always had.
+/// ported caller keeps the field it has always had. [prompt] is
+/// [NumberDialog.prompt] and defaults to none, for the same reason.
 Future<NumberDialogResult?> showNumberDialog(
   BuildContext context, {
   required double value,
@@ -98,6 +105,7 @@ Future<NumberDialogResult?> showNumberDialog(
   required core.Color color,
   required core.Preferences preferences,
   bool showNotes = true,
+  String? prompt,
 }) async {
   final draft = NotesDraft(notes);
   final result = await showDialog<NumberDialogResult>(
@@ -109,6 +117,7 @@ Future<NumberDialogResult?> showNumberDialog(
       color: color,
       preferences: preferences,
       showNotes: showNotes,
+      prompt: prompt,
       // Черновик остаётся и при спрятанном поле, и он тогда пуст: писать в
       // него некому, так что восстанавливать после закрытия нечего и хвост
       // ниже возвращает null.
@@ -131,6 +140,7 @@ class NumberDialog extends StatefulWidget {
     required this.color,
     required this.preferences,
     this.showNotes = true,
+    this.prompt,
     this.draft,
   });
 
@@ -167,6 +177,20 @@ class NumberDialog extends StatefulWidget {
   /// Wiring the notes through instead would need a column in `Lapses`, which
   /// is a migration, not a dialog argument.
   final bool showNotes;
+
+  /// One line of caption above the value field, or null for none.
+  ///
+  /// Null everywhere the original has this popup: upstream the value field
+  /// stands on its own, and the day it belongs to is named by the row the
+  /// gesture came from. The abstinence amount has no such context — the
+  /// question arrives on its own — and "how much?" with no unit and no
+  /// allowance is a question with nothing to answer it against
+  /// (`computed.abstinence-cell#8`).
+  ///
+  /// It takes the slot the notes field would occupy rather than growing the
+  /// popup: the same [Padding] and the same divider, so nothing about the
+  /// shell moves.
+  final String? prompt;
 
   /// Written on every keystroke so [showNumberDialog] can recover the text
   /// after a dismissal. Null when the widget is hosted directly.
@@ -398,6 +422,22 @@ class _NumberDialogState extends State<NumberDialog> {
               ),
               // `@drawable/checkmark_dialog_divider`: `<solid ?contrast40>`
               // (`audit8.entry-popups-paint-themselves-cardbgcolor-over#1`).
+              Divider(
+                height: EntryPopupMetrics.borderWidth,
+                thickness: EntryPopupMetrics.borderWidth,
+                color: toFlutterColor(theme.contrast40),
+              ),
+            ],
+            if (widget.prompt != null) ...<Widget>[
+              Padding(
+                padding: _promptPadding,
+                child: Text(
+                  widget.prompt!,
+                  key: const ValueKey<String>('number_prompt'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: dim),
+                ),
+              ),
               Divider(
                 height: EntryPopupMetrics.borderWidth,
                 thickness: EntryPopupMetrics.borderWidth,

@@ -898,4 +898,14 @@ class L10nRu extends L10n {
 
   @override
   String get abstinenceUndoToday => 'Отменить срыв';
+
+  @override
+  String abstinenceAmountPrompt(String allowance, String unit) {
+    return 'Не более $allowance $unit в день';
+  }
+
+  @override
+  String abstinenceAmountPromptNoUnit(String allowance) {
+    return 'Не более $allowance в день';
+  }
 }

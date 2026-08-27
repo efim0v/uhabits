@@ -4,6 +4,7 @@ library;
 import 'package:flutter/widgets.dart';
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
+import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import 'abstinence_amount_dialog.dart';
 
@@ -64,8 +65,17 @@ Future<bool> toggleLapseDay(
   if (core.abstinenceAllowanceOf(definition) <= 0) {
     return setLapseDay(scope, habit: habit, date: date, lapsed: true);
   }
+  // Величина, которая в дне уже записана. Журнал, а не значение дня: он
+  // хранит её целыми единицами, ровно теми, что вводят, а значение дня есть
+  // произведение на тысячу, и делить его обратно значило бы завести второй
+  // путь к одному числу. Привычка без id в журнал ещё не попадала.
+  final int? id = habit.id;
+  final int recorded =
+      id == null ? 0 : scope.lapses.forDay(id, date.daysSince2000) ?? 0;
   final int? amount = await askLapseAmount(
     context,
+    initialAmount: recorded,
+    prompt: abstinenceAmountPrompt(L10n.of(context), definition),
     preferences: scope.preferences,
     color: theme.colorOf(const core.PaletteColor(0)),
   );

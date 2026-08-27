@@ -241,5 +241,7 @@
   "abstinenceSince": "С {date}",
   "abstinenceLastLapse": "Последний срыв: {date}",
   "abstinenceLapseToday": "Отметить срыв",
-  "abstinenceUndoToday": "Отменить срыв"
+  "abstinenceUndoToday": "Отменить срыв",
+  "abstinenceAmountPrompt": "Не более {allowance} {unit} в день",
+  "abstinenceAmountPromptNoUnit": "Не более {allowance} в день"
 }

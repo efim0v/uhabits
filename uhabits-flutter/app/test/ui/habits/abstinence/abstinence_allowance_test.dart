@@ -34,7 +34,7 @@ void main() {
   /// Допуск пишется в двух местах одним движением, потому что судьи два лица
   /// одного числа: `payload` читает интерфейс, `targetValue` — оценка
   /// (`computed.allowance#1`).
-  void commit({required double allowance}) {
+  void commit({required double allowance, String? unit}) {
     habit.targetValue = allowance;
     scope.habitList.update(<Habit>[habit]);
     scope.definitions.save(
@@ -44,9 +44,12 @@ void main() {
         committedFrom: getToday().daysSince2000 - 40,
         payload: abstinencePayload(
           allowance: allowance,
-          unit: allowance == 0.0
-              ? abstinenceUnitCount
-              : abstinenceUnitMinutes,
+          // Единицу человек пишет сам, своим словом: в форме это свободное
+          // поле, а `count` есть признак «оставили пустым».
+          unit: unit ??
+              (allowance == 0.0
+                  ? abstinenceUnitCount
+                  : abstinenceUnitMinutes),
         ),
       ),
     );
@@ -130,6 +133,12 @@ void main() {
   // Локальным геттером это не выразить: `get` внутри тела функции
   // Dart не принимает.
   int todayDay() => getToday().daysSince2000;
+
+  /// Что стоит в поле величины, когда вопрос только открылся.
+  String amountField(WidgetTester tester) => tester
+      .widget<TextField>(find.byKey(const ValueKey<String>('number_value')))
+      .controller!
+      .text;
 
   testWidgets('computed.abstinence-cell#8 двадцать минут при допуске тридцать '
       'обещание держат, и трое согласны', (tester) async {
@@ -283,5 +292,61 @@ void main() {
             'фактом не становится');
     expect(cellToday(tester), AbstinenceCell.clean,
         reason: 'computed.abstinence-cell#5 — и оптимистичная краска снята');
+  });
+
+  testWidgets('computed.abstinence-cell#8 вопрос открывается на том, что в '
+      'дне уже записано', (tester) async {
+    await tapToday(tester);
+
+    // Пустой день — ноль: открывать нечему.
+    expect(amountField(tester), '0',
+        reason: 'computed.abstinence-cell#8 — в дне ничего не записано');
+    await answer(tester, '20');
+    expect(scope.lapses.forDay(habit.id!, todayDay()), 20,
+        reason: 'computed.abstinence-cell#8');
+
+    // Двадцать минут при допуске тридцать обещание держат, ячейка чиста — и
+    // следующий тап по ней снова спрашивает величину. Открыть его нулём
+    // значило бы предложить человеку стереть написанное, не показав ему, что
+    // там написано: он подтвердил бы «45», а двадцать исчезли бы молча.
+    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.pumpAndSettle();
+
+    expect(amountField(tester), '20',
+        reason: 'computed.abstinence-cell#8 — вопрос есть правка записанного, '
+            'а не запись поверх вслепую');
+
+    // И отказ от правки записанного не трогает.
+    Navigator.of(tester.element(find.byType(NumberDialog))).pop();
+    await tester.pumpAndSettle();
+
+    expect(scope.lapses.forDay(habit.id!, todayDay()), 20,
+        reason: 'computed.abstinence-cell#8');
+  });
+
+  testWidgets('computed.abstinence-cell#8 вопрос называет допуск и единицу',
+      (tester) async {
+    // «Сколько?» без «чего и из скольких» — вопрос, на который нечем
+    // ответить. Единица приходит из полезной нагрузки словом самого человека
+    // (`computed.allowance#2`), допуск — оттуда же.
+    commit(allowance: 30.0, unit: 'минут');
+
+    await tapToday(tester);
+
+    expect(find.text('Не более 30 минут в день'), findsOneWidget,
+        reason: 'computed.abstinence-cell#8 — обещание, против которого вводят '
+            'число, стоит над полем');
+  });
+
+  testWidgets('computed.abstinence-cell#8 без единицы вопрос называет один '
+      'допуск', (tester) async {
+    // Единицу оставили пустой, и `count` есть признак этого, а не слово,
+    // которое можно показать: «Не более 3 count в день» было бы мусором.
+    commit(allowance: 3.0, unit: abstinenceUnitCount);
+
+    await tapToday(tester);
+
+    expect(find.text('Не более 3 в день'), findsOneWidget,
+        reason: 'computed.abstinence-cell#8');
   });
 }

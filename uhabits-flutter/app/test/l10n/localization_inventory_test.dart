@@ -791,11 +791,28 @@ void main() {
                 'named by a prefix rather than by accident');
       }
       expect(extension.where((String k) => k.startsWith('abstinence')).length,
-          14,
+          16,
           reason: 'platform-glue.localization-inventory#4 (deviation) — the '
-              'abstinence kind adds exactly fourteen strings: eight in the '
-              'editor and six on the list cell and the habit screen. A '
-              'fifteenth that nobody declared would be one nobody translated');
+              'abstinence kind adds exactly sixteen strings: eight in the '
+              'editor, six on the list cell and the habit screen, and two '
+              'over the field where a lapse amount is typed. A seventeenth '
+              'that nobody declared would be one nobody translated');
+    });
+
+    test('every extension message is in Russian too', () {
+      // Охрана выше считает только портированные строки: расширения из неё
+      // намеренно вычтены, и до сих пор ни один тест не спрашивал, доехали ли
+      // ОНИ до второго языка. Английская строка без русской пары живёт молча —
+      // gen-l10n подставляет английский текст и ни на что не жалуется, — и
+      // человек, читающий приложение по-русски, видит её по-английски.
+      // Двуязычие расширений держится решением проекта, а не переводчиками:
+      // языка ровно два, и оба ведёт этот же репозиторий.
+      final Set<String> extension =
+          messagesOf(template).difference(portedMessagesOf(template));
+      expect(extension.difference(messagesOf(arbs['ru']!)), isEmpty,
+          reason: 'platform-glue.localization-inventory#4 (deviation) — у '
+              'каждой строки расширения есть русская пара; английская без '
+              'пары показалась бы по-английски и никого бы не разбудила');
     });
   });
 
