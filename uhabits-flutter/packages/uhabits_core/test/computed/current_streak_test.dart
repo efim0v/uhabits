@@ -1,7 +1,11 @@
 import 'package:test/test.dart';
+import 'package:uhabits_core/src/computed/days_without_lapse.dart';
+import 'package:uhabits_core/src/computed/habit_definition.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/entry_list.dart';
+import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
+import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 import 'package:uhabits_core/src/models/streak.dart';
 import 'package:uhabits_core/src/models/streak_list.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
@@ -137,6 +141,72 @@ void main() {
         NumericalHabitType.atMost,
       );
       expect(streaks.getBest(10).length, 2, reason: 'computed.streak#2');
+    });
+  });
+
+  group('computed.streak days without a lapse', () {
+    Habit buildAbstinence(int committedFromOffset) =>
+        MemoryModelFactory().buildHabit()
+          ..name = 'No sugar'
+          ..type = HabitType.numerical
+          ..targetType = NumericalHabitType.atMost
+          ..targetValue = 0.0
+          ..definition = HabitDefinition(
+            kind: ComputedKind.abstinence,
+            committedFrom: today.minus(committedFromOffset).daysSince2000,
+          );
+
+    test('#4 counts up to today and ignores the future tail of the window',
+        () {
+      final Habit habit = buildAbstinence(40);
+      habit.recompute();
+
+      // Серия тянется до today + 30, но дней без срыва — сорок.
+      expect(habit.streaks.getCurrent(today)?.end, today.plus(30),
+          reason: 'computed.streak#4');
+      expect(daysWithoutLapse(habit), 40, reason: 'computed.streak#4');
+    });
+
+    test('#4 a lapse restarts the count the next day', () {
+      final Habit habit = buildAbstinence(40);
+      habit.originalEntries.add(Entry(today.minus(10), 1000));
+      habit.recompute();
+
+      // Срыв был десять дней назад: серия началась девять дней назад, и
+      // прошедшего времени в ней девять дней.
+      expect(daysWithoutLapse(habit), 9, reason: 'computed.streak#4');
+      expect(daysWithoutLapse(habit, asOf: today.minus(11)), 29,
+          reason: 'computed.streak#4');
+    });
+
+    test('#4 a commitment made for tomorrow gives zero, not a negative', () {
+      // Перенесено из раздела списка вместе с функцией: арифметика счётчика
+      // живёт там же, где счётчик, и «обещание в будущем» проверяется тут.
+      final Habit habit = MemoryModelFactory().buildHabit()
+        ..name = 'No sugar'
+        ..type = HabitType.numerical
+        ..targetType = NumericalHabitType.atMost
+        ..targetValue = 0.0
+        ..definition = HabitDefinition(
+          kind: ComputedKind.abstinence,
+          committedFrom: today.plus(1).daysSince2000,
+        );
+      habit.recompute();
+
+      expect(daysWithoutLapse(habit), 0, reason: 'computed.streak#4');
+    });
+
+    test('#5 a lapse today gives zero', () {
+      final Habit habit = buildAbstinence(40);
+      habit.originalEntries.add(Entry(today, 1000));
+      habit.recompute();
+
+      expect(daysWithoutLapse(habit), 0, reason: 'computed.streak#5');
+
+      // И обычная привычка без единой серии тоже даёт ноль, а не падает.
+      expect(daysWithoutLapse(MemoryModelFactory().buildHabit()..recompute()),
+          0,
+          reason: 'computed.streak#5');
     });
   });
 }

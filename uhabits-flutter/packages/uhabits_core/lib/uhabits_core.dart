@@ -64,6 +64,7 @@ export 'src/sleep/sleep_suggestions.dart';
 // Computed habits
 export 'src/computed/abstinence_payload.dart';
 export 'src/computed/day_writer.dart';
+export 'src/computed/days_without_lapse.dart';
 export 'src/computed/definition_repository.dart';
 export 'src/computed/habit_definition.dart';
 export 'src/computed/lapse_day_value.dart';
