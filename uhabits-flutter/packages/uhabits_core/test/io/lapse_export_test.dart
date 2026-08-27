@@ -123,22 +123,24 @@ void main() {
 
       expect(rows, <String>[
         'Habit,Day,Amount',
-        'Sober,LocalDate(2024-8-12),45',
+        'Sober,2024-08-12,45',
       ],
           reason: 'computed.backup#5 — имя привычки, день и величина; не '
               'habit id, по которому снаружи ничего не найти, и не «1», '
               'потому что «не более 30 минут» без числа не выражается');
     });
 
-    test('the day is spelled the way SleepSessions.csv already spells it', () {
-      // Не отдельная договорённость, а та же самая: `_writeSleepSessions`
-      // печатает день через `LocalDate(day).toString()`, а `toString()` есть
-      // `'LocalDate($year-$month-$day)'` без ведущих нулей
-      // (`time/local_date.dart:227`). Две колонки `Day` в одном архиве,
-      // набранные по-разному, — это два формата у одного слова.
-      expect(LocalDate(8990).toString(), 'LocalDate(2024-8-12)',
+    test('the day is a date, spelled as every other date in the archive', () {
+      // Ревью нашло: обе колонки `Day` печатались через `toString()`, то есть
+      // `'LocalDate($year-$month-$day)'` — отладочное представление с именем
+      // класса вокруг даты и без ведущих нулей. Колонка «день» обязана нести
+      // дату: её читают глазами и разбирают инструментами, и `Scores.csv`,
+      // `Checkmarks.csv` и все сводные файлы архива уже пишут
+      // `toCSVString()`. Одинаковой ошибка была в двух местах, а не
+      // договорённостью.
+      expect(LocalDate(8990).toCSVString(), '2024-08-12',
           reason: 'computed.backup#5 — 8990-й день от 1 января 2000 года есть '
-              '12 августа 2024 года');
+              '12 августа 2024 года, и в архиве это ISO-8601');
     });
 
     test('a habit that was not selected is left out', () async {

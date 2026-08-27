@@ -102,7 +102,11 @@ class HabitsCSVExporter {
         any = true;
         rows.write(<String>[
           habit.name,
-          LocalDate(day).toString(),
+          // `toCSVString()`, как всякая другая колонка дня в этом архиве:
+          // `toString()` есть отладочное представление
+          // (`LocalDate(2024-8-12)`), и колонка «день» обязана нести дату,
+          // а не имя класса вокруг неё (`sleep.export#2`).
+          LocalDate(day).toCSVString(),
           '${night.bedStartMillis}',
           '${night.wakeEndMillis}',
           '${night.asleepMinutes}',
@@ -142,8 +146,10 @@ class HabitsCSVExporter {
   /// names.
   ///
   /// Written exactly as [_writeSleepSessions] is written, down to printing the
-  /// day with `LocalDate.toString()`: two `Day` columns in one archive that
-  /// disagree about what a day looks like would be two formats for one word.
+  /// day with `LocalDate.toCSVString()`: two `Day` columns in one archive that
+  /// disagree about what a day looks like would be two formats for one word,
+  /// and every other date in the archive — `Scores.csv`, `Checkmarks.csv`,
+  /// the combined files — is already spelled that way.
   /// The fields go in raw, unquoted, for the same reason the sleep rows and
   /// the combined header do — upstream never quotes them, and a habit name
   /// holding a comma corrupts the row. Reproduced deliberately.
@@ -165,7 +171,7 @@ class HabitsCSVExporter {
         any = true;
         rows.write(<String>[
           habit.name,
-          LocalDate(day).toString(),
+          LocalDate(day).toCSVString(),
           '${amounts[day]}',
         ].join(_delimiter));
         rows.write('\n');

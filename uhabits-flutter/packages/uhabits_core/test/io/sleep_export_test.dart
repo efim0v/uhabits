@@ -165,9 +165,12 @@ void main() {
           .skip(1)
           .toList();
       expect(rows, hasLength(2), reason: 'sleep.export#2');
-      expect(rows.first, contains(LocalDate(8999).toString()),
+      // Колонка «день» несёт дату, а не отладочное представление класса
+      // вокруг неё: тот же `toCSVString()`, что и во всех прочих файлах
+      // архива.
+      expect(rows.first, contains('2024-08-21'),
           reason: 'sleep.export#2');
-      expect(rows.last, contains(LocalDate(9000).toString()),
+      expect(rows.last, contains('2024-08-22'),
           reason: 'sleep.export#2');
     });
 
