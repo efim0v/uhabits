@@ -882,6 +882,11 @@ class AppScope {
     // only observable effect is the write itself.
     preferences.lastAppVersion = appVersionCode;
     setToday(computeToday(preferences.midnightDelayHours, 0));
+    // Определение — до первого пересчёта, а не после: окно вычисляемой
+    // привычки начинается со дня обязательства, и привычка, у которой ещё нет
+    // ни одной записи, посчиталась бы пустой (`computed.commitment#5`).
+    final definitions = DefinitionRepository(database);
+    attachDefinitions(habitList, definitions);
     for (final habit in habitList) {
       habit.recompute();
     }
@@ -914,7 +919,6 @@ class AppScope {
       database,
       () => DateTime.now().millisecondsSinceEpoch,
     );
-    final definitions = DefinitionRepository(database);
     // The announcement is handed to the door that writes days rather than left
     // for each kind to remember. It has to close over the scope, which does
     // not exist until the next statement — hence `late`, and hence a callback
