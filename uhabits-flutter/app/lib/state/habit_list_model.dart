@@ -370,6 +370,39 @@ class HabitListModel extends ChangeNotifier
   /// adapter has no listener attached.
   HabitCardData? cardAt(int position) => scope.adapter.bindCardView(position);
 
+  /// Определение привычки-воздержания, или null для любой другой.
+  ///
+  /// Читается из базы, но не на каждый кадр: строка списка перестраивается на
+  /// каждой прокрутке, а определение меняется только вместе с моделью — и
+  /// [notifyListeners] и есть тот момент, когда старый ответ перестаёт быть
+  /// верным.
+  ///
+  /// `kind` спрашивается наравне с днём: у сна `committed_from` есть null, и
+  /// «непустой день» без проверки вида был бы признаком, который однажды
+  /// поймает не того. Признак считается здесь, один раз, и ниже едет уже
+  /// готовый ответ — определение целиком, потому что срывом день называет
+  /// `isAbstinenceLapse(definition, величина)`, и допуск он берёт оттуда.
+  HabitDefinition? abstinenceDefinitionOf(Habit habit) {
+    final int? id = habit.id;
+    if (id == null) return null;
+    return _abstinenceDefinitions.putIfAbsent(id, () {
+      final HabitDefinition? definition = scope.definitions.forHabit(id);
+      if (definition == null) return null;
+      if (definition.kind != ComputedKind.abstinence) return null;
+      if (definition.committedFrom == null) return null;
+      return definition;
+    });
+  }
+
+  final Map<int, HabitDefinition?> _abstinenceDefinitions =
+      <int, HabitDefinition?>{};
+
+  @override
+  void notifyListeners() {
+    _abstinenceDefinitions.clear();
+    super.notifyListeners();
+  }
+
   /// Reads the *unfiltered* list, so it stays false when a filter happens to
   /// hide everything.
   bool get hasNoHabit => scope.adapter.hasNoHabit();

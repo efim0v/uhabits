@@ -59,6 +59,7 @@ import '../../intro/intro_screen.dart';
 import '../../settings/data_actions.dart';
 import '../../settings/settings_screen.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
+import '../abstinence/abstinence_gestures.dart';
 import '../edit/edit_habit_screen.dart';
 import '../show/show_habit_screen.dart';
 import 'habit_card.dart';
@@ -1005,6 +1006,13 @@ class _HabitListViewState extends State<_HabitListView>
       buttonCount: buttonCount,
       dataOffset: dataOffset,
       isSelected: data.selected,
+      abstinenceDefinition: model.abstinenceDefinitionOf(habit),
+      onLapse: (core.LocalDate date, bool lapsed) async => setLapseDay(
+        _model.scope,
+        habit: habit,
+        date: date,
+        lapsed: lapsed,
+      ),
       // `HabitCardView` passes `getAbsoluteButtonLocation(date)` into both
       // presenter calls; that is what places the confetti burst.
       onEntryPressed: (_, globalCenter) => _lastEntryPress = globalCenter,
