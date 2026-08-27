@@ -153,6 +153,16 @@ class Habit {
     final to = today.plus(30);
     final entries = computedEntries.getKnown();
     var from = entries.isEmpty ? today : entries.last.date;
+    // Расширение: у вычисляемой привычки нижняя граница не может опираться на
+    // записи. Привычка, которая ничего не пишет, пока её держат, старейшей
+    // записи не имеет, и её сорок чистых дней не существовали бы
+    // (`computed.commitment#1`). Окно только расширяется назад: запись старше
+    // дня обязательства границу не теряет (`computed.commitment#2`).
+    final int? committedFrom = definition?.committedFrom;
+    if (committedFrom != null) {
+      final LocalDate committed = LocalDate(committedFrom);
+      if (committed.isOlderThan(from)) from = committed;
+    }
     if (from.isNewerThan(to)) from = to;
 
     scores.recompute(
@@ -172,6 +182,10 @@ class Habit {
       isNumerical,
       targetValue,
       targetType,
+      // Молчание — свойство вида, а не привычки: у сна непрослеженная ночь не
+      // хорошая ночь, у воздержания день без отметки и есть тот день, ради
+      // которого обязывались (`computed.streak#1`).
+      silenceQualifies: definition?.kind.silenceQualifies ?? false,
     );
   }
 
