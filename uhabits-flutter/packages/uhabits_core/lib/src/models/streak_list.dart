@@ -27,6 +27,23 @@ class StreakList {
     return List.unmodifiable(best);
   }
 
+  /// Серия, накрывающая [day], или null, если день не входит ни в одну.
+  ///
+  /// Расширение порта: Kotlin отдаёт наружу только [getBest], а счётчик «дней
+  /// без срыва» — это именно текущая серия, а не самая длинная
+  /// (`computed.streak#3`).
+  ///
+  /// Перебором, а не по первому элементу: [getBest] переупорядочивает
+  /// внутренний список как побочный эффект (`_list.setRange`, см.
+  /// `models.streak-best#5`), поэтому после любого его вызова первая серия в
+  /// списке — не самая новая.
+  Streak? getCurrent(LocalDate day) {
+    for (final Streak streak in _list) {
+      if (streak.start <= day && day <= streak.end) return streak;
+    }
+    return null;
+  }
+
   /// Discards every stored streak and rebuilds the list from the computed
   /// entries in `[from, to]`.
   ///
