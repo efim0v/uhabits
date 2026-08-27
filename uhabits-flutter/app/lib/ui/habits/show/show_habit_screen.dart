@@ -62,6 +62,8 @@ import '../../common/dialogs/number_dialog.dart';
 import '../../common/show_message.dart' as messages;
 import '../../common/window_insets.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
+import '../abstinence/abstinence_button_view.dart' show isAbstinenceLapseDay;
+import '../abstinence/abstinence_gestures.dart';
 import '../abstinence/abstinence_section.dart';
 import '../edit/edit_habit_screen.dart';
 import 'cards/bar_card_view.dart';
@@ -562,6 +564,39 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     // day is computed from instead (`computed.write-paths#3`, `#4`).
     if (_isComputed) {
       callback.onNumberPickerDismissed();
+      // Воздержание: тот же жест, что и в ячейке списка. Числа человек не
+      // вводит, но «в этот день я сорвался» — не измерение, а факт, и его
+      // дверь — журнал срывов (`computed.abstinence-screen#6`).
+      final core.HabitDefinition? definition = _abstinenceDefinition;
+      if (definition != null) {
+        final core.LocalDate? day = _lastClickedDate;
+        // День до обещания приложение себе не приписывает — тот же охранник,
+        // что закрывает ячейку списка (`computed.abstinence-cell#3`), закрывает
+        // и клетку календаря (`computed.abstinence-screen#7`).
+        if (day == null || day.daysSince2000 < definition.committedFrom!) {
+          return;
+        }
+        final int stored = widget.habit.originalEntries.get(day).value;
+        // Пропуск — отметка человека; `DayWriter` его не перепишет, и здесь
+        // тоже не переписывает тап (`computed.abstinence-screen#8`).
+        if (stored == core.Entry.skip) return;
+        // Тот же судья, что у ячейки и у кнопки карточки: «есть запись в дне»
+        // при допуске 30 сняло бы двадцать минут, которые срывом не были.
+        unawaited(toggleLapseDay(
+          context,
+          widget.scope,
+          habit: widget.habit,
+          definition: definition,
+          date: day,
+          lapsed: !isAbstinenceLapseDay(definition, stored),
+          // `coreThemeOf(context)` — тот же способ, каким тему берут соседние
+          // `showNumberPopup` и `_showCheckmarkPopup` в этом же файле.
+          theme: coreThemeOf(context),
+        ).then((bool written) {
+          if (written && mounted) _repaintComputed();
+        }));
+        return;
+      }
       final core.SleepGoal? sleepGoal =
           widget.scope.sleepRepository.goalFor(widget.habit.id!);
       final core.LocalDate? date = _lastClickedDate;
