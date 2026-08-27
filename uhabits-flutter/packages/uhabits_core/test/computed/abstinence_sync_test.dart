@@ -96,6 +96,24 @@ void main() {
         reason: 'computed.abstinence-sync#3 — а дверь снятия есть');
   });
 
+  test('#6 setLapse answers with the sweep, not with "got to the end"', () {
+    // Обе ветки знают ответ, и он не «дошли до конца»: жест красит ячейку до
+    // записи и снимает краску по этому ответу. Дверь, отвечающая `true`
+    // всегда, оставляла бы крест на дне, который не сдвинулся.
+    expect(sync.setLapse(habit, today, true, amount: 20), isTrue,
+        reason: 'computed.abstinence-sync#6 — день был молчанием, стал 20000');
+    expect(sync.setLapse(habit, today, true, amount: 20), isFalse,
+        reason: 'computed.abstinence-sync#6 — те же двадцать: журнал заменил '
+            'строку тем же числом, значение дня не сдвинулось, и объявлять '
+            'нечего (`computed.day-write#5`, `computed.freshness#3`)');
+
+    expect(sync.setLapse(habit, today, false), isTrue,
+        reason: 'computed.abstinence-sync#6 — снятие вернуло день в молчание');
+    expect(sync.setLapse(habit, today, false), isFalse,
+        reason: 'computed.abstinence-sync#6 — снимать нечего, и вторая ветвь '
+            'отвечает тем же способом');
+  });
+
   test('the sweep does not touch a skip', () {
     habit.originalEntries.add(Entry(today, Entry.skip));
     sync.setLapse(habit, today, true);

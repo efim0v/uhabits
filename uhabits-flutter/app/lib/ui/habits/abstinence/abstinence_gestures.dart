@@ -8,7 +8,8 @@ import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import 'abstinence_amount_dialog.dart';
 
-/// Записывает или снимает срыв за [date]. Отвечает, записала ли.
+/// Записывает или снимает срыв за [date]. Отвечает, сдвинулось ли значение
+/// дня.
 ///
 /// Одна функция, а не вызов на каждом жесте: путей записи два — ячейка списка
 /// и календарь на экране привычки, — и правило, размазанное по обоим, будет
@@ -33,8 +34,13 @@ bool setLapseDay(
 }) {
   final int? id = habit.id;
   if (id == null) return false;
-  scope.abstinence.setLapse(habit, date, lapsed, amount: amount);
-  return true;
+  // Ответ свода, а не `true`. Свод знает то, чего не знает жест: `writeDays`
+  // не переписывает неизменившееся значение и молчит (`computed.day-write#5`,
+  // `computed.freshness#3`), а значит списка никто не перестроит. Отвечая
+  // `true`, жест оставлял бы свою оптимистичную краску висеть на дне, который
+  // не изменился: подтверждённые двадцать минут при допуске тридцать
+  // залипали крестом на чистом дне (`computed.abstinence-cell#5`).
+  return scope.abstinence.setLapse(habit, date, lapsed, amount: amount);
 }
 
 /// Жест «сорвался» / «не сорвался» целиком: спрашивает величину, когда допуск

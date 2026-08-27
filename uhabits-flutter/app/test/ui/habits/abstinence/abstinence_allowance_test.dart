@@ -19,6 +19,7 @@ import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/ui/common/dialogs/current_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_button_view.dart';
+import 'package:uhabits/ui/habits/abstinence/abstinence_gestures.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
@@ -163,6 +164,45 @@ void main() {
     // Третий — счётчик.
     expect(find.text('40'), findsOneWidget,
         reason: 'computed.streak#4 — двадцать минут серию не рвут');
+  });
+
+  testWidgets('computed.abstinence-cell#5 подтверждённая величина не оставляет '
+      'креста на чистом дне', (tester) async {
+    // Ревью нашло: жест отвечал `true` всегда, а свод — «значение дня не
+    // сдвинулось». Двадцать минут уже записаны; человек открывает вопрос
+    // ещё раз и подтверждает те же двадцать. Журнал заменяет строку тем же
+    // числом, `writeDays` не пишет ничего и молчит, список никто не
+    // перестраивает — и оптимистичный крест оставался висеть на дне, который
+    // обещание держит, до первого чужого повода перерисовать строку.
+    await tapToday(tester);
+    await answer(tester, '20');
+    expect(cellToday(tester), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#2');
+
+    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.pumpAndSettle();
+    expect(amountField(tester), '20',
+        reason: 'computed.abstinence-cell#8 — вопрос открылся на том, что в '
+            'дне уже записано');
+    await answer(tester, '20');
+
+    expect(scope.lapses.forDay(habit.id!, todayDay()), 20,
+        reason: 'computed.abstinence-cell#8 — журнал остался при своих '
+            'двадцати');
+    expect(cellToday(tester), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#5 — на чистом дне стоит галочка, а '
+            'не крест');
+
+    // И вот чем она снимается: единственная дверь жеста отвечает ответом
+    // свода. Тот же вызов, что делает `toggleLapseDay` после ответа на
+    // вопрос о величине, — те же двадцать в дне, где двадцать и лежат.
+    expect(
+        setLapseDay(scope,
+            habit: habit, date: getToday(), lapsed: true, amount: 20),
+        isFalse,
+        reason: 'computed.abstinence-sync#6 — значение дня не сдвинулось, '
+            'перерисовывать список нечему, и ответ «записал» оставил бы '
+            'оптимистичный крест висеть на дне, который обещание держит');
   });
 
   testWidgets('computed.abstinence-cell#8 сорок пять минут — срыв, и трое '

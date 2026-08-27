@@ -29,7 +29,14 @@ class AbstinenceSync {
   /// `const DayWriter()` сам, и это видно.
   final DayWriter writer;
 
-  /// Записывает или снимает срыв за [date] и пересчитывает день.
+  /// Записывает или снимает срыв за [date], пересчитывает день и отвечает,
+  /// сдвинулось ли значение дня.
+  ///
+  /// Ответ — свода, а не «дошли до конца»: обе ветки его знают
+  /// ([recomputeDays] и [DayWriter.clear]), и он есть тот самый признак, по
+  /// которому зовущий решает, перерисовывать ли список. Отвечать `true`
+  /// всегда значило бы оставлять оптимистичную краску висеть на дне, который
+  /// не изменился (`computed.abstinence-cell#5`).
   ///
   /// Идемпотентно: повторный `setLapse(h, d, true)` даёт один срыв — журнал
   /// заменяет строку (`computed.lapses#3`), а [DayWriter] не переписывает
@@ -39,7 +46,7 @@ class AbstinenceSync {
   /// нечего» и оставляет запись как была (`computed.day-write#3`). Здесь
   /// сказано другое — «того, что было записано, не было», — и это
   /// [DayWriter.clear] (`computed.day-write#8`).
-  void setLapse(Habit habit, LocalDate date, bool lapsed, {int? amount}) {
+  bool setLapse(Habit habit, LocalDate date, bool lapsed, {int? amount}) {
     final int id = habit.id!;
     final int day = date.daysSince2000;
     if (lapsed) {
@@ -51,11 +58,10 @@ class AbstinenceSync {
       } else {
         lapses.save(id, day, amount: amount);
       }
-      recomputeDays(habit, day, day);
-    } else {
-      lapses.remove(id, day);
-      writer.clear(habit, day);
+      return recomputeDays(habit, day, day);
     }
+    lapses.remove(id, day);
+    return writer.clear(habit, day);
   }
 
   /// Пишет значения дней `[fromDay, toDay]` по строкам журнала.
