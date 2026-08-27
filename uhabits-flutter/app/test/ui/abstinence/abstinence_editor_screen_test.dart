@@ -275,6 +275,30 @@ void main() {
             'check');
   });
 
+  testWidgets('the chooser says out loud that it scrolls', (tester) async {
+    // A 375x667 screen is an iPhone SE, and at the default text scale the
+    // fourth card is already cut off there by fifteen pixels. Android and iOS
+    // get no scrollbar from `MaterialScrollBehavior`, so without an explicit
+    // one there is nothing on screen to say a fourth card exists at all — and
+    // a habit type nobody scrolls to is a habit type nobody has.
+    tester.view.physicalSize = const Size(375, 667);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await pumpChooser(tester);
+
+    final Finder scrollbar = find.ancestor(
+      of: find.byKey(EditHabitScreen.abstinenceTypeCardKey),
+      matching: find.byType(Scrollbar),
+    );
+    expect(scrollbar, findsOneWidget,
+        reason: 'computed.create#3 — the cards outgrew the screen, so the '
+            'chooser has to admit it');
+    expect(tester.widget<Scrollbar>(scrollbar).thumbVisibility, isTrue,
+        reason: 'computed.create#3 — a thumb that waits for a drag is no '
+            'help to someone who does not know to drag');
+  });
+
   testWidgets('picking an earlier day moves the commitment back to it',
       (tester) async {
     // Today is 2024-08-22. The picker deals in calendar dates and the model

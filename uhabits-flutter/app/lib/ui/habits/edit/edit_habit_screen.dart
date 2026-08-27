@@ -1315,59 +1315,69 @@ class HabitTypeDialog extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Material(
         color: scrimColor,
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                _HabitTypeCard(
-                  key: EditHabitScreen.yesNoTypeCardKey,
-                  title: l10n.yesOrNo,
-                  body: l10n.yesOrNoExample,
-                  onTap: () => Navigator.of(context)
-                      .pop(const HabitTypeSelection(core.HabitType.yesNo)),
-                ),
-                const SizedBox(height: 16),
-                _HabitTypeCard(
-                  key: EditHabitScreen.measurableTypeCardKey,
-                  title: l10n.measurable,
-                  body: l10n.measurableExample,
-                  onTap: () => Navigator.of(context)
-                      .pop(const HabitTypeSelection(core.HabitType.numerical)),
-                ),
-                const SizedBox(height: 16),
-                // The port's own third card, and a deliberate departure from
-                // `habit-type-dialog.select-type#4`, which says exactly two.
-                // A sleep goal is something the original cannot express, and
-                // every other surface that could offer it is specified just as
-                // precisely; the divergence is recorded in DEVIATIONS.md
-                // rather than hidden somewhere less visible.
-                _HabitTypeCard(
-                  key: EditHabitScreen.sleepTypeCardKey,
-                  title: l10n.sleepHabitType,
-                  body: l10n.sleepHabitTypeExample,
-                  onTap: () => Navigator.of(context).pop(
-                      const HabitTypeSelection(core.HabitType.numerical,
-                          computed: core.ComputedKind.sleep)),
-                ),
-                const SizedBox(height: 16),
-                // The port's fourth card. `habit-type-dialog.select-type#4`
-                // says exactly two, and the port has departed from it once
-                // already, for sleep; this does not depart from it a second
-                // time, it makes the first departure a shape: one card per
-                // computed kind, all of them after the two the original has.
-                // DEVIATIONS.md carries the entry, widened from "the third
-                // card" to this.
-                _HabitTypeCard(
-                  key: EditHabitScreen.abstinenceTypeCardKey,
-                  title: l10n.abstinenceHabitType,
-                  body: l10n.abstinenceHabitTypeExample,
-                  onTap: () => Navigator.of(context).pop(
-                      const HabitTypeSelection(core.HabitType.numerical,
-                          computed: core.ComputedKind.abstinence)),
-                ),
-              ],
+        // The thumb stays visible instead of waiting for a drag. Four cards no
+        // longer fit a 375x667 screen even at the default text scale — the
+        // fourth is cut off by fifteen pixels there and by sixty on a 360x640
+        // one — and on Android and iOS `MaterialScrollBehavior` adds no
+        // scrollbar of its own. Without the thumb nothing at all says the list
+        // continues, and a habit type nobody scrolls to is a habit type nobody
+        // has.
+        child: Scrollbar(
+          thumbVisibility: true,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _HabitTypeCard(
+                    key: EditHabitScreen.yesNoTypeCardKey,
+                    title: l10n.yesOrNo,
+                    body: l10n.yesOrNoExample,
+                    onTap: () => Navigator.of(context)
+                        .pop(const HabitTypeSelection(core.HabitType.yesNo)),
+                  ),
+                  const SizedBox(height: 16),
+                  _HabitTypeCard(
+                    key: EditHabitScreen.measurableTypeCardKey,
+                    title: l10n.measurable,
+                    body: l10n.measurableExample,
+                    onTap: () => Navigator.of(context)
+                        .pop(const HabitTypeSelection(core.HabitType.numerical)),
+                  ),
+                  const SizedBox(height: 16),
+                  // The port's own third card, and a deliberate departure from
+                  // `habit-type-dialog.select-type#4`, which says exactly two.
+                  // A sleep goal is something the original cannot express, and
+                  // every other surface that could offer it is specified just as
+                  // precisely; the divergence is recorded in DEVIATIONS.md
+                  // rather than hidden somewhere less visible.
+                  _HabitTypeCard(
+                    key: EditHabitScreen.sleepTypeCardKey,
+                    title: l10n.sleepHabitType,
+                    body: l10n.sleepHabitTypeExample,
+                    onTap: () => Navigator.of(context).pop(
+                        const HabitTypeSelection(core.HabitType.numerical,
+                            computed: core.ComputedKind.sleep)),
+                  ),
+                  const SizedBox(height: 16),
+                  // The port's fourth card. `habit-type-dialog.select-type#4`
+                  // says exactly two, and the port has departed from it once
+                  // already, for sleep; this does not depart from it a second
+                  // time, it makes the first departure a shape: one card per
+                  // computed kind, all of them after the two the original has.
+                  // DEVIATIONS.md carries the entry, widened from "the third
+                  // card" to this.
+                  _HabitTypeCard(
+                    key: EditHabitScreen.abstinenceTypeCardKey,
+                    title: l10n.abstinenceHabitType,
+                    body: l10n.abstinenceHabitTypeExample,
+                    onTap: () => Navigator.of(context).pop(
+                        const HabitTypeSelection(core.HabitType.numerical,
+                            computed: core.ComputedKind.abstinence)),
+                    ),
+                  ],
+              ),
             ),
           ),
         ),
