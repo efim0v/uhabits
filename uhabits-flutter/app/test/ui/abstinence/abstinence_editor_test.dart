@@ -471,4 +471,97 @@ void main() {
               'phone');
     });
   });
+
+  group('opening one that already exists', () {
+    /// Creates an abstinence habit the way the editor does, and hands back its
+    /// id.
+    int makeOne({required String allowance, required int committedFrom}) {
+      final EditHabitModel making =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      making.nameController.text = 'Screen time';
+      making.targetController.text = allowance;
+      making.unitController.text = 'minutes';
+      making.setCommittedFrom(committedFrom);
+      making.save();
+      return scope.habitList.getByPosition(0).id!;
+    }
+
+    test('the kind comes from the definition row, not from a flag', () {
+      final int id = makeOne(allowance: '30', committedFrom: 8960);
+
+      final EditHabitModel editing = EditHabitModel(scope: scope, habitId: id);
+      expect(editing.computedKind, ComputedKind.abstinence,
+          reason: 'computed.create#10 — EDIT mode is never told the kind; the '
+              'row is the only thing that knows');
+      expect(editing.isAbstinence, isTrue, reason: 'computed.create#10');
+      expect(editing.committedFrom, 8960, reason: 'computed.create#10');
+      expect(editing.targetController.text, '30',
+          reason: 'computed.create#10 — "30", not "30.0": an allowance is a '
+              'count of minutes and that is how it was typed in');
+      expect(editing.unitController.text, 'minutes',
+          reason: 'computed.create#10');
+    });
+
+    test('changing the allowance updates the row instead of adding one', () {
+      final int id = makeOne(allowance: '30', committedFrom: 8960);
+
+      final EditHabitModel editing = EditHabitModel(scope: scope, habitId: id);
+      editing.targetController.text = '10';
+      editing.setCommittedFrom(8950);
+      expect(editing.save(), isTrue, reason: 'computed.create#10');
+
+      final HabitDefinition definition = scope.definitions.forHabit(id)!;
+      expect(definition.kind, ComputedKind.abstinence,
+          reason: 'computed.create#10 — the kind does not move');
+      expect((definition.payload['allowance'] as num).toDouble(), 10.0,
+          reason: 'computed.create#10');
+      expect(definition.committedFrom, 8950, reason: 'computed.create#10');
+      expect(scope.habitList.getById(id)!.targetValue, 10.0,
+          reason: 'computed.create#6 — the habit and the row are written by '
+              'the same save, so they cannot drift apart');
+    });
+
+    test('the habit is computing from the moment it is saved', () {
+      // Строка в базе — половина дела: пересчёт читает `Habit.definition`, а
+      // не репозиторий. Без прикрепления на живой модели только что созданное
+      // воздержание до перезапуска считается с сегодняшнего дня, деление
+      // пополам выключено, а «сорока дней» не существует. Тесты выше этого не
+      // видят: они проверяют базу, а не модель.
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'No alcohol';
+      model.setCommittedFrom(8960);
+      model.save();
+
+      final Habit habit = scope.habitList.getByPosition(0);
+      expect(habit.definition?.committedFrom, 8960,
+          reason: 'computed.commitment#5 — без перезапуска');
+      expect(habit.scores.halvesOnLapse, isTrue,
+          reason: 'computed.lapse-score#11');
+      expect(daysWithoutLapse(habit), 40, reason: 'computed.streak#4');
+    });
+
+    test('an ordinary habit opened for editing never becomes computed', () {
+      final EditHabitModel making =
+          EditHabitModel(scope: scope, habitType: HabitType.numerical);
+      making.nameController.text = 'Pages';
+      making.unitController.text = 'pages';
+      making.targetController.text = '30';
+      making.save();
+      final int id = scope.habitList.getByPosition(0).id!;
+
+      final EditHabitModel editing = EditHabitModel(scope: scope, habitId: id);
+      expect(editing.computedKind, isNull, reason: 'computed.create#10');
+      expect(editing.isComputed, isFalse, reason: 'computed.create#10');
+      editing.targetController.text = '40';
+      editing.save();
+
+      expect(scope.definitions.forHabit(id), isNull,
+          reason: 'computed.create#10 — the transition ordinary → computed '
+              'does not exist, and it does not exist because there is no code '
+              'for it in either direction, not by agreement');
+      expect(scope.definitions.isComputed(id), isFalse,
+          reason: 'computed.create#10');
+    });
+  });
 }

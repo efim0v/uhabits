@@ -365,4 +365,18 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
   });
+
+  testWidgets('the chooser is nowhere on the editor itself', (tester) async {
+    await pumpEditor(tester, computed: ComputedKind.abstinence);
+    for (final Key key in <Key>[
+      EditHabitScreen.yesNoTypeCardKey,
+      EditHabitScreen.measurableTypeCardKey,
+      EditHabitScreen.sleepTypeCardKey,
+      EditHabitScreen.abstinenceTypeCardKey,
+    ]) {
+      expect(find.byKey(key), findsNothing,
+          reason: 'computed.create#10 — there is no control for the kind on '
+              'the form, which is why the kind cannot change');
+    }
+  });
 }
