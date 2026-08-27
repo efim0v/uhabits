@@ -109,6 +109,10 @@ void main() {
     scope.habitList.add(habit);
     scope.sleepRepository.saveGoal(
         habit.id!, const SleepGoal(bedMinutes: 1380, wakeMinutes: 420));
+    // The goal and the mark travel as a pair on every path that makes a sleep
+    // habit (`computed.definition#8`), and the sweep enumerates by the mark.
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
     habit.recompute();
     return habit;
   }

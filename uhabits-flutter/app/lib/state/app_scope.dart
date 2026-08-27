@@ -180,6 +180,33 @@ class AppScope {
   /// system settings is picked up on the next return to the app.
   bool sleepSourceAuthorized = false;
 
+  /// Every habit of [kind] this device still has, and still works on.
+  ///
+  /// The enumeration goes through the mark rather than through the kind's own
+  /// side table. `SleepGoals` answers "which habits are sleep habits" only
+  /// because sleep happens to have such a table; abstinence has no equivalent
+  /// and never will — its mark *is* the row in `HabitDefinitions`. A loop
+  /// written around a side table is a loop the second kind cannot reuse.
+  ///
+  /// Both filters live here rather than in each kind's sweep. The ported
+  /// scheduler and the tray already skip archived habits, and arming a
+  /// question for one is a notification for a habit the person put away; a
+  /// mark whose habit is gone is the shape of a teardown race, and reaching
+  /// for it would be `getById(habitId)!`. A rule spread across the kinds is a
+  /// rule that will be carried to some and not the rest
+  /// (`computed.lifecycle#4`).
+  ///
+  /// Lazy on purpose: a sweep awaits a platform read between two habits, and
+  /// the list can change under it. Each step asks the list again.
+  Iterable<Habit> computedHabits(ComputedKind kind) sync* {
+    for (final int id in definitions.habitIdsOfKind(kind)) {
+      final Habit? habit = habitList.getById(id);
+      if (habit == null) continue;
+      if (habit.isArchived) continue;
+      yield habit;
+    }
+  }
+
   /// The sync currently running, so a second caller joins it rather than
   /// starting another.
   Future<void>? _sleepSyncInFlight;
@@ -211,13 +238,7 @@ class AppScope {
     if (_closed) return;
     sleepSourceAuthorized = authorized;
 
-    for (final int id in sleepRepository.sleepHabitIds()) {
-      final Habit? habit = habitList.getById(id);
-      if (habit == null) continue;
-      // The ported scheduler and tray both skip archived habits; reading the
-      // platform for one is work nobody asked for, and arming its question is
-      // a notification for a habit the person put away.
-      if (habit.isArchived) continue;
+    for (final Habit habit in computedHabits(ComputedKind.sleep)) {
       // Read first, then check, then write. A sync waits on a permission
       // sheet and a fortnight of platform reads, and the person can leave the
       // app at any point during that; past this check there is no await left

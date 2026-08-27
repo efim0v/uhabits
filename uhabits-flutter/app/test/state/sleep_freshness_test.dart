@@ -107,6 +107,10 @@ void main() {
     scope.habitList.add(habit);
     scope.sleepRepository
         .saveGoal(habit.id!, const SleepGoal(bedMinutes: 1390, wakeMinutes: 400));
+    // The goal and the mark travel as a pair on every path that makes a sleep
+    // habit (`computed.definition#8`), and the sweep enumerates by the mark.
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
     // Attached after the habit exists: the cache holds its own copy of the
     // list, and a row it has never loaded is not a row it can report a change
     // to.

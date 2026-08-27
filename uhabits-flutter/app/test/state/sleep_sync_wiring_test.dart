@@ -89,7 +89,12 @@ void main() {
     resetToday();
   });
 
-  /// A habit with a sleep goal attached, which is what makes it a sleep habit.
+  /// A habit with both rows a sleep habit has: the goal sleep is scored
+  /// against, and the mark the sweep enumerates by.
+  ///
+  /// Written as a pair because every path that makes one writes both
+  /// (`computed.definition#8`); a fixture with only the goal is a device state
+  /// the app cannot produce.
   Habit addSleepHabit({required String name}) {
     final Habit habit = scope.modelFactory.buildHabit()
       ..name = name
@@ -99,6 +104,8 @@ void main() {
     scope.habitList.add(habit);
     scope.sleepRepository
         .saveGoal(habit.id!, const SleepGoal(bedMinutes: 1380, wakeMinutes: 420));
+    scope.definitions
+        .save(habit.id!, const HabitDefinition(kind: ComputedKind.sleep));
     return habit;
   }
 
