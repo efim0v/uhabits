@@ -46,9 +46,9 @@ void main() {
 
     test('#1 a kind says whether silence is success', () {
       expect(ComputedKind.abstinence.silenceQualifies, isTrue,
-          reason: 'computed.commitment#1');
+          reason: 'computed.streak#1');
       expect(ComputedKind.sleep.silenceQualifies, isFalse,
-          reason: 'computed.commitment#1');
+          reason: 'computed.streak#1');
     });
   });
 }
