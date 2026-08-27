@@ -20,9 +20,10 @@
 ///
 /// **Сегодня здесь настоящее.** `AppScope.open` сам стамповывает день
 /// (`setToday(computeToday(...))`), перетирая любой `setToday` из `setUp`, —
-/// поэтому день берётся у него, а не назначается тестом. Цена — теоретическая
-/// зыбкость на самой полуночи; выгода — что перезапуск в тесте есть тот же
-/// перезапуск, что на телефоне, вместе со стамповкой дня.
+/// поэтому день берётся у него, а не назначается тестом — перезапуск здесь тот
+/// же, что на телефоне, вместе со стамповкой дня. Часы при этом пинятся
+/// (`setUp`): день назначает `AppScope.open`, но из чего он его считает, решает
+/// тест, и оба открытия считают из одного и того же.
 ///
 /// Чего файл **не** достаёт, и это сказано прямо: пальца. Карточка вида в
 /// диалоге типов (`EditHabitScreen.abstinenceTypeCardKey`), жест по ячейке и
@@ -47,19 +48,35 @@ import 'package:uhabits/state/edit_habit_model.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_gestures.dart';
 import 'package:uhabits/ui/settings/data_actions.dart' show buildGenericImporter;
 import 'package:uhabits_core/src/io/files.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
+  final TimeZone Function() realZone = getDefaultTimeZone;
 
   setUp(() {
     tempDir = Directory.systemTemp.createTempSync('uhabits_abstinence_life');
+    // Часы пинятся, а день — нет. `AppScope.open` стамповывает его сам,
+    // `setToday(computeToday(...))`, и в этом весь смысл здешнего перезапуска:
+    // день приходит оттуда же, откуда на телефоне. Но `computeToday` читает
+    // эти два хука, и если прогон переедет местную полночь между двумя
+    // открытиями, второй scope проснётся в другом дне, чем первый, — тест
+    // упадёт один раз и потом навсегда будет считаться зыбким. Зона пинится
+    // вместе с часами: восточнее UTC+12 полдень по Гринвичу уже завтра.
+    DateUtils.setFixedTimeZone(const FixedTimeZone(0));
+    getDefaultTimeZone = () => const FixedTimeZone(0);
+    systemCurrentTimeMillis =
+        () => (9000 + 10957) * 86400000 + 12 * 3600000;
   });
 
   tearDown(() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    systemCurrentTimeMillis = defaultCurrentTimeMillis;
+    getDefaultTimeZone = realZone;
+    DateUtils.setFixedTimeZone(null);
     resetToday();
   });
 
@@ -73,7 +90,6 @@ void main() {
   /// задача доберётся до базы уже после `close()`.
   Future<AppScope> openScope(String path) async {
     final AppScope scope = AppScope.open(AppDatabase.openAndMigrate(path));
-    scope.preferences.isFirstRun = false;
     await scope.taskRunner.awaitAll();
     return scope;
   }
