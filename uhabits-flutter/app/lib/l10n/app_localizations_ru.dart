@@ -850,7 +850,7 @@ class L10nRu extends L10n {
       'напр.: Не пить. Не листать ленту. Молчание — чистый день; отмечать нужно только срывы.';
 
   @override
-  String get abstinenceQuestionExample => 'напр.: Были срывы сегодня?';
+  String get abstinenceQuestionExample => 'напр.: Были ли у вас сегодня срывы?';
 
   @override
   String get abstinenceAllowance => 'Допуск';

@@ -230,7 +230,7 @@
   "sleepTimezoneOffset": "UTC{sign}{hours}:{minutes}",
   "abstinenceHabitType": "Воздержание",
   "abstinenceHabitTypeExample": "напр.: Не пить. Не листать ленту. Молчание — чистый день; отмечать нужно только срывы.",
-  "abstinenceQuestionExample": "напр.: Были срывы сегодня?",
+  "abstinenceQuestionExample": "напр.: Были ли у вас сегодня срывы?",
   "abstinenceAllowance": "Допуск",
   "abstinenceAllowanceExample": "напр.: 30",
   "abstinenceAllowanceUnit": "Считается в",
