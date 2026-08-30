@@ -1249,13 +1249,29 @@ git commit -m "Ask how this run compares to the record and to the last try"
     // Обязательство сорок дней назад, ни одного срыва: идёт сороковая сутки.
     await pumpAbstinenceScreen(tester, committedFrom: today - 40);
 
-    expect(find.text('40'), findsWidgets,
-        reason: 'computed.streak#8 — карточка серий говорит то же число, что '
-            'счётчик над ней');
+    // Число серии красится на канвасе, а не пишется виджетом `Text`:
+    // `find.text('41')` не найдёт его ни при каком состоянии кода, и проверка
+    // через него прошла бы одинаково у исправной карточки и у сломанной.
+    // Смотреть надо туда, где число живёт, — тем же приёмом, каким читает
+    // подписи дат `streak_date_labels_test.dart`.
+    final StreakChartView chart = tester
+        .widget<CoreView>(find.descendant(
+          of: find.byType(StreakCardView),
+          matching: find.byType(CoreView),
+        ))
+        .view as StreakChartView;
+    expect(chart.streaks.single.length, 40,
+        reason: 'computed.streak#8 — карточка серий держит сорок, не сорок '
+            'один: сегодняшний день ещё идёт');
+
+    // А это — про весь экран разом: включительного счёта на нём нет нигде.
     expect(find.text('41'), findsNothing,
         reason: 'computed.streak#8 — включительный счёт остался порту');
   });
 ```
+
+Точное имя обёртки (`CoreView`, `StreakCardView`) и путь до графика сверить с
+`streak_date_labels_test.dart`: он уже вынимает то же самое.
 
 Хелпера `pumpAbstinenceScreen` в файле нет — это сокращение плана. Настоящие
 хелперы там два: `addAbstinence({required int committedFrom, double allowance,
@@ -1270,7 +1286,7 @@ await tester.pumpAndSettle();`, — а срыв пишется
 - [ ] **Шаг 2: прогнать и увидеть падение**
 
 Run: `cd uhabits-flutter/app && flutter test test/ui/habits/show/abstinence_screen_test.dart`
-Expected: FAIL — `find.text('41')` находит карточку серий.
+Expected: FAIL — `chart.streaks.single.length` равен сорока одному.
 
 - [ ] **Шаг 3: реализовать**
 
@@ -1325,7 +1341,7 @@ Expected: PASS.
 
 - [ ] **Шаг 5: доказать, что сон не сдвинулся**
 
-Run: `cd uhabits-flutter/app && flutter test test/ui/sleep/ test/ui/habits/show/sleep_habit_screen_test.dart`
+Run: `cd uhabits-flutter/app && flutter test test/ui/sleep/ test/ui/sleep/sleep_habit_screen_test.dart`
 Expected: PASS, число тестов прежнее.
 
 - [ ] **Шаг 6: отступление**
