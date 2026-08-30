@@ -1064,6 +1064,8 @@ git commit -m "Ask how this run compares to the record and to the last try"
 **Files:**
 - Modify: `uhabits-flutter/app/lib/state/show_habit_model.dart`
 - Modify: `uhabits-flutter/packages/uhabits_core/lib/src/ui/screens/habits/show/views/streak_card.dart`
+- Modify: `uhabits-flutter/packages/uhabits_core/lib/src/ui/screens/habits/show/show_habit.dart`
+- Modify: `uhabits-flutter/app/lib/ui/habits/abstinence/abstinence_calendar.dart`
 - Test: `uhabits-flutter/app/test/ui/habits/show/abstinence_screen_test.dart`
 - Modify: `docs/parity/DEVIATIONS.md`
 
@@ -1116,12 +1118,32 @@ Expected: FAIL — `find.text('41')` находит карточку серий.
 
 Прочитать существующее тело `buildState` целиком и подставить `lengthOf` ровно там, где длина попадает в состояние.
 
+Шов обязан пройти через посредника: модель зовёт не `StreakCardState.buildState`
+напрямую, а `ShowHabitPresenter.buildState`
+(`packages/uhabits_core/lib/src/ui/screens/habits/show/show_habit.dart:148`), где
+уже проложены `intensityOf`, `squareOf` и `oldestDay`. Добавить `lengthOf` туда
+тем же способом — необязательным параметром рядом с ними — и передать дальше в
+построение карточки серий.
+
+В `abstinence_calendar.dart`, рядом с `abstinenceSquareOf`, — хелпер по её
+образцу: воздержание узнаётся по `abstinenceCommitmentOf(habit)`, а всякая
+другая привычка получает `null` и остаётся при портированном счёте.
+
+```dart
+/// Сколько дней показывать за серию, или null — считать как порт.
+///
+/// Воздержание измеряет выдержанное время, и сегодняшний день ещё идёт
+/// (`computed.streak#8`).
+int Function(core.Streak)? abstinenceStreakLengthOf(core.Habit habit) {
+  if (abstinenceCommitmentOf(habit) == null) return null;
+  return (core.Streak streak) => core.elapsedDaysOf(streak);
+}
+```
+
 В `show_habit_model.dart`, рядом с передачей `squareOf`:
 
 ```dart
-      lengthOf: _abstinenceDefinition == null
-          ? null
-          : (Streak s) => elapsedDaysOf(s),
+      lengthOf: abstinenceStreakLengthOf(habit),
 ```
 
 - [ ] **Шаг 4: прогнать и увидеть зелёное**
@@ -1295,7 +1317,7 @@ int? abstinenceSinceMillis(
   // видит смену суток.
   return utcInstantOfLocal(
     current.start.daysSince2000 * DateUtils.dayLength,
-    getDefaultTimeZone(),
+    DateUtils.currentTimeZone,
   );
 }
 ```
@@ -1649,7 +1671,8 @@ class AbstinenceOverviewCard extends StatelessWidget {
     final int? since = core.abstinenceSinceMillis(habit, scope.lapses);
     final double level = habit.scores[core.getToday()].value;
 
-    return CardBox(
+    return ComputedCard(
+      theme: theme,
       title: l10n.overview,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1676,9 +1699,9 @@ class AbstinenceOverviewCard extends StatelessWidget {
                 height: ringSize,
                 child: RingView(
                   percentage: level,
-                  color: _toFlutterColor(theme.colorOf(habit.color)),
-                  backgroundColor: _toFlutterColor(theme.cardBgColor),
-                  inactiveColor: _toFlutterColor(theme.lowContrastTextColor),
+                  color: toFlutterColor(theme.colorOf(habit.color)),
+                  backgroundColor: toFlutterColor(theme.cardBackgroundColor),
+                  inactiveColor: toFlutterColor(theme.lowContrastTextColor),
                   text: '${(level * 100).round()}%',
                 ),
               ),
@@ -1968,6 +1991,7 @@ git commit -m "Write the goal as a promise, not as an arrow and a zero"
 
 **Files:**
 - Modify: `uhabits-flutter/app/lib/state/show_habit_model.dart`
+- Modify: `uhabits-flutter/app/lib/ui/habits/abstinence/abstinence_calendar.dart`
 - Test: `uhabits-flutter/app/test/ui/habits/show/abstinence_calendar_test.dart`
 
 **Interfaces:**
@@ -2004,15 +2028,35 @@ git commit -m "Write the goal as a promise, not as an arrow and a zero"
 
 В `show_habit_model.dart`, рядом с `squareOf`:
 
+Сонная ветвь сейчас выглядит так и остаётся дословно
+(`show_habit_model.dart:297`):
+
 ```dart
-      // Яркость дня есть оценка в этот день: кольцо, сетка и уровень — одна
-      // кривая, показанная тремя способами (`computed.abstinence-screen#13`).
-      intensityOf: _abstinenceDefinition == null
-          ? _sleepIntensity
-          : (Entry e) => habit.scores[e.date].value,
+      intensityOf: _isSleepHabit ? (Entry e) => cellIntensityOf(e.value) : null,
 ```
 
-Сверить, как именно сейчас передаётся сонная яркость, и не сломать её ветвь.
+Второй судья тут не заводится: воздержание узнаётся тем же
+`abstinenceCommitmentOf`, каким его узнаёт `abstinenceSquareOf`. Хелпер — в
+`abstinence_calendar.dart`, рядом с ней:
+
+```dart
+/// Яркость дня в сетке, или null — красить как порт.
+///
+/// Яркость дня есть оценка в этот день: кольцо, сетка и уровень — одна кривая,
+/// показанная тремя способами (`computed.abstinence-screen#13`).
+double Function(core.Entry)? abstinenceIntensityOf(core.Habit habit) {
+  if (abstinenceCommitmentOf(habit) == null) return null;
+  return (core.Entry entry) => habit.scores[entry.date].value;
+}
+```
+
+А в `show_habit_model.dart` сонная ветвь получает запасной выход:
+
+```dart
+      intensityOf: _isSleepHabit
+          ? (Entry e) => cellIntensityOf(e.value)
+          : abstinenceIntensityOf(habit),
+```
 
 - [ ] **Шаг 3: прогнать и убедиться, что сон не сдвинулся**
 
