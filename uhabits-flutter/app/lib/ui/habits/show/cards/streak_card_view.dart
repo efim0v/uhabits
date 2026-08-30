@@ -53,6 +53,7 @@ class StreakChartView extends core.View {
     required this.theme,
     required this.dateFormatter,
     this.dateLabel,
+    this.lengths,
   });
 
   /// `R.dimen.baseSize`.
@@ -89,6 +90,16 @@ class StreakChartView extends core.View {
 
   final String Function(core.LocalDate date)? dateLabel;
 
+  /// How many days to show for each streak of [streaks], parallel to it, or
+  /// null — every habit the original knows — to show each streak's own
+  /// `Streak.length`, the inclusive count. Not upstream.
+  ///
+  /// Dates always come from the streak itself, whatever this says: a shorter
+  /// count for a still-running streak must never turn into an earlier end
+  /// date, or the day it moves to would be a lie the chart tells on its own
+  /// (`computed.streak#8`).
+  final List<int>? lengths;
+
   /// The text that flanks a bar: `df.longFormat(date)`, the locale's medium
   /// date pattern (`audit3.streak-chart-date-labels-are-hard#1`).
   ///
@@ -123,8 +134,9 @@ class StreakChartView extends core.View {
     // updateMaxMinLengths. `maxLength` is reset here and `maxLabelWidth` is
     // not (`charts-canvas-theming.streak-chart#13`).
     var maxLength = 0;
-    for (final streak in streaks) {
-      maxLength = math.max(maxLength, streak.length);
+    for (var i = 0; i < streaks.length; i++) {
+      final streak = streaks[i];
+      maxLength = math.max(maxLength, _lengthOf(i));
       maxLabelWidth = math.max(
         maxLabelWidth,
         math.max(
@@ -143,10 +155,11 @@ class StreakChartView extends core.View {
     if (maxLength == 0) return;
 
     var top = 0.0;
-    for (final streak in streaks) {
+    for (var i = 0; i < streaks.length; i++) {
       _drawRow(
         canvas,
-        streak,
+        streaks[i],
+        _lengthOf(i),
         top,
         width,
         maxLength,
@@ -160,9 +173,15 @@ class StreakChartView extends core.View {
     }
   }
 
+  /// [lengths]`[i]`, or the streak's own inclusive count when there is no
+  /// override — the one number the row's bar and printed text are built
+  /// from. The dates in `_drawRow` never go through this.
+  int _lengthOf(int i) => lengths?[i] ?? streaks[i].length;
+
   void _drawRow(
     core.Canvas canvas,
     core.Streak streak,
+    int length,
     double top,
     double width,
     int maxLength,
@@ -172,11 +191,11 @@ class StreakChartView extends core.View {
     double em,
     double textSize,
   ) {
-    final percentage = streak.length / maxLength;
+    final percentage = length / maxLength;
     var availableWidth = width - 2 * maxLabelWidth;
     if (shouldShowLabels) availableWidth -= 2 * textMargin;
 
-    final lengthText = streak.length.toString();
+    final lengthText = length.toString();
     // A bar is never narrower than its own number plus one em.
     final barWidth = math.max(
       percentage * availableWidth,
@@ -333,6 +352,7 @@ class StreakCardView extends StatelessWidget {
             theme: state.theme,
             dateFormatter: dateFormatter ?? IntlLocalDateFormatter.of(context),
             dateLabel: dateLabel,
+            lengths: state.lengths,
           ),
         ),
       ),

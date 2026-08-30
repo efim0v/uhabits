@@ -21,28 +21,48 @@ class StreakCardState {
     required this.color,
     required this.bestStreaks,
     required this.theme,
+    this.lengths,
   });
 
   final PaletteColor color;
 
-  /// At most ten streaks, ordered newest-ending first.
+  /// At most ten streaks, ordered newest-ending first. Real streaks, start and
+  /// end dates included: [lengths] is where a different count lives, and
+  /// nothing here ever gets reshaped to fit it.
   final List<Streak> bestStreaks;
 
   final Theme theme;
+
+  /// How many days to show for each streak of [bestStreaks], parallel to it,
+  /// or null — every habit the original knows — to show each streak's own
+  /// `Streak.length`, the inclusive count. Not upstream.
+  ///
+  /// A number, not a function: the state needs `==`, and a closure would
+  /// break it. Kept apart from [bestStreaks] on purpose, so a shorter count
+  /// for a running streak can never smuggle in a different end date — the
+  /// two are true independently, and the card's job is to print both, not to
+  /// reconcile them into one (`computed.streak#8`).
+  final List<int>? lengths;
 
   @override
   bool operator ==(Object other) =>
       other is StreakCardState &&
       other.color == color &&
       _listEquals(other.bestStreaks, bestStreaks) &&
-      other.theme == theme;
+      other.theme == theme &&
+      _nullableListEquals(other.lengths, lengths);
 
   @override
-  int get hashCode => Object.hash(color, Object.hashAll(bestStreaks), theme);
+  int get hashCode => Object.hash(
+        color,
+        Object.hashAll(bestStreaks),
+        theme,
+        lengths == null ? null : Object.hashAll(lengths!),
+      );
 
   @override
-  String toString() =>
-      'StreakCardState(color=$color, bestStreaks=$bestStreaks, theme=$theme)';
+  String toString() => 'StreakCardState(color=$color, '
+      'bestStreaks=$bestStreaks, theme=$theme, lengths=$lengths)';
 }
 
 /// Port of `class StreakCartPresenter`. It has no constructor parameters and no
@@ -62,16 +82,10 @@ class StreakCartPresenter {
     final List<Streak> best = habit.streaks.getBest(10);
     return StreakCardState(
       color: habit.color,
-      // A finished streak's own length already is the elapsed time
-      // (`computed.streak#8`), so this reshapes nothing for it: start stays
-      // put and the replacement end lands exactly where the real one was.
-      // Only the one streak still running — the one whose count `lengthOf`
-      // actually shortens — gets a different end date here.
-      bestStreaks: lengthOf == null
-          ? best
-          : best
-              .map((Streak s) => Streak(s.start, s.start.plus(lengthOf(s) - 1)))
-              .toList(),
+      bestStreaks: best,
+      lengths: lengthOf == null
+          ? null
+          : best.map(lengthOf).toList(growable: false),
       theme: theme,
     );
   }
@@ -84,4 +98,9 @@ bool _listEquals<T>(List<T> a, List<T> b) {
     if (a[i] != b[i]) return false;
   }
   return true;
+}
+
+bool _nullableListEquals<T>(List<T>? a, List<T>? b) {
+  if (a == null || b == null) return a == b;
+  return _listEquals(a, b);
 }

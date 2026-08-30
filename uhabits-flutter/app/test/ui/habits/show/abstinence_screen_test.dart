@@ -274,26 +274,29 @@ void main() {
     await tester.pumpWidget(wrap(habit));
     await tester.pumpAndSettle();
 
-    expect(find.text('40'), findsWidgets,
-        reason: 'computed.streak#8 — карточка серий говорит то же число, что '
-            'счётчик над ней');
-    expect(find.text('41'), findsNothing,
-        reason: 'computed.streak#8 — включительный счёт остался порту');
-
-    // Число серии красится на канвасе, а не пишется виджетом `Text`, — та же
-    // причина, по которой даты-подписи читает `streak_date_labels_test.dart`
-    // прямо с построенного графика, а не через `find.text`. Две проверки
-    // выше только удостоверяют, что «41» нет нигде на экране, а эта смотрит
-    // туда, где число действительно живёт.
+    // Число серии красится на канвасе, а не пишется виджетом `Text`, поэтому
+    // `find.text('40')`/`find.text('41')` тут ни при чём: оба видят только
+    // счётчик над карточкой (уже проверен `computed.streak#7`), саму карточку
+    // не видит ни один. Смотреть приходится прямо в построенный график, как
+    // это уже делает `streak_date_labels_test.dart` для дат.
     final StreakChartView chart = tester
         .widget<CoreView>(find.descendant(
           of: find.byType(StreakCardView),
           matching: find.byType(CoreView),
         ))
         .view as StreakChartView;
-    expect(chart.streaks.single.length, 40,
+
+    expect(chart.lengths?.single, 40,
         reason: 'computed.streak#8 — карточка серий сама держит сорок, не '
             'сорок один');
+    expect(chart.streaks.single.length, 41,
+        reason: 'computed.streak#8 — серия самой себе не изменяет: '
+            'включительный счёт остался сорока одним, только показывать '
+            'карточке велено другое число');
+    expect(chart.streaks.single.end, getToday(),
+        reason: 'computed.streak#8 — сорок прошедших суток не делают концом '
+            'вчерашний день: серия идёт, и её настоящий конец остаётся '
+            'сегодняшним');
   });
 
   testWidgets('computed.commitment#2 перенесённый вперёд день обещания '
