@@ -335,13 +335,16 @@ void main() {
           reason: 'computed.allowance#1 — and the judge the interface uses; '
               'one parse makes them the same number by construction');
 
-      // And the ring stays up: three weeks of silence under this commitment
-      // are three weeks kept, not three weeks of invisible lapses.
+      // And the ring stays up: the silent day under this commitment is a day
+      // kept, not a day of invisible lapse.
       attachDefinition(habit, scope.definitions);
       habit.recompute();
-      expect(habit.scores[getToday()].value, 1.0,
+      expect(habit.scores[getToday()].value, closeTo(0.022840, 1e-6),
           reason: 'computed.allowance#1 — silence is success, and a number '
-              'nobody can enter must not turn it into failure');
+              'nobody can enter must not turn it into failure. The commitment '
+              'day defaults to today, so today is the whole window, and one '
+              'kept day earns exactly one step of the abstinence curve, '
+              '1 - 0.5^(1/30). A day counted as a lapse would read 0.0');
     });
   });
 
@@ -370,11 +373,13 @@ void main() {
       scope.lapses.save(habit.id!, 8995, amount: 20);
       scope.abstinence.recomputeAll(habit, definition);
       final double lenient = habit.scores[LocalDate(9000)].value;
-      expect(lenient, 1.0,
+      expect(lenient, closeTo(0.224428, 1e-6),
           reason: 'computed.allowance#1 — pinned, so that the comparison '
               'below cannot be two degenerate zeroes agreeing with each '
               'other: a twenty-minute day under a thirty-minute allowance is '
-              'a kept promise, and at-most starts at 1.0');
+              'a kept promise, and eleven kept days — 8990, the commitment '
+              'day, through 9000 — earn eleven steps of the abstinence '
+              'curve, 1 - 0.5^(11/30)');
 
       final EditHabitModel edit =
           EditHabitModel(scope: scope, habitId: habit.id);
