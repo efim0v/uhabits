@@ -12,7 +12,7 @@ void main() {
       ..type = HabitType.numerical
       ..targetType = NumericalHabitType.atMost
       ..targetValue = 0.0
-      ..frequency = Frequency(1, 1)
+      ..frequency = Frequency.daily
       ..definition = HabitDefinition(
         kind: ComputedKind.abstinence,
         committedFrom: committedFrom,
@@ -61,6 +61,30 @@ void main() {
     expect(s.shareOfPrevious, closeTo(3.5, 0.001),
         reason: 'computed.streak#10 — прошлую попытку можно и перерасти, и '
             'доля тогда больше единицы');
+  });
+
+  test('#10 the day asked about is the day answered about', () {
+    // `asOf` идёт вниз в три места разом: `getCurrent`, `elapsedDaysOf` и
+    // `daysWithoutLapse`. Забыть его в любом из них — значит посчитать не тот
+    // день, о котором спросили, и ни один тест выше этого не заметит: у них
+    // сегодня и есть день вопроса.
+    //
+    // Часы двигаются вперёд, а спрашивают про прежний день. Серии при этом
+    // не пересчитываются, поэтому текущая серия по-прежнему кончается 9000-м.
+    final Habit habit =
+        makeHabit(committedFrom: 8960, lapses: <int>[8980, 8985]);
+    setToday(LocalDate(9005));
+
+    final AbstinenceStreaks asked =
+        abstinenceStreaksOf(habit, asOf: LocalDate(9000));
+    final AbstinenceStreaks byClock = abstinenceStreaksOf(habit);
+
+    expect(asked.currentDays, 14,
+        reason: 'computed.streak#10 — спросили про 9000-й, и ответ про него');
+    expect(byClock.currentDays, 0,
+        reason: 'computed.streak#10 — а по часам серия уже кончилась пять '
+            'дней назад, и это другой ответ: значит день берётся из вопроса, '
+            'а не из часов');
   });
 
   test('#11 a lapse today leaves the counter at nothing', () {
