@@ -204,4 +204,32 @@ void main() {
             'отсутствующей строкой и представлен; а дни после него — срывы, '
             'и они переезжают');
   });
+
+  test('a restored lapse keeps the moment it happened', () async {
+    final UserFile file = sourceFileWithHabit(uuid: 'abc', sourceId: 41);
+    final Database source = opener.open(file.pathString);
+    LapseRepository(source).save(41, 8990, amount: 1, atMillis: 1724832000000);
+    source.close();
+
+    await importFile(file);
+
+    final Habit restored = here.getByUUID('abc')!;
+    expect(LapseRepository(hereDb).momentOf(restored.id!, 8990), 1724832000000,
+        reason: 'computed.backup#6 — момент едет вместе со срывом, иначе '
+            'после восстановления счётчик начал бы с полуночи');
+  });
+
+  test('a lapse with no moment restores without one', () async {
+    final UserFile file = sourceFileWithHabit(uuid: 'abc', sourceId: 41);
+    final Database source = opener.open(file.pathString);
+    LapseRepository(source).save(41, 8990, amount: 1);
+    source.close();
+
+    await importFile(file);
+
+    final Habit restored = here.getByUUID('abc')!;
+    expect(LapseRepository(hereDb).momentOf(restored.id!, 8990), isNull,
+        reason: 'computed.backup#6 — пустота переносится пустотой, а не '
+            'выдумывается на месте');
+  });
 }

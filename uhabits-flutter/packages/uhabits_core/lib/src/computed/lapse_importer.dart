@@ -49,7 +49,16 @@ class LapseImporter {
       if (lapse.value < LapseRepository.minimumAmount) continue;
       // `save` with its named amount, rather than three positional ints past
       // it: the same one door, so that a floor raised there is raised here.
-      _destination.save(destinationHabitId, lapse.key, amount: lapse.value);
+      // The moment travels the same way, read back from the source through
+      // the same `momentOf` rather than carried alongside `lapse.value`: a
+      // row from before migration 104 has none, and `momentOf` already
+      // answers that with null instead of inventing midnight.
+      _destination.save(
+        destinationHabitId,
+        lapse.key,
+        amount: lapse.value,
+        atMillis: origin.momentOf(sourceHabitId, lapse.key),
+      );
     }
   }
 }

@@ -143,7 +143,10 @@ class HabitsCSVExporter {
   /// tax on everybody for the sake of a few. `Checkmarks.csv` already carries
   /// the day values these were computed into; what cannot be reconstructed
   /// from those is the amount as it was measured, in the unit the commitment
-  /// names.
+  /// names, and the moment it was measured at. The moment is printed as an
+  /// ISO-8601 instant in UTC, because it is stored as a moment and not as a
+  /// time on somebody's clock; a row from before the moment existed prints an
+  /// empty cell rather than a made-up midnight.
   ///
   /// Written exactly as [_writeSleepSessions] is written, down to printing the
   /// day with `LocalDate.toCSVString()`: two `Day` columns in one archive that
@@ -169,9 +172,18 @@ class HabitsCSVExporter {
       final Map<int, int> amounts = repository.range(id, from, to);
       for (final int day in amounts.keys.toList()..sort()) {
         any = true;
+        // The moment is stored separately from the amount (`Lapses.at_millis`
+        // is nullable on its own), so it is read back by day rather than
+        // carried in `amounts`.
+        final int? moment = repository.momentOf(id, day);
+        final String at = moment == null
+            ? ''
+            : DateTime.fromMillisecondsSinceEpoch(moment, isUtc: true)
+                .toIso8601String();
         rows.write(<String>[
           habit.name,
           LocalDate(day).toCSVString(),
+          at,
           '${amounts[day]}',
         ].join(_delimiter));
         rows.write('\n');
@@ -180,7 +192,7 @@ class HabitsCSVExporter {
     if (!any) return null;
 
     return <String>[
-      <String>['Habit', 'Day', 'Amount'].join(_delimiter),
+      <String>['Habit', 'Day', 'Moment', 'Amount'].join(_delimiter),
       '\n',
       rows.toString(),
     ].join();

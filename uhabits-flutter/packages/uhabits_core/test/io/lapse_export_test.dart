@@ -110,8 +110,9 @@ void main() {
           reason: 'computed.backup#5');
     });
 
-    test('names its columns, and the row is the habit, the day, the amount',
-        () async {
+    test('names its columns and writes one row per lapse', () async {
+      lapses.save(1, 8990, amount: 45, atMillis: 1723454400000);
+
       final Uint8List bytes = await HabitsCSVExporter(
         habits,
         <Habit>[sober],
@@ -121,13 +122,11 @@ void main() {
       final List<String> rows =
           (await contentOf(bytes, 'Lapses.csv')).trim().split('\n');
 
-      expect(rows, <String>[
-        'Habit,Day,Amount',
-        'Sober,2024-08-12,45',
-      ],
-          reason: 'computed.backup#5 — имя привычки, день и величина; не '
-              'habit id, по которому снаружи ничего не найти, и не «1», '
-              'потому что «не более 30 минут» без числа не выражается');
+      expect(rows.first, 'Habit,Day,Moment,Amount',
+          reason: 'computed.backup#5 — момент стоит рядом с днём, которому он '
+              'принадлежит');
+      expect(rows[1], 'Sober,2024-08-12,2024-08-12T09:20:00.000Z,45',
+          reason: 'computed.backup#5');
     });
 
     test('the day is a date, spelled as every other date in the archive', () {
