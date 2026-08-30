@@ -315,14 +315,22 @@ git commit -m "Let the journal answer when, not only whether"
   });
 ```
 
-В `test/io/lapse_export_test.dart` заменить утверждение о заголовке и строке в тесте `names its columns and writes one row per lapse`:
+В `test/io/lapse_export_test.dart` расширить утверждение о содержимом в тесте,
+проверяющем колонки и строки экспорта. Сравнение идёт со списком целиком, а не
+двумя отдельными проверками: тест обещает «одну строку на срыв», и список это
+проверяет, а пара обращений по индексу — нет. Точное имя теста взять из файла,
+а не отсюда.
 
 ```dart
-    expect(lines.first, 'Habit,Day,Moment,Amount',
-        reason: 'computed.backup#5 — момент стоит рядом с днём, которому он '
-            'принадлежит');
-    expect(lines[1], 'Sober,2024-08-12,2024-08-12T09:20:00.000Z,45',
-        reason: 'computed.backup#5');
+    expect(
+      lines,
+      <String>[
+        'Habit,Day,Moment,Amount',
+        'Sober,2024-08-12,2024-08-12T09:20:00.000Z,45',
+      ],
+      reason: 'computed.backup#5 — момент стоит рядом с днём, которому он '
+          'принадлежит, и лишних строк за ним не идёт',
+    );
 ```
 
 - [ ] **Шаг 2: прогнать и увидеть падение**
