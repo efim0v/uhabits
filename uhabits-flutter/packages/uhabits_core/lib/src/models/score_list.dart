@@ -40,7 +40,10 @@ class ScoreList {
   /// Шаг остаётся портовым, аффинным. Именно поэтому «срыв делит пополам»
   /// продолжает работать: делить есть что.
   ///
-  /// Ставит его `applyLapseScoring`, рядом с [halvesOnLapse].
+  /// Ставить его будет `applyLapseScoring`, рядом с [halvesOnLapse], — но
+  /// пока не ставит: эту дверь открывает Задача 5. До неё поле пусто у всех,
+  /// и обе ветви ниже недостижимы. Оговорка снимается вместе с тем коммитом,
+  /// который делает её ложной.
   int? growthHalfLifeDays;
 
   /// Returns the score for a given day. If the date given happens before the
