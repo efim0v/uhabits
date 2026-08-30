@@ -49,7 +49,24 @@ void main() {
     final Streak running = Streak(LocalDate(8990), LocalDate(9000));
 
     expect(elapsedDaysOf(running), LocalDate(8990).daysUntil(LocalDate(9000)),
-        reason: 'computed.streak#8 — счётчик и карточка серий считают одно, '
-            'и это доказывается арифметикой, а не совпадением');
+        reason: 'computed.streak#8 — прошедшие сутки есть расстояние от '
+            'начала серии до сегодня, тем же счётом, каким его меряет '
+            'счётчик дней без срыва');
+  });
+
+  test('#8 the day asked about is the day answered about', () {
+    final Streak running = Streak(LocalDate(8990), LocalDate(9000));
+
+    // Без этой проверки реализация, которая молча берёт `getToday()` и
+    // выбрасывает `asOf`, прошла бы все проверки выше: у них сегодня и есть
+    // 9000. А `asOf` передаёт вниз вся вышестоящая арифметика воздержания,
+    // и день, о котором спросили, обязан быть днём, о котором ответили.
+    expect(elapsedDaysOf(running, asOf: LocalDate(9010)), 11,
+        reason: 'computed.streak#8 — на десятый день после конца серия '
+            'завершена, и прошедших суток в ней одиннадцать, включительно '
+            'с последним');
+    expect(elapsedDaysOf(running, asOf: LocalDate(9000)), 10,
+        reason: 'computed.streak#8 — а в свой последний день она ещё идёт, '
+            'и сегодняшний день целыми сутками не стал');
   });
 }
