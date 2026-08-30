@@ -1479,6 +1479,23 @@ void main() {
             'полуночи');
   });
 
+  test('#3 the midnight is the one on the person\'s clock', () {
+    // Все проверки выше прибивают зону нулём, а при нулевом смещении перевод
+    // местной полуночи в момент — тождественная функция: она вернёт то же
+    // число, даже если зону выбросить вовсе. Здесь смещение ненулевое, и
+    // потому проверка различает «зона применена» и «зона проигнорирована».
+    //
+    // Разница видна человеку: у живущего в пятом часовом поясе счётчик,
+    // забывший про зону, показал бы на пять часов больше выдержанного.
+    DateUtils.setFixedTimeZone(const FixedTimeZone(5 * 3600000));
+    final habit = makeAbstinence(committedFrom: 8960);
+
+    expect(abstinenceSinceMillis(habit, lapses),
+        (8960 + 10957) * 86400000 - 5 * 3600000,
+        reason: 'computed.since#3 — полночь 8960-го в зоне UTC+5 наступает на '
+            'пять часов раньше, чем полночь того же дня в UTC');
+  });
+
   test('#4 a lapse today means the count has not started', () {
     final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[9000]);
 
@@ -1542,10 +1559,11 @@ int? abstinenceSinceMillis(
   // Полночь дня начала серии, в зоне человека: счётчик показывает
   // длительность, и час её начала должен быть тем же часом, каким человек
   // видит смену суток.
-  return utcInstantOfLocal(
-    current.start.daysSince2000 * DateUtils.dayLength,
-    DateUtils.currentTimeZone,
-  );
+  // `LocalDate.unixTime` — местное время этой полуночи, как если бы она была
+  // UTC; счёт идёт от эпохи, а не от двухтысячного года. Умножать
+  // `daysSince2000` на длину суток нельзя: получится число на тридцать лет
+  // меньше нужного, и счётчик покажет три десятилетия воздержания.
+  return utcInstantOfLocal(current.start.unixTime, DateUtils.currentTimeZone);
 }
 ```
 
