@@ -417,12 +417,12 @@ git commit -m "Carry the moment of a lapse out of the app and back in"
   group('computed.lapse-score growth', () {
     /// Уровень после [days] чистых дней подряд, с нуля.
     double levelAfter(int days, {int halfLife = 30}) {
-      final FakeEntries entries = FakeEntries(<int, int>{});
+      final FakeEntries entries = FakeEntries();
       final ScoreList scores = ScoreList()
         ..halvesOnLapse = true
         ..growthHalfLifeDays = halfLife;
       scores.recompute(
-        frequency: const Frequency(1, 1),
+        frequency: Frequency.daily,
         isNumerical: true,
         numericalHabitType: NumericalHabitType.atMost,
         targetValue: 0.0,
@@ -457,11 +457,11 @@ git commit -m "Carry the moment of a lapse out of the app and back in"
         () {
       final ScoreList ported = ScoreList();
       ported.recompute(
-        frequency: const Frequency(1, 1),
+        frequency: Frequency.daily,
         isNumerical: true,
         numericalHabitType: NumericalHabitType.atMost,
         targetValue: 0.0,
-        computedEntries: FakeEntries(<int, int>{}).getByInterval,
+        computedEntries: FakeEntries().getByInterval,
         from: getToday().minus(29),
         to: getToday(),
       );
@@ -866,7 +866,7 @@ void main() {
       ..type = HabitType.numerical
       ..targetType = NumericalHabitType.atMost
       ..targetValue = 0.0
-      ..frequency = const Frequency(1, 1)
+      ..frequency = Frequency.daily
       ..definition = HabitDefinition(
         kind: ComputedKind.abstinence,
         committedFrom: committedFrom,
