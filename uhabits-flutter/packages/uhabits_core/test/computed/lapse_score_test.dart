@@ -318,18 +318,28 @@ void main() {
           ..frequency = Frequency.daily;
 
     final Habit committed = buildAbstinenceShapedHabit()..id = 1;
-    applyLapseScoring(
-      committed,
-      const HabitDefinition(kind: ComputedKind.abstinence, committedFrom: 5450),
-    );
+    final definition =
+        const HabitDefinition(kind: ComputedKind.abstinence, committedFrom: 5450);
+    applyLapseScoring(committed, definition);
+    committed.definition = definition;
     committed.originalEntries
         .add(Entry(today.minus(5), lapseDayValue(1)!));
     committed.recompute();
 
-    expect(committed.scores[today.minus(5)].value, closeTo(0.5, 1e-12),
-        reason: 'computed.lapse-score#12');
-    expect(committed.scores[today].value, closeTo(0.617008, 1e-6),
-        reason: 'computed.lapse-score#12');
+    // Срыв делит нажитое пополам — не обнуляет и не отнимает портовые 5%
+    // (`computed.lapse-score#3`). Отношением, а не числом: число зависит от
+    // длины окна, отношение — нет.
+    expect(committed.scores[today.minus(5)].value,
+        closeTo(committed.scores[today.minus(6)].value / 2, 1e-12),
+        reason: 'computed.lapse-score#12 — деление переживает пересчёт');
+    expect(committed.scores[today.minus(5)].value, closeTo(0.335062, 1e-6),
+        reason: 'computed.lapse-score#15 — половина от 0.670123, до которых '
+            'уровень дорос за сорок восемь чистых дней, а не половина от ста '
+            'процентов: уровень зарабатывается');
+    expect(committed.scores[today].value, closeTo(0.407607, 1e-6),
+        reason: 'computed.lapse-score#15 — отрастает по кривой воздержания, '
+            'а не по портовой: на портовом множителе то же место дало бы '
+            '0.617008');
 
     // Сосед без определения на тех же самых данных считается портом: тот же
     // день теряет 5.2%, а не половину.
