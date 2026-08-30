@@ -1,6 +1,12 @@
 import '../models/habit.dart';
 import 'habit_definition.dart';
 
+/// Период полураспада кривой роста воздержания, в днях.
+///
+/// Тридцать, а не портовые тринадцать: воздержание — длинная игра, и месяц
+/// трезвости не должен выглядеть как «почти всё» (`computed.lapse-score#15`).
+const int abstinenceHalfLifeDays = 30;
+
 /// Включает деление оценки пополам ровно для привычек-воздержаний и
 /// выключает его для всех прочих.
 ///
@@ -16,5 +22,6 @@ import 'habit_definition.dart';
 bool applyLapseScoring(Habit habit, HabitDefinition? definition) {
   final bool halves = definition?.kind == ComputedKind.abstinence;
   habit.scores.halvesOnLapse = halves;
+  habit.scores.growthHalfLifeDays = halves ? abstinenceHalfLifeDays : null;
   return halves;
 }
