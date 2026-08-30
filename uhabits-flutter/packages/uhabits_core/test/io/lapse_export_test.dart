@@ -122,11 +122,15 @@ void main() {
       final List<String> rows =
           (await contentOf(bytes, 'Lapses.csv')).trim().split('\n');
 
-      expect(rows.first, 'Habit,Day,Moment,Amount',
-          reason: 'computed.backup#5 — момент стоит рядом с днём, которому он '
-              'принадлежит');
-      expect(rows[1], 'Sober,2024-08-12,2024-08-12T09:20:00.000Z,45',
-          reason: 'computed.backup#5');
+      expect(
+        rows,
+        <String>[
+          'Habit,Day,Moment,Amount',
+          'Sober,2024-08-12,2024-08-12T09:20:00.000Z,45',
+        ],
+        reason: 'computed.backup#5 — момент стоит рядом с днём, которому он '
+            'принадлежит, и лишних строк за ним не идёт',
+      );
     });
 
     test('the day is a date, spelled as every other date in the archive', () {
