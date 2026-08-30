@@ -169,7 +169,7 @@ git commit -m "Give the lapse journal a moment, not just a day"
 
     expect(repository.momentOf(1, 9000), isNull,
         reason: 'computed.schema#9 — отсутствие момента есть null, а не ноль: '
-            'ноль был бы полуночью первого января двухтысячного');
+            'ноль был бы полуночью первого января семидесятого');
     expect(repository.forDay(1, 9000), LapseRepository.minimumAmount,
         reason: 'computed.lapses#2 — величина при этом записана обычным '
             'образом');
@@ -201,6 +201,9 @@ Expected: FAIL при компиляции — `No named parameter with the name
 
 ```dart
   /// Записывает срыв величиной [amount] за [day], перезаписывая прежний.
+  ///
+  /// [amount] по умолчанию единица, потому что обычный жест — касание, а у
+  /// касания своей величины нет.
   ///
   /// [atMillis] — момент срыва в миллисекундах эпохи, от которого считает
   /// счётчик воздержания. Необязателен: журнал знает дни с миграции 103, а
@@ -237,8 +240,9 @@ Expected: FAIL при компиляции — `No named parameter with the name
   /// Момент срыва за [day] в миллисекундах эпохи, или null.
   ///
   /// Null отвечает на два разных вопроса одинаково — срыва в этот день не
-  /// было, или он был записан до миграции 104, — и это намеренно: обе
-  /// пустоты счётчик обрабатывает одним правилом (`computed.since#2`).
+  /// было, или он был записан до миграции 104, — и это намеренно: пустота
+  /// есть отсутствие момента, а не полночь, чей бы она ни была
+  /// (`computed.schema#9`).
   int? momentOf(int habitId, int day) => _db.querySingle<int?>(
         'select at_millis from Lapses where habit = ? and day = ?',
         <String>['$habitId', '$day'],
