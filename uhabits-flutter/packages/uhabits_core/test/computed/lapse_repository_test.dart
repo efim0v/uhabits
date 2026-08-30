@@ -98,4 +98,37 @@ void main() {
     expect(repository.firstDay(1), 8990, reason: 'computed.lapses#6');
     expect(repository.lastDay(1), 9002, reason: 'computed.lapses#6');
   });
+
+  test('a lapse remembers the moment it happened', () {
+    repository.save(1, 9000, amount: 1, atMillis: 1724832000000);
+
+    expect(repository.momentOf(1, 9000), 1724832000000,
+        reason: 'computed.schema#8 — момент возвращается тем же, каким его '
+            'записали');
+  });
+
+  test('a lapse recorded without a moment has none', () {
+    repository.save(1, 9000);
+
+    expect(repository.momentOf(1, 9000), isNull,
+        reason: 'computed.schema#9 — отсутствие момента есть null, а не ноль: '
+            'ноль был бы полуночью первого января двухтысячного');
+    expect(repository.forDay(1, 9000), LapseRepository.minimumAmount,
+        reason: 'computed.lapses#2 — величина при этом записана обычным '
+            'образом');
+  });
+
+  test('re-saving a day replaces its moment along with its amount', () {
+    repository.save(1, 9000, amount: 1, atMillis: 1724832000000);
+    repository.save(1, 9000, amount: 5, atMillis: 1724900000000);
+
+    expect(repository.forDay(1, 9000), 5, reason: 'computed.lapses#3');
+    expect(repository.momentOf(1, 9000), 1724900000000,
+        reason: 'computed.schema#8 — правка дня переписывает и момент, иначе '
+            'счётчик считал бы от стёртого срыва');
+  });
+
+  test('the moment of a day with no lapse is null', () {
+    expect(repository.momentOf(1, 9000), isNull, reason: 'computed.lapses#1');
+  });
 }

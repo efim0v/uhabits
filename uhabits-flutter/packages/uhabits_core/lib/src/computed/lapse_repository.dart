@@ -32,6 +32,17 @@ class LapseRepository {
         (stmt) => stmt.getInt(0),
       );
 
+  /// Момент срыва за [day] в миллисекундах эпохи, или null.
+  ///
+  /// Null отвечает на два разных вопроса одинаково — срыва в этот день не
+  /// было, или он был записан до миграции 104, — и это намеренно: обе
+  /// пустоты счётчик обрабатывает одним правилом (`computed.since#2`).
+  int? momentOf(int habitId, int day) => _db.querySingle<int?>(
+        'select at_millis from Lapses where habit = ? and day = ?',
+        <String>['$habitId', '$day'],
+        (stmt) => stmt.getIntOrNull(0),
+      );
+
   /// The amounts recorded in `[fromDay, toDay]`, keyed by day.
   ///
   /// Days with nothing recorded are simply absent, exactly as in
@@ -48,11 +59,15 @@ class LapseRepository {
     return result;
   }
 
-  /// Records that [amount] happened on [day], replacing whatever was there.
+  /// Записывает срыв величиной [amount] за [day], перезаписывая прежний.
   ///
-  /// [amount] defaults to one because the ordinary gesture is a tap, which has
-  /// no quantity of its own to give.
-  void save(int habitId, int day, {int amount = minimumAmount}) {
+  /// [atMillis] — момент срыва в миллисекундах эпохи, от которого считает
+  /// счётчик воздержания. Необязателен: журнал знает дни с миграции 103, а
+  /// моменты только со 104, и строка без момента — обычное дело
+  /// (`computed.schema#9`). Перезапись дня меняет и момент: иначе счётчик
+  /// считал бы от срыва, которого человек уже не помнит.
+  void save(int habitId, int day,
+      {int amount = minimumAmount, int? atMillis}) {
     if (amount < minimumAmount) {
       throw ArgumentError.value(
         amount,
@@ -61,12 +76,19 @@ class LapseRepository {
       );
     }
     _db.run(
-      'insert into Lapses (habit, day, amount) values (?, ?, ?) '
-      'on conflict(habit, day) do update set amount = excluded.amount',
+      'insert into Lapses (habit, day, amount, at_millis) '
+      'values (?, ?, ?, ?) '
+      'on conflict(habit, day) do update set '
+      'amount = excluded.amount, at_millis = excluded.at_millis',
       (stmt) {
         stmt.bindInt(1, habitId);
         stmt.bindInt(2, day);
         stmt.bindInt(3, amount);
+        if (atMillis == null) {
+          stmt.bindNull(4);
+        } else {
+          stmt.bindInt(4, atMillis);
+        }
       },
     );
   }
