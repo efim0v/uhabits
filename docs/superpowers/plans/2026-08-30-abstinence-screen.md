@@ -1065,6 +1065,33 @@ void main() {
             'дней назад, и это другой ответ: значит день берётся из вопроса, '
             'а не из часов');
   });
+
+  test('#10 the record too is measured on the day asked about', () {
+    // Проверка выше стережёт только текущую длительность, а она приходит из
+    // `daysWithoutLapse`. Лучшую и прошлую считает `elapsedDaysOf`, и `asOf`
+    // теряется там незаметно: у завершённой серии конец старше любого из двух
+    // дней, и ответ один и тот же.
+    //
+    // Разводит их случай, когда рекорд — сама текущая серия. Тогда её
+    // длительность считают оба пути: `daysWithoutLapse` на дне вопроса и
+    // `elapsedDaysOf` на том дне, который ему передали. Совпадут они, только
+    // если день один.
+    final Habit habit = makeAbstinence(lapses: <int>[8970]);
+    setToday(LocalDate(9005));
+
+    final AbstinenceStreaks asked =
+        abstinenceStreaksOf(habit, asOf: LocalDate(9000));
+
+    expect(asked.currentDays, 29,
+        reason: 'computed.streak#10 — с 8971-го по 9000-й прошло двадцать '
+            'девять полных суток');
+    expect(asked.bestDays, 29,
+        reason: 'computed.streak#10 — идущая серия и есть рекорд, и меряется '
+            'она тем же днём, каким меряется текущая');
+    expect(asked.currentIsBest, isTrue,
+        reason: 'computed.streak#10 — два пути к одному числу сошлись; '
+            'разойдись они на день, рекорд оказался бы чужим');
+  });
 }
 ```
 
