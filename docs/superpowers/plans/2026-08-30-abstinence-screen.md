@@ -1093,7 +1093,15 @@ git commit -m "Ask how this run compares to the record and to the last try"
   });
 ```
 
-Хелпер `pumpAbstinenceScreen` уже есть в файле — сверить его подпись.
+Хелпера `pumpAbstinenceScreen` в файле нет — это сокращение плана. Настоящие
+хелперы там два: `addAbstinence({required int committedFrom, double allowance,
+String unit})` строит привычку и зовёт `attachDefinition` с `recompute`, а
+`wrap(habit)` заворачивает экран в `MaterialApp` с русской локалью. Экран
+поднимается двумя строками — `await tester.pumpWidget(wrap(habit));
+await tester.pumpAndSettle();`, — а срыв пишется
+`scope.abstinence.setLapse(habit, LocalDate(day), true)` до подъёма экрана.
+Либо пользоваться ими напрямую, либо завести местный хелпер поверх них; чего
+делать нельзя — так это заводить второй способ построить привычку.
 
 - [ ] **Шаг 2: прогнать и увидеть падение**
 
