@@ -72,6 +72,8 @@ create table Lapses (
     amount integer not null,
     primary key (habit, day)
 );""",
+  104: r"""
+alter table Lapses add column at_millis integer;""",
 };
 
 /// The schema version this build ships.
@@ -81,7 +83,7 @@ create table Lapses (
 /// asks "is this file newer than we understand" or "bring this file up to
 /// date" means this one; anything still asking [databaseVersion] would refuse
 /// our own database.
-const int appDatabaseVersion = 103;
+const int appDatabaseVersion = 104;
 
 /// Whether a database at [version] is one this build can bring up to date.
 ///

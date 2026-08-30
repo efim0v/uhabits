@@ -211,7 +211,7 @@ void main() {
       final Database db = openAppSchemaDatabase();
       addTearDown(db.close);
 
-      expect(appDatabaseVersion, 103, reason: 'computed.schema#4');
+      expect(appDatabaseVersion, greaterThanOrEqualTo(103), reason: 'computed.schema#4');
       expect(db.getVersion(), appDatabaseVersion, reason: 'computed.schema#4');
       expect(
         db.queryInt("select count(*) from sqlite_master "
@@ -272,6 +272,44 @@ void main() {
           reason: 'computed.schema#4');
       expect(db.queryInt('select count(*) from HabitDefinitions'), 1,
           reason: 'computed.schema#4 — 103 does not disturb 102');
+    });
+  });
+
+  group('migration 104', () {
+    test('the journal gains a column for the moment of the lapse', () {
+      final Database db = openAppSchemaDatabase();
+      addTearDown(db.close);
+
+      final List<String> columns = [];
+      db.query(
+        "select name from pragma_table_info('Lapses')",
+        const <String>[],
+        (stmt) => columns.add(stmt.getText(0)),
+      );
+
+      expect(columns, contains('at_millis'),
+          reason: 'computed.schema#8 — счётчик считает до минут, а день '
+              'минут не содержит');
+      expect(db.getVersion(), greaterThanOrEqualTo(104),
+          reason: 'computed.schema#8');
+    });
+
+    test('a lapse that predates the column reads as no moment at all', () {
+      final Database db = openAppSchemaDatabase();
+      addTearDown(db.close);
+      db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
+      db.run('insert into Lapses (habit, day, amount) values (1, 9000, 1)');
+
+      expect(
+        db.querySingle<int?>(
+          'select at_millis from Lapses where habit = 1 and day = 9000',
+          const <String>[],
+          (stmt) => stmt.getIntOrNull(0),
+        ),
+        isNull,
+        reason: 'computed.schema#9 — старая строка не выдумывает момент, '
+            'которого в ней никогда не было',
+      );
     });
   });
 }
