@@ -1391,21 +1391,21 @@ git commit -m "Answer the moment this stretch of abstinence began"
 В `app_en.arb` и `app_ru.arb`, пять множественных форм:
 
 ```json
-  "durationYears": "{count, plural, =1{{count} year} other{{count} years}}",
-  "durationMonths": "{count, plural, =1{{count} month} other{{count} months}}",
-  "durationDays": "{count, plural, =1{{count} day} other{{count} days}}",
-  "durationHours": "{count, plural, =1{{count} hour} other{{count} hours}}",
-  "durationMinutes": "{count, plural, =1{{count} minute} other{{count} minutes}}",
+  "abstinenceDurationYears": "{count, plural, =1{{count} year} other{{count} years}}",
+  "abstinenceDurationMonths": "{count, plural, =1{{count} month} other{{count} months}}",
+  "abstinenceDurationDays": "{count, plural, =1{{count} day} other{{count} days}}",
+  "abstinenceDurationHours": "{count, plural, =1{{count} hour} other{{count} hours}}",
+  "abstinenceDurationMinutes": "{count, plural, =1{{count} minute} other{{count} minutes}}",
 ```
 
 Русские, со всеми формами:
 
 ```json
-  "durationYears": "{count, plural, one{{count} год} few{{count} года} many{{count} лет} other{{count} года}}",
-  "durationMonths": "{count, plural, one{{count} месяц} few{{count} месяца} many{{count} месяцев} other{{count} месяца}}",
-  "durationDays": "{count, plural, one{{count} день} few{{count} дня} many{{count} дней} other{{count} дня}}",
-  "durationHours": "{count, plural, one{{count} час} few{{count} часа} many{{count} часов} other{{count} часа}}",
-  "durationMinutes": "{count, plural, one{{count} минута} few{{count} минуты} many{{count} минут} other{{count} минуты}}",
+  "abstinenceDurationYears": "{count, plural, one{{count} год} few{{count} года} many{{count} лет} other{{count} года}}",
+  "abstinenceDurationMonths": "{count, plural, one{{count} месяц} few{{count} месяца} many{{count} месяцев} other{{count} месяца}}",
+  "abstinenceDurationDays": "{count, plural, one{{count} день} few{{count} дня} many{{count} дней} other{{count} дня}}",
+  "abstinenceDurationHours": "{count, plural, one{{count} час} few{{count} часа} many{{count} часов} other{{count} часа}}",
+  "abstinenceDurationMinutes": "{count, plural, one{{count} минута} few{{count} минуты} many{{count} минут} other{{count} минуты}}",
 ```
 
 Поднять литерал числа строк расширения в `localization_inventory_test.dart` на пять и пересчитать его по фактическому числу ключей, а не по этому плану.
@@ -1521,7 +1521,7 @@ DateTime _shiftMonths(DateTime from, int totalMonths) {
 }
 
 String formatAbstinenceDuration(L10n l10n, DateTime from, DateTime to) {
-  if (!to.isAfter(from)) return l10n.durationMinutes(0);
+  if (!to.isAfter(from)) return l10n.abstinenceDurationMinutes(0);
 
   // Сколько целых месяцев уместилось: берём оценку сверху и убавляем, пока
   // перенос обгоняет настоящее. Цикл делает один-два шага.
@@ -1539,14 +1539,14 @@ String formatAbstinenceDuration(L10n l10n, DateTime from, DateTime to) {
     if (value > 0 && parts.length < _unitsShown) parts.add(word(value));
   }
 
-  add(years, l10n.durationYears);
-  add(months, l10n.durationMonths);
-  add(rest.inDays, l10n.durationDays);
-  add(rest.inHours.remainder(24), l10n.durationHours);
-  add(rest.inMinutes.remainder(60), l10n.durationMinutes);
+  add(years, l10n.abstinenceDurationYears);
+  add(months, l10n.abstinenceDurationMonths);
+  add(rest.inDays, l10n.abstinenceDurationDays);
+  add(rest.inHours.remainder(24), l10n.abstinenceDurationHours);
+  add(rest.inMinutes.remainder(60), l10n.abstinenceDurationMinutes);
 
   // Первая минута воздержания — тоже ответ, и он не должен быть пустым.
-  if (parts.isEmpty) return l10n.durationMinutes(0);
+  if (parts.isEmpty) return l10n.abstinenceDurationMinutes(0);
   return parts.join(' ');
 }
 ```
@@ -1588,11 +1588,19 @@ git commit -m "Say a duration the way a person says it"
 **Files:**
 - Create: `uhabits-flutter/app/lib/ui/habits/abstinence/abstinence_overview.dart`
 - Modify: `uhabits-flutter/app/lib/l10n/app_en.arb`, `uhabits-flutter/app/lib/l10n/app_ru.arb`
+- Modify: `uhabits-flutter/app/test/l10n/localization_inventory_test.dart`
 - Test: `uhabits-flutter/app/test/ui/habits/abstinence/abstinence_overview_test.dart`
 
 **Interfaces:**
 - Consumes: `AbstinenceStreaks` (Задача 7), `abstinenceSinceMillis` (Задача 9), `formatAbstinenceDuration` (Задача 10), `RingView` из `app/lib/ui/common/views/ring_view.dart`.
 - Produces: виджет `AbstinenceOverviewCard`.
+
+Каждая новая строка несёт приставку `abstinence`: тест инвентаря считает строки
+расширений отдельно от портированных и требует, чтобы всякая непортированная
+строка была названа приставкой, а не случайно
+(`localization_inventory_test.dart:781`). Литерал числа строк воздержания в том
+же тесте поднять по фактическому числу ключей и поправить прозу рядом с ним,
+чтобы она не врала.
 
 Карточка несёт счётчик, кольцо, два отношения, число срывов и кнопку «Отметить срыв» — кнопка переезжает сюда из `abstinence_section.dart`, которая после Задачи 12 исчезает.
 
@@ -1754,7 +1762,7 @@ class AbstinenceOverviewCard extends StatelessWidget {
           // экран открывают (`computed.abstinence-screen#11`).
           Text(
             since == null
-                ? l10n.durationMinutes(0)
+                ? l10n.abstinenceDurationMinutes(0)
                 : formatAbstinenceDuration(
                     l10n,
                     DateTime.fromMillisecondsSinceEpoch(since),
@@ -1969,11 +1977,19 @@ git commit -m "Show the counter once, where a person looks for it"
 - Modify: `uhabits-flutter/app/lib/ui/habits/show/cards/subtitle_card_view.dart`
 - Modify: `uhabits-flutter/app/lib/ui/habits/show/show_habit_screen.dart`
 - Modify: `uhabits-flutter/app/lib/l10n/app_en.arb`, `uhabits-flutter/app/lib/l10n/app_ru.arb`
+- Modify: `uhabits-flutter/app/test/l10n/localization_inventory_test.dart`
 - Test: `uhabits-flutter/app/test/ui/habits/show/abstinence_screen_test.dart`
 
 **Interfaces:**
 - Consumes: `SubtitleCardView.targetOverride`.
 - Produces: `String? targetIconOverride`, `bool showsFrequency` на `SubtitleCardView`.
+
+Каждая новая строка несёт приставку `abstinence`: тест инвентаря считает строки
+расширений отдельно от портированных и требует, чтобы всякая непортированная
+строка была названа приставкой, а не случайно
+(`localization_inventory_test.dart:781`). Литерал числа строк воздержания в том
+же тесте поднять по фактическому числу ключей и поправить прозу рядом с ним,
+чтобы она не врала.
 
 - [ ] **Шаг 1: завести строку**
 
