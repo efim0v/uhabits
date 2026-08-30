@@ -1,4 +1,4 @@
-/// A file written by the shipped build — schema 102 — opens under 103.
+/// A file written by the shipped build — schema 102 — opens and migrates to the current schema.
 ///
 /// The schema itself is checked in memory by
 /// `extension_migrations_test.dart`. What is not checked there is the one
@@ -48,7 +48,7 @@ void main() {
     final Database upgraded = AppDatabase.openAndMigrate(path);
     addTearDown(upgraded.close);
 
-    expect(upgraded.getVersion(), greaterThanOrEqualTo(103), reason: 'computed.schema#4');
+    expect(upgraded.getVersion(), appDatabaseVersion, reason: 'computed.schema#4');
     expect(upgraded.queryInt('select count(*) from Habits'), 1,
         reason: 'computed.schema#4 — подъём версии не карантинит файл');
     expect(upgraded.queryInt('select count(*) from HabitDefinitions'), 1,

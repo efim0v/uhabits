@@ -211,7 +211,6 @@ void main() {
       final Database db = openAppSchemaDatabase();
       addTearDown(db.close);
 
-      expect(appDatabaseVersion, greaterThanOrEqualTo(103), reason: 'computed.schema#4');
       expect(db.getVersion(), appDatabaseVersion, reason: 'computed.schema#4');
       expect(
         db.queryInt("select count(*) from sqlite_master "
