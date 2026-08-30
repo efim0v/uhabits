@@ -1250,10 +1250,10 @@ git commit -m "Ask how this run compares to the record and to the last try"
     await pumpAbstinenceScreen(tester, committedFrom: today - 40);
 
     // Число серии красится на канвасе, а не пишется виджетом `Text`:
-    // `find.text('41')` не найдёт его ни при каком состоянии кода, и проверка
-    // через него прошла бы одинаково у исправной карточки и у сломанной.
-    // Смотреть надо туда, где число живёт, — тем же приёмом, каким читает
-    // подписи дат `streak_date_labels_test.dart`.
+    // `find.text` не найдёт его ни при каком состоянии кода, и проверка через
+    // него прошла бы одинаково у исправной карточки и у сломанной. Смотреть
+    // надо туда, где число живёт, — тем же приёмом, каким читает подписи дат
+    // `streak_date_labels_test.dart`.
     final StreakChartView chart = tester
         .widget<CoreView>(find.descendant(
           of: find.byType(StreakCardView),
@@ -1264,9 +1264,12 @@ git commit -m "Ask how this run compares to the record and to the last try"
         reason: 'computed.streak#8 — карточка серий держит сорок, не сорок '
             'один: сегодняшний день ещё идёт');
 
-    // А это — про весь экран разом: включительного счёта на нём нет нигде.
-    expect(find.text('41'), findsNothing,
-        reason: 'computed.streak#8 — включительный счёт остался порту');
+    // И дата конца осталась настоящей: серия идёт, её конец — сегодня.
+    // Число и дата верны каждое само по себе, и подменять серию ради числа
+    // значит менять один суточный сдвиг на другой.
+    expect(chart.streaks.single.end, core.getToday(),
+        reason: 'computed.streak#8 — сорок прошедших суток не делают концом '
+            'вчерашний день: серия идёт');
   });
 ```
 
@@ -1304,7 +1307,40 @@ Expected: FAIL — `chart.streaks.single.length` равен сорока одн�
   }) {
 ```
 
-Прочитать существующее тело `buildState` целиком и подставить `lengthOf` ровно там, где длина попадает в состояние.
+Прочитать существующее тело `buildState` целиком и подставить `lengthOf` ровно
+там, где длина попадает в состояние.
+
+**Подменять сам объект `Streak` нельзя.** Соблазн есть: синтетическая серия
+`Streak(s.start, s.start.plus(lengthOf(s) - 1))` даёт верное число одной
+строкой. Но карточка рисует рядом с числом дату конца —
+`canvas.drawText(labelFor(streak.end), …)` в `streak_card_view.dart`, — и у
+идущей серии этот конец уехал бы на вчера. Получился бы тот же суточный
+сдвиг, ради которого затеяна задача, только переехавший из числа в дату.
+
+Сорок прошедших суток и сегодняшний день как конец — обе величины истинны
+по отдельности; синтез их ломает. Поэтому длина едет **отдельным списком**,
+параллельным сериям:
+
+```dart
+      bestStreaks: best,
+      lengths: lengthOf == null
+          ? null
+          : best.map(lengthOf).toList(growable: false),
+```
+
+`StreakCardState` получает поле `final List<int>? lengths` — null означает
+«длина у каждой серии своя, включительная», как в порту. Список из чисел,
+а не функция: у состояния есть равенство, и функция бы его сломала.
+
+`StreakChartView` получает такой же необязательный список и берёт число из
+него, а даты — по-прежнему у самой серии:
+
+```dart
+    final lengthText = (lengths?[i] ?? streak.length).toString();
+```
+
+Цикл по сериям придётся сделать индексным — сейчас он `for (final streak in
+streaks)`.
 
 Шов обязан пройти через посредника: модель зовёт не `StreakCardState.buildState`
 напрямую, а `ShowHabitPresenter.buildState`
