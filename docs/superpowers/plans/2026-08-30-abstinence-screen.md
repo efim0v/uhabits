@@ -1260,9 +1260,12 @@ git commit -m "Ask how this run compares to the record and to the last try"
           matching: find.byType(CoreView),
         ))
         .view as StreakChartView;
-    expect(chart.streaks.single.length, 40,
-        reason: 'computed.streak#8 — карточка серий держит сорок, не сорок '
-            'один: сегодняшний день ещё идёт');
+    expect(chart.lengths?.single, 40,
+        reason: 'computed.streak#8 — карточка показывает сорок: сегодняшний '
+            'день ещё идёт');
+    expect(chart.streaks.single.length, 41,
+        reason: 'computed.streak#8 — а сама серия осталась портовой, '
+            'включительной: её арифметику задача не трогает');
 
     // И дата конца осталась настоящей: серия идёт, её конец — сегодня.
     // Число и дата верны каждое само по себе, и подменять серию ради числа
