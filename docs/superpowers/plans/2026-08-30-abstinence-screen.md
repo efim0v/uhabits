@@ -571,7 +571,7 @@ Expected: FAIL при компиляции — `The setter 'growthHalfLifeDays' 
 Поэтому `ScoreList` получил `growthHalfLifeDays`, по умолчанию пустой. Когда
 он задан, старт равен нулю, а множитель шага считается из него, а не из
 частоты и портовой тринадцатки. Сам шаг остаётся портовым, аффинным, и это
-не мелочь: решение «срыв делит оценку пополам» (`computed.lapse-score#1`)
+не мелочь: решение «срыв делит оценку пополам» (`computed.lapse-score#3`)
 работает только потому, что накопленное есть чему делить. Оценка как чистая
 функция от длины серии была бы короче и обнуляла бы уровень при срыве —
 то есть отменяла бы решение владельца молча.
@@ -2295,7 +2295,7 @@ git commit -m "Take away two cards that had nothing to say"
     setLapseDay(scope, habit: habit, date: getToday(), lapsed: true);
 
     expect(habit.scores[getToday()].value, closeTo(0.25, 0.02),
-        reason: 'computed.lapse-score#1 — срыв делит пополам, а не обнуляет: '
+        reason: 'computed.lapse-score#3 — срыв делит пополам, а не обнуляет: '
             'иначе месяц воздержания стоил бы столько же, сколько ничего');
   });
 ```
