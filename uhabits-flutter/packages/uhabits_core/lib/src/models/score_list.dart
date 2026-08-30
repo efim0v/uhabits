@@ -29,6 +29,20 @@ class ScoreList {
   /// оценку пополам мимо формулы порта».
   bool halvesOnLapse = false;
 
+  /// Период полураспада кривой роста в днях, или null для портовой кривой.
+  ///
+  /// Расширение слоя вычисляемых привычек. При null всё в точности как в
+  /// Kotlin: старт с единицы для привычки «не больше» и множитель из
+  /// `Score.compute`. При заданном периоде уровень стартует с нуля и растёт
+  /// своим множителем — это единственная форма, в которой «уровень
+  /// сдержанности» вообще может расти (`computed.lapse-score#14`).
+  ///
+  /// Шаг остаётся портовым, аффинным. Именно поэтому «срыв делит пополам»
+  /// продолжает работать: делить есть что.
+  ///
+  /// Ставит его `applyLapseScoring`, рядом с [halvesOnLapse].
+  int? growthHalfLifeDays;
+
   /// Returns the score for a given day. If the date given happens before the
   /// first repetition of the habit or after the last computed score, returns a
   /// score with value zero.
@@ -82,7 +96,9 @@ class ScoreList {
       denominator *= 2;
     }
 
-    var previousValue = (isNumerical && isAtMost) ? 1.0 : 0.0;
+    final int? halfLife = growthHalfLifeDays;
+    var previousValue =
+        (isNumerical && isAtMost && halfLife == null) ? 1.0 : 0.0;
     for (var i = 0; i < values.length; i++) {
       final offset = values.length - i - 1;
       if (isNumerical) {
@@ -130,6 +146,13 @@ class ScoreList {
               frequency.denominator == 1 &&
               normalizedRollingSum > targetValue) {
             previousValue = previousValue / 2;
+          } else if (halfLife != null) {
+            // Тот же аффинный шаг, что у порта, но на своём множителе:
+            // `Score.compute` считает его из частоты и портовой тринадцатки,
+            // а воздержанию нужен свой период (`computed.lapse-score#15`).
+            final double m = pow(0.5, 1.0 / halfLife).toDouble();
+            previousValue =
+                previousValue * m + percentageCompleted * (1 - m);
           } else {
             previousValue =
                 Score.compute(freq, previousValue, percentageCompleted);

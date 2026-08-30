@@ -343,4 +343,62 @@ void main() {
     expect(plain.scores[today].value, closeTo(0.960228, 1e-6),
         reason: 'computed.lapse-score#12');
   });
+
+  group('computed.lapse-score growth', () {
+    /// Уровень после [days] чистых дней подряд, с нуля.
+    double levelAfter(int days, {int halfLife = 30}) {
+      final FakeEntries entries = FakeEntries();
+      final ScoreList scores = ScoreList()
+        ..halvesOnLapse = true
+        ..growthHalfLifeDays = halfLife;
+      scores.recompute(
+        frequency: Frequency.daily,
+        isNumerical: true,
+        numericalHabitType: NumericalHabitType.atMost,
+        targetValue: 0.0,
+        computedEntries: entries.getByInterval,
+        from: getToday().minus(days - 1),
+        to: getToday(),
+      );
+      return scores[getToday()].value;
+    }
+
+    test('#14 the level starts at nothing and climbs', () {
+      expect(levelAfter(1), closeTo(0.0228, 0.0005),
+          reason: 'computed.lapse-score#14 — первый день не даёт ста '
+              'процентов: уровень зарабатывается, а не выдаётся');
+      expect(levelAfter(30), closeTo(0.5, 0.005),
+          reason: 'computed.lapse-score#14 — месяц есть половина');
+      expect(levelAfter(100), closeTo(0.9, 0.005),
+          reason: 'computed.lapse-score#14 — сто дней есть девяносто '
+              'процентов');
+    });
+
+    test('#15 the half-life is the one the kind asks for', () {
+      expect(levelAfter(13, halfLife: 13), closeTo(0.5, 0.005),
+          reason: 'computed.lapse-score#15 — период берётся из поля, а не '
+              'из портовой тринадцатки');
+      expect(levelAfter(13, halfLife: 30), lessThan(0.3),
+          reason: 'computed.lapse-score#15 — на тридцатидневном периоде те '
+              'же тринадцать дней дают заметно меньше');
+    });
+
+    test('#16 a habit without the field keeps the port, to the last digit',
+        () {
+      final ScoreList ported = ScoreList();
+      ported.recompute(
+        frequency: Frequency.daily,
+        isNumerical: true,
+        numericalHabitType: NumericalHabitType.atMost,
+        targetValue: 0.0,
+        computedEntries: FakeEntries().getByInterval,
+        from: getToday().minus(29),
+        to: getToday(),
+      );
+
+      expect(ported[getToday()].value, 1.0,
+          reason: 'computed.lapse-score#16 — привычка «не больше» без '
+              'кривой роста по-прежнему невиновна, пока не доказано');
+    });
+  });
 }
