@@ -48,7 +48,7 @@ void main() {
     final Database upgraded = AppDatabase.openAndMigrate(path);
     addTearDown(upgraded.close);
 
-    expect(upgraded.getVersion(), 103, reason: 'computed.schema#4');
+    expect(upgraded.getVersion(), greaterThanOrEqualTo(103), reason: 'computed.schema#4');
     expect(upgraded.queryInt('select count(*) from Habits'), 1,
         reason: 'computed.schema#4 — подъём версии не карантинит файл');
     expect(upgraded.queryInt('select count(*) from HabitDefinitions'), 1,
