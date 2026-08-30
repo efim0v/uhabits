@@ -112,7 +112,7 @@ void main() {
 
     expect(repository.momentOf(1, 9000), isNull,
         reason: 'computed.schema#9 — отсутствие момента есть null, а не ноль: '
-            'ноль был бы полуночью первого января двухтысячного');
+            'ноль был бы полуночью первого января семидесятого');
     expect(repository.forDay(1, 9000), LapseRepository.minimumAmount,
         reason: 'computed.lapses#2 — величина при этом записана обычным '
             'образом');
