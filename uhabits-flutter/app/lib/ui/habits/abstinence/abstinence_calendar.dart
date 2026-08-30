@@ -72,6 +72,15 @@ Square Function(core.Entry)? abstinenceSquareOf(core.Habit habit) {
   };
 }
 
+/// Сколько дней показывать за серию, или null — считать как порт.
+///
+/// Воздержание измеряет выдержанное время, и сегодняшний день ещё идёт
+/// (`computed.streak#8`).
+int Function(core.Streak)? abstinenceStreakLengthOf(core.Habit habit) {
+  if (abstinenceCommitmentOf(habit) == null) return null;
+  return (core.Streak streak) => core.elapsedDaysOf(streak);
+}
+
 /// Что идёт в счёт «Всего» на кольце Overview, или null — считать как порт.
 ///
 /// Портированный счёт складывает дни, равные `Entry.yesManual`: отметки,

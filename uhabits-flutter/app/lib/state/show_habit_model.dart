@@ -307,6 +307,7 @@ class ShowHabitModel extends ChangeNotifier
       // (`computed.abstinence-screen#10`).
       squareOf: abstinenceSquareOf(habit),
       oldestDay: abstinenceOldestDay(habit),
+      lengthOf: abstinenceStreakLengthOf(habit),
     );
     _visibility.setState(_state);
   }

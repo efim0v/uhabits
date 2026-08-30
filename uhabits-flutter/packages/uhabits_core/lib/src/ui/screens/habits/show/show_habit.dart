@@ -16,6 +16,7 @@ import '../../../../models/entry.dart';
 import '../../../../models/habit.dart';
 import '../../../../models/habit_list.dart';
 import '../../../../models/palette_color.dart';
+import '../../../../models/streak.dart';
 import '../../../../gui/theme.dart';
 import '../../../../preferences/preferences.dart';
 import '../../../../time/local_date.dart';
@@ -143,7 +144,9 @@ class ShowHabitPresenter {
   /// on this screen.
   /// [intensityOf], [squareOf] and [oldestDay] are not upstream and are passed
   /// straight through to the History card; see
-  /// [HistoryCardPresenter.buildState]. Null for every habit the original
+  /// [HistoryCardPresenter.buildState]. [lengthOf] is not upstream either and
+  /// is passed straight through to the Streak card; see
+  /// [StreakCartPresenter.buildState]. Null for every habit the original
   /// knows.
   static ShowHabitState buildState({
     required Habit habit,
@@ -153,6 +156,7 @@ class ShowHabitPresenter {
     bool Function(Entry)? countsTowardsTotal,
     Square Function(Entry)? squareOf,
     LocalDate? oldestDay,
+    int Function(Streak)? lengthOf,
   }) {
     return ShowHabitState(
       title: habit.name,
@@ -176,7 +180,7 @@ class ShowHabitPresenter {
         firstWeekday: preferences.firstWeekdayInt,
         theme: theme,
       ),
-      streaks: StreakCartPresenter.buildState(habit, theme),
+      streaks: StreakCartPresenter.buildState(habit, theme, lengthOf: lengthOf),
       scores: ScoreCardPresenter.buildState(
         spinnerPosition: preferences.scoreCardSpinnerPosition,
         habit: habit,

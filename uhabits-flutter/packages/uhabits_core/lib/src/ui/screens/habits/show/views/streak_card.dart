@@ -50,12 +50,31 @@ class StreakCardState {
 class StreakCartPresenter {
   const StreakCartPresenter();
 
-  static StreakCardState buildState(Habit habit, Theme theme) =>
-      StreakCardState(
-        color: habit.color,
-        bestStreaks: habit.streaks.getBest(10),
-        theme: theme,
-      );
+  /// [lengthOf] не из порта: он отвечает, сколько дней показывать за серию.
+  /// Null у всякой привычки, которую знает оригинал, и тогда длина берётся
+  /// у самой серии, включительным счётом. Воздержание передаёт своё:
+  /// длительность есть прошедшие полные сутки (`computed.streak#8`).
+  static StreakCardState buildState(
+    Habit habit,
+    Theme theme, {
+    int Function(Streak)? lengthOf,
+  }) {
+    final List<Streak> best = habit.streaks.getBest(10);
+    return StreakCardState(
+      color: habit.color,
+      // A finished streak's own length already is the elapsed time
+      // (`computed.streak#8`), so this reshapes nothing for it: start stays
+      // put and the replacement end lands exactly where the real one was.
+      // Only the one streak still running — the one whose count `lengthOf`
+      // actually shortens — gets a different end date here.
+      bestStreaks: lengthOf == null
+          ? best
+          : best
+              .map((Streak s) => Streak(s.start, s.start.plus(lengthOf(s) - 1)))
+              .toList(),
+      theme: theme,
+    );
+  }
 }
 
 bool _listEquals<T>(List<T> a, List<T> b) {

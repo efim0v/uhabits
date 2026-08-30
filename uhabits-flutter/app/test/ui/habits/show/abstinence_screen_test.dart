@@ -14,8 +14,10 @@ import 'package:uhabits/state/app_scope.dart';
 // `ShowHabitCard` is not re-exported by show_habit_screen.dart itself — the
 // same reason sleep_habit_screen_test.dart imports it directly.
 import 'package:uhabits/state/show_habit_model.dart';
+import 'package:uhabits/ui/core_view.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_counter.dart';
 import 'package:uhabits/ui/habits/show/cards/overview_card_view.dart';
+import 'package:uhabits/ui/habits/show/cards/streak_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
@@ -261,6 +263,37 @@ void main() {
             'сорок дней обещания остаются сорока');
     expect(find.textContaining('Последний срыв'), findsNothing,
         reason: 'computed.streak#7 — и подпись согласна: срыва не было');
+  });
+
+  testWidgets('the best-streaks card counts days lived through',
+      (tester) async {
+    // Обязательство сорок дней назад, ни одного срыва: идёт сороковая сутки.
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 40);
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.text('40'), findsWidgets,
+        reason: 'computed.streak#8 — карточка серий говорит то же число, что '
+            'счётчик над ней');
+    expect(find.text('41'), findsNothing,
+        reason: 'computed.streak#8 — включительный счёт остался порту');
+
+    // Число серии красится на канвасе, а не пишется виджетом `Text`, — та же
+    // причина, по которой даты-подписи читает `streak_date_labels_test.dart`
+    // прямо с построенного графика, а не через `find.text`. Две проверки
+    // выше только удостоверяют, что «41» нет нигде на экране, а эта смотрит
+    // туда, где число действительно живёт.
+    final StreakChartView chart = tester
+        .widget<CoreView>(find.descendant(
+          of: find.byType(StreakCardView),
+          matching: find.byType(CoreView),
+        ))
+        .view as StreakChartView;
+    expect(chart.streaks.single.length, 40,
+        reason: 'computed.streak#8 — карточка серий сама держит сорок, не '
+            'сорок один');
   });
 
   testWidgets('computed.commitment#2 перенесённый вперёд день обещания '
