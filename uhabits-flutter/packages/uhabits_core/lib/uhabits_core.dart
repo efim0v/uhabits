@@ -72,3 +72,4 @@ export 'src/computed/habit_definition.dart';
 export 'src/computed/lapse_day_value.dart';
 export 'src/computed/lapse_repository.dart';
 export 'src/computed/lapse_scoring.dart';
+export 'src/computed/streak_duration.dart';
