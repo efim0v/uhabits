@@ -1,6 +1,7 @@
 import 'package:test/test.dart';
 import 'package:uhabits_core/src/computed/habit_definition.dart';
-import 'package:uhabits_core/src/computed/lapse_scoring.dart' show applyLapseScoring, abstinenceHalfLifeDays;
+import 'package:uhabits_core/src/computed/lapse_scoring.dart'
+    show abstinenceHalfLifeDays, applyLapseScoring;
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
 
@@ -48,9 +49,10 @@ void main() {
   });
 
   test('the switch sets the growth curve as well as the halving', () {
-    final Habit habit = MemoryModelFactory().buildHabit()..id = 1;
-
-    applyLapseScoring(habit, const HabitDefinition(kind: ComputedKind.abstinence));
+    applyLapseScoring(
+      habit,
+      const HabitDefinition(kind: ComputedKind.abstinence),
+    );
 
     expect(habit.scores.growthHalfLifeDays, abstinenceHalfLifeDays,
         reason: 'computed.lapse-score#15 — деление пополам и рост включаются '
@@ -58,8 +60,10 @@ void main() {
   });
 
   test('the switch clears the growth curve for every other kind', () {
-    final Habit habit = MemoryModelFactory().buildHabit()..id = 1;
-    applyLapseScoring(habit, const HabitDefinition(kind: ComputedKind.abstinence));
+    applyLapseScoring(
+      habit,
+      const HabitDefinition(kind: ComputedKind.abstinence),
+    );
 
     applyLapseScoring(habit, const HabitDefinition(kind: ComputedKind.sleep));
 
