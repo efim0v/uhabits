@@ -269,4 +269,21 @@ void main() {
     expect(fresh.definitions.forHabit(id), isNull,
         reason: 'computed.lifecycle#6');
   });
+
+  test('the level is earned, halved and earned again', () async {
+    final String path = '${tempDir.path}/habits.db';
+    final AppScope scope = await openScope(path);
+    addTearDown(() => closeScope(scope));
+    final int today = getToday().daysSince2000;
+    final Habit habit = makeAbstinence(scope, committedFrom: today - 30);
+
+    expect(habit.scores[getToday()].value, closeTo(0.5, 0.02),
+        reason: 'computed.lapse-score#14 — месяц есть половина');
+
+    setLapseDay(scope, habit: habit, date: getToday(), lapsed: true);
+
+    expect(habit.scores[getToday()].value, closeTo(0.25, 0.02),
+        reason: 'computed.lapse-score#3 — срыв делит пополам, а не обнуляет: '
+            'иначе месяц воздержания стоил бы столько же, сколько ничего');
+  });
 }
