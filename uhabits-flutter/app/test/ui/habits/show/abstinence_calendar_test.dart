@@ -13,6 +13,7 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/history_editor_dialog.dart';
+import 'package:uhabits/ui/common/scrollable_chart.dart';
 import 'package:uhabits/ui/core_view.dart';
 import 'package:uhabits/ui/habits/show/cards/history_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
@@ -128,6 +129,56 @@ void main() {
     await openEditor(tester, habit);
     await tester.tapAt(cellAt(tester));
     await tester.pumpAndSettle();
+  }
+
+  /// Сетка календарной карточки на экране привычки — та же, что `squareOf`
+  /// и `oldestDay` уже красят (`computed.abstinence-screen#10`), — как
+  /// `ScrollableChart` её строит на живом дереве.
+  final Finder cardChartFinder = find.descendant(
+    of: find.byType(HistoryCardView),
+    matching: find.byType(ScrollableChart),
+  );
+
+  HistoryChart cardChart(WidgetTester tester) =>
+      tester.widget<ScrollableChart>(cardChartFinder).view as HistoryChart;
+
+  /// Открывает экран привычки воздержания с данным днём обещания и срывами
+  /// на перечисленных днях — тем же `scope.abstinence.setLapse`, каким их
+  /// пишет тап по ячейке (`computed.abstinence-screen#6`). Редактор не
+  /// открывается: сетка, которую здесь читают, — карточка календаря на самом
+  /// экране, шов `intensityOf` красит именно её.
+  Future<void> pumpAbstinenceCalendar(
+    WidgetTester tester, {
+    required int committedFrom,
+    List<int> lapses = const <int>[],
+  }) async {
+    final Habit habit = addAbstinence(committedFrom: committedFrom);
+    for (final int day in lapses) {
+      scope.abstinence.setLapse(habit, LocalDate(day), true);
+    }
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: L10n.localizationsDelegates,
+      supportedLocales: L10n.supportedLocales,
+      home: Provider<AppScope>.value(
+        value: scope,
+        child: ShowHabitScreen(
+          key: ValueKey<String?>(habit.uuid),
+          habit: habit,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+  }
+
+  /// Яркость каждого дня сетки, `[0]` — сегодня, тем же порядком, что и у
+  /// `chart.series` (`computed.abstinence-screen#13`).
+  List<double> intensitiesOf(WidgetTester tester) =>
+      cardChart(tester).intensities;
+
+  /// Цвет клетки данного дня, независимо от яркости.
+  Square squareAt(WidgetTester tester, int day) {
+    final HistoryChart chart = cardChart(tester);
+    return chart.series[getToday().daysSince2000 - day];
   }
 
   testWidgets('computed.abstinence-screen#6 тап по дню записывает срыв, а не '
@@ -392,5 +443,30 @@ void main() {
     expect(chart.series[7], Square.grey,
         reason: 'computed.abstinence-screen#10 — сорок пять больше тридцати, '
             'и только этот день есть срыв (computed.abstinence-cell#2)');
+  });
+
+  testWidgets('the grid brightens along the stretch', (tester) async {
+    final int today = getToday().daysSince2000;
+    await pumpAbstinenceCalendar(tester,
+        committedFrom: today - 60, lapses: <int>[today - 30]);
+
+    final List<double> shades = intensitiesOf(tester);
+
+    expect(shades[0], greaterThan(shades[29]),
+        reason: 'computed.abstinence-screen#13 — сегодня ярче, чем день '
+            'после срыва: видно, как шёл');
+    expect(shades[30], lessThan(shades[29]),
+        reason: 'computed.abstinence-screen#13 — в день срыва провал, и он '
+            'виден');
+  });
+
+  testWidgets('a lapsed day keeps its own square', (tester) async {
+    final int today = getToday().daysSince2000;
+    await pumpAbstinenceCalendar(tester,
+        committedFrom: today - 60, lapses: <int>[today - 30]);
+
+    expect(squareAt(tester, today - 30), Square.grey,
+        reason: 'computed.abstinence-cell#2 — яркость не перекрашивает срыв '
+            'в чистый день');
   });
 }

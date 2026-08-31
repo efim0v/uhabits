@@ -72,6 +72,15 @@ Square Function(core.Entry)? abstinenceSquareOf(core.Habit habit) {
   };
 }
 
+/// Яркость дня в сетке, или null — красить как порт.
+///
+/// Яркость дня есть оценка в этот день: кольцо, сетка и уровень — одна кривая,
+/// показанная тремя способами (`computed.abstinence-screen#13`).
+double Function(core.Entry)? abstinenceIntensityOf(core.Habit habit) {
+  if (abstinenceCommitmentOf(habit) == null) return null;
+  return (core.Entry entry) => habit.scores[entry.date].value;
+}
+
 /// Сколько дней показывать за серию, или null — считать как порт.
 ///
 /// Воздержание измеряет выдержанное время, и сегодняшний день ещё идёт
