@@ -1008,11 +1008,12 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     // (`show-habit.card-order-and-visibility#2`,
     // `computed.abstinence-screen#4`).
     //
-    // Прячется только цель. Bar и Frequency остаются намеренно: спецификация
-    // требует решать по ним отдельно, решение отложено и записано в
-    // DEVIATIONS.md («computed: воздержание не трогает виджеты, Bar и
-    // Frequency»). Тест «Bar и Frequency остаются на экране намеренно»
-    // держит это как решение, а не как забывчивость.
+    // У воздержания цель уступает место тому же кольцу, но этим дело не
+    // заканчивается: Bar и «Частота» тоже складывают сделанные отметки за
+    // неделю и месяц, а привычка, которую держат, ничего не делает — ей
+    // нечего сложить (`computed.abstinence-screen#14`). У сна то же
+    // возражение к цели силы не имеет: доля ночи есть отметка, а не молчание,
+    // и Bar с частотой сну ещё пригождаются.
     final bool swapsTargetForOverview = (habitId != null &&
             widget.scope.sleepRepository.goalFor(habitId) != null) ||
         _abstinenceDefinition != null;
@@ -1043,6 +1044,12 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   /// well the habit is kept is exactly what a nightly percentage supports. An
   /// abstinence habit is numerical too, and the same swap applies to it for
   /// the same reason (`computed.abstinence-screen#4`).
+  ///
+  /// Bar and frequency add up the same values the same way, over a week and
+  /// a month, and for an abstinence habit they have nothing to add: a habit
+  /// that is kept writes nothing. So both go too, for abstinence only — a
+  /// sleep habit still writes a value every night, and keeps them
+  /// (`computed.abstinence-screen#14`).
   bool _isVisible(
     ShowHabitModel model,
     ShowHabitCard card, {
@@ -1051,6 +1058,10 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     if (!swapsTargetForOverview) return model.isVisible(card);
     if (card == ShowHabitCard.target) return false;
     if (card == ShowHabitCard.overview) return true;
+    if (_abstinenceDefinition != null &&
+        (card == ShowHabitCard.bar || card == ShowHabitCard.frequency)) {
+      return false;
+    }
     return model.isVisible(card);
   }
 

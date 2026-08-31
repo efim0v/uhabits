@@ -283,24 +283,25 @@ void main() {
         reason: 'computed.abstinence-screen#5');
   });
 
-  testWidgets('Bar и Frequency остаются на экране намеренно', (tester) async {
-    // Спецификация выносит решение по ним отдельно, и оно принято: отложить.
-    // Тест держит это как решение, а не как забывчивость, — когда карточки
-    // решат прятать, падёт именно он (DEVIATIONS.md, «computed: воздержание не
-    // трогает виджеты, Bar и Frequency»).
+  testWidgets('two cards that can say nothing about this kind are gone',
+      (tester) async {
     final int today = getToday().daysSince2000;
     final Habit habit = addAbstinence(committedFrom: today - 40);
 
     await tester.pumpWidget(wrap(habit));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.bar)),
-        findsOneWidget,
-        reason: 'computed.abstinence-screen#4 — скрывается только карточка '
-            'цели; Bar и Frequency оставлены, решение отложено спецификацией');
+    expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.bar)), findsNothing,
+        reason: 'computed.abstinence-screen#14 — столбцы считают сделанное, а '
+            'воздержание ничего не делает');
     expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.frequency)),
+        findsNothing,
+        reason: 'computed.abstinence-screen#14 — частота у привычки с '
+            'прибитой частотой не говорит ничего');
+    expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.history)),
         findsOneWidget,
-        reason: 'computed.abstinence-screen#4');
+        reason: 'computed.abstinence-screen#13 — а календарь остаётся, он '
+            'здесь главный');
   });
 
   testWidgets('the goal says what is promised, not which way the arrow points',
