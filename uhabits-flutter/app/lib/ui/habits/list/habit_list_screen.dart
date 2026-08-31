@@ -59,7 +59,6 @@ import '../../intro/intro_screen.dart';
 import '../../settings/data_actions.dart';
 import '../../settings/settings_screen.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
-import '../abstinence/abstinence_gestures.dart';
 import '../edit/edit_habit_screen.dart';
 import '../show/show_habit_screen.dart';
 import 'habit_card.dart';
@@ -1007,18 +1006,6 @@ class _HabitListViewState extends State<_HabitListView>
       dataOffset: dataOffset,
       isSelected: data.selected,
       abstinenceDefinition: model.abstinenceDefinitionOf(habit),
-      // `!` здесь безопасен и назван: колбэк существует только у карточки,
-      // которой `abstinenceDefinitionOf` уже ответил не-null — тем же вызовом,
-      // что двумя строками выше отдаёт `abstinenceDefinition:`.
-      onLapse: (core.LocalDate date, bool lapsed) => toggleLapseDay(
-        context,
-        _model.scope,
-        habit: habit,
-        definition: model.abstinenceDefinitionOf(habit)!,
-        date: date,
-        lapsed: lapsed,
-        theme: theme,
-      ),
       // `HabitCardView` passes `getAbsoluteButtonLocation(date)` into both
       // presenter calls; that is what places the confetti burst.
       onEntryPressed: (_, globalCenter) => _lastEntryPress = globalCenter,

@@ -228,7 +228,7 @@
   "sleepHalfCreditSleep": "Половина зачёта (сон)",
   "sleepMinutesShort": "{minutes} мин",
   "sleepTimezoneOffset": "UTC{sign}{hours}:{minutes}",
-  "abstinenceHabitType": "Воздержание",
+  "abstinenceHabitType": "Свобода",
   "abstinenceHabitTypeExample": "напр.: Не пить. Не листать ленту. Молчание — чистый день; отмечать нужно только срывы.",
   "abstinenceQuestionExample": "напр.: Вы сорвались сегодня?",
   "abstinenceAllowance": "Допуск",

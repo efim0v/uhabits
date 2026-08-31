@@ -1,8 +1,12 @@
-/// Тап по ячейке воздержания на настоящем экране списка.
+/// Ячейка воздержания на настоящем экране списка: список — только для
+/// просмотра этого вида.
 ///
 /// Запрет на ввод числа вычисляемой привычке уже стоит и проверен
-/// `computed_list_edit_test.dart`. Здесь проверяется, что второй житель слоя
-/// проходит мимо этого запрета не в обход его, а другой дверью: журнал срывов.
+/// `computed_list_edit_test.dart`. Здесь проверяется, что второй житель слоя —
+/// журнал срывов — из списка тоже не достать: ни тапом, ни долгим нажатием,
+/// ни в одном состоянии ячейки (`computed.abstinence-cell#9`). Что та же
+/// дверь по-прежнему открыта с кнопки карточки и с клетки календаря, проверяют
+/// `abstinence_allowance_test.dart` и `abstinence_overview_test.dart`.
 library;
 
 // ignore_for_file: implementation_imports
@@ -17,6 +21,7 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_button_view.dart';
+import 'package:uhabits/ui/habits/abstinence/abstinence_gestures.dart';
 import 'package:uhabits/ui/habits/list/entry_button_views.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
@@ -127,7 +132,8 @@ void main() {
       isAbstinenceLapseDay(scope.definitions.forHabit(habit.id!)!,
           habit.originalEntries.get(date).value);
 
-  testWidgets('computed.abstinence-cell#5 тап записывает срыв, повторный '
+  testWidgets(
+      'computed.abstinence-cell#9 тап по ячейке списка ничего не пишет и не '
       'снимает', (tester) async {
     final AppScope scope = openScope();
     final int today = getToday().daysSince2000;
@@ -137,70 +143,25 @@ void main() {
     await tester.pumpAndSettle();
     await tapToday(tester);
 
-    expect(scope.lapses.lastDay(habit.id!), today,
-        reason: 'computed.abstinence-cell#5');
-    expect(lapsedOn(scope, habit, getToday()), isTrue,
-        reason: 'computed.abstinence-cell#5 — день пересчитан, а не только '
-            'записан в журнал');
+    expect(scope.lapses.lastDay(habit.id!), isNull,
+        reason: 'computed.abstinence-cell#9 — список этого вида только для '
+            'просмотра, тап в журнал срывов не пишет');
+    expect(lapsedOn(scope, habit, getToday()), isFalse,
+        reason: 'computed.abstinence-cell#9 — день остался нетронутым');
+    expect(cellAt(tester, getToday()), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#9 — и рисунок не сдвинулся');
 
+    // Повторный тап по чистому дню тоже ничего не заводит — не только
+    // повторный тап поверх уже отмеченного срыва.
     await tapToday(tester);
 
     expect(scope.lapses.lastDay(habit.id!), isNull,
-        reason: 'computed.abstinence-cell#5');
-    expect(lapsedOn(scope, habit, getToday()), isFalse,
-        reason: 'computed.abstinence-cell#5 — отмена возвращает день в тишину');
+        reason: 'computed.abstinence-cell#9');
   });
 
-  testWidgets('computed.abstinence-cell#6 числового окна нет ни на тапе, ни '
-      'на долгом нажатии', (tester) async {
-    final AppScope scope = openScope();
-    final int today = getToday().daysSince2000;
-    addAbstinence(scope, committedFrom: today - 40);
-
-    await tester.pumpWidget(wrap(scope));
-    await tester.pumpAndSettle();
-    await tapToday(tester);
-    expect(find.byType(NumberDialog), findsNothing,
-        reason: 'computed.abstinence-cell#6');
-
-    await tester.longPress(find.byKey(EntryPanel.buttonKey(getToday())));
-    await tester.pumpAndSettle();
-    expect(find.byType(NumberDialog), findsNothing,
-        reason: 'computed.abstinence-cell#6 — тот же запрет, что у сна без '
-            'ночи (computed.write-paths#3)');
-  });
-
-  testWidgets('computed.abstinence-cell#5 список перерисовывается сам',
-      (tester) async {
-    final AppScope scope = openScope();
-    final int today = getToday().daysSince2000;
-    addAbstinence(scope, committedFrom: today - 40);
-
-    await tester.pumpWidget(wrap(scope));
-    await tester.pumpAndSettle();
-    await tapToday(tester);
-    // Кэш списка обязан отдать пересчитанное значение: оптимистичная краска
-    // стирается в didUpdateWidget, и если хук инвалидации не дёрнут, ячейка
-    // вернётся к чистой.
-    await tester.pumpAndSettle();
-
-    final AbstinenceButtonView view = tester
-        .widget<EntryButton>(find.byKey(EntryPanel.buttonKey(getToday())))
-        .view as AbstinenceButtonView;
-    expect(view.cell, AbstinenceCell.lapse,
-        reason: 'computed.abstinence-cell#5 — onComputedDataChanged');
-  });
-
-  testWidgets('computed.abstinence-cell#2 ячейка идёт за допуском, а не за '
-      'тем, что её однажды нарисовало', (tester) async {
-    // Единственный случай, где «нарисовано» и «сорвался» расходятся: запись за
-    // день осталась прежней, а допуск под ней стал другим. Тап тут ни при чём,
-    // и перекрасить ячейку обязано определение.
-    //
-    // Две памяти на этом пути, и обе живут ровно до следующего
-    // [HabitListModel.notifyListeners]: мемо определения в модели и
-    // оптимистичная краска в панели. Пережившая своё, любая из них показала бы
-    // крест на дне, который допуск простил.
+  testWidgets(
+      'computed.abstinence-cell#9 долгое нажатие тоже ничего не пишет и не '
+      'открывает числового окна', (tester) async {
     final AppScope scope = openScope();
     final int today = getToday().daysSince2000;
     final Habit habit = addAbstinence(scope, committedFrom: today - 40);
@@ -208,6 +169,62 @@ void main() {
     await tester.pumpWidget(wrap(scope));
     await tester.pumpAndSettle();
     await tapToday(tester);
+    expect(find.byType(NumberDialog), findsNothing,
+        reason: 'computed.abstinence-cell#9 — тап и не пишет, и не открывает '
+            'общую дверь числа, которая для вычисляемых и так закрыта '
+            '(computed.write-paths#3)');
+
+    await tester.longPress(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.pumpAndSettle();
+    expect(find.byType(NumberDialog), findsNothing,
+        reason: 'computed.abstinence-cell#9 — долгое нажатие ровно так же '
+            'ничего не делает');
+    expect(scope.lapses.lastDay(habit.id!), isNull,
+        reason: 'computed.abstinence-cell#9');
+  });
+
+  testWidgets('computed.abstinence-cell#5 список перерисовывается сам, когда '
+      'срыв пишет кнопка карточки или календарь', (tester) async {
+    final AppScope scope = openScope();
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(scope, committedFrom: today - 40);
+
+    await tester.pumpWidget(wrap(scope));
+    await tester.pumpAndSettle();
+
+    // Список сам тапом уже не пишет (`computed.abstinence-cell#9`) — срыв
+    // сюда приходит той же дверью, что и у кнопки карточки, и у клетки
+    // календаря (`computed.abstinence-cell#5`), позвана прямо, в обход
+    // экрана привычки.
+    final bool written =
+        setLapseDay(scope, habit: habit, date: getToday(), lapsed: true);
+    expect(written, isTrue);
+    await tester.pumpAndSettle();
+
+    final AbstinenceButtonView view = tester
+        .widget<EntryButton>(find.byKey(EntryPanel.buttonKey(getToday())))
+        .view as AbstinenceButtonView;
+    expect(view.cell, AbstinenceCell.lapse,
+        reason: 'computed.abstinence-cell#5 — onComputedDataChanged '
+            'перекрашивает список, хотя список этот срыв и не писал');
+  });
+
+  testWidgets('computed.abstinence-cell#2 ячейка идёт за допуском, а не за '
+      'тем, что её однажды нарисовало', (tester) async {
+    // Единственный случай, где «нарисовано» и «сорвался» расходятся: запись за
+    // день осталась прежней, а допуск под ней стал другим. Тап тут ни при чём
+    // ни разу — ни первым срывом, ни сменой допуска, — и перекрасить ячейку
+    // обязано определение.
+    final AppScope scope = openScope();
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(scope, committedFrom: today - 40);
+
+    await tester.pumpWidget(wrap(scope));
+    await tester.pumpAndSettle();
+    final bool written =
+        setLapseDay(scope, habit: habit, date: getToday(), lapsed: true);
+    expect(written, isTrue);
+    await tester.pumpAndSettle();
     expect(cellAt(tester, getToday()), AbstinenceCell.lapse,
         reason: 'computed.abstinence-cell#5 — при допуске ноль одна единица '
             'уже срыв');
@@ -254,6 +271,10 @@ void main() {
         reason: 'computed.abstinence-cell#7 — судить день как чистый или '
             'сорванный тогда не от чего, и привычка остаётся числовой');
 
+    // Без признака ячейка — обычная числовая, и тап на ней по-прежнему
+    // тапабелен как у любой другой вычисляемой привычки; здесь нет
+    // `computed.abstinence-cell#9` — это правило только для настоящей ячейки
+    // воздержания.
     await tapToday(tester);
 
     expect(find.byType(NumberDialog), findsNothing,

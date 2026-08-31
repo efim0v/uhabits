@@ -567,15 +567,16 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     // day is computed from instead (`computed.write-paths#3`, `#4`).
     if (_isComputed) {
       callback.onNumberPickerDismissed();
-      // Воздержание: тот же жест, что и в ячейке списка. Числа человек не
-      // вводит, но «в этот день я сорвался» — не измерение, а факт, и его
-      // дверь — журнал срывов (`computed.abstinence-screen#6`).
+      // Воздержание: та же дверь, что и у кнопки карточки, — `toggleLapseDay`.
+      // Числа человек не вводит, но «в этот день я сорвался» — не измерение,
+      // а факт, и его дверь — журнал срывов (`computed.abstinence-screen#6`).
       final core.HabitDefinition? definition = _abstinenceDefinition;
       if (definition != null) {
         final core.LocalDate? day = _lastClickedDate;
-        // День до обещания приложение себе не приписывает — тот же охранник,
-        // что закрывает ячейку списка (`computed.abstinence-cell#3`), закрывает
-        // и клетку календаря (`computed.abstinence-screen#7`).
+        // День до обещания приложение себе не приписывает: тот же
+        // классификатор, что рисует такой день пустым в ячейке списка
+        // (`computed.abstinence-cell#3`), не даёт клетке календаря записать
+        // его срывом (`computed.abstinence-screen#7`).
         if (day == null || day.daysSince2000 < definition.committedFrom!) {
           return;
         }

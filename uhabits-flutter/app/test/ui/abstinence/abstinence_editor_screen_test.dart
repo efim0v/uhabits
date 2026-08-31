@@ -129,7 +129,7 @@ void main() {
 
     expect(find.byKey(EditHabitScreen.abstinenceTypeCardKey), findsOneWidget,
         reason: 'computed.create#1');
-    expect(find.text('Abstinence'), findsOneWidget,
+    expect(find.text('Freedom'), findsOneWidget,
         reason: 'computed.create#1');
 
     final Rect yesNo =

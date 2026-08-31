@@ -827,7 +827,7 @@ class L10nGu extends L10n {
   }
 
   @override
-  String get abstinenceHabitType => 'Abstinence';
+  String get abstinenceHabitType => 'Freedom';
 
   @override
   String get abstinenceHabitTypeExample =>

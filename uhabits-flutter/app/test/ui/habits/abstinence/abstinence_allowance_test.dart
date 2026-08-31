@@ -4,6 +4,12 @@
 /// допуске 30 записал бы день, который обещание держит, а покрасил бы его как
 /// срыв — и тогда ячейка говорила бы «сорвался», счётчик «сорок дней без
 /// срыва», а балл не шелохнулся бы. Здесь эти трое спрошены об одном дне.
+///
+/// Пишет кнопка карточки — список этого вида только для просмотра
+/// (`computed.abstinence-cell#9`), и тап по нему величину больше не
+/// спрашивает. Дверь и диалог те же, что были бы у тапа: кнопка зовёт
+/// `toggleLapseDay` ровно так же, как раньше звала ячейка списка
+/// (`computed.abstinence-cell#5`).
 library;
 
 // ignore_for_file: implementation_imports
@@ -116,10 +122,21 @@ void main() {
           .view as AbstinenceButtonView)
       .cell;
 
-  Future<void> tapToday(WidgetTester tester) async {
+  /// Ставит список текущим деревом, чтобы прочесть его ячейку —
+  /// `cellToday` — самим списком он больше не пишет
+  /// (`computed.abstinence-cell#9`).
+  Future<void> readList(WidgetTester tester) async {
     await tester.pumpWidget(list());
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+  }
+
+  /// Жест «сорвался», записывающий срыв за сегодня: кнопка карточки на
+  /// экране самой привычки, а не тап по ячейке списка — тот теперь только
+  /// рисует (`computed.abstinence-cell#9`).
+  Future<void> tapToday(WidgetTester tester) async {
+    await tester.pumpWidget(screen());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(AbstinenceOverviewCard.todayButtonKey));
     await tester.pumpAndSettle();
   }
 
@@ -159,18 +176,12 @@ void main() {
     expect(scope.lapses.forDay(habit.id!, todayDay()), 20,
         reason: 'computed.abstinence-cell#8');
 
-    // Первый из троих — ячейка списка.
-    expect(cellToday(tester), AbstinenceCell.clean,
-        reason: 'computed.abstinence-cell#2 — «не более 30» обещание держит');
-
-    await tester.pumpWidget(screen());
-    await tester.pumpAndSettle();
-
-    // Второй — кнопка карточки.
+    // Первый из троих — кнопка карточки, которой и записан срыв: `tapToday`
+    // уже оставил её на экране.
     expect(find.text('Отметить срыв'), findsOneWidget,
         reason: 'computed.abstinence-screen#5 — предлагать «Отменить срыв» '
             'там, где срыва не было, значит спорить с ячейкой');
-    // Третий — счётчик, адресован напрямую по своему ключу, а не всему
+    // Второй — счётчик, адресован напрямую по своему ключу, а не всему
     // дереву: `find.textContaining` по всему экрану поймал бы и чужое
     // «раз в месяц» на карточке «Частота», окажись оно там однажды.
     expect(
@@ -179,6 +190,13 @@ void main() {
       reason: 'computed.streak#4 — двадцать минут серию не рвут: счётчик '
           'по-прежнему считает от дня обязательства, а не от сегодня',
     );
+
+    // Третий — ячейка списка. Список этого вида только для просмотра
+    // (`computed.abstinence-cell#9`) и срыв не писал, но кэш у него общий с
+    // теми двумя, и согласие троих от этого не страдает.
+    await readList(tester);
+    expect(cellToday(tester), AbstinenceCell.clean,
+        reason: 'computed.abstinence-cell#2 — «не более 30» обещание держит');
   });
 
   testWidgets('computed.abstinence-cell#5 подтверждённая величина не оставляет '
@@ -186,15 +204,18 @@ void main() {
     // Ревью нашло: жест отвечал `true` всегда, а свод — «значение дня не
     // сдвинулось». Двадцать минут уже записаны; человек открывает вопрос
     // ещё раз и подтверждает те же двадцать. Журнал заменяет строку тем же
-    // числом, `writeDays` не пишет ничего и молчит, список никто не
-    // перестраивает — и оптимистичный крест оставался висеть на дне, который
-    // обещание держит, до первого чужого повода перерисовать строку.
+    // числом, `writeDays` не пишет ничего и молчит, и список — тот, что
+    // сейчас лишь читает этот кэш (`computed.abstinence-cell#9`), — обязан
+    // остаться тем же, чем был до второго нажатия.
     await tapToday(tester);
     await answer(tester, '20');
+    await readList(tester);
     expect(cellToday(tester), AbstinenceCell.clean,
         reason: 'computed.abstinence-cell#2');
 
-    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.pumpWidget(screen());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(AbstinenceOverviewCard.todayButtonKey));
     await tester.pumpAndSettle();
     expect(amountField(tester), '20',
         reason: 'computed.abstinence-cell#8 — вопрос открылся на том, что в '
@@ -204,20 +225,20 @@ void main() {
     expect(scope.lapses.forDay(habit.id!, todayDay()), 20,
         reason: 'computed.abstinence-cell#8 — журнал остался при своих '
             'двадцати');
+    await readList(tester);
     expect(cellToday(tester), AbstinenceCell.clean,
         reason: 'computed.abstinence-cell#5 — на чистом дне стоит галочка, а '
             'не крест');
 
-    // И вот чем она снимается: единственная дверь жеста отвечает ответом
-    // свода. Тот же вызов, что делает `toggleLapseDay` после ответа на
-    // вопрос о величине, — те же двадцать в дне, где двадцать и лежат.
+    // Единственная дверь жеста отвечает ответом свода — тот же вызов, что
+    // делает `toggleLapseDay` после ответа на вопрос о величине, — те же
+    // двадцать в дне, где двадцать и лежат.
     expect(
         setLapseDay(scope,
             habit: habit, date: getToday(), lapsed: true, amount: 20),
         isFalse,
-        reason: 'computed.abstinence-sync#6 — значение дня не сдвинулось, '
-            'перерисовывать список нечему, и ответ «записал» оставил бы '
-            'оптимистичный крест висеть на дне, который обещание держит');
+        reason: 'computed.abstinence-sync#6 — значение дня не сдвинулось, и '
+            'кнопке с календарём отвечать перерисовкой нечего');
   });
 
   testWidgets('computed.abstinence-cell#8 сорок пять минут — срыв, и трое '
@@ -227,12 +248,8 @@ void main() {
 
     expect(scope.lapses.forDay(habit.id!, todayDay()), 45,
         reason: 'computed.abstinence-cell#8');
-    expect(cellToday(tester), AbstinenceCell.lapse,
-        reason: 'computed.abstinence-cell#2');
 
-    await tester.pumpWidget(screen());
-    await tester.pumpAndSettle();
-
+    // Кнопка и счётчик — `tapToday` уже оставил экран привычки текущим.
     expect(find.text('Отменить срыв'), findsOneWidget,
         reason: 'computed.abstinence-screen#5');
     // Счётчик больше не пишет голую цифру: срыв сегодня оставляет `since`
@@ -240,6 +257,10 @@ void main() {
     // «0».
     expect(find.text('0 минут'), findsWidgets,
         reason: 'computed.streak#5 — срыв сегодня обнуляет счётчик');
+
+    await readList(tester);
+    expect(cellToday(tester), AbstinenceCell.lapse,
+        reason: 'computed.abstinence-cell#2');
   });
 
   testWidgets('computed.abstinence-cell#8 вопрос без ответа фактом не '
@@ -253,9 +274,11 @@ void main() {
 
     expect(scope.lapses.forDay(habit.id!, todayDay()), isNull,
         reason: 'computed.abstinence-cell#8');
+    await readList(tester);
     expect(cellToday(tester), AbstinenceCell.clean,
-        reason: 'computed.abstinence-cell#5 — и оптимистичная краска снята: '
-            'перерисовать список тут нечему, и крест остался бы висеть');
+        reason: 'computed.abstinence-cell#9 — список только читает: отказ от '
+            'ответа ничего не записал, и рисовать ячейке нечего, кроме '
+            'тишины');
   });
 
   testWidgets('computed.abstinence-cell#8 ноль — это молчание, а не срыв',
@@ -268,6 +291,7 @@ void main() {
 
     expect(scope.lapses.forDay(habit.id!, todayDay()), isNull,
         reason: 'computed.abstinence-cell#8');
+    await readList(tester);
     expect(cellToday(tester), AbstinenceCell.clean,
         reason: 'computed.abstinence-cell#8');
   });
@@ -283,8 +307,9 @@ void main() {
             'умолчании лишнего шага нет');
     expect(scope.lapses.forDay(habit.id!, todayDay()),
         LapseRepository.minimumAmount,
-        reason: 'computed.abstinence-cell#8 — тап пишет одну единицу, как и '
-            'было');
+        reason: 'computed.abstinence-cell#8 — нажатие пишет одну единицу, '
+            'как и было');
+    await readList(tester);
     expect(cellToday(tester), AbstinenceCell.lapse,
         reason: 'computed.abstinence-cell#2');
   });
@@ -294,7 +319,7 @@ void main() {
     await tapToday(tester);
     await answer(tester, '45');
 
-    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.tap(find.byKey(AbstinenceOverviewCard.todayButtonKey));
     await tester.pumpAndSettle();
 
     expect(find.byType(NumberDialog), findsNothing,
@@ -348,8 +373,10 @@ void main() {
     expect(scope.lapses.forDay(habit.id!, todayDay()), isNull,
         reason: 'computed.abstinence-cell#8 — закрытый чужой рукой вопрос '
             'фактом не становится');
+    await readList(tester);
     expect(cellToday(tester), AbstinenceCell.clean,
-        reason: 'computed.abstinence-cell#5 — и оптимистичная краска снята');
+        reason: 'computed.abstinence-cell#9 — список ничего не писал и '
+            'ничего не рисует поверх тишины');
   });
 
   testWidgets('computed.abstinence-cell#8 вопрос открывается на том, что в '
@@ -364,10 +391,10 @@ void main() {
         reason: 'computed.abstinence-cell#8');
 
     // Двадцать минут при допуске тридцать обещание держат, ячейка чиста — и
-    // следующий тап по ней снова спрашивает величину. Открыть его нулём
+    // следующее нажатие снова спрашивает величину. Открыть его нулём
     // значило бы предложить человеку стереть написанное, не показав ему, что
     // там написано: он подтвердил бы «45», а двадцать исчезли бы молча.
-    await tester.tap(find.byKey(EntryPanel.buttonKey(getToday())));
+    await tester.tap(find.byKey(AbstinenceOverviewCard.todayButtonKey));
     await tester.pumpAndSettle();
 
     expect(amountField(tester), '20',
@@ -391,9 +418,18 @@ void main() {
 
     await tapToday(tester);
 
-    expect(find.text('Не более 30 минут в день'), findsOneWidget,
-        reason: 'computed.abstinence-cell#8 — обещание, против которого вводят '
-            'число, стоит над полем');
+    // Не `find.text(...)`: экран самой привычки уже показывает то же
+    // обещание в подписи под карточкой, а диалог должен повторить его над
+    // полем — тот же текст в двух местах, и найден должен быть именно
+    // `number_prompt`.
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey<String>('number_prompt')))
+          .data,
+      'Не более 30 минут в день',
+      reason: 'computed.abstinence-cell#8 — обещание, против которого вводят '
+          'число, стоит над полем',
+    );
   });
 
   testWidgets('computed.abstinence-cell#8 без единицы вопрос называет один '
@@ -404,7 +440,12 @@ void main() {
 
     await tapToday(tester);
 
-    expect(find.text('Не более 3 в день'), findsOneWidget,
-        reason: 'computed.abstinence-cell#8');
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey<String>('number_prompt')))
+          .data,
+      'Не более 3 в день',
+      reason: 'computed.abstinence-cell#8',
+    );
   });
 }

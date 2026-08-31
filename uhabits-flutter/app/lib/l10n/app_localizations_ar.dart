@@ -848,7 +848,7 @@ class L10nAr extends L10n {
   }
 
   @override
-  String get abstinenceHabitType => 'Abstinence';
+  String get abstinenceHabitType => 'Freedom';
 
   @override
   String get abstinenceHabitTypeExample =>

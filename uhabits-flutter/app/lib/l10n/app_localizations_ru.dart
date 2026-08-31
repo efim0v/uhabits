@@ -843,7 +843,7 @@ class L10nRu extends L10n {
   }
 
   @override
-  String get abstinenceHabitType => 'Воздержание';
+  String get abstinenceHabitType => 'Свобода';
 
   @override
   String get abstinenceHabitTypeExample =>

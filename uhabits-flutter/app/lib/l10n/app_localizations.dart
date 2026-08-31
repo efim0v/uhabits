@@ -1613,7 +1613,7 @@ abstract class L10n {
   /// Title of the habit-type card for "I commit not to do X".
   ///
   /// In en, this message translates to:
-  /// **'Abstinence'**
+  /// **'Freedom'**
   String get abstinenceHabitType;
 
   /// No description provided for @abstinenceHabitTypeExample.

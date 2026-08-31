@@ -398,7 +398,7 @@
       }
     }
   },
-  "abstinenceHabitType": "Abstinence",
+  "abstinenceHabitType": "Freedom",
   "@abstinenceHabitType": {
     "description": "Title of the habit-type card for \"I commit not to do X\"."
   },
