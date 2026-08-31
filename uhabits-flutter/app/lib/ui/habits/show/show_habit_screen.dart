@@ -64,7 +64,7 @@ import '../../common/window_insets.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
 import '../abstinence/abstinence_button_view.dart' show isAbstinenceLapseDay;
 import '../abstinence/abstinence_gestures.dart';
-import '../abstinence/abstinence_section.dart';
+import '../abstinence/abstinence_overview.dart' show AbstinenceOverviewCard;
 import '../edit/edit_habit_screen.dart';
 import 'cards/bar_card_view.dart';
 import '../sleep/sleep_section.dart';
@@ -902,46 +902,28 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     ShowHabitCard.score,
   };
 
-  /// The whole column, ported cards and a computed habit's own blocks
-  /// together.
+  /// The whole column, ported cards and a sleep habit's own blocks together.
   ///
   /// For every habit the original knows this is exactly `ShowHabitCard`'s
   /// declaration order (`show-habit.card-order-and-visibility#1`). A sleep
-  /// habit and an abstinence habit both split that order in the same place
-  /// and put their own blocks in the seam — after `subtitle`, `notes`,
-  /// `overview` and `score`, before everything else — because those four
-  /// cards are the habit itself, not its machinery, and a person reads them
-  /// first (`computed.abstinence-screen#3`). The two kinds never overlap
-  /// (`_abstinenceDefinition` and a sleep goal are mutually exclusive), so at
-  /// most one of [_buildSleepCards] and [_buildAbstinenceCards] is ever
-  /// non-empty, and the other contributes nothing to `own`.
+  /// habit splits that order and puts its own blocks in the seam — after
+  /// `subtitle`, `notes`, `overview` and `score`, before everything else —
+  /// because those four cards are the habit itself, not its machinery, and a
+  /// person reads them first. An abstinence habit needs no such splice: its
+  /// whole own card lives *inside* the ported `overview` slot itself
+  /// (`_buildCard`'s `ShowHabitCard.overview` case), which `ShowHabitCard`
+  /// already declares in that same seam — so [_buildSleepCards] is the only
+  /// source of `own`, and for an abstinence habit it is empty, and this
+  /// method falls back to the plain, unsplit column
+  /// (`computed.abstinence-screen#3`).
   List<Widget> _buildColumn(BuildContext context, ShowHabitModel model) {
-    final List<Widget> own = <Widget>[
-      ..._buildSleepCards(context, model),
-      ..._buildAbstinenceCards(context, model),
-    ];
+    final List<Widget> own = _buildSleepCards(context, model);
     if (own.isEmpty) return _buildCards(context, model);
     return <Widget>[
       ..._buildCards(context, model, only: _sleepLeadingCards),
       ...own,
       ..._buildCards(context, model, except: _sleepLeadingCards),
     ];
-  }
-
-  /// Пусто для всякой привычки без дня обязательства — тот же признак, каким
-  /// решает ячейка списка.
-  List<Widget> _buildAbstinenceCards(
-      BuildContext context, ShowHabitModel model) {
-    final core.HabitDefinition? definition = _abstinenceDefinition;
-    if (definition == null) return const <Widget>[];
-    return buildAbstinenceSection(
-      context,
-      scope: widget.scope,
-      habit: widget.habit,
-      definition: definition,
-      theme: model.state.theme,
-      onChanged: _repaintComputed,
-    );
   }
 
   /// Pull to refresh, for a sleep habit only.
@@ -1076,6 +1058,21 @@ class _ShowHabitViewState extends State<_ShowHabitView>
           child: NotesCardView(state: state.notes, theme: state.theme),
         );
       case ShowHabitCard.overview:
+        // An abstinence habit's own card takes over this slot whole: no
+        // ported ring, no ported total — `AbstinenceOverviewCard` carries the
+        // duration counter, the streak ring, the two shares and the lapse
+        // count together, and the button that used to sit on its own section
+        // below the ported cards (`computed.abstinence-screen#3`, `#11`).
+        final core.HabitDefinition? abstinence = _abstinenceDefinition;
+        if (abstinence != null) {
+          return AbstinenceOverviewCard(
+            key: key,
+            habit: widget.habit,
+            definition: abstinence,
+            scope: widget.scope,
+            onLapse: _repaintComputed,
+          );
+        }
         return _Card(
           key: key,
           theme: state.theme,
