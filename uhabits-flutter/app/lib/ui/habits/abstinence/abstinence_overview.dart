@@ -158,7 +158,7 @@ class AbstinenceOverviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     // Сто процентов от самого себя — не новость; рекорд —
-                    // новость (`computed.streak#10`).
+                    // новость (`computed.abstinence-screen#11`).
                     _shareLine(
                       context,
                       label: l10n.abstinenceOfRecord,

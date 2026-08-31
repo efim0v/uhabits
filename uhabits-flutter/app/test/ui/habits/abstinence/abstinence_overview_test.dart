@@ -111,8 +111,8 @@ void main() {
     expect(find.byType(RingView), findsOneWidget,
         reason: 'computed.abstinence-screen#11 — уровень кольцом');
     expect(find.text('рекорд'), findsOneWidget,
-        reason: 'computed.streak#10 — сто процентов от самого себя не новость, '
-            'а рекорд — новость');
+        reason: 'computed.abstinence-screen#11 — сто процентов от самого себя '
+            'не новость, а рекорд — новость');
     expect(find.text('от прошлой серии'), findsNothing,
         reason: 'computed.streak#10 — первой попытке сравнивать не с чем, и '
             'строка не рисуется вовсе');
