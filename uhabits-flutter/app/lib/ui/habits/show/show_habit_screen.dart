@@ -66,6 +66,7 @@ import '../abstinence/abstinence_amount_dialog.dart'
     show abstinenceAmountPrompt;
 import '../abstinence/abstinence_button_view.dart' show isAbstinenceLapseDay;
 import '../abstinence/abstinence_gestures.dart';
+import '../abstinence/abstinence_glyphs.dart' show banGlyph;
 import '../abstinence/abstinence_overview.dart' show AbstinenceOverviewCard;
 import '../edit/edit_habit_screen.dart';
 import 'cards/bar_card_view.dart';
@@ -252,15 +253,6 @@ class _ShowHabitView extends StatefulWidget {
   @override
   State<_ShowHabitView> createState() => _ShowHabitViewState();
 }
-
-/// `fa_ban` — U+F05E, a crossed-out circle. The same private-use range and
-/// the same bundled face (`core.FontAssets.fontAwesomeFamily`) every other
-/// glyph on this screen draws from — `core.FontAwesome` just never named it,
-/// because upstream's own `res/values/fontawesome.xml` lists it commented
-/// out, never drawn by the original app. A promise with no direction needs
-/// an icon the ported vocabulary has no word for
-/// (`computed.abstinence-screen#12`).
-const String banGlyph = '\u{f05e}';
 
 class _ShowHabitViewState extends State<_ShowHabitView>
     with WidgetsBindingObserver

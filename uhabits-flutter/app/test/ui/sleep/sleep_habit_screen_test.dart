@@ -104,6 +104,20 @@ void main() {
           tester.widget<Text>(find.byKey(SubtitleCardView.targetTextKey));
       expect(target.data, isNot(contains('100')), reason: 'sleep.ui#11');
       expect(target.data, contains('→'), reason: 'sleep.ui#11');
+
+      // Знак запрета и спрятанная частота принадлежат воздержанию. У сна
+      // значок остаётся портированной стрелкой, а частота — на месте.
+      expect(
+        tester.widget<Text>(find.byKey(SubtitleCardView.targetIconKey)).data,
+        SubtitleCardState.targetIconGlyphFor(NumericalHabitType.atLeast),
+        reason: 'computed.abstinence-screen#12 — подмена значка достаётся '
+            'только воздержанию',
+      );
+      expect(find.byKey(SubtitleCardView.frequencyIconKey), findsOneWidget,
+          reason: 'computed.abstinence-screen#12 — частота прячется только у '
+              'воздержания');
+      expect(find.byKey(SubtitleCardView.frequencyLabelKey), findsOneWidget,
+          reason: 'computed.abstinence-screen#12');
     });
 
     testWidgets('shows the overview the target displaced', (tester) async {
