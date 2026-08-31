@@ -897,8 +897,10 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   /// величину: одна формулировка, один смысл. Строит её
   /// [abstinenceAmountPrompt] — та же функция, которой собран `prompt` в
   /// `toggleLapseDay`, — а не вторая копия того же текста.
-  String? _abstinenceGoalText(BuildContext context) {
-    final core.HabitDefinition? definition = _abstinenceDefinition;
+  String? _abstinenceGoalText(
+    BuildContext context,
+    core.HabitDefinition? definition,
+  ) {
     if (definition == null) return null;
     final L10n l10n = L10n.of(context);
     if (core.abstinenceAllowanceOf(definition) <= 0) {
@@ -1002,6 +1004,15 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     Set<ShowHabitCard>? except,
   }) {
     final int? habitId = widget.habit.id;
+    // Определение спрашивается один раз на весь набор карточек и дальше идёт
+    // из рук в руки. Геттер ходит в SQLite и разбирает JSON, а спрашивают его
+    // правило видимости — по разу на карточку — и ветвь подписи трижды: за
+    // кадр набегало около четырнадцати чтений одной и той же строки, которая
+    // внутри кадра измениться не может. Локальная переменная, а не поле:
+    // привычка становится воздержанием и перестаёт им быть, пока экран
+    // открыт, и следующий кадр спрашивает заново — по той же причине, по
+    // которой не кэшируется `_isComputed`.
+    final core.HabitDefinition? abstinence = _abstinenceDefinition;
     // Карточка цели складывает значения за неделю и месяц. Для доли ночи это
     // бессмыслица, и для срывов тоже: неделя без срывов — не «0% в неделю».
     // Обе получают взамен кольцо Overview
@@ -1016,17 +1027,23 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     // и Bar с частотой сну ещё пригождаются.
     final bool swapsTargetForOverview = (habitId != null &&
             widget.scope.sleepRepository.goalFor(habitId) != null) ||
-        _abstinenceDefinition != null;
+        abstinence != null;
 
     final widgets = <Widget>[];
     for (final card in model.cards) {
       if (only != null && !only.contains(card)) continue;
       if (except != null && except.contains(card)) continue;
       if (!_isVisible(model, card,
-          swapsTargetForOverview: swapsTargetForOverview)) {
+          swapsTargetForOverview: swapsTargetForOverview,
+          abstinence: abstinence)) {
         continue;
       }
-      widgets.add(_buildCard(context, model: model, card: card));
+      widgets.add(_buildCard(
+        context,
+        model: model,
+        card: card,
+        abstinence: abstinence,
+      ));
     }
     return widgets;
   }
@@ -1054,11 +1071,12 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     ShowHabitModel model,
     ShowHabitCard card, {
     required bool swapsTargetForOverview,
+    required core.HabitDefinition? abstinence,
   }) {
     if (!swapsTargetForOverview) return model.isVisible(card);
     if (card == ShowHabitCard.target) return false;
     if (card == ShowHabitCard.overview) return true;
-    if (_abstinenceDefinition != null &&
+    if (abstinence != null &&
         (card == ShowHabitCard.bar || card == ShowHabitCard.frequency)) {
       return false;
     }
@@ -1069,6 +1087,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
     BuildContext context, {
     required ShowHabitModel model,
     required ShowHabitCard card,
+    required core.HabitDefinition? abstinence,
   }) {
     final state = model.state;
     final key = ShowHabitScreen.cardKey(card);
@@ -1079,11 +1098,10 @@ class _ShowHabitViewState extends State<_ShowHabitView>
           theme: state.theme,
           child: SubtitleCardView(
             state: state.subtitle,
-            targetOverride:
-                _abstinenceGoalText(context) ?? _sleepTargetText(context),
-            targetIconOverride:
-                _abstinenceDefinition == null ? null : banGlyph,
-            showsFrequency: _abstinenceDefinition == null,
+            targetOverride: _abstinenceGoalText(context, abstinence) ??
+                _sleepTargetText(context),
+            targetIconOverride: abstinence == null ? null : banGlyph,
+            showsFrequency: abstinence == null,
           ),
         );
       case ShowHabitCard.notes:
@@ -1098,7 +1116,6 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         // duration counter, the streak ring, the two shares and the lapse
         // count together, and the button that used to sit on its own section
         // below the ported cards (`computed.abstinence-screen#3`, `#11`).
-        final core.HabitDefinition? abstinence = _abstinenceDefinition;
         if (abstinence != null) {
           return AbstinenceOverviewCard(
             key: key,
