@@ -158,16 +158,21 @@ class AbstinenceOverviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     // Сто процентов от самого себя — не новость; рекорд —
-                    // новость (`computed.abstinence-screen#11`).
-                    _shareLine(
-                      context,
-                      label: l10n.abstinenceOfRecord,
-                      share:
-                          streaks.currentIsBest ? null : streaks.shareOfBest,
-                      instead: streaks.currentIsBest
-                          ? l10n.abstinenceIsRecord
-                          : null,
-                    ),
+                    // новость (`computed.abstinence-screen#11`). А пока
+                    // рекорда нет вовсе — серий ни одной или лучшая длится
+                    // ноль суток, — строки нет: сравнивать не с чем, и
+                    // «рекорд» за ноль прожитых суток был бы неправдой
+                    // (`computed.streak#12`).
+                    if (streaks.hasRecord)
+                      _shareLine(
+                        context,
+                        label: l10n.abstinenceOfRecord,
+                        share:
+                            streaks.currentIsBest ? null : streaks.shareOfBest,
+                        instead: streaks.currentIsBest
+                            ? l10n.abstinenceIsRecord
+                            : null,
+                      ),
                     // Первой попытке сравнивать не с чем, и строки нет вовсе.
                     if (streaks.shareOfPrevious != null)
                       _shareLine(

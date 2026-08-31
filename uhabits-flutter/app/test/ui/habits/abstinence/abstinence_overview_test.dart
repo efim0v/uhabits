@@ -185,6 +185,41 @@ void main() {
             'и это ровно те два дня, которые сетка красит крестом');
   });
 
+  testWidgets('a habit begun and broken on one day still draws its card',
+      (tester) async {
+    // Ревью нашло: завести воздержание и нажать «Отметить срыв» в тот же
+    // день. Окно серий равно [обязательство, сегодня], срыв выбрасывает
+    // единственный день — серий не остаётся ни одной, — и строка доли от
+    // рекорда получала пустоту вместо обоих своих аргументов. Человек видел
+    // прямоугольник ошибки вместо Overview, и при повторном открытии тоже.
+    await pumpOverview(tester, committedFrom: today, lapses: <int>[today]);
+
+    expect(tester.takeException(), isNull,
+        reason: 'computed.streak#12 — сравнивать не с чем, и это не повод '
+            'падать');
+    expect(find.textContaining('от рекорда'), findsNothing,
+        reason: 'computed.streak#12 — рекорда нет: серий не осталось ни '
+            'одной');
+    expect(find.text('0 минут'), findsOneWidget,
+        reason: 'computed.since#4 — сорвался сегодня, и счётчику нечего '
+            'показывать');
+    expect(find.text('1'), findsOneWidget,
+        reason: 'computed.abstinence-screen#4 — а про один срыв карточке есть '
+            'что сказать, и она говорит');
+  });
+
+  testWidgets('nought days lived through is not a record yet', (tester) async {
+    // Соседняя странность того же места: у привычки, заведённой сегодня и не
+    // сорвавшейся, единственная серия длится ноль суток, лучшая равна нулю —
+    // и человек, продержавшийся ноль дней, читал «рекорд».
+    await pumpOverview(tester, committedFrom: today, lapses: const []);
+
+    expect(find.text('рекорд'), findsNothing,
+        reason: 'computed.streak#12 — ноль прожитых суток рекордом не бывает');
+    expect(find.textContaining('от рекорда'), findsNothing,
+        reason: 'computed.streak#12 — и доли от него нет: делить не на что');
+  });
+
   testWidgets('the button is here, because it has nowhere else to be',
       (tester) async {
     await pumpOverview(tester, committedFrom: today - 40, lapses: const []);

@@ -114,6 +114,44 @@ void main() {
             'разойдись они на день, рекорд оказался бы чужим');
   });
 
+  test('#12 a habit begun and broken on one day leaves no record at all', () {
+    // Самый короткий путь к пустоте, и обычный: день обязательства по
+    // умолчанию есть сегодняшний, окно серий равно [обязательство, сегодня],
+    // и срыв выбрасывает из него единственный день. Серий не остаётся ни
+    // одной, а карточка спрашивала у пустоты и долю, и слово вместо неё.
+    final AbstinenceStreaks s = abstinenceStreaksOf(
+        makeHabit(committedFrom: 9000, lapses: <int>[9000]));
+
+    expect(s.bestDays, isNull,
+        reason: 'computed.streak#12 — серий нет вовсе, и лучшей среди них не '
+            'заводится');
+    expect(s.hasRecord, isFalse,
+        reason: 'computed.streak#12 — сравнивать не с чем');
+    expect(s.currentIsBest, isFalse,
+        reason: 'computed.streak#12 — нечему быть рекордом');
+    expect(s.shareOfBest, isNull,
+        reason: 'computed.streak#12 — и доли от него нет: делить не на что');
+  });
+
+  test('#12 nought days lived through is not a record', () {
+    // Привычка, заведённая сегодня и не сорвавшаяся: серия одна, и длится
+    // она ноль суток. Рекорд, равный нулю, поздравлял продержавшегося
+    // нисколько.
+    final AbstinenceStreaks s = abstinenceStreaksOf(makeHabit(
+      committedFrom: 9000,
+    ));
+
+    expect(s.currentDays, 0,
+        reason: 'computed.streak#8 — сегодняшний день ещё идёт');
+    expect(s.bestDays, 0,
+        reason: 'computed.streak#12 — серия есть, а прожитых суток в ней нет');
+    expect(s.hasRecord, isFalse,
+        reason: 'computed.streak#12 — ноль суток рекордом не бывает');
+    expect(s.currentIsBest, isFalse,
+        reason: 'computed.streak#12 — и «рекорд» человеку, продержавшемуся '
+            'нисколько, читать нечего');
+  });
+
   test('#11 a lapse today leaves the counter at nothing', () {
     final AbstinenceStreaks s = abstinenceStreaksOf(
         makeHabit(committedFrom: 8960, lapses: <int>[9000]));
