@@ -1682,6 +1682,12 @@ abstract class L10n {
   /// **'Undo today'**
   String get abstinenceUndoToday;
 
+  /// The subtitle's goal line for an abstinence habit with no allowance: the promise in words, in place of the ported arrow-and-number.
+  ///
+  /// In en, this message translates to:
+  /// **'Not once'**
+  String get abstinenceGoalNever;
+
   /// Caption over the field where the amount of a lapse is typed. States the promise the number is measured against, so the question is not a bare box. The unit is the person's own word, entered in the editor, and is inserted verbatim.
   ///
   /// In en, this message translates to:

@@ -877,6 +877,9 @@ class L10nMl extends L10n {
   String get abstinenceUndoToday => 'Undo today';
 
   @override
+  String get abstinenceGoalNever => 'Not once';
+
+  @override
   String abstinenceAmountPrompt(String allowance, String unit) {
     return 'No more than $allowance $unit a day';
   }

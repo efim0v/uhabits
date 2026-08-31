@@ -302,4 +302,32 @@ void main() {
         findsOneWidget,
         reason: 'computed.abstinence-screen#4');
   });
+
+  testWidgets('the goal says what is promised, not which way the arrow points',
+      (tester) async {
+    final int today = getToday().daysSince2000;
+    final Habit habit = addAbstinence(committedFrom: today - 40);
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ни разу'), findsOneWidget,
+        reason: 'computed.abstinence-screen#12 — обещание словами');
+    expect(find.text('Каждый день'), findsNothing,
+        reason: 'computed.abstinence-screen#12 — частота у воздержания есть '
+            'подробность устройства, а не цель');
+  });
+
+  testWidgets('an allowance is quoted the way it was asked', (tester) async {
+    final int today = getToday().daysSince2000;
+    final Habit habit =
+        addAbstinence(committedFrom: today - 40, allowance: 30, unit: 'минут');
+
+    await tester.pumpWidget(wrap(habit));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Не более 30 минут в день'), findsOneWidget,
+        reason: 'computed.abstinence-screen#12 — одна формулировка, один '
+            'смысл: та же фраза стоит в вопросе о величине');
+  });
 }

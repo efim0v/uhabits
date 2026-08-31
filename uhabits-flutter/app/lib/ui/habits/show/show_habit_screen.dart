@@ -62,6 +62,8 @@ import '../../common/dialogs/number_dialog.dart';
 import '../../common/show_message.dart' as messages;
 import '../../common/window_insets.dart';
 import '../../theme/app_theme.dart' show coreThemeOf;
+import '../abstinence/abstinence_amount_dialog.dart'
+    show abstinenceAmountPrompt;
 import '../abstinence/abstinence_button_view.dart' show isAbstinenceLapseDay;
 import '../abstinence/abstinence_gestures.dart';
 import '../abstinence/abstinence_overview.dart' show AbstinenceOverviewCard;
@@ -250,6 +252,15 @@ class _ShowHabitView extends StatefulWidget {
   @override
   State<_ShowHabitView> createState() => _ShowHabitViewState();
 }
+
+/// `fa_ban` — U+F05E, a crossed-out circle. The same private-use range and
+/// the same bundled face (`core.FontAssets.fontAwesomeFamily`) every other
+/// glyph on this screen draws from — `core.FontAwesome` just never named it,
+/// because upstream's own `res/values/fontawesome.xml` lists it commented
+/// out, never drawn by the original app. A promise with no direction needs
+/// an icon the ported vocabulary has no word for
+/// (`computed.abstinence-screen#12`).
+const String banGlyph = '\u{f05e}';
 
 class _ShowHabitViewState extends State<_ShowHabitView>
     with WidgetsBindingObserver
@@ -888,6 +899,22 @@ class _ShowHabitViewState extends State<_ShowHabitView>
         ' → ${formatDeviceTime(context, minuteOfDay: goal.wakeMinutes)}';
   }
 
+  /// Обещание воздержания словами.
+  ///
+  /// При ненулевом допуске — дословно та фраза, какой у человека спрашивают
+  /// величину: одна формулировка, один смысл. Строит её
+  /// [abstinenceAmountPrompt] — та же функция, которой собран `prompt` в
+  /// `toggleLapseDay`, — а не вторая копия того же текста.
+  String? _abstinenceGoalText(BuildContext context) {
+    final core.HabitDefinition? definition = _abstinenceDefinition;
+    if (definition == null) return null;
+    final L10n l10n = L10n.of(context);
+    if (core.abstinenceAllowanceOf(definition) <= 0) {
+      return l10n.abstinenceGoalNever;
+    }
+    return abstinenceAmountPrompt(l10n, definition);
+  }
+
   /// The ported cards a sleep habit shows *above* its own blocks.
   ///
   /// A sleep habit is still a habit, and the first things a person looks for
@@ -1049,7 +1076,11 @@ class _ShowHabitViewState extends State<_ShowHabitView>
           theme: state.theme,
           child: SubtitleCardView(
             state: state.subtitle,
-            targetOverride: _sleepTargetText(context),
+            targetOverride:
+                _abstinenceGoalText(context) ?? _sleepTargetText(context),
+            targetIconOverride:
+                _abstinenceDefinition == null ? null : banGlyph,
+            showsFrequency: _abstinenceDefinition == null,
           ),
         );
       case ShowHabitCard.notes:

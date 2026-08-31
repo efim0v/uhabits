@@ -240,6 +240,7 @@
   "abstinenceLastLapse": "Последний срыв: {date}",
   "abstinenceLapseToday": "Отметить срыв",
   "abstinenceUndoToday": "Отменить срыв",
+  "abstinenceGoalNever": "Ни разу",
   "abstinenceAmountPrompt": "Не более {allowance} {unit} в день",
   "abstinenceAmountPromptNoUnit": "Не более {allowance} в день",
   "abstinenceDurationYears": "{count, plural, one{{count} год} few{{count} года} many{{count} лет} other{{count} года}}",

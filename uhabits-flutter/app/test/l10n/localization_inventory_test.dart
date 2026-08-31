@@ -791,14 +791,14 @@ void main() {
                 'named by a prefix rather than by accident');
       }
       expect(extension.where((String k) => k.startsWith('abstinence')).length,
-          23,
+          24,
           reason: 'platform-glue.localization-inventory#4 (deviation) — the '
-              'abstinence kind adds exactly twenty-three strings: eight in '
-              'the editor, four on the list cell and the habit screen, two '
+              'abstinence kind adds exactly twenty-four strings: eight in '
+              'the editor, five on the list cell and the habit screen, two '
               'over the field where a lapse amount is typed, five in the '
               'duration phrase the counter reads aloud, and four on the '
               'overview card that name the two shares and the lapse count. '
-              'A twenty-fourth that nobody declared would be one nobody '
+              'A twenty-fifth that nobody declared would be one nobody '
               'translated');
     });
 

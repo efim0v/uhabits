@@ -44,8 +44,10 @@ import '../../edit/edit_habit_screen.dart' show formatFrequency;
 class SubtitleCardView extends StatelessWidget {
   const SubtitleCardView({
     this.targetOverride,
+    this.targetIconOverride,
     required this.state,
     this.use24HourFormat,
+    this.showsFrequency = true,
     super.key,
   });
 
@@ -59,6 +61,20 @@ class SubtitleCardView extends StatelessWidget {
   /// under the question, on a screen full of percentages. A sleep habit puts
   /// its real goal there instead.
   final String? targetOverride;
+
+  /// Значок вместо портированного, когда обещание рисуется не стрелкой.
+  ///
+  /// Стрелка «не больше» отвечает на вопрос «в какую сторону цель», а
+  /// воздержание обещает «ни разу»: у обещания нет стороны
+  /// (`computed.abstinence-screen#12`).
+  final String? targetIconOverride;
+
+  /// Показывать ли частоту.
+  ///
+  /// У воздержания частота прибита к суточной ради арифметики деления
+  /// пополам и потому есть подробность устройства, а не цель. Форма её тоже
+  /// не показывает.
+  final bool showsFrequency;
 
   /// Stands in for `DateFormat.getTimeFormat(context)`, which follows the
   /// system 12h/24h setting. Defaults to
@@ -133,7 +149,7 @@ class SubtitleCardView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: <Widget>[
                     Text(
-                      state.targetIconGlyph,
+                      targetIconOverride ?? state.targetIconGlyph,
                       key: targetIconKey,
                       style: iconStyle.copyWith(fontSize: targetIconFontSize),
                     ),
@@ -161,27 +177,28 @@ class SubtitleCardView extends StatelessWidget {
                   ],
                 ),
               // `android:layout_marginEnd="16dp"` is the Wrap's own spacing.
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  Text(
-                    SubtitleCardState.frequencyIconGlyph,
-                    key: frequencyIconKey,
-                    style: iconStyle,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    formatFrequency(
-                      state.frequency.numerator,
-                      state.frequency.denominator,
-                      l10n,
+              if (showsFrequency)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      SubtitleCardState.frequencyIconGlyph,
+                      key: frequencyIconKey,
+                      style: iconStyle,
                     ),
-                    key: frequencyLabelKey,
-                    style: captionStyle,
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 4),
+                    Text(
+                      formatFrequency(
+                        state.frequency.numerator,
+                        state.frequency.denominator,
+                        l10n,
+                      ),
+                      key: frequencyLabelKey,
+                      style: captionStyle,
+                    ),
+                  ],
+                ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
