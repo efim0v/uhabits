@@ -1900,9 +1900,13 @@ git commit -m "Say a duration the way a person says it"
 
 ```dart
   testWidgets('the counter, the ring and the two shares', (tester) async {
-    await pumpOverview(tester, committedFrom: today - 40, lapses: const []);
+    // Двадцать дней, а не сорок: счётчик считает календарно, и всякий отрезок
+    // длиннее самого длинного месяца обязан пересечь месяц. Сорок дней он
+    // прочитает как «1 месяц 9 дней», и проверка на «40 дней» невыполнима
+    // арифметически, а не просто неудачна.
+    await pumpOverview(tester, committedFrom: today - 20, lapses: const []);
 
-    expect(find.text('40 дней'), findsOneWidget,
+    expect(find.textContaining('20 дней'), findsOneWidget,
         reason: 'computed.abstinence-screen#11 — счётчик крупно и сверху');
     expect(find.byType(RingView), findsOneWidget,
         reason: 'computed.abstinence-screen#11 — уровень кольцом');
@@ -1919,10 +1923,15 @@ git commit -m "Say a duration the way a person says it"
     await pumpOverview(tester,
         committedFrom: today - 40, lapses: <int>[today - 20, today - 10]);
 
-    expect(find.textContaining('от рекорда'), findsOneWidget,
-        reason: 'computed.streak#10');
-    expect(find.textContaining('от прошлой серии'), findsOneWidget,
-        reason: 'computed.streak#10');
+    // Наличия подписей мало: с ними проверка проходит и тогда, когда доли
+    // посчитаны по включительной длине вместо прошедших суток. Проверяются
+    // числа. Текущая серия идёт десять дней, лучшая длилась двадцать, прошлая
+    // — десять: доля от рекорда пятьдесят процентов, от прошлой сто.
+    expect(find.textContaining('50%'), findsOneWidget,
+        reason: 'computed.streak#10 — доля от рекорда считается прошедшими '
+            'сутками, теми же, какими считает карточка серий');
+    expect(find.textContaining('100%'), findsOneWidget,
+        reason: 'computed.streak#10 — доля от прошлой попытки');
   });
 
   testWidgets('the button is here, because it has nowhere else to be',
@@ -2188,9 +2197,11 @@ git commit -m "Give the overview the numbers a person opens it for"
 ```dart
   testWidgets('the counter shows once, and it shows in the overview',
       (tester) async {
-    await pumpAbstinenceScreen(tester, committedFrom: today - 40);
+    // Двадцать дней, а не сорок: сорокадневный отрезок счётчик прочитает
+    // календарно, как «1 месяц 9 дней».
+    await pumpAbstinenceScreen(tester, committedFrom: today - 20);
 
-    expect(find.text('40 дней'), findsOneWidget,
+    expect(find.textContaining('20 дней'), findsOneWidget,
         reason: 'computed.abstinence-screen#11 — одно число в одном месте');
     expect(
       tester.getRect(find.byType(AbstinenceOverviewCard)).top,
