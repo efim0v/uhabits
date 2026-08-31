@@ -105,8 +105,9 @@ void main() {
       lessThan(tester
           .getRect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.score)))
           .top),
-      reason: 'computed.abstinence-screen#3 — Overview стоит в том же шве, '
-          'что и блоки сна',
+      reason: 'computed.abstinence-screen#3 — Overview занимает портированный '
+          'слот целиком и потому стоит до `score`, там же, где у обычной '
+          'привычки стоит кольцо',
     );
   });
 
