@@ -32,7 +32,7 @@ class HistoryCardState {
     required this.notesIndicators,
     required this.theme,
     required this.today,
-    this.intensities = const <double>[],
+    this.intensities = const <double?>[],
   });
 
   final PaletteColor color;
@@ -48,14 +48,18 @@ class HistoryCardState {
   final List<bool> notesIndicators;
 
   /// Not upstream. How strongly each day of [series] should be coloured, in
-  /// `[0, 1]`, parallel to it.
+  /// `[0, 1]`, parallel to it. A day can be `null` inside a non-empty list:
+  /// that day gets no shade, whichever of the two squares it is.
   ///
   /// Empty for every habit the original knows, and an empty list is read as
   /// "paint exactly as before" — so nothing about the ported calendar changes
-  /// unless something asks it to. A sleep habit fills it, because its days are
-  /// a percentage and the original's two answers, "met the target" and "did
-  /// not", discard everything that percentage says.
-  final List<double> intensities;
+  /// unless something asks it to. A sleep habit fills every day, because its
+  /// nights are a percentage and the original's two answers, "met the
+  /// target" and "did not", discard everything that percentage says.
+  /// Abstinence fills every day but a lapse: `Square.grey` there already
+  /// means the ported contrast60, and a shade would blend it towards the
+  /// habit's own colour, which is a lapse in name only.
+  final List<double?> intensities;
 
   final Theme theme;
 
@@ -212,11 +216,12 @@ class HistoryCardPresenter extends OnDateClickedListener {
   }
 
   /// [intensityOf] is not upstream: given a day's entry it answers how
-  /// strongly that day should be coloured, in `[0, 1]`. Null for every habit
-  /// the original knows, which leaves [HistoryCardState.intensities] empty and
-  /// the calendar painted exactly as before. The mapping itself is deliberately
-  /// not decided here — what a value is worth is the habit's business, not the
-  /// calendar's.
+  /// strongly that day should be coloured, in `[0, 1]`, or `null` for a day
+  /// that gets no shade at all. Null for every habit the original knows,
+  /// which leaves [HistoryCardState.intensities] empty and the calendar
+  /// painted exactly as before. The mapping itself is deliberately not
+  /// decided here — what a value is worth, and whether a day gets one at
+  /// all, is the habit's business, not the calendar's.
   ///
   /// [squareOf] is not upstream either, and it is the same idea one step
   /// further: given a day's entry it answers which of the five squares that
@@ -236,7 +241,7 @@ class HistoryCardPresenter extends OnDateClickedListener {
     required Habit habit,
     required DayOfWeek firstWeekday,
     required Theme theme,
-    double Function(Entry)? intensityOf,
+    double? Function(Entry)? intensityOf,
     Square Function(Entry)? squareOf,
     LocalDate? oldestDay,
   }) {
@@ -288,8 +293,8 @@ class HistoryCardPresenter extends OnDateClickedListener {
 
     // Built from the same list, in the same order, so a cell and its shade
     // cannot come apart.
-    final List<double> intensities = intensityOf == null
-        ? const <double>[]
+    final List<double?> intensities = intensityOf == null
+        ? const <double?>[]
         : entries.map(intensityOf).toList();
 
     return HistoryCardState(

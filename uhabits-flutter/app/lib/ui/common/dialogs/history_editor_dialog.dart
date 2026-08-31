@@ -226,9 +226,10 @@ class HistoryEditorDialog extends StatefulWidget {
   /// `refreshData()`'s call into the core presenter.
   ///
   /// The theme is hardcoded to `LightTheme()` upstream, in every app theme —
-  /// a wart that costs nothing, since only the series, the default square and
-  /// the notes indicators are read back out of the state; the chart keeps
-  /// rendering with the real theme (`history-editor.dialog#7`).
+  /// a wart that costs nothing, since only the series, the default square,
+  /// the notes indicators and the intensities are read back out of the
+  /// state; the chart keeps rendering with the real theme
+  /// (`history-editor.dialog#7`).
   static HistoryCardState buildState({
     required core.Habit habit,
     required Preferences preferences,
@@ -244,6 +245,7 @@ class HistoryEditorDialog extends StatefulWidget {
       // (`computed.abstinence-screen#10`).
       squareOf: abstinenceSquareOf(habit),
       oldestDay: abstinenceOldestDay(habit),
+      intensityOf: abstinenceIntensityOf(habit),
     );
   }
 
@@ -340,8 +342,13 @@ class _HistoryEditorDialogState extends State<HistoryEditorDialog>
   @override
   void refresh() => _refreshData();
 
-  /// `refreshData()`: rebuild the state, push the three data fields into the
-  /// live chart and invalidate.
+  /// `refreshData()`: rebuild the state, push the data fields into the live
+  /// chart and invalidate.
+  ///
+  /// `intensities` is a fourth field, not upstream: empty for every habit
+  /// `buildState` leaves it empty for, so a habit that never asked for a
+  /// shade keeps painting exactly as `series` and `defaultSquare` alone
+  /// describe it.
   void _refreshData({bool notify = true}) {
     final chart = _chart;
     if (chart == null) return;
@@ -352,6 +359,7 @@ class _HistoryEditorDialogState extends State<HistoryEditorDialog>
     chart.series = model.series;
     chart.defaultSquare = model.defaultSquare;
     chart.notesIndicators = model.notesIndicators;
+    chart.intensities = model.intensities;
     // `dataView.postInvalidate()`.
     if (notify && mounted) setState(() {});
   }

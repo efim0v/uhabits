@@ -45,7 +45,7 @@ class HistoryChart extends DataView {
     required this.notesIndicators,
     required this.theme,
     required this.today,
-    this.intensities = const <double>[],
+    this.intensities = const <double?>[],
     this.onDateClickedListener = const _NoOpOnDateClickedListener(),
     this.padding = 0.0,
   });
@@ -62,8 +62,13 @@ class HistoryChart extends DataView {
   /// [Square.grey] — the two the target decides between.
   ///
   /// Empty means "as the original paints it", which is every habit but a sleep
-  /// habit.
-  List<double> intensities;
+  /// habit. A day can also carry `null` of its own, inside a non-empty list:
+  /// that day has no shade regardless of which of the two squares it is, and
+  /// paints exactly as [Square.on] or [Square.grey] always did. Abstinence
+  /// needs both answers side by side — a lapse is [Square.grey] and stays flat
+  /// [Theme.mediumContrastTextColor], never blended towards the habit colour,
+  /// while every other day still climbs.
+  List<double?> intensities;
 
   Theme theme;
   LocalDate today;

@@ -171,15 +171,15 @@ void main() {
   }
 
   /// Яркость каждого дня сетки, `[0]` — сегодня, тем же порядком, что и у
-  /// `chart.series` (`computed.abstinence-screen#13`).
-  List<double> intensitiesOf(WidgetTester tester) =>
+  /// `chart.series` (`computed.abstinence-screen#13`). `null` на дне —
+  /// не низкая яркость, а её отсутствие: свой признак у дня срыва
+  /// (`computed.abstinence-cell#2`).
+  List<double?> intensitiesOf(WidgetTester tester) =>
       cardChart(tester).intensities;
 
-  /// Цвет клетки данного дня, независимо от яркости.
-  Square squareAt(WidgetTester tester, int day) {
-    final HistoryChart chart = cardChart(tester);
-    return chart.series[getToday().daysSince2000 - day];
-  }
+  /// Смещение дня в сетке — `chart.series[0]` и `chart.intensities[0]` есть
+  /// сегодня, и оба индексируются одним и тем же вычитанием.
+  int offsetOf(int day) => getToday().daysSince2000 - day;
 
   testWidgets('computed.abstinence-screen#6 тап по дню записывает срыв, а не '
       'открывает число', (tester) async {
@@ -447,26 +447,51 @@ void main() {
 
   testWidgets('the grid brightens along the stretch', (tester) async {
     final int today = getToday().daysSince2000;
+    final int lapseDay = today - 30;
     await pumpAbstinenceCalendar(tester,
-        committedFrom: today - 60, lapses: <int>[today - 30]);
+        committedFrom: today - 60, lapses: <int>[lapseDay]);
 
-    final List<double> shades = intensitiesOf(tester);
+    final List<double?> shades = intensitiesOf(tester);
 
-    expect(shades[0], greaterThan(shades[29]),
+    expect(shades[0], greaterThan(shades[29]!),
         reason: 'computed.abstinence-screen#13 — сегодня ярче, чем день '
-            'после срыва: видно, как шёл');
-    expect(shades[30], lessThan(shades[29]),
-        reason: 'computed.abstinence-screen#13 — в день срыва провал, и он '
-            'виден');
+            'после срыва: виден путь наверх');
+    expect(shades[offsetOf(lapseDay)], isNull,
+        reason: 'computed.abstinence-screen#13 — в день срыва провал: '
+            'яркости у него нет вовсе (computed.abstinence-cell#2)');
   });
 
   testWidgets('a lapsed day keeps its own square', (tester) async {
     final int today = getToday().daysSince2000;
+    final int lapseDay = today - 30;
     await pumpAbstinenceCalendar(tester,
-        committedFrom: today - 60, lapses: <int>[today - 30]);
+        committedFrom: today - 60, lapses: <int>[lapseDay]);
 
-    expect(squareAt(tester, today - 30), Square.grey,
-        reason: 'computed.abstinence-cell#2 — яркость не перекрашивает срыв '
-            'в чистый день');
+    final HistoryChart chart = cardChart(tester);
+    expect(chart.intensities[offsetOf(lapseDay)], isNull,
+        reason: 'computed.abstinence-cell#2 — у дня срыва яркости нет вовсе, '
+            'и потому он остаётся ровным contrast60, а не смешивается к '
+            'цвету привычки');
+  });
+
+  testWidgets('the calendar editor brightens too, paired with the card '
+      'behind it', (tester) async {
+    final int today = getToday().daysSince2000;
+    final int lapseDay = today - 30;
+    await pumpAbstinenceCalendar(tester,
+        committedFrom: today - 60, lapses: <int>[lapseDay]);
+
+    final List<double?> cardShades = cardChart(tester).intensities;
+
+    await tester.ensureVisible(find.byKey(HistoryCardView.editButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(HistoryCardView.editButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(HistoryEditorDialog.current!.chart!.intensities, cardShades,
+        reason: 'the editor redraws the same grid the card does — a shade '
+            'wired into only one of buildState\'s two callers would show '
+            'up on one and not the other, exactly the split the card and '
+            'editor already refuse for Square (computed.abstinence-screen#10)');
   });
 }

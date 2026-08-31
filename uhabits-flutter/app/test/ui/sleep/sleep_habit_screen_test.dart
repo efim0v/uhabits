@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:uhabits/l10n/app_localizations.dart';
 import 'package:uhabits/state/app_scope.dart';
+import 'package:uhabits/ui/common/scrollable_chart.dart';
+import 'package:uhabits/ui/habits/show/cards/history_card_view.dart';
 import 'package:uhabits/ui/habits/show/cards/subtitle_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
 import 'package:uhabits/ui/habits/sleep/last_night_card.dart';
@@ -16,6 +18,7 @@ import 'package:uhabits/ui/habits/sleep/nights_chart.dart';
 import 'package:uhabits/ui/habits/sleep/stability_card.dart';
 import 'package:uhabits_core/src/tasks/task_runner.dart';
 import 'package:uhabits_core/src/time/date_utils.dart' as core_time;
+import 'package:uhabits_core/src/ui/views/history_chart.dart' show HistoryChart;
 import 'package:uhabits/state/show_habit_model.dart';
 import 'package:uhabits_core/uhabits_core.dart';
 
@@ -89,6 +92,46 @@ void main() {
       expect(find.byType(NightsChart), findsOneWidget, reason: 'sleep.ui#3');
       expect(find.byType(StabilityCard), findsOneWidget,
           reason: 'sleep.stability#1');
+    });
+
+    // `nights_chart_test.dart` pumps `NightsChart` on its own, with fixtures
+    // it builds by hand — never the real screen, never a night that went
+    // through `ShowHabitModel._rebuild()`. A mutation that severed
+    // `intensityOf` from a sleep habit entirely left every one of those
+    // tests green, because none of them ever asks the glue for anything. This
+    // one does: it reads the Calendar card's own `HistoryChart` off the live
+    // tree the screen actually built.
+    testWidgets(
+        'shades a known night on the calendar card exactly as cellIntensityOf '
+        'says', (tester) async {
+      final Habit habit = addHabit(name: 'Sleep', sleep: true);
+      // A night in the middle of the scale, not at either end — the one
+      // range a bug in the wiring, as opposed to the formula, has room to
+      // miss.
+      const int storedValue = 62000;
+      const int night = 8999;
+      habit.originalEntries.add(Entry(LocalDate(night), storedValue));
+      habit.recompute();
+
+      await tester.pumpWidget(wrap(habit));
+      await tester.pumpAndSettle();
+
+      final HistoryChart chart = tester
+          .widget<ScrollableChart>(find.descendant(
+            of: find.byType(HistoryCardView),
+            matching: find.byType(ScrollableChart),
+          ))
+          .view as HistoryChart;
+
+      // `series[0]`/`intensities[0]` is today; any other day's offset is the
+      // same subtraction the abstinence calendar's own tests use, read fresh
+      // rather than assumed, since the screen can move `getToday()` on its
+      // own while mounting.
+      final int offset = getToday().daysSince2000 - night;
+      expect(chart.intensities[offset], cellIntensityOf(storedValue),
+          reason: 'sleep.calendar#1 — the real screen has to shade a known '
+              'night with the same number cellIntensityOf gives it, read '
+              'off the chart the screen itself built, not a synthetic one');
     });
 
     testWidgets('says what the goal is where the target figure would go',

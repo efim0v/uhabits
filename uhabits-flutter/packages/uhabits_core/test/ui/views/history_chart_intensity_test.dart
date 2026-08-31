@@ -26,7 +26,7 @@ import 'history_chart_test.dart' show CanvasOp, RecordingCanvas, TestDateFormatt
 Color fillFor({
   required Theme theme,
   required List<Square> series,
-  required List<double> intensities,
+  required List<double?> intensities,
 }) {
   final HistoryChart chart = HistoryChart(
     dateFormatter: const TestDateFormatter(),
@@ -140,6 +140,26 @@ void main() {
       ),
       theme.mediumContrastTextColor,
       reason: 'sleep.calendar#3 — every habit the original knows is untouched',
+    );
+  });
+
+  test('a day carrying null keeps its plain colour even inside a shaded list',
+      () {
+    // Abstinence fills a shade for every day but a lapse, where the list
+    // carries `null` at that one offset. A lapse is `Square.grey`, the very
+    // value the blend above reaches for — so this is the one case the blend
+    // must decline, not merely a day nobody happened to ask about.
+    final Theme theme = DarkTheme();
+    expect(
+      fillFor(
+        theme: theme,
+        series: <Square>[Square.grey],
+        intensities: const <double?>[null],
+      ),
+      theme.mediumContrastTextColor,
+      reason: 'computed.abstinence-cell#2 — a lapse carries no shade of its '
+          'own, so it stays the flat contrast60 the original always painted '
+          'it, not a blend towards the habit colour',
     );
   });
 }

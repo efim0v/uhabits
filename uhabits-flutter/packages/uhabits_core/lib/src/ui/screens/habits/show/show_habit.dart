@@ -152,7 +152,7 @@ class ShowHabitPresenter {
     required Habit habit,
     required Preferences preferences,
     required Theme theme,
-    double Function(Entry)? intensityOf,
+    double? Function(Entry)? intensityOf,
     bool Function(Entry)? countsTowardsTotal,
     Square Function(Entry)? squareOf,
     LocalDate? oldestDay,

@@ -75,10 +75,24 @@ Square Function(core.Entry)? abstinenceSquareOf(core.Habit habit) {
 /// Яркость дня в сетке, или null — красить как порт.
 ///
 /// Яркость дня есть оценка в этот день: кольцо, сетка и уровень — одна кривая,
-/// показанная тремя способами (`computed.abstinence-screen#13`).
-double Function(core.Entry)? abstinenceIntensityOf(core.Habit habit) {
-  if (abstinenceCommitmentOf(habit) == null) return null;
-  return (core.Entry entry) => habit.scores[entry.date].value;
+/// показанная тремя способами (`computed.abstinence-screen#13`). У дня срыва
+/// яркости нет вовсе — не ноль, а `null`: `Square.grey` там уже есть
+/// contrast60 (`computed.abstinence-screen#10`), а смешивание к цвету
+/// привычки читалось бы как «наполовину сорвался». Судья тот же
+/// `abstinenceCellOf`, что красит день срыва серым, второго не заводится
+/// (`computed.abstinence-cell#2`).
+double? Function(core.Entry)? abstinenceIntensityOf(core.Habit habit) {
+  final core.HabitDefinition? definition = abstinenceCommitmentOf(habit);
+  if (definition == null) return null;
+  return (core.Entry entry) {
+    final AbstinenceCell cell = abstinenceCellOf(
+      definition: definition,
+      storedValue: entry.value,
+      day: entry.date.daysSince2000,
+    );
+    if (cell == AbstinenceCell.lapse) return null;
+    return habit.scores[entry.date].value;
+  };
 }
 
 /// Сколько дней показывать за серию, или null — считать как порт.
