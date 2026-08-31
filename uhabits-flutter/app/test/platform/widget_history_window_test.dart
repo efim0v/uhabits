@@ -298,6 +298,60 @@ void main() {
       expect(series[40], '0',
           reason: 'computed.abstinence-screen#10 — день обещания уже под ним');
     });
+
+    test('computed.streak#6 the streak a widget publishes carries the number '
+        'the screen prints', () async {
+      // До правки документ нёс включительный счёт, а экран после задачи 8 —
+      // прошедшие сутки: у одной и той же идущей серии виджет писал «41», а
+      // карточка на экране — «40». Число это рисует страница «Серии» внутри
+      // стопки (`StackWidgetService.constructWidget`), чей выбор привычек
+      // числовых не прячет, — в отличие от одиночного виджета серий, чей
+      // выбор их прячет на обеих платформах (`widgets.config-picker#4`).
+      final Habit habit = fixtures.createEmptyNumericalHabit(
+        NumericalHabitType.atMost,
+      );
+      habit.targetValue = 0.0;
+      habit.definition = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: today.minus(40).daysSince2000,
+      );
+      habitList.add(habit);
+      habit.recompute();
+      registry.addWidget(7, <int>[habit.id!]);
+      await bridge.publish();
+
+      final Map<String, Object?> streak =
+          (habitOfWidget(7)['streaks']! as List<Object?>).single
+              as Map<String, Object?>;
+
+      expect(streak['length'], 40,
+          reason: 'computed.streak#6 — сорок прожитых суток, столько же, '
+              'сколько печатает карточка серий');
+      expect(streak['end'], HomeWidgetBridge.formatDate(today),
+          reason: 'computed.streak#6 — а конец у серии настоящий: сегодня, не '
+              'вчера');
+      expect(streak['start'],
+          HomeWidgetBridge.formatDate(today.minus(40)),
+          reason: 'computed.streak#6 — и начало то же, что у счётчика: серия '
+              'одна');
+    });
+
+    test('computed.streak#6 an ordinary habit keeps the ported count',
+        () async {
+      // Шов пустой у всякой привычки, которую знает оригинал, и число там
+      // остаётся включительным: пятнадцать галочек есть пятнадцать,
+      // сегодняшняя в их числе.
+      final Habit habit = longHabit(days: 10);
+      registry.addWidget(7, <int>[habit.id!]);
+      await bridge.publish();
+
+      final List<Object?> streaks =
+          habitOfWidget(7)['streaks']! as List<Object?>;
+
+      expect((streaks.first as Map<String, Object?>)['length'], 10,
+          reason: 'computed.streak#6 — десять отмеченных дней есть десять, и '
+              'портированную арифметику это правило не трогает');
+    });
   });
 
   // =======================================================================

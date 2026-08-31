@@ -680,6 +680,11 @@ class HomeWidgetBridge {
       squareOf: abstinenceSquareOf(habit),
       oldestDay: abstinenceOldestDay(habit),
     );
+    // Тот же шов, каким число получает карточка серий на экране привычки:
+    // у воздержания длина серии есть прошедшие полные сутки, у всякой другой
+    // привычки — портированный включительный счёт (`computed.streak#8`).
+    // Null здесь и есть «считать как порт».
+    final int Function(Streak)? streakLength = abstinenceStreakLengthOf(habit);
     final int historyLength =
         historyCard.series.length < historyDayCount
             ? historyCard.series.length
@@ -755,12 +760,17 @@ class HomeWidgetBridge {
       ],
       'bucketSize': scoreCard.bucketSize,
       // `widgets.streak#3`: `habit.streaks.getBest(n)`, over the whole history.
+      // Число внутри полосы — то же, что печатает карточка серий на экране:
+      // документ не вправе нести два ответа об одной серии
+      // (`computed.streak#6`). Сама серия при этом остаётся собой, с
+      // настоящими началом и концом.
       'streaks': <Object?>[
         for (final Streak streak in habit.streaks.getBest(streakCount))
           <String, Object?>{
             'start': formatDate(streak.start),
             'end': formatDate(streak.end),
-            'length': streak.length,
+            'length':
+                streakLength == null ? streak.length : streakLength(streak),
           },
       ],
       // `widgets.frequency#3`, `#5`: the ORIGINAL entries — the user's own

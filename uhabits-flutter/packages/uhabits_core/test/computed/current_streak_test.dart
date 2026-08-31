@@ -1,6 +1,7 @@
 import 'package:test/test.dart';
 import 'package:uhabits_core/src/computed/days_without_lapse.dart';
 import 'package:uhabits_core/src/computed/habit_definition.dart';
+import 'package:uhabits_core/src/computed/streak_duration.dart';
 import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/entry_list.dart';
 import 'package:uhabits_core/src/models/frequency.dart';
@@ -213,38 +214,44 @@ void main() {
       expect(daysWithoutLapse(habit), 40, reason: 'computed.streak#4');
     });
 
-    test('#6 the streak card and the counter read one streak, in two units',
-        () {
+    test('#6 the streak card and the counter read one streak, and print one '
+        'number', () {
       // Ревью нашло это на экране: счётчик говорил «10 дней без срыва», а
       // карточка серий под ним — «41 день, до 19 сентября», даты, которой
       // ещё не было. Одна и та же `StreakList` отвечала двоим по-разному,
       // потому что хвост окна в тридцать дней вперёд входил в серию целиком.
       //
-      // Серия у них одна, а единицы разные, и это остаётся так: `length`
-      // считает дни включительно, счётчик — прошедшее время
-      // (`computed.streak#4`), и одиннадцать против десяти — та же
-      // портированная арифметика, что у всякой другой привычки. Правило
-      // говорит «одна серия», а не «одно число».
+      // Карточка строится так же, как её строит экран: со швом длины
+      // (`show_habit_model.dart` подаёт `abstinenceStreakLengthOf`, а он
+      // отдаёт ровно `elapsedDaysOf`). Без шва — то есть в конфигурации,
+      // которой у настоящего воздержания не бывает, — проверка утверждала бы
+      // включительный счёт и стерегла бы поведение, которого больше нет.
       final Habit habit = buildAbstinence(10);
       habit.recompute();
 
-      final StreakCardState card =
-          StreakCartPresenter.buildState(habit, LightTheme());
+      final StreakCardState card = StreakCartPresenter.buildState(
+        habit,
+        LightTheme(),
+        lengthOf: elapsedDaysOf,
+      );
       final Streak shown = card.bestStreaks.first;
 
       expect(shown.end, today,
           reason: 'computed.streak#6 — карточка не вправе показывать дату, '
               'которой ещё не было');
+      expect(card.lengths?.first, 10,
+          reason: 'computed.streak#6 — карточка печатает прожитые сутки, те '
+              'же десять, что и счётчик, а не сорок один и не одиннадцать');
       expect(shown.length, 11,
-          reason: 'computed.streak#6 — одиннадцать прожитых дней, а не сорок '
-              'один; тридцать из них ещё не наступили');
+          reason: 'computed.streak#6 — сама серия при этом остаётся '
+              'портированной и включительной: одиннадцать прожитых дней, а '
+              'не сорок один; тридцать из них ещё не наступили');
       expect(shown.start, today.minus(10),
           reason: 'computed.streak#6 — и начало у карточки то же, что у '
               'счётчика: серия одна');
       expect(daysWithoutLapse(habit), 10,
           reason: 'computed.streak#6 — счётчик читает ту же серию и печатает '
-              'прошедшее время; «11» на карточке и «10» под счётчиком есть '
-              'одна серия в двух единицах, а не два ответа (`#4`)');
+              'то же число: одна серия, один ответ');
     });
 
     test('#6 a lapse still cuts the streak where it happened', () {
