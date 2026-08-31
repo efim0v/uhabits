@@ -947,6 +947,18 @@ class L10nSr extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get abstinenceOfRecord => 'of the record';
+
+  @override
+  String get abstinenceOfPrevious => 'of the previous run';
+
+  @override
+  String get abstinenceIsRecord => 'record';
+
+  @override
+  String get abstinenceLapsesTotal => 'lapses';
 }
 
 /// The translations for Serbian, using the Latin script (`sr_Latn`).

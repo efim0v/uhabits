@@ -509,5 +509,21 @@
         "type": "num"
       }
     }
+  },
+  "abstinenceOfRecord": "of the record",
+  "@abstinenceOfRecord": {
+    "description": "Label beside the current streak's share of the all-time best streak, on the abstinence overview card."
+  },
+  "abstinenceOfPrevious": "of the previous run",
+  "@abstinenceOfPrevious": {
+    "description": "Label beside the current streak's share of the streak that broke right before it, on the abstinence overview card."
+  },
+  "abstinenceIsRecord": "record",
+  "@abstinenceIsRecord": {
+    "description": "Shown instead of a share of the best streak when the current streak already is the best one: a hundred percent of itself is not news, but a record is."
+  },
+  "abstinenceLapsesTotal": "lapses",
+  "@abstinenceLapsesTotal": {
+    "description": "Label beside the total count of lapses, on the abstinence overview card."
   }
 }

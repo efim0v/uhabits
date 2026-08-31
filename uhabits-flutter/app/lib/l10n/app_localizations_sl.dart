@@ -959,4 +959,16 @@ class L10nSl extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get abstinenceOfRecord => 'of the record';
+
+  @override
+  String get abstinenceOfPrevious => 'of the previous run';
+
+  @override
+  String get abstinenceIsRecord => 'record';
+
+  @override
+  String get abstinenceLapsesTotal => 'lapses';
 }

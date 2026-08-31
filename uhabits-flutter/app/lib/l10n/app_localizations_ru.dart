@@ -973,4 +973,16 @@ class L10nRu extends L10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get abstinenceOfRecord => 'от рекорда';
+
+  @override
+  String get abstinenceOfPrevious => 'от прошлой серии';
+
+  @override
+  String get abstinenceIsRecord => 'рекорд';
+
+  @override
+  String get abstinenceLapsesTotal => 'срывов';
 }

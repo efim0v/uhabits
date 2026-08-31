@@ -1735,6 +1735,30 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'{count, plural, =1{{count} minute} other{{count} minutes}}'**
   String abstinenceDurationMinutes(num count);
+
+  /// Label beside the current streak's share of the all-time best streak, on the abstinence overview card.
+  ///
+  /// In en, this message translates to:
+  /// **'of the record'**
+  String get abstinenceOfRecord;
+
+  /// Label beside the current streak's share of the streak that broke right before it, on the abstinence overview card.
+  ///
+  /// In en, this message translates to:
+  /// **'of the previous run'**
+  String get abstinenceOfPrevious;
+
+  /// Shown instead of a share of the best streak when the current streak already is the best one: a hundred percent of itself is not news, but a record is.
+  ///
+  /// In en, this message translates to:
+  /// **'record'**
+  String get abstinenceIsRecord;
+
+  /// Label beside the total count of lapses, on the abstinence overview card.
+  ///
+  /// In en, this message translates to:
+  /// **'lapses'**
+  String get abstinenceLapsesTotal;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {
