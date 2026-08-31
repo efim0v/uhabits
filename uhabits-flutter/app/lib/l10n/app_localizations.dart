@@ -1658,12 +1658,6 @@ abstract class L10n {
   /// **'Committed since'**
   String get abstinenceCommittedFrom;
 
-  /// No description provided for @abstinenceTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Without a lapse'**
-  String get abstinenceTitle;
-
   /// The day the person committed, shown when they have never lapsed.
   ///
   /// In en, this message translates to:

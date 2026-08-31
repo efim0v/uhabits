@@ -868,9 +868,6 @@ class L10nRu extends L10n {
   String get abstinenceCommittedFrom => 'Обязательство с';
 
   @override
-  String get abstinenceTitle => 'Без срывов';
-
-  @override
   String abstinenceSince(String date) {
     return 'С $date';
   }

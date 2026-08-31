@@ -861,9 +861,6 @@ class L10nMl extends L10n {
   String get abstinenceCommittedFrom => 'Committed since';
 
   @override
-  String get abstinenceTitle => 'Without a lapse';
-
-  @override
   String abstinenceSince(String date) {
     return 'Since $date';
   }

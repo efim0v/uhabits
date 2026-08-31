@@ -236,7 +236,6 @@
   "abstinenceAllowanceUnit": "Ед. изм.",
   "abstinenceAllowanceUnitExample": "напр.: минуты",
   "abstinenceCommittedFrom": "Обязательство с",
-  "abstinenceTitle": "Без срывов",
   "abstinenceSince": "С {date}",
   "abstinenceLastLapse": "Последний срыв: {date}",
   "abstinenceLapseToday": "Отметить срыв",
