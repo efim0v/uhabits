@@ -296,12 +296,12 @@ void main() {
             'воздержание ничего не делает');
     expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.frequency)),
         findsNothing,
-        reason: 'computed.abstinence-screen#14 — частота у привычки с '
-            'прибитой частотой не говорит ничего');
+        reason: 'computed.abstinence-screen#14 — частота у воздержания '
+            'ежедневная и другой не бывает, и таблице нечего показывать');
     expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.history)),
         findsOneWidget,
-        reason: 'computed.abstinence-screen#13 — а календарь остаётся, он '
-            'здесь главный');
+        reason: 'computed.abstinence-screen#14 — а календарь остаётся: он '
+            'единственный отвечает на вопрос, ради которого экран открывают');
   });
 
   testWidgets('the goal says what is promised, not which way the arrow points',
