@@ -89,7 +89,7 @@ void main() {
     final habit = makeAbstinence(committedFrom: 8960);
 
     expect(abstinenceSinceMillis(habit, lapses), (8960 + 10957) * 86400000,
-        reason: 'computed.since#4 — день, который человек выбрал сам, с его '
+        reason: 'computed.since#3 — день, который человек выбрал сам, с его '
             'полуночи');
   });
 
@@ -97,6 +97,6 @@ void main() {
     final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[9000]);
 
     expect(abstinenceSinceMillis(habit, lapses), isNull,
-        reason: 'computed.since#5 — сорвался сегодня, считать нечего');
+        reason: 'computed.since#4 — сорвался сегодня, считать нечего');
   });
 }
