@@ -99,4 +99,25 @@ void main() {
     expect(abstinenceSinceMillis(habit, lapses), isNull,
         reason: 'computed.since#4 — сорвался сегодня, считать нечего');
   });
+
+  test(
+      '#6 moving the commitment forward strands a lapse moment before it, '
+      'and the count does not follow it', () {
+    // Срыв на 8989-м, ещё под старым обязательством от 8960-го.
+    final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8989]);
+    const int staleAt =
+        (8989 + 10957) * 86400000 + 9 * 3600000; // 09:00 UTC того дня
+    lapses.save(habit.id!, 8989, amount: 1, atMillis: staleAt);
+
+    // Владелец переносит обязательство на день после того срыва: запись
+    // остаётся в журнале, но окно её больше не видит (`computed.commitment#2`).
+    habit.definition = habit.definition!.copyWith(committedFrom: 8990);
+    habit.recompute();
+
+    expect(abstinenceSinceMillis(habit, lapses), (8990 + 10957) * 86400000,
+        reason: 'computed.commitment#2 — день срыва старше нового дня '
+            'обязательства, значит он вне окна: счётчик идёт от полуночи '
+            'обязательства, а не от мгновения, которое обязательство '
+            'исключило');
+  });
 }

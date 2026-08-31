@@ -22,6 +22,15 @@ import 'lapse_repository.dart';
 ///    считаем от полуночи дня `start` (`computed.since#3`).
 ///
 /// Две последние ветви дают один и тот же ответ, поэтому в коде их одна.
+///
+/// День `start - 1` читается только тогда, когда он не старше дня
+/// обязательства: день обязательства задаёт нижнюю границу окна целиком, в
+/// обе стороны, и запись старше него в окно не входит
+/// (`computed.commitment#2`). Перенос обязательства вперёд оставляет в
+/// журнале срыв, отмеченный до переноса, — его момент по-прежнему лежит в
+/// базе, но серия начинается обязательством, а не им, и считать от него
+/// значило бы тянуть счётчик из-за границы, которую сам человек только что
+/// подвинул.
 int? abstinenceSinceMillis(
   Habit habit,
   LapseRepository lapses, {
@@ -32,8 +41,10 @@ int? abstinenceSinceMillis(
   if (current == null) return null;
 
   final int? id = habit.id;
-  if (id != null) {
-    final int? at = lapses.momentOf(id, current.start.daysSince2000 - 1);
+  final int? committedFrom = habit.definition?.committedFrom;
+  final int lapseDay = current.start.daysSince2000 - 1;
+  if (id != null && (committedFrom == null || lapseDay >= committedFrom)) {
+    final int? at = lapses.momentOf(id, lapseDay);
     if (at != null) return at;
   }
 
