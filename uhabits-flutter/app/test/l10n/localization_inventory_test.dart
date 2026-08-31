@@ -791,12 +791,13 @@ void main() {
                 'named by a prefix rather than by accident');
       }
       expect(extension.where((String k) => k.startsWith('abstinence')).length,
-          16,
+          21,
           reason: 'platform-glue.localization-inventory#4 (deviation) — the '
-              'abstinence kind adds exactly sixteen strings: eight in the '
-              'editor, six on the list cell and the habit screen, and two '
-              'over the field where a lapse amount is typed. A seventeenth '
-              'that nobody declared would be one nobody translated');
+              'abstinence kind adds exactly twenty-one strings: eight in the '
+              'editor, six on the list cell and the habit screen, two over '
+              'the field where a lapse amount is typed, and five in the '
+              'duration phrase the counter reads aloud. A twenty-second that '
+              'nobody declared would be one nobody translated');
     });
 
     test('every extension message is in Russian too', () {

@@ -464,5 +464,50 @@
         "type": "String"
       }
     }
+  },
+  "abstinenceDurationYears": "{count, plural, =1{{count} year} other{{count} years}}",
+  "@abstinenceDurationYears": {
+    "description": "The years part of the abstinence duration phrase, e.g. \"2 years 18 days\".",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "abstinenceDurationMonths": "{count, plural, =1{{count} month} other{{count} months}}",
+  "@abstinenceDurationMonths": {
+    "description": "The months part of the abstinence duration phrase.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "abstinenceDurationDays": "{count, plural, =1{{count} day} other{{count} days}}",
+  "@abstinenceDurationDays": {
+    "description": "The days part of the abstinence duration phrase.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "abstinenceDurationHours": "{count, plural, =1{{count} hour} other{{count} hours}}",
+  "@abstinenceDurationHours": {
+    "description": "The hours part of the abstinence duration phrase.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "abstinenceDurationMinutes": "{count, plural, =1{{count} minute} other{{count} minutes}}",
+  "@abstinenceDurationMinutes": {
+    "description": "The minutes part of the abstinence duration phrase, e.g. \"12 minutes\". Also the whole phrase at the first instant of a clean streak, where it alone reads \"0 minutes\".",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
   }
 }

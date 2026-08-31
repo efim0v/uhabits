@@ -1705,6 +1705,36 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'No more than {allowance} a day'**
   String abstinenceAmountPromptNoUnit(String allowance);
+
+  /// The years part of the abstinence duration phrase, e.g. "2 years 18 days".
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} year} other{{count} years}}'**
+  String abstinenceDurationYears(num count);
+
+  /// The months part of the abstinence duration phrase.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} month} other{{count} months}}'**
+  String abstinenceDurationMonths(num count);
+
+  /// The days part of the abstinence duration phrase.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} day} other{{count} days}}'**
+  String abstinenceDurationDays(num count);
+
+  /// The hours part of the abstinence duration phrase.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} hour} other{{count} hours}}'**
+  String abstinenceDurationHours(num count);
+
+  /// The minutes part of the abstinence duration phrase, e.g. "12 minutes". Also the whole phrase at the first instant of a clean streak, where it alone reads "0 minutes".
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} minute} other{{count} minutes}}'**
+  String abstinenceDurationMinutes(num count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

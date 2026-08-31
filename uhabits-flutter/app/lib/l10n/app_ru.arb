@@ -243,5 +243,10 @@
   "abstinenceLapseToday": "Отметить срыв",
   "abstinenceUndoToday": "Отменить срыв",
   "abstinenceAmountPrompt": "Не более {allowance} {unit} в день",
-  "abstinenceAmountPromptNoUnit": "Не более {allowance} в день"
+  "abstinenceAmountPromptNoUnit": "Не более {allowance} в день",
+  "abstinenceDurationYears": "{count, plural, one{{count} год} few{{count} года} many{{count} лет} other{{count} года}}",
+  "abstinenceDurationMonths": "{count, plural, one{{count} месяц} few{{count} месяца} many{{count} месяцев} other{{count} месяца}}",
+  "abstinenceDurationDays": "{count, plural, one{{count} день} few{{count} дня} many{{count} дней} other{{count} дня}}",
+  "abstinenceDurationHours": "{count, plural, one{{count} час} few{{count} часа} many{{count} часов} other{{count} часа}}",
+  "abstinenceDurationMinutes": "{count, plural, one{{count} минута} few{{count} минуты} many{{count} минут} other{{count} минуты}}"
 }
