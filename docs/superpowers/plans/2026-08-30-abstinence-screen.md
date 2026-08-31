@@ -1911,8 +1911,8 @@ git commit -m "Say a duration the way a person says it"
     expect(find.byType(RingView), findsOneWidget,
         reason: 'computed.abstinence-screen#11 — уровень кольцом');
     expect(find.text('рекорд'), findsOneWidget,
-        reason: 'computed.streak#10 — сто процентов от самого себя не новость, '
-            'а рекорд — новость');
+        reason: 'computed.abstinence-screen#11 — сто процентов от самого себя '
+            'не новость, а рекорд — новость');
     expect(find.text('от прошлой серии'), findsNothing,
         reason: 'computed.streak#10 — первой попытке сравнивать не с чем, и '
             'строка не рисуется вовсе');
@@ -2161,7 +2161,7 @@ Run: `cd uhabits-flutter/app && flutter test test/ui/habits/abstinence/`
 - [ ] **Шаг 6: дописать правило**
 
 ```markdown
-11. `computed.abstinence-screen#11` Overview воздержания несёт счётчик, кольцо уровня, долю от рекорда и долю от прошлой серии. Числа берутся из тех же функций, что питают карточку серий, поэтому согласованы по построению, а не по совпадению.
+11. `computed.abstinence-screen#11` Overview воздержания несёт счётчик, кольцо уровня, долю от рекорда и долю от прошлой серии. Числа берутся из тех же функций, что питают карточку серий, поэтому согласованы по построению, а не по совпадению. Когда нынешняя серия и есть лучшая, вместо ста процентов от самой себя пишется «рекорд»: сто процентов от себя не новость, а рекорд — новость.
 ```
 
 - [ ] **Шаг 7: мутация**
