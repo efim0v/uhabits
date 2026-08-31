@@ -1,6 +1,8 @@
 /// Overview воздержания: счётчик, кольцо, две доли, число срывов и кнопка.
 library;
 
+// ignore_for_file: implementation_imports
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,6 +13,8 @@ import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/ui/common/views/ring_view.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_overview.dart';
+import 'package:uhabits_core/src/time/date_utils.dart'
+    show systemCurrentTimeMillis;
 import 'package:uhabits_core/uhabits_core.dart';
 
 void main() {
@@ -328,5 +332,52 @@ void main() {
     expect(find.text('0'), findsOneWidget,
         reason: 'computed.abstinence-screen#4 — срыв старше обязательства не '
             'срыв этого обязательства');
+  });
+
+  testWidgets(
+      'the counter moves with the clock, and the timer does not survive '
+      'the card', (tester) async {
+    // `since` берётся от полуночи дня обязательства (`computed.since#3`) и
+    // от подмены часов ниже не зависит вовсе — двигаем только «сейчас», тот
+    // же крюк, которым карточка сама читает текущий момент
+    // (`computed.since#5`).
+    final int Function() realClock = systemCurrentTimeMillis;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+    int nowMillis = realClock();
+    systemCurrentTimeMillis = () => nowMillis;
+
+    // Двух дней хватает, чтобы минуты остались одной из трёх старших
+    // ненулевых единиц почти всегда: часы обнуляются раз в сутки, годы и
+    // месяцы здесь не набегают вовсе.
+    await pumpOverview(tester, committedFrom: today - 2, lapses: const []);
+
+    String counterText() => tester
+        .widget<Text>(find.byKey(AbstinenceOverviewCard.counterKey))
+        .data!;
+    final String before = counterText();
+
+    // Минута вперёд — граница, на которой обязана сдвинуться младшая
+    // единица счётчика, а не «когда-нибудь при следующей перерисовке
+    // экрана» (`computed.since#5`).
+    nowMillis += 60000;
+    await tester.pump(const Duration(minutes: 1));
+
+    expect(counterText(), isNot(before),
+        reason: 'computed.since#5 — счётчик идёт сам, тикая раз в минуту, а '
+            'не ждёт внешней перерисовки экрана');
+
+    // Карточка уходит с экрана — и вместе с ней обязан уйти таймер: не
+    // отменённый в `dispose`, он попытался бы вызвать `setState` на уже
+    // мёртвом `State` на следующей же минуте, а сам прогон файла упал бы в
+    // самом конце теста на `flutter_test`-овской проверке «A Timer is still
+    // pending even after the widget tree was disposed» (`binding.dart`),
+    // которая срабатывает по каждому тесту, оставившему висящий таймер.
+    await tester.pumpWidget(const SizedBox.shrink());
+    nowMillis += 60000;
+    await tester.pump(const Duration(minutes: 1));
+
+    expect(tester.takeException(), isNull,
+        reason: 'computed.since#5 — таймер остановлен в dispose и не тикает '
+            'вхолостую после того, как карточка исчезла с экрана');
   });
 }

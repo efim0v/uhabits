@@ -1,7 +1,15 @@
-/// Overview воздержания: счётчик, кольцо, две доли и число срывов.
+/// Overview воздержания: счётчик, кольцо, две доли, число срывов и кнопка.
 library;
 
+// `date_utils.dart` не отдаёт свой крюк через барель ядра — тем же путём его
+// читают `widget_sync.dart` и `abstinence_sync.dart`.
+// ignore_for_file: implementation_imports
+
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:uhabits_core/src/time/date_utils.dart'
+    show systemCurrentTimeMillis;
 import 'package:uhabits_core/uhabits_core.dart' as core;
 
 import '../../../l10n/app_localizations.dart';
@@ -18,7 +26,7 @@ import 'abstinence_calendar.dart' show abstinenceCountsTowardsTotal;
 import 'abstinence_duration.dart';
 import 'abstinence_gestures.dart';
 
-class AbstinenceOverviewCard extends StatelessWidget {
+class AbstinenceOverviewCard extends StatefulWidget {
   const AbstinenceOverviewCard({
     required this.habit,
     required this.definition,
@@ -47,7 +55,52 @@ class AbstinenceOverviewCard extends StatelessWidget {
   static const double ringSize = 30.0;
 
   @override
+  State<AbstinenceOverviewCard> createState() => _AbstinenceOverviewCardState();
+}
+
+class _AbstinenceOverviewCardState extends State<AbstinenceOverviewCard> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleTick();
+  }
+
+  @override
+  void dispose() {
+    // Без отмены таймер пережил бы карточку: он держит только `setState`
+    // этого `State`, но зона `flutter_test` считает такой висящий таймер
+    // ошибкой ровно потому, что в настоящем приложении это была бы утечка —
+    // виджет ушёл с экрана, а будильник продолжал бы будить дерево, которого
+    // больше нет.
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  /// Планирует следующую перерисовку ровно на границу минуты.
+  ///
+  /// Не «через шестьдесят секунд от того, как открыли экран» — так цифра
+  /// менялась бы в случайный момент внутри минуты, — а на первый момент
+  /// после «сейчас», у которого миллисекунды от начала минуты нулевые: ровно
+  /// тогда меняется младшая единица счётчика (`computed.since#5`).
+  void _scheduleTick() {
+    final int msIntoMinute = systemCurrentTimeMillis() % 60000;
+    final int delay = 60000 - msIntoMinute;
+    _tick = Timer(Duration(milliseconds: delay), () {
+      if (!mounted) return;
+      setState(() {});
+      _scheduleTick();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final core.Habit habit = widget.habit;
+    final core.HabitDefinition definition = widget.definition;
+    final AppScope scope = widget.scope;
+    final VoidCallback onLapse = widget.onLapse;
+
     final L10n l10n = L10n.of(context);
     final core.Theme theme = coreThemeOf(context);
     final core.AbstinenceStreaks streaks = core.abstinenceStreaksOf(habit);
@@ -84,48 +137,40 @@ class AbstinenceOverviewCard extends StatelessWidget {
     return ComputedCard(
       theme: theme,
       title: l10n.overview,
-      key: cardKey,
-      // Кнопка живёт в `trailing`, ровно там же, где жила у счётчика, и
-      // судит тем же судьёй. Пропуск — отметка человека, и нажатие её не
-      // переписывает (`computed.day-write#4`): у пропущенного дня кнопка не
-      // нажимается вовсе.
-      trailing: TextButton(
-        key: todayButtonKey,
-        onPressed: todayValue == core.Entry.skip
-            ? null
-            : () async {
-                final bool written = await toggleLapseDay(
-                  context,
-                  scope,
-                  habit: habit,
-                  definition: definition,
-                  date: today,
-                  lapsed: !lapsedToday,
-                  theme: theme,
-                );
-                if (written) onLapse();
-              },
-        child: Text(
-          lapsedToday ? l10n.abstinenceUndoToday : l10n.abstinenceLapseToday,
-        ),
-      ),
+      key: AbstinenceOverviewCard.cardKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           // Счётчик крупно и сверху: это ответ на вопрос, ради которого
-          // экран открывают (`computed.abstinence-screen#11`).
-          Text(
-            since == null
-                ? l10n.abstinenceDurationMinutes(0)
-                : formatAbstinenceDuration(
-                    l10n,
-                    DateTime.fromMillisecondsSinceEpoch(since),
-                    DateTime.now(),
-                  ),
-            key: counterKey,
-            style: Theme.of(context).textTheme.headlineMedium,
-            textAlign: TextAlign.center,
+          // экран открывают (`computed.abstinence-screen#11`). Рамка вокруг
+          // него — цветом границы из темы, тем же `contrast20`, которым уже
+          // очерчена ячейка списка (`entry_panel.dart`) — не выдумана заново
+          // для этой карточки.
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: toFlutterColor(theme.contrast20)),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Text(
+              since == null
+                  ? l10n.abstinenceDurationMinutes(0)
+                  : formatAbstinenceDuration(
+                      l10n,
+                      DateTime.fromMillisecondsSinceEpoch(since),
+                      // Тот же крюк, что пишет момент срыва
+                      // (`computed.since#7`): подмена часов в тесте обязана
+                      // двигать и его, и это число одним поворотом одного
+                      // винта, а не двумя.
+                      DateTime.fromMillisecondsSinceEpoch(
+                          systemCurrentTimeMillis()),
+                    ),
+              key: AbstinenceOverviewCard.counterKey,
+              style: Theme.of(context).textTheme.headlineMedium,
+              textAlign: TextAlign.center,
+            ),
           ),
+          const SizedBox(height: 8),
           // Подпись прежняя, слово в слово: счётчик отвечает «сколько
           // держусь», она — «с каких пор». Задача 12 запрещает ослаблять её
           // проверки, а не показывать её было бы самым сильным ослаблением.
@@ -135,15 +180,15 @@ class AbstinenceOverviewCard extends StatelessWidget {
                     .longFormat(core.LocalDate(definition.committedFrom!)))
                 : l10n.abstinenceLastLapse(
                     formatter.longFormat(core.LocalDate(lastLapse))),
-            key: subtitleKey,
+            key: AbstinenceOverviewCard.subtitleKey,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           Row(
             children: <Widget>[
               SizedBox(
-                width: ringSize,
-                height: ringSize,
+                width: AbstinenceOverviewCard.ringSize,
+                height: AbstinenceOverviewCard.ringSize,
                 child: RingView(
                   percentage: level,
                   color: toFlutterColor(theme.colorOf(habit.color)),
@@ -191,6 +236,37 @@ class AbstinenceOverviewCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          // Полноширинная кнопка с заливкой, а не строка в углу шапки: тот
+          // же `FilledButton`, каким сон подтверждает введённую ночь
+          // (`sleep/manual_entry_sheet.dart`) — действие, которое ничего не
+          // рушит и снимается тем же нажатием, обходится без кричащего
+          // предупреждающего цвета. Судит тем же судьёй, что и подпись выше.
+          // Пропуск — отметка человека, и нажатие её не переписывает
+          // (`computed.day-write#4`): у пропущенного дня кнопка не
+          // нажимается вовсе.
+          FilledButton(
+            key: AbstinenceOverviewCard.todayButtonKey,
+            onPressed: todayValue == core.Entry.skip
+                ? null
+                : () async {
+                    final bool written = await toggleLapseDay(
+                      context,
+                      scope,
+                      habit: habit,
+                      definition: definition,
+                      date: today,
+                      lapsed: !lapsedToday,
+                      theme: theme,
+                    );
+                    if (written) onLapse();
+                  },
+            child: Text(
+              lapsedToday
+                  ? l10n.abstinenceUndoToday
+                  : l10n.abstinenceLapseToday,
+            ),
           ),
         ],
       ),

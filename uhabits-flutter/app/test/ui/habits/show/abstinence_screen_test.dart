@@ -129,7 +129,7 @@ void main() {
 
     expect(
         tester
-            .widget<TextButton>(
+            .widget<FilledButton>(
                 find.byKey(AbstinenceOverviewCard.todayButtonKey))
             .enabled,
         isFalse,
