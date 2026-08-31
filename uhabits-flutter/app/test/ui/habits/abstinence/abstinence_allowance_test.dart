@@ -20,6 +20,7 @@ import 'package:uhabits/ui/common/dialogs/current_dialog.dart';
 import 'package:uhabits/ui/common/dialogs/number_dialog.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_button_view.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_gestures.dart';
+import 'package:uhabits/ui/habits/abstinence/abstinence_overview.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
@@ -30,19 +31,20 @@ void main() {
   late AppScope scope;
   late Habit habit;
 
-  /// «Не более [allowance] минут в день», обещание дано сорок дней назад.
+  /// «Не более [allowance] минут в день», обещание дано [daysAgo] дней
+  /// назад (по умолчанию сорок).
   ///
   /// Допуск пишется в двух местах одним движением, потому что судьи два лица
   /// одного числа: `payload` читает интерфейс, `targetValue` — оценка
   /// (`computed.allowance#1`).
-  void commit({required double allowance, String? unit}) {
+  void commit({required double allowance, String? unit, int daysAgo = 40}) {
     habit.targetValue = allowance;
     scope.habitList.update(<Habit>[habit]);
     scope.definitions.save(
       habit.id!,
       HabitDefinition(
         kind: ComputedKind.abstinence,
-        committedFrom: getToday().daysSince2000 - 40,
+        committedFrom: getToday().daysSince2000 - daysAgo,
         payload: abstinencePayload(
           allowance: allowance,
           // Единицу человек пишет сам, своим словом: в форме это свободное
@@ -143,6 +145,13 @@ void main() {
 
   testWidgets('computed.abstinence-cell#8 двадцать минут при допуске тридцать '
       'обещание держат, и трое согласны', (tester) async {
+    // Двадцать, не сорок: `since` считает разрыв календарно
+    // (`computed.since#6`), и сорок настоящих суток от полуночи
+    // обязательства до настоящего момента теста пересекли бы границу месяца
+    // — остаток дней после месяца гуляет вместе с датой прогона, и точную
+    // проверку текста он бы не пережил. Восемь остальных тестов файла зовут
+    // `commit` без этого параметра и его не замечают.
+    commit(allowance: 30.0, daysAgo: 20);
     await tapToday(tester);
     await answer(tester, '20');
 
@@ -161,16 +170,15 @@ void main() {
     expect(find.text('Отметить срыв'), findsOneWidget,
         reason: 'computed.abstinence-screen#5 — предлагать «Отменить срыв» '
             'там, где срыва не было, значит спорить с ячейкой');
-    // Третий — счётчик. Голой цифры «40» больше нет: счётчик читает `since`
-    // календарно (`computed.since#6`), и сорок настоящих суток от полуночи
-    // обязательства до настоящего момента теста пересекают границу
-    // календарного месяца — карточка честно пишет «1 месяц N дней», а не
-    // «40 дней». Проверяется не точный остаток (он гуляет вместе с датой
-    // прогона), а сам переход через месяц: он и есть доказательство, что
-    // серия не оборвалась и не пошла с нуля.
-    expect(find.textContaining('месяц'), findsOneWidget,
-        reason: 'computed.streak#4 — двадцать минут серию не рвут: счётчик '
-            'по-прежнему считает от дня обязательства, а не от сегодня');
+    // Третий — счётчик, адресован напрямую по своему ключу, а не всему
+    // дереву: `find.textContaining` по всему экрану поймал бы и чужое
+    // «раз в месяц» на карточке «Частота», окажись оно там однажды.
+    expect(
+      tester.widget<Text>(find.byKey(AbstinenceOverviewCard.counterKey)).data,
+      contains('20 дней'),
+      reason: 'computed.streak#4 — двадцать минут серию не рвут: счётчик '
+          'по-прежнему считает от дня обязательства, а не от сегодня',
+    );
   });
 
   testWidgets('computed.abstinence-cell#5 подтверждённая величина не оставляет '

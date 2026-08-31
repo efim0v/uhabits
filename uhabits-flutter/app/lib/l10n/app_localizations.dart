@@ -1664,12 +1664,6 @@ abstract class L10n {
   /// **'Without a lapse'**
   String get abstinenceTitle;
 
-  /// Label beside the big counter on an abstinence habit's screen.
-  ///
-  /// In en, this message translates to:
-  /// **'{days, plural, one {day without a lapse} other {days without a lapse}}'**
-  String abstinenceCleanDaysLabel(num days);
-
   /// The day the person committed, shown when they have never lapsed.
   ///
   /// In en, this message translates to:

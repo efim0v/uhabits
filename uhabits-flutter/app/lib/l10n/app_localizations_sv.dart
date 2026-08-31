@@ -857,17 +857,6 @@ class L10nSv extends L10n {
   String get abstinenceTitle => 'Without a lapse';
 
   @override
-  String abstinenceCleanDaysLabel(num days) {
-    String _temp0 = intl.Intl.pluralLogic(
-      days,
-      locale: localeName,
-      other: 'days without a lapse',
-      one: 'day without a lapse',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String abstinenceSince(String date) {
     return 'Since $date';
   }

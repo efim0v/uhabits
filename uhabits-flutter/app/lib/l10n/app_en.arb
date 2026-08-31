@@ -416,15 +416,6 @@
   "abstinenceAllowanceUnitExample": "e.g. minutes",
   "abstinenceCommittedFrom": "Committed since",
   "abstinenceTitle": "Without a lapse",
-  "abstinenceCleanDaysLabel": "{days, plural, one {day without a lapse} other {days without a lapse}}",
-  "@abstinenceCleanDaysLabel": {
-    "description": "Label beside the big counter on an abstinence habit's screen.",
-    "placeholders": {
-      "days": {
-        "type": "num"
-      }
-    }
-  },
   "abstinenceSince": "Since {date}",
   "@abstinenceSince": {
     "description": "The day the person committed, shown when they have never lapsed.",

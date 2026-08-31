@@ -906,16 +906,17 @@ class _ShowHabitViewState extends State<_ShowHabitView>
   ///
   /// For every habit the original knows this is exactly `ShowHabitCard`'s
   /// declaration order (`show-habit.card-order-and-visibility#1`). A sleep
-  /// habit splits that order and puts its own blocks in the seam — after
+  /// habit splits that order and puts its own blocks in a seam — after
   /// `subtitle`, `notes`, `overview` and `score`, before everything else —
   /// because those four cards are the habit itself, not its machinery, and a
   /// person reads them first. An abstinence habit needs no such splice: its
-  /// whole own card lives *inside* the ported `overview` slot itself
-  /// (`_buildCard`'s `ShowHabitCard.overview` case), which `ShowHabitCard`
-  /// already declares in that same seam — so [_buildSleepCards] is the only
-  /// source of `own`, and for an abstinence habit it is empty, and this
-  /// method falls back to the plain, unsplit column
-  /// (`computed.abstinence-screen#3`).
+  /// whole own card takes over the ported `overview` slot itself
+  /// (`_buildCard`'s `ShowHabitCard.overview` case) rather than sitting
+  /// beside it, and `ShowHabitCard` declares that slot third — before
+  /// `target` and `score`, not after them, exactly where an ordinary habit's
+  /// ring sits (`computed.abstinence-screen#3`). So [_buildSleepCards] is the
+  /// only source of `own`; for an abstinence habit it is empty, and this
+  /// method falls back to the plain, unsplit column.
   List<Widget> _buildColumn(BuildContext context, ShowHabitModel model) {
     final List<Widget> own = _buildSleepCards(context, model);
     if (own.isEmpty) return _buildCards(context, model);

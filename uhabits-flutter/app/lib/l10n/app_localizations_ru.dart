@@ -871,19 +871,6 @@ class L10nRu extends L10n {
   String get abstinenceTitle => 'Без срывов';
 
   @override
-  String abstinenceCleanDaysLabel(num days) {
-    String _temp0 = intl.Intl.pluralLogic(
-      days,
-      locale: localeName,
-      other: 'дня без срыва',
-      many: 'дней без срыва',
-      few: 'дня без срыва',
-      one: 'день без срыва',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String abstinenceSince(String date) {
     return 'С $date';
   }
