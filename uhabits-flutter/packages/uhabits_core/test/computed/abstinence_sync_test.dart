@@ -8,6 +8,7 @@ import 'package:uhabits_core/src/models/entry.dart';
 import 'package:uhabits_core/src/models/habit.dart';
 import 'package:uhabits_core/src/models/habit_type.dart';
 import 'package:uhabits_core/src/models/memory/memory_model_factory.dart';
+import 'package:uhabits_core/src/time/date_utils.dart';
 import 'package:uhabits_core/src/time/local_date.dart';
 
 import '../helpers/test_database.dart';
@@ -112,6 +113,42 @@ void main() {
     expect(sync.setLapse(habit, today, false), isFalse,
         reason: 'computed.abstinence-sync#6 — снимать нечего, и вторая ветвь '
             'отвечает тем же способом');
+  });
+
+  test('#7 a lapse marked today carries the moment it was marked at', () {
+    // Решение владельца: счётчик считает до минут, и ради этого схема
+    // получила время срыва (`computed.schema#8`). Писать его больше некому:
+    // импортёр только переносит момент из чужой копии, а копия та же дверь и
+    // наполняет. Не писать его здесь значило оставить `momentOf` пустым
+    // всегда, ветвь `computed.since#1` мёртвой, колонку `Moment` в CSV пустой
+    // и миграцию 104 бесполезной.
+    const int at = (9000 + 10957) * 86400000 + 14 * 3600000 + 30 * 60000;
+    final int Function() realClock = systemCurrentTimeMillis;
+    systemCurrentTimeMillis = () => at;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+
+    sync.setLapse(habit, today, true);
+
+    expect(lapses.momentOf(1, today.daysSince2000), at,
+        reason: 'computed.since#7 — сегодняшний срыв случился сейчас, и '
+            '«сейчас» про него правда');
+  });
+
+  test('#7 a lapse marked for an earlier day carries no moment', () {
+    // Человек нажал на позавчерашний день в календаре. «Сейчас» соврало бы о
+    // нём на двое суток; пустота читается как полночь после того дня
+    // (`computed.since#2`), и это про него верно.
+    final int Function() realClock = systemCurrentTimeMillis;
+    systemCurrentTimeMillis = () => (9000 + 10957) * 86400000 + 50000000;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+
+    sync.setLapse(habit, today.minus(2), true, amount: 45);
+
+    expect(lapses.forDay(1, today.minus(2).daysSince2000), 45,
+        reason: 'computed.since#7 — строка записана: речь только о моменте');
+    expect(lapses.momentOf(1, today.minus(2).daysSince2000), isNull,
+        reason: 'computed.since#7 — момента у срыва задним числом нет, и '
+            'выдумывать его сегодняшними часами нельзя');
   });
 
   test('the sweep does not touch a skip', () {
