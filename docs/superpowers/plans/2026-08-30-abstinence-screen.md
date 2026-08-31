@@ -2702,12 +2702,12 @@ git commit -m "Let the calendar show the climb, not just the days"
             'воздержание ничего не делает');
     expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.frequency)),
         findsNothing,
-        reason: 'computed.abstinence-screen#14 — частота у привычки с '
-            'прибитой частотой не говорит ничего');
+        reason: 'computed.abstinence-screen#14 — частота у воздержания '
+            'ежедневная и другой не бывает, и таблице нечего показывать');
     expect(find.byKey(ShowHabitScreen.cardKey(ShowHabitCard.history)),
         findsOneWidget,
-        reason: 'computed.abstinence-screen#13 — а календарь остаётся, он '
-            'здесь главный');
+        reason: 'computed.abstinence-screen#14 — а календарь остаётся: он '
+            'единственный отвечает на вопрос, ради которого экран открывают');
   });
 ```
 
@@ -2733,7 +2733,7 @@ Frequency» в `DEVIATIONS.md` (сейчас около строки 1355) — �
 - [ ] **Шаг 4: правило, прогон, коммит**
 
 ```markdown
-14. `computed.abstinence-screen#14` Столбчатый график и «Частота» воздержанию не показываются: обе карточки считают сделанное, а оно ничего не делает. Портированный код не трогается — скрытие живёт в правиле видимости.
+14. `computed.abstinence-screen#14` Столбчатый график и «Частота» воздержанию не показываются: обе карточки считают сделанное, а оно ничего не делает. Календарь при этом остаётся: он единственный отвечает на вопрос, ради которого экран открывают, — сколько держусь и где сорвался. Портированный код не трогается — скрытие живёт в правиле видимости.
 ```
 
 ```bash
