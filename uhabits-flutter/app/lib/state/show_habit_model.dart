@@ -18,6 +18,10 @@
 /// (`show-habit.screen-scaffold#3`: there is no incremental card update, the
 /// state is thrown away and rebuilt from scratch every single time).
 ///
+/// It is also a [MidnightListener], which `ShowHabitActivity` never was: a
+/// finished command is not the only thing that makes "today" stop being
+/// true. See [atMidnight].
+///
 /// The card *order* and the per-habit-type *visibility* are the core's
 /// [ShowHabitCardVisibility], not this class's: it is fed the freshly built
 /// state and asked which cards survive.
@@ -38,6 +42,8 @@ import 'package:uhabits_core/src/ui/screens/habits/show/show_habit.dart';
 import 'package:uhabits_core/src/ui/screens/habits/show/show_habit_menu_presenter.dart';
 import 'package:uhabits_core/src/ui/views/history_chart.dart'
     show OnDateClickedListener;
+import 'package:uhabits_core/src/utils/midnight_timer.dart'
+    show MidnightListener;
 import 'package:uhabits_core/uhabits_core.dart';
 
 import '../ui/habits/abstinence/abstinence_calendar.dart';
@@ -111,6 +117,7 @@ abstract interface class ShowHabitScreenDelegate {
 class ShowHabitModel extends ChangeNotifier
     implements
         CommandRunnerListener,
+        MidnightListener,
         ShowHabitPresenterScreen,
         ShowHabitMenuPresenterScreen {
   /// Builds the first state immediately.
@@ -219,10 +226,15 @@ class ShowHabitModel extends ChangeNotifier
 
   /// `onResume`: registers as a command listener, re-attaches the history
   /// editor's date-clicked listener, and refreshes.
+  ///
+  /// Also registers as a [MidnightListener] — an addition `onResume` never
+  /// made, because upstream never subscribes this screen to `MidnightTimer`
+  /// at all (see [atMidnight]).
   void attach() {
     if (_attached) return;
     _attached = true;
     scope.commandRunner.addListener(this);
+    scope.midnightTimer.addListener(this);
     // supportFragmentManager.findFragmentByTag("historyEditor")?.let {
     //     (it as HistoryEditorDialog).setOnDateClickedListener(
     //         presenter.historyCardPresenter)
@@ -237,11 +249,14 @@ class ShowHabitModel extends ChangeNotifier
   /// there is no fragment manager to search.
   void Function(OnDateClickedListener listener)? reattachHistoryEditor;
 
-  /// `onPause`: dismisses the open dialog and unregisters.
+  /// `onPause`: dismisses the open dialog and unregisters — from the command
+  /// runner and, with it, from `scope.midnightTimer`: a screen that is gone
+  /// has no state left to roll over.
   void detach() {
     if (!_attached) return;
     _attached = false;
     scope.commandRunner.removeListener(this);
+    scope.midnightTimer.removeListener(this);
   }
 
   @override
@@ -319,6 +334,29 @@ class ShowHabitModel extends ChangeNotifier
   /// (`show-habit.screen-scaffold#4`).
   @override
   void onCommandFinished(Command command) => refresh();
+
+  /// `MidnightTimer.MidnightListener.atMidnight`.
+  ///
+  /// No Kotlin counterpart: `ShowHabitActivity` is not a `MidnightTimer`
+  /// listener, so a screen left open across midnight used to go on reading
+  /// the day that just ended — the calendar, the level ring and the total
+  /// all pinned to yesterday, and an abstinence habit's running counter
+  /// reading "0 minutes" because `habit.streaks` had no streak covering the
+  /// new day at all. Отклонение: `docs/parity/DEVIATIONS.md`, запись
+  /// «computed: экран привычки начинает слушать полночь».
+  ///
+  /// `habit.recompute()` runs first, because it is the half of "the habit
+  /// changed" that a finished command always did for itself before this
+  /// class ever heard about it — [onCommandFinished] only ever had to
+  /// rebuild the *screen's* state, never the habit's. Midnight is the one
+  /// change nothing else recomputes for, so this listener does both halves:
+  /// recompute the habit, then [refresh] the screen the same way any other
+  /// change does.
+  @override
+  void atMidnight() {
+    habit.recompute();
+    refresh();
+  }
 
   // -----------------------------------------------------------------------
   // The dialog half, forwarded to the widget
