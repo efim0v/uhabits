@@ -16,6 +16,7 @@ import 'package:uhabits_core/uhabits_core.dart' as core;
 import '../../../l10n/app_localizations.dart';
 import '../../../state/app_scope.dart';
 import '../show/cards/streak_card_view.dart';
+import 'abstinence_button_view.dart' show isAbstinenceLapseDay;
 import 'abstinence_duration.dart';
 
 /// Обёртка вокруг [StreakCardView], которая знает про журнал срывов и про
@@ -28,12 +29,19 @@ import 'abstinence_duration.dart';
 class AbstinenceStreakCard extends StatefulWidget {
   const AbstinenceStreakCard({
     required this.habit,
+    required this.definition,
     required this.scope,
     required this.state,
     super.key,
   });
 
   final core.Habit habit;
+
+  /// Обещание, по которому судится день. Приезжает готовым, как и у
+  /// `AbstinenceOverviewCard`: экран его уже прочитал, а два источника одного
+  /// факта расходятся.
+  final core.HabitDefinition definition;
+
   final AppScope scope;
   final StreakCardState state;
 
@@ -58,8 +66,10 @@ class _AbstinenceStreakCardState extends State<AbstinenceStreakCard> {
     super.dispose();
   }
 
-  /// Планирует следующую перерисовку ровно на границу минуты — тем же
-  /// выравниванием, каким идёт счётчик воздержания (`computed.since#5`).
+  /// Планирует следующую перерисовку ровно на границу минуты.
+  ///
+  /// Идти надписи идущей серии разрешает `computed.since#8`; выравнивание —
+  /// то же, каким идёт счётчик воздержания (`computed.since#5`).
   ///
   /// Планируется всегда, а не только когда серия идёт. Ответ на «идёт ли
   /// хоть одна» меняется в полночь, то есть ровно на одной из этих границ, и
@@ -87,6 +97,13 @@ class _AbstinenceStreakCardState extends State<AbstinenceStreakCard> {
               widget.habit,
               widget.scope.lapses,
               streak,
+              // Судья один на все поверхности воздержания: тот же, что красит
+              // ячейку списка, клетку календаря и подпись под счётчиком
+              // (`computed.abstinence-cell#2`). Ядру он нужен, чтобы узнать,
+              // оборвал ли серию срыв (`computed.since#10`), и второго такого
+              // сравнения заводить негде.
+              isLapseValue: (int value) =>
+                  isAbstinenceLapseDay(widget.definition, value),
             ),
           ),
       ],

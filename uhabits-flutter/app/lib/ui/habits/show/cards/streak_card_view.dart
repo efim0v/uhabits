@@ -167,6 +167,25 @@ class StreakChartView extends core.View {
       maxLabelWidth = 0.0;
       shouldShowLabels = false;
     }
+    // Тот же выключатель, с одним новым поводом. Порт спрашивает, осталась ли
+    // между подписями хотя бы четверть ширины; когда в полосе стоит точная
+    // длительность, спрашивается ещё и то, влезает ли она в этот просвет с
+    // тем же отступом, какой порт держит между полосой и подписью. Не влезает
+    // — подписи гаснут все разом, как гасит их порт: карточка, где даты есть
+    // у одних строк и нет у других, была бы хуже карточки без дат
+    // (`computed.since#9`).
+    final List<String>? durations = this.durations;
+    if (shouldShowLabels && durations != null) {
+      var maxDurationWidth = 0.0;
+      for (final String duration in durations) {
+        maxDurationWidth =
+            math.max(maxDurationWidth, canvas.measureText(duration));
+      }
+      if (maxDurationWidth > width - 2 * maxLabelWidth - 2 * textMargin) {
+        maxLabelWidth = 0.0;
+        shouldShowLabels = false;
+      }
+    }
     // `drawRow` bails on every row when the longest streak is empty.
     if (maxLength == 0) return;
 
@@ -255,11 +274,23 @@ class StreakChartView extends core.View {
     canvas.drawText(text, width / 2, y);
 
     if (shouldShowLabels) {
+      // Порт клеит подписи к краям полосы
+      // (`charts-canvas-theming.streak-chart#11`), и для него это верно: в
+      // полосе стоит двузначное число, оно из полосы не выходит, и край
+      // полосы есть край всего, что строка рисует. Точная
+      // длительность из короткой полосы выходит, и подпись, приклеенная к
+      // краю, легла бы прямо под неё — буквы поверх букв. Поэтому там, где
+      // шов заполнен, подписи стоят столбиком, в той колонке, куда их и так
+      // ставит самая длинная строка карточки: для неё `gap - textMargin`
+      // равно ровно `maxLabelWidth`, так что рекордная полоса не двигается
+      // вовсе, а короткие перестают тянуть подписи к середине
+      // (`computed.since#9`).
+      final double edge = duration == null ? gap : maxLabelWidth + textMargin;
       canvas.setColor(theme.mediumContrastTextColor);
       canvas.setTextAlign(core.TextAlign.right);
-      canvas.drawText(labelFor(streak.start), gap - textMargin, y);
+      canvas.drawText(labelFor(streak.start), edge - textMargin, y);
       canvas.setTextAlign(core.TextAlign.left);
-      canvas.drawText(labelFor(streak.end), width - gap + textMargin, y);
+      canvas.drawText(labelFor(streak.end), width - edge + textMargin, y);
     }
   }
 

@@ -136,10 +136,56 @@ void main() {
           'считают одни и те же два мгновения, и расходиться им не в чем',
     );
     expect(chartOf(tester).lengths, <int>[20],
-        reason: 'computed.streak#8 — полосу по-прежнему меряет число чистых '
-            'суток, и здесь оно совпадает с напечатанным: моментов срыва в '
-            'журнале нет, а от полуночи до «сейчас» полных суток ровно '
-            'столько же');
+        reason: 'computed.streak#6 — полосу по-прежнему меряет число чистых '
+            'суток, то же самое, что едет в документ виджета, и здесь оно '
+            'совпадает с напечатанным: моментов срыва в журнале нет, а от '
+            'полуночи до «сейчас» полных суток ровно столько же');
+  });
+
+  testWidgets('computed.since#10 midnight does not stop a streak no lapse '
+      'stopped', (tester) async {
+    final Habit habit = addAbstinence(committedFrom: today - 20);
+    await pumpScreen(tester, habit);
+    expect(chartOf(tester).durations, <String>['20 дней 06:12'],
+        reason: 'computed.since#10 — до полуночи');
+
+    // Полночь. «Сегодня» переезжает, а список серий — нет: экран привычки
+    // полуночи не слушает и привычку не пересчитывает. Часы двигаются тем же
+    // крюком, каким их двигает поминутный таймер карточки.
+    setToday(LocalDate(today + 1));
+    nowMillis = LocalDate(today + 1).unixTime + 6 * 3600000 + 13 * 60000;
+    await tester.pump(const Duration(minutes: 1));
+
+    expect(chartOf(tester).streaks.single.end, LocalDate(today),
+        reason: 'computed.since#10 — список серий остался вчерашним, и это '
+            'условие проверки, а не её вывод');
+    expect(chartOf(tester).durations, <String>['21 день 06:13'],
+        reason: 'computed.since#10 — серия идёт: срыва на дне после её конца '
+            'нет. Спроси карточка «конец старше сегодня?», она напечатала бы '
+            '«21 день 00:00» — главное число на карточке молча стало бы '
+            'неверным и стояло бы так до следующей перерисовки экрана');
+  });
+
+  testWidgets('computed.since#10 only a lapse ends a streak — a skip on the '
+      'day after does not', (tester) async {
+    // Пропуск, поставленный диапазоном на завтра: значение у дня после конца
+    // серии есть, а срывом оно не является. Судья на этом и стоит — грубое
+    // «что-то записано» ответило бы «серия кончена» и заморозило бы надпись
+    // (`computed.abstinence-cell#4`, `computed.streak#7`).
+    final Habit habit = addAbstinence(committedFrom: today - 20);
+    habit.originalEntries.add(Entry(LocalDate(today + 1), Entry.skip));
+    habit.recompute();
+    await pumpScreen(tester, habit);
+
+    expect(habit.computedEntries.get(LocalDate(today + 1)).value, Entry.skip,
+        reason: 'computed.since#10 — условие проверки: у дня после конца '
+            'серии значение есть');
+    expect(chartOf(tester).streaks.single.end, LocalDate(today),
+        reason: 'computed.streak#6 — хвост окна в серию не входит, и конец '
+            'у неё сегодняшний');
+    expect(chartOf(tester).durations, <String>['20 дней 06:12'],
+        reason: 'computed.since#10 — серия идёт: пропуск не срыв, и судья тут '
+            'тот же, что не даёт клетке календаря принять пропуск за срыв');
   });
 
   testWidgets('computed.since#8 a habit the original knows keeps the ported '

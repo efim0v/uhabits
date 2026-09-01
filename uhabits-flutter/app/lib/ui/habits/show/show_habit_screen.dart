@@ -1173,6 +1173,7 @@ class _ShowHabitViewState extends State<_ShowHabitView>
           return AbstinenceStreakCard(
             key: key,
             habit: widget.habit,
+            definition: abstinence,
             scope: widget.scope,
             state: state.streaks,
           );

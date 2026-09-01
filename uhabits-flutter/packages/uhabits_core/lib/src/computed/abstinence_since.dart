@@ -35,10 +35,20 @@ int? abstinenceSinceMillis(
 ///  * конец — там, где начался срыв, лежащий на дне `end + 1`;
 ///  * у идущей серии конца ещё нет, и вместо него берётся «сейчас».
 ///
-/// Идёт серия или кончилась, решает тот же вопрос, каким это решает
-/// `elapsedDaysOf`: кончилась та, чей конец старше дня [asOf]
-/// (`computed.streak#8`). Двух ответов на «идёт ли она» в приложении не
-/// заводится.
+/// Кончилась серия или идёт, решает **срыв, который её оборвал**, а не
+/// сегодняшнее число: серия кончена тогда, когда день `end + 1` есть срыв
+/// (`computed.since#10`). Спросить «конец старше сегодня?» было бы короче и
+/// было бы неверно: список серий собирается один раз, а «сегодня» переезжает
+/// в полночь, и у открытого экрана идущая серия за одну минуту превращалась
+/// бы в завершённую — с концом на вчерашнем дне, на котором срыва нет, — и
+/// надпись вставала бы на «N дней 00:00» до следующей перерисовки.
+///
+/// [isLapseValue] — тот самый судья, которым ячейка списка, клетка календаря,
+/// кнопка карточки и подпись под счётчиком судят день по его хранимому
+/// значению (`computed.abstinence-cell#2`). Он приходит швом, а не пишется
+/// здесь заново: у ядра есть половина этого судьи — `isAbstinenceLapse`, — а
+/// вторая половина, перевод шкалы и ступеньки `Entry`, живёт на поверхности,
+/// и второго такого сравнения в приложении быть не должно.
 ///
 /// У серии, о концах которой журнал молчит, ответ есть ровно число суток от
 /// полуночи до полуночи: часы и минуты нулевые, и это не выдумка, а
@@ -51,16 +61,18 @@ int abstinenceStreakMillis(
   Habit habit,
   LapseRepository lapses,
   Streak streak, {
-  LocalDate? asOf,
+  required bool Function(int storedValue) isLapseValue,
   int? nowMillis,
 }) {
-  final LocalDate day = asOf ?? getToday();
-  final int to = streak.end.isOlderThan(day)
+  final int brokenOn = streak.end.daysSince2000 + 1;
+  final bool over =
+      isLapseValue(habit.computedEntries.get(LocalDate(brokenOn)).value);
+  final int to = over
       ? _boundaryMillis(
           habit,
           lapses,
-          lapseDay: streak.end.daysSince2000 + 1,
-          cleanEdgeDay: streak.end.daysSince2000 + 1,
+          lapseDay: brokenOn,
+          cleanEdgeDay: brokenOn,
         )
       : nowMillis ?? systemCurrentTimeMillis();
   return to - _startMillis(habit, lapses, streak);

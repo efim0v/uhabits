@@ -128,6 +128,15 @@ void main() {
       .getBest(1 << 20)
       .firstWhere((Streak s) => s.start == LocalDate(start));
 
+  /// Судья дня по хранимому значению — тот же, что на поверхностях
+  /// воздержания: ступеньки `Entry` срывом не бывают, а всё прочее судится
+  /// допуском (`computed.abstinence-cell#2`). В приложении он живёт в
+  /// `abstinence_button_view.dart`, куда ядру не дотянуться; здесь записан
+  /// теми же двумя строками, чтобы шов проверялся тем, чем его кормят.
+  bool Function(int) judgeOf(Habit habit) => (int value) =>
+      value > Entry.skip &&
+      isAbstinenceLapse(habit.definition!, value / 1000.0);
+
   test('#7 a streak the journal says nothing about runs midnight to midnight',
       () {
     // Срывы 8990-го и 8996-го, ни у одного момента не записано: между ними
@@ -138,7 +147,10 @@ void main() {
 
     expect(streak.end, LocalDate(8995),
         reason: 'computed.since#8 — серия кончается днём перед срывом');
-    expect(abstinenceStreakMillis(habit, lapses, streak), 5 * 86400000,
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit)),
+        5 * 86400000,
         reason: 'computed.since#8 — ровно пять суток: от полуночи 8991-го до '
             'полуночи 8996-го, часы и минуты нулевые. Это не выдумка, а '
             'единственное, что про такую серию известно (`computed.since#2`)');
@@ -155,10 +167,15 @@ void main() {
     lapses.save(habit.id!, 8996, atMillis: second);
     final Streak streak = streakFrom(habit, 8991);
 
-    expect(abstinenceStreakMillis(habit, lapses, streak), second - first,
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit)),
+        second - first,
         reason: 'computed.since#8 — правило на обоих концах одно: от '
             'мгновения одного срыва до мгновения следующего');
-    expect(abstinenceStreakMillis(habit, lapses, streak),
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit)),
         6 * 86400000 + 14 * 3600000,
         reason: 'computed.since#8 — шесть суток и четырнадцать часов, тогда '
             'как чистых суток в серии пять: чистое время начинается утром '
@@ -173,11 +190,52 @@ void main() {
 
     expect(streak.end, LocalDate(9000),
         reason: 'computed.since#8 — идущая серия кончается сегодняшним днём');
-    expect(abstinenceStreakMillis(habit, lapses, streak, nowMillis: now),
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit), nowMillis: now),
         3 * 86400000 + 9 * 3600000,
         reason: 'computed.since#8 — у идущей серии конца ещё нет, и вместо '
             'него берётся «сейчас»: от полуночи 8997-го до девяти утра '
             'сегодня');
+  });
+
+  test('#11 midnight does not end a streak that no lapse ended', () {
+    // Список серий собирается один раз, а «сегодня» переезжает в полночь.
+    // Строим список вчерашним днём и переводим часы через полночь, ничего
+    // больше не трогая, — ровно то, что происходит с открытым экраном.
+    setToday(LocalDate(8999));
+    final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8996]);
+    setToday(LocalDate(9000));
+    final Streak streak = streakFrom(habit, 8997);
+
+    expect(streak.end, LocalDate(8999),
+        reason: 'computed.since#10 — серия осталась той, какой её собрали до '
+            'полуночи: её конец — вчерашний день');
+
+    const int now = (9000 + 10957) * 86400000 + 9 * 3600000;
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit), nowMillis: now),
+        3 * 86400000 + 9 * 3600000,
+        reason: 'computed.since#10 — серия идёт: на дне после её конца срыва '
+            'нет. Спроси мы «конец старше сегодня?», ответ был бы ровно трое '
+            'суток — надпись встала бы на «3 дня 00:00» и стояла бы до '
+            'следующей перерисовки экрана');
+  });
+
+  test('#12 a lapse on the day after does end it, whatever the date is', () {
+    // Та же форма, но срыв на дне после конца есть. Дата тут ни при чём:
+    // кончает серию срыв.
+    final habit =
+        makeAbstinence(committedFrom: 8960, lapses: <int>[8990, 8996]);
+    final Streak streak = streakFrom(habit, 8991);
+
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit), nowMillis: (9000 + 10957) * 86400000),
+        5 * 86400000,
+        reason: 'computed.since#10 — пять суток, а не двадцать один день до '
+            '«сейчас»: серию оборвал срыв 8996-го, и на нём она кончилась');
   });
 
   test('#10 the streak does not read a moment its own commitment excluded',
@@ -190,7 +248,9 @@ void main() {
     habit.recompute();
     final Streak streak = streakFrom(habit, 8990);
 
-    expect(abstinenceStreakMillis(habit, lapses, streak,
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit),
             nowMillis: (9000 + 10957) * 86400000),
         10 * 86400000,
         reason: 'computed.commitment#2 — охрана у карточки серий та же, что у '

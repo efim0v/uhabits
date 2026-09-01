@@ -1974,6 +1974,76 @@ void main() {
               'длительность на месте: она стоит в полосе, а не на подписи');
     });
 
+    testWidgets('#9 the exact text never lands on a date label',
+        (tester) async {
+      // Свес с полосы и наезд на подпись — не одно и то же, и между ними
+      // зазор в один em: надпись выходит из полосы при `T > barWidth`, а под
+      // подпись залезает при `T > barWidth + em`. Проверять надо второе.
+      final canvas = draw(spread, durations: spreadDurations);
+      final ops = canvas.opsNamed('drawText');
+      expect(ops, hasLength(spread.length * 3),
+          reason: 'computed.since#9 — три надписи в строке: длительность и '
+              'две даты');
+
+      const double textMargin = 0.5 * 11.71;
+      double widthOf(_Op op) => op.text!.length * op.fontSize * 0.6;
+
+      for (var row = 0; row < spread.length; row++) {
+        final centre = ops[row * 3];
+        final startLabel = ops[row * 3 + 1];
+        final endLabel = ops[row * 3 + 2];
+        expect(centre.textAlign, core.TextAlign.center,
+            reason: 'computed.since#9');
+        expect(startLabel.textAlign, core.TextAlign.right,
+            reason: 'charts-canvas-theming.streak-chart#11');
+        expect(endLabel.textAlign, core.TextAlign.left,
+            reason: 'charts-canvas-theming.streak-chart#11');
+
+        final double half = widthOf(centre) / 2;
+        final double textLeft = centre.args[0] - half;
+        final double textRight = centre.args[0] + half;
+        // Правый край левой подписи и левый край правой: у выровненного к
+        // краю текста нарисованная координата и есть этот край.
+        expect(textLeft - startLabel.args[0],
+            greaterThanOrEqualTo(textMargin - 1e-9),
+            reason: 'computed.since#9 — между надписью и датой остаётся тот '
+                'же отступ, какой порт держит между полосой и датой; строка '
+                '$row');
+        expect(endLabel.args[0] - textRight,
+            greaterThanOrEqualTo(textMargin - 1e-9),
+            reason: 'computed.since#9 — и справа тоже; строка $row');
+      }
+
+      // И то, чего больше нет: у сорокадневной серии дата, приклеенная к
+      // краю полосы по-портовому, легла бы под надпись на четыре пикселя.
+      final double gap = canvas.opsNamed('fillRoundRect')[1].args[0];
+      final centre = ops[3];
+      expect(gap - textMargin,
+          greaterThan(centre.args[0] - widthOf(centre) / 2),
+          reason: 'computed.since#9 — вот наезд, который был: `gap - '
+              'textMargin` заходит правее левого края надписи');
+    });
+
+    testWidgets('#9 when the exact text will not fit between the dates, the '
+        'dates go out together', (tester) async {
+      // Ширина 200: портированная охрана здесь молчит — просвет между
+      // подписями 56, а её порог 50, — и без второго повода даты остались бы
+      // и легли бы под надписи.
+      expect(inBars(draw(spread, width: 200)).length, 5,
+          reason: 'charts-canvas-theming.streak-chart#12 — портированная '
+              'охрана на этой ширине не срабатывает');
+      expect(draw(spread, width: 200).texts.length, 15,
+          reason: 'charts-canvas-theming.streak-chart#12 — без шва даты на '
+              'месте: пять строк по три надписи');
+
+      final canvas = draw(spread, durations: spreadDurations, width: 200);
+      expect(canvas.texts, spreadDurations,
+          reason: 'computed.since#9 — просвет в 56 не держит и самой короткой '
+              'надписи, и подписи гаснут все разом, как их гасит порт: '
+              'карточка с датами у одних строк и без них у других была бы '
+              'хуже карточки без дат');
+    });
+
     testWidgets('#9 a text that overflows its bar is drawn in contrast60',
         (tester) async {
       // Две серии, 24 и 12: доля второй ровно половина, и порт красит её
