@@ -326,7 +326,7 @@ void main() {
 
       expect(streak['length'], 40,
           reason: 'computed.streak#6 — сорок прожитых суток, столько же, '
-              'сколько печатает карточка серий');
+              'сколько меряет свою полосу карточка серий');
       expect(streak['end'], HomeWidgetBridge.formatDate(today),
           reason: 'computed.streak#6 — а конец у серии настоящий: сегодня, не '
               'вчера');

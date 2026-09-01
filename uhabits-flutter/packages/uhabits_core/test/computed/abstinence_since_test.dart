@@ -120,4 +120,81 @@ void main() {
             'обязательства, а не от мгновения, которое обязательство '
             'исключило');
   });
+
+  /// Серия привычки, начинающаяся в день [start]. Берётся у самой привычки, а
+  /// не собирается рядом: длительность считается про ту серию, которую нашёл
+  /// пересчёт, и подставленная вручную пара дат проверяла бы не то.
+  Streak streakFrom(Habit habit, int start) => habit.streaks
+      .getBest(1 << 20)
+      .firstWhere((Streak s) => s.start == LocalDate(start));
+
+  test('#7 a streak the journal says nothing about runs midnight to midnight',
+      () {
+    // Срывы 8990-го и 8996-го, ни у одного момента не записано: между ними
+    // серия [8991, 8995].
+    final habit =
+        makeAbstinence(committedFrom: 8960, lapses: <int>[8990, 8996]);
+    final Streak streak = streakFrom(habit, 8991);
+
+    expect(streak.end, LocalDate(8995),
+        reason: 'computed.since#8 — серия кончается днём перед срывом');
+    expect(abstinenceStreakMillis(habit, lapses, streak), 5 * 86400000,
+        reason: 'computed.since#8 — ровно пять суток: от полуночи 8991-го до '
+            'полуночи 8996-го, часы и минуты нулевые. Это не выдумка, а '
+            'единственное, что про такую серию известно (`computed.since#2`)');
+  });
+
+  test('#8 a streak between two recorded moments is the distance between them',
+      () {
+    // Сорвался 8990-го в 06:00 и снова 8996-го в 20:00.
+    const int first = (8990 + 10957) * 86400000 + 6 * 3600000;
+    const int second = (8996 + 10957) * 86400000 + 20 * 3600000;
+    final habit =
+        makeAbstinence(committedFrom: 8960, lapses: <int>[8990, 8996]);
+    lapses.save(habit.id!, 8990, atMillis: first);
+    lapses.save(habit.id!, 8996, atMillis: second);
+    final Streak streak = streakFrom(habit, 8991);
+
+    expect(abstinenceStreakMillis(habit, lapses, streak), second - first,
+        reason: 'computed.since#8 — правило на обоих концах одно: от '
+            'мгновения одного срыва до мгновения следующего');
+    expect(abstinenceStreakMillis(habit, lapses, streak),
+        6 * 86400000 + 14 * 3600000,
+        reason: 'computed.since#8 — шесть суток и четырнадцать часов, тогда '
+            'как чистых суток в серии пять: чистое время начинается утром '
+            'одного дня и кончается вечером другого, и полными сутками его '
+            'больше, чем календарными днями между срывами');
+  });
+
+  test('#9 a running streak is measured up to now', () {
+    const int now = (9000 + 10957) * 86400000 + 9 * 3600000;
+    final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8996]);
+    final Streak streak = streakFrom(habit, 8997);
+
+    expect(streak.end, LocalDate(9000),
+        reason: 'computed.since#8 — идущая серия кончается сегодняшним днём');
+    expect(abstinenceStreakMillis(habit, lapses, streak, nowMillis: now),
+        3 * 86400000 + 9 * 3600000,
+        reason: 'computed.since#8 — у идущей серии конца ещё нет, и вместо '
+            'него берётся «сейчас»: от полуночи 8997-го до девяти утра '
+            'сегодня');
+  });
+
+  test('#10 the streak does not read a moment its own commitment excluded',
+      () {
+    final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8989]);
+    const int staleAt = (8989 + 10957) * 86400000 + 9 * 3600000;
+    lapses.save(habit.id!, 8989, atMillis: staleAt);
+
+    habit.definition = habit.definition!.copyWith(committedFrom: 8990);
+    habit.recompute();
+    final Streak streak = streakFrom(habit, 8990);
+
+    expect(abstinenceStreakMillis(habit, lapses, streak,
+            nowMillis: (9000 + 10957) * 86400000),
+        10 * 86400000,
+        reason: 'computed.commitment#2 — охрана у карточки серий та же, что у '
+            'счётчика: день срыва старше нового дня обязательства, значит он '
+            'вне окна, и серия считается от полуночи обязательства');
+  });
 }

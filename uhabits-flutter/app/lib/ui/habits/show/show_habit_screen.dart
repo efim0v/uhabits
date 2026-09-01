@@ -68,6 +68,7 @@ import '../abstinence/abstinence_button_view.dart' show isAbstinenceLapseDay;
 import '../abstinence/abstinence_gestures.dart';
 import '../abstinence/abstinence_glyphs.dart' show banGlyph;
 import '../abstinence/abstinence_overview.dart' show AbstinenceOverviewCard;
+import '../abstinence/abstinence_streak_card.dart' show AbstinenceStreakCard;
 import '../edit/edit_habit_screen.dart';
 import 'cards/bar_card_view.dart';
 import '../sleep/sleep_section.dart';
@@ -1164,6 +1165,18 @@ class _ShowHabitViewState extends State<_ShowHabitView>
           onClickEditButton: model.presenter.historyCardPresenter.onClickEditButton,
         );
       case ShowHabitCard.streak:
+        // Воздержание печатает в полосе не число суток, а точную
+        // длительность серии (`computed.since#8`). Карточка та же самая:
+        // обёртка добавляет ей надписи и часы, отбор и геометрию оставляя
+        // портированными.
+        if (abstinence != null) {
+          return AbstinenceStreakCard(
+            key: key,
+            habit: widget.habit,
+            scope: widget.scope,
+            state: state.streaks,
+          );
+        }
         return StreakCardView(key: key, state: state.streaks);
       case ShowHabitCard.frequency:
         return FrequencyCardView(key: key, state: state.frequency);

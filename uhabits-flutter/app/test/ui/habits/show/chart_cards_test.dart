@@ -1869,6 +1869,146 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // Точная длительность в полосе: шов `durations`
+  // -------------------------------------------------------------------------
+
+  group('computed.since — точная длительность серии', () {
+    /// Рисует [streaks] с надписями [durations] или без них.
+    _RecordingCanvas draw(
+      List<core.Streak> streaks, {
+      List<String>? durations,
+      double width = 300,
+    }) {
+      final view = StreakChartView(
+        streaks: streaks,
+        color: green,
+        theme: theme,
+        dateFormatter: formatter,
+        durations: durations,
+      );
+      final canvas = _RecordingCanvas(
+        width: width,
+        height: streaks.length * StreakChartView.baseSize,
+      );
+      view.draw(canvas);
+      return canvas;
+    }
+
+    /// Надписи, которые стоят в полосах: даты по краям выровнены к краю, а
+    /// эти — по центру строки.
+    List<_Op> inBars(_RecordingCanvas c) => c
+        .opsNamed('drawText')
+        .where((op) => op.textAlign == core.TextAlign.center)
+        .toList();
+
+    /// Пять серий разной длины, от стодневной до однодневной.
+    final spread = <core.Streak>[
+      streak(core.LocalDate.ymd(2015, 1, 25), 100),
+      streak(core.LocalDate.ymd(2014, 9, 30), 40),
+      streak(core.LocalDate.ymd(2014, 8, 10), 10),
+      streak(core.LocalDate.ymd(2014, 7, 20), 4),
+      streak(core.LocalDate.ymd(2014, 6, 30), 1),
+    ];
+
+    /// Те же пять, каждая со своей точной длительностью — самая длинная
+    /// надпись, какую карточка печатает по-русски.
+    const spreadDurations = <String>[
+      '100 дней 06:12',
+      '40 дней 00:00',
+      '10 дней 00:00',
+      '4 дня 00:00',
+      '1 день 00:00',
+    ];
+
+    testWidgets('#9 the exact text does not touch a single bar width',
+        (tester) async {
+      final before = draw(spread);
+      final after = draw(spread, durations: spreadDurations);
+
+      List<double> widths(_RecordingCanvas c) =>
+          c.opsNamed('fillRoundRect').map((op) => op.args[2]).toList();
+      expect(widths(after), widths(before),
+          reason: 'computed.since#9 — полоса меряется числом суток, и точная '
+              'надпись в этот минимум не попадает');
+
+      // availableWidth = 300 - 2 * 72 - 11.71; measureText = 6 за глиф.
+      const available = 300.0 - 2 * 72.0 - 11.71;
+      expect(widths(after), <Object>[
+        available,
+        closeTo(0.4 * available, 1e-9),
+        closeTo(2 * 6.0 + 11.71, 1e-9),
+        closeTo(1 * 6.0 + 11.71, 1e-9),
+        closeTo(1 * 6.0 + 11.71, 1e-9),
+      ], reason: 'computed.since#9 — сотня занимает всю ширину, сорок — свои '
+          'сорок процентов, а короткие серии стоят на портированном минимуме '
+          '«число плюс em», каждая на своём');
+
+      // Тот же минимум, посчитанный от надписи, а не от числа: «100 дней
+      // 06:12» есть четырнадцать глифов, то есть 84 + 11.71. Он поднял бы
+      // все четыре короткие полосы к одной ширине, и однодневная серия
+      // встала бы вровень с сорокадневной.
+      const naiveFloor = 14 * 6.0 + 11.71;
+      expect(naiveFloor, greaterThan(0.4 * available),
+          reason: 'computed.since#9 — вот эта ловушка: минимум по надписи '
+              'выше, чем настоящая полоса сорокадневной серии');
+    });
+
+    testWidgets('#8 the bar prints the seam, and the port still prints the '
+        'number', (tester) async {
+      expect(inBars(draw(spread, durations: spreadDurations))
+              .map((op) => op.text)
+              .toList(),
+          spreadDurations,
+          reason: 'computed.since#8 — в полосе стоит точная длительность');
+      expect(inBars(draw(spread)).map((op) => op.text).toList(),
+          <String>['100', '40', '10', '4', '1'],
+          reason: 'computed.since#8 — без шва карточка печатает то же число, '
+              'что и раньше: у привычки оригинала не меняется ничего');
+
+      // Узкая карточка гасит подписи дат целиком
+      // (`charts-canvas-theming.streak-chart#12`). Время, повешенное на них,
+      // погасло бы вместе с ними; в полосе оно остаётся.
+      final squeezed = draw(spread, durations: spreadDurations, width: 100);
+      expect(squeezed.texts, spreadDurations,
+          reason: 'computed.since#8 — дат не осталось ни одной, а точная '
+              'длительность на месте: она стоит в полосе, а не на подписи');
+    });
+
+    testWidgets('#9 a text that overflows its bar is drawn in contrast60',
+        (tester) async {
+      // Две серии, 24 и 12: доля второй ровно половина, и порт красит её
+      // надпись цветом текста по полосе.
+      final halved = <core.Streak>[
+        streak(core.LocalDate.ymd(2015, 1, 25), 24),
+        streak(core.LocalDate.ymd(2014, 12, 1), 12),
+      ];
+      const durations = <String>['24 дня 00:00', '12 дней 06:12'];
+
+      final ported = inBars(draw(halved));
+      expect(ported[0].color, theme.cardBackgroundColor,
+          reason: 'charts-canvas-theming.streak-chart#10 — доля 1.0');
+      expect(ported[1].color, theme.cardBackgroundColor,
+          reason: 'charts-canvas-theming.streak-chart#10 — доля ровно 0.5, и '
+              'порт всё ещё пишет цветом текста по полосе');
+
+      final exact = inBars(draw(halved, durations: durations));
+      const available = 300.0 - 2 * 72.0 - 11.71;
+      expect(12 * 6.0, lessThan(available),
+          reason: 'computed.since#9 — первая надпись в свою полосу входит');
+      expect(13 * 6.0, greaterThan(0.5 * available),
+          reason: 'computed.since#9 — вторая из своей выходит');
+      expect(exact[0].color, theme.cardBackgroundColor,
+          reason: 'computed.since#9 — надпись лежит на полосе целиком, и её '
+              'цвет — цвет текста по полосе');
+      expect(exact[1].color, theme.mediumContrastTextColor,
+          reason: 'computed.since#9 — а эта с полосы свешивается, и цветом '
+              'текста по полосе её края легли бы на подложку карточки и '
+              'пропали: доля стояла за «надпись помещается», и спрашивается '
+              'теперь именно это');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Target chart
   // -------------------------------------------------------------------------
 

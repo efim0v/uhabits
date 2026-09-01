@@ -54,6 +54,7 @@ class StreakChartView extends core.View {
     required this.dateFormatter,
     this.dateLabel,
     this.lengths,
+    this.durations,
   });
 
   /// `R.dimen.baseSize`.
@@ -99,6 +100,21 @@ class StreakChartView extends core.View {
   /// date, or the day it moves to would be a lie the chart tells on its own
   /// (`computed.streak#8`).
   final List<int>? lengths;
+
+  /// Точная длительность каждой серии из [streaks], параллельно ему, — та
+  /// надпись, которая печатается в полосе вместо числа суток. Null у всякой
+  /// привычки, которую знает оригинал. Не из порта.
+  ///
+  /// Готовая строка, а не число: сутки в ней названы словом, а слово знает
+  /// только слой с локализацией. Ядро отдаёт длительность в миллисекундах, и
+  /// разложить её на «сутки, часы, минуты» умеет `formatStreakDuration`.
+  ///
+  /// Ширину полосы эта надпись не задаёт. Минимум по-прежнему считается от
+  /// числа суток — от той величины, которой полоса и меряется, — иначе
+  /// портированная охрана «полоса не уже собственной надписи» подняла бы
+  /// однодневную серию до ширины стодневной, и график перестал бы быть
+  /// графиком (`computed.since#9`).
+  final List<String>? durations;
 
   /// The text that flanks a bar: `df.longFormat(date)`, the locale's medium
   /// date pattern (`audit3.streak-chart-date-labels-are-hard#1`).
@@ -160,6 +176,7 @@ class StreakChartView extends core.View {
         canvas,
         streaks[i],
         _lengthOf(i),
+        durations?[i],
         top,
         width,
         maxLength,
@@ -182,6 +199,7 @@ class StreakChartView extends core.View {
     core.Canvas canvas,
     core.Streak streak,
     int length,
+    String? duration,
     double top,
     double width,
     int maxLength,
@@ -196,7 +214,10 @@ class StreakChartView extends core.View {
     if (shouldShowLabels) availableWidth -= 2 * textMargin;
 
     final lengthText = length.toString();
-    // A bar is never narrower than its own number plus one em.
+    // A bar is never narrower than its own number plus one em. Мерится
+    // именно число суток — и когда в полосе печатается длительность целиком
+    // (`computed.since#9`): длинная надпись, попав в этот минимум, сравняла
+    // бы однодневную серию со стодневной.
     final barWidth = math.max(
       percentage * availableWidth,
       canvas.measureText(lengthText) + em,
@@ -218,9 +239,20 @@ class StreakChartView extends core.View {
     final baselineY = top + baseSize / 2 + 0.3 * em;
     final y = chartTextCenter(baselineY, textSize);
 
-    canvas.setColor(_numberColor(percentage));
+    // Порт выбирает цвет надписи по доле, и `percentage >= 0.5` стоит там за
+    // «надпись лежит на полосе»: у двузначного числа это одно и то же. Точная
+    // длительность втрое длиннее, и с половинной полосы она свешивается —
+    // цветом текста по полосе её края легли бы на подложку карточки и
+    // пропали. Поэтому там, где шов заполнен, спрашивается ровно то, за что
+    // доля стояла: помещается ли надпись в свою полосу (`computed.since#9`).
+    final String text = duration ?? lengthText;
+    canvas.setColor(duration == null
+        ? _numberColor(percentage)
+        : canvas.measureText(text) <= barWidth
+            ? textColors[2]
+            : textColors[1]);
     canvas.setTextAlign(core.TextAlign.center);
-    canvas.drawText(lengthText, width / 2, y);
+    canvas.drawText(text, width / 2, y);
 
     if (shouldShowLabels) {
       canvas.setColor(theme.mediumContrastTextColor);
@@ -322,6 +354,7 @@ class StreakCardView extends StatelessWidget {
     required this.state,
     this.dateFormatter,
     this.dateLabel,
+    this.durations,
     super.key,
   });
 
@@ -330,6 +363,15 @@ class StreakCardView extends StatelessWidget {
   final core.LocalDateFormatter? dateFormatter;
 
   final String Function(core.LocalDate date)? dateLabel;
+
+  /// Точная длительность каждой серии, параллельно `state.bestStreaks`, или
+  /// null — печатать одно число суток, как порт. См.
+  /// [StreakChartView.durations].
+  ///
+  /// Живёт на виде, а не в [StreakCardState]: строка названа словом
+  /// человеческого языка, а язык знает только дерево виджетов. Состояние
+  /// возит числа, вид — слова.
+  final List<String>? durations;
 
   /// show_habit_streak.xml gives the chart `wrap_content`, and
   /// `StreakChart.onMeasure` answers `streaks.size * baseSize`.
@@ -353,6 +395,7 @@ class StreakCardView extends StatelessWidget {
             dateFormatter: dateFormatter ?? IntlLocalDateFormatter.of(context),
             dateLabel: dateLabel,
             lengths: state.lengths,
+            durations: durations,
           ),
         ),
       ),

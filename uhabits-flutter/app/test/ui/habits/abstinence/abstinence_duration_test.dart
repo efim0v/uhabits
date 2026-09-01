@@ -85,4 +85,47 @@ void main() {
           'не печатается, сколько бы их ни было',
     );
   });
+
+  /// [formatStreakDuration] с русской локалью.
+  String streak(Duration held) => formatStreakDuration(ru, held.inMilliseconds);
+
+  test('a streak prints days, hours and minutes, and nothing above days', () {
+    expect(streak(const Duration(days: 40, hours: 6, minutes: 12)),
+        '40 дней 06:12',
+        reason: 'computed.since#8 — сутки, часы и минуты: месяца среди них '
+            'нет, владелец просил у карточки не его');
+    expect(streak(const Duration(days: 400, hours: 6, minutes: 12)),
+        '400 дней 06:12',
+        reason: 'computed.since#8 — и за год сутки не превращаются в год: '
+            'счётчику календарные единицы нужны (`computed.since#6`), '
+            'карточке — нет');
+  });
+
+  test('a streak the journal says nothing about prints a clean zero', () {
+    expect(streak(const Duration(days: 5)), '5 дней 00:00',
+        reason: 'computed.since#8 — серия шла от полуночи до полуночи, и '
+            'между ними ровно столько');
+    expect(streak(Duration.zero), '0 дней 00:00',
+        reason: 'computed.since#8 — серия первого дня длится нисколько, и '
+            'это тоже ответ');
+  });
+
+  test('hours and minutes are two digits, and hours never reach a day', () {
+    expect(streak(const Duration(days: 1, hours: 2, minutes: 3)),
+        '1 день 02:03',
+        reason: 'computed.since#8 — двузначные, чтобы десять строк карточки '
+            'встали столбиком');
+    expect(streak(const Duration(hours: 47, minutes: 59)), '1 день 23:59',
+        reason: 'computed.since#8 — часы не переваливают за сутки: сорок '
+            'семь часов есть сутки и двадцать три часа');
+  });
+
+  test('a duration that runs backwards reads as nothing at all', () {
+    // Серия не кончается раньше, чем начинается: отрицательная длительность
+    // есть сбитые часы, а не событие приложения. Читается как ноль, ровно
+    // так же, как её читает счётчик.
+    expect(streak(const Duration(hours: -3)), '0 дней 00:00',
+        reason: 'computed.since#8 — «-1 день 21:00» не сказало бы человеку '
+            'ничего, кроме того, что приложение сломалось');
+  });
 }
