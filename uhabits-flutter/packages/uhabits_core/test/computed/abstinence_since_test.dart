@@ -190,6 +190,58 @@ void main() {
             'свободы; остаётся полночь дня обязательства');
   });
 
+  test(
+      '#23 a commitment moment stranded on a day the commitment no longer '
+      'names is no moment at all', () {
+    // Так её принёс бы `copyWith` до собственного исправления — заменить день
+    // обязательства этим методом можно, а стереть повисший момент нельзя было
+    // в принципе (`computed.definition#11`) — или чужая копия базы, ни разу
+    // не видевшая стирания (`computed.commitment#9`): день обязательства
+    // перенесён назад, момент остался тем, что был записан для прежнего,
+    // более позднего дня.
+    const int at = (8990 + 10957) * 86400000 + 9 * 3600000; // 9 утра 8990-го
+    final habit = makeAbstinence(committedFrom: 8990, committedAtMillis: at);
+    habit.definition = habit.definition!.copyWith(committedFrom: 8960);
+    habit.recompute();
+
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8960 + 10957) * 86400000,
+        reason: 'computed.since#13 — момент остался висеть на дне, которого '
+            'у обязательства больше нет: он не про 8960-й, и читается как '
+            'отсутствие, а не как «эта привычка начата только что»');
+  });
+
+  test(
+      '#24 a commitment moment exactly at the next midnight belongs to the '
+      'next day, not this one', () {
+    // Ровно та полночь, которой кончаются сутки дня обязательства, — уже
+    // начало следующих суток, а не их конец: момент обязательства обязан
+    // лежать строго внутри своего дня, границу с чужим не разделяя с ним.
+    final int nextMidnight = (8960 + 1 + 10957) * 86400000;
+    final habit =
+        makeAbstinence(committedFrom: 8960, committedAtMillis: nextMidnight);
+
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8960 + 10957) * 86400000,
+        reason: 'computed.since#13 — момент лёг точно на границу дня и '
+            'принадлежит уже следующим суткам, а не этим; остаётся полночь '
+            'дня обязательства');
+  });
+
+  test('#22 a lapse moment of zero is no moment at all', () {
+    // Ноль сюда не могла положить ни одна дверь записи — `setLapse` кладёт
+    // либо часы, либо пустоту (`computed.since#7`), — но чужая копия базы
+    // донесёт что угодно, и счётчик её всё равно спросят.
+    final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8995]);
+    lapses.save(habit.id!, 8995, amount: 1, atMillis: 0);
+
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8996 + 10957) * 86400000,
+        reason: 'computed.since#12 — ноль есть первое января семидесятого, и '
+            'принять его за настоящий момент значило бы напечатать полвека '
+            'свободы; остаётся полночь после дня срыва (`computed.since#2`)');
+  });
+
   test('#16 without a commitment day there is nothing to count from', () {
     final habit = makeAbstinence(committedFrom: 8960);
     habit.definition = HabitDefinition(

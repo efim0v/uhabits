@@ -507,12 +507,31 @@ class EditHabitModel extends ChangeNotifier {
       habit.targetType = NumericalHabitType.atMost;
       habit.unit = unit;
       habit.frequency = Frequency(1, 1);
+      // Момент обязательства пишется тем же правилом, каким
+      // `AbstinenceSync.setLapse` пишет момент срыва (`computed.since#7`,
+      // `computed.commitment#8`): «сейчас» бывает правдой только про
+      // сегодняшний день. День обязательства равен сегодняшнему — момент есть
+      // `systemCurrentTimeMillis()`, те же часы, из которых ядро выводит само
+      // «сегодня» (`computeToday`), а не `DateTime.now()` напрямую: тест,
+      // прибивший часы, обязан прибивать вместе с ними и момент. День в
+      // прошлом — по словам человека, привычка держится не с этого сохранения,
+      // а раньше, — и момент остаётся пустым; счётчик честно считает от
+      // полуночи того дня (`computed.since#3`).
+      //
+      // Пересчитывается заново при каждом сохранении, а не переносится из
+      // прежней строки: перенесённый назад день обязательства иначе унёс бы с
+      // собой момент, записанный для другого дня, и счётчик показал бы
+      // месячной привычке «0 минут» вместо месяца (`computed.commitment#9`).
+      final int? committedAtMillis = committedFrom == getToday().daysSince2000
+          ? systemCurrentTimeMillis()
+          : null;
       // The payload is assembled by the core's own door rather than by
       // literals: the keys are named once, the allowance is a `double`, and an
       // empty unit becomes `count` instead of `''` (`computed.allowance#2`).
       abstinenceRow = HabitDefinition(
         kind: ComputedKind.abstinence,
         committedFrom: committedFrom,
+        committedAtMillis: committedAtMillis,
         payload: abstinencePayload(allowance: allowance, unit: unit),
       );
     }

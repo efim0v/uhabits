@@ -1,5 +1,13 @@
 import 'dart:convert';
 
+/// Значение по умолчанию у [HabitDefinition.copyWith]'s `committedAtMillis`,
+/// и только у него: настоящий момент — тоже `int?`, включая null, так что
+/// свой собственный `null` от «не передали» отличить нечем. Отличает эту
+/// метку `identical`, а не `==` — value-типы вроде `int` тоже пришлось бы
+/// исключать, а несравнимый по значению `Object()` таким не бывает
+/// (`computed.definition#11`).
+const Object _unspecified = Object();
+
 /// What kind of computation stands behind a habit.
 ///
 /// The name goes to the database, so it is written out rather than derived
@@ -72,14 +80,30 @@ class HabitDefinition {
   /// gives it should not put it here.
   final Map<String, Object?> payload;
 
+  /// [committedAtMillis] здесь не `int?`, а нарочно `Object?` со значением по
+  /// умолчанию [_unspecified]: у поля три состояния, а не два — «не
+  /// передали» (значение осталось прежним), «передали момент» (заменили) и
+  /// «передали null» (стёрли), — а `int? committedAtMillis` умел бы различить
+  /// только первые два: `null ?? this.committedAtMillis` читает явную
+  /// пустоту как «не передали» и молча возвращает прежнее значение. Стереть
+  /// момент этим методом было бы нельзя в принципе, а перенос дня
+  /// обязательства назад обязан именно это и делать
+  /// (`computed.commitment#9`, `computed.definition#11`).
+  ///
+  /// [committedFrom] такого же обращения не получил: ни один зовущий не
+  /// стирает день обязательства этим методом — только заменяет его или
+  /// оставляет как есть, — а заводить сигнальное значение ради стирания,
+  /// которого не просят, значило бы усложнять сигнатуру ради предположения.
   HabitDefinition copyWith(
           {int? committedFrom,
-          int? committedAtMillis,
+          Object? committedAtMillis = _unspecified,
           Map<String, Object?>? payload}) =>
       HabitDefinition(
         kind: kind,
         committedFrom: committedFrom ?? this.committedFrom,
-        committedAtMillis: committedAtMillis ?? this.committedAtMillis,
+        committedAtMillis: identical(committedAtMillis, _unspecified)
+            ? this.committedAtMillis
+            : committedAtMillis as int?,
         payload: payload ?? this.payload,
       );
 

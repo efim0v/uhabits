@@ -139,6 +139,71 @@ void main() {
     });
   });
 
+  group('the moment of commitment', () {
+    test('the commitment day equal to today records the moment', () {
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'No alcohol';
+      expect(model.save(), isTrue, reason: 'computed.commitment#8');
+
+      final HabitDefinition definition = scope.definitions
+          .forHabit(scope.habitList.getByPosition(0).id!)!;
+      expect(definition.committedFrom, 9000, reason: 'computed.create#8');
+      expect(definition.committedAtMillis,
+          (9000 + 10957) * 86400000 + 12 * 3600000,
+          reason: 'computed.commitment#8 — день обязательства равен '
+              'сегодняшнему, и момент есть те самые часы, из которых ядро '
+              'выводит само «сегодня» (`systemCurrentTimeMillis`, прибитые в '
+              'setUp вместе с ним)');
+    });
+
+    test('a backdated commitment at creation gets no moment', () {
+      final EditHabitModel model =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      model.nameController.text = 'No spending';
+      model.setCommittedFrom(8960);
+      expect(model.save(), isTrue, reason: 'computed.commitment#8');
+
+      final HabitDefinition definition = scope.definitions
+          .forHabit(scope.habitList.getByPosition(0).id!)!;
+      expect(definition.committedAtMillis, isNull,
+          reason: 'computed.commitment#8 — «я держусь с прошлого '
+              'понедельника»: «сейчас» не было бы правдой о прошлом '
+              'понедельнике, и момент остаётся пустым, а счётчик честно '
+              'считает от полуночи того дня (`computed.since#3`)');
+    });
+
+    test('moving the commitment day backward erases the moment', () {
+      // Обязательство дано сегодня — момент записан. Человек передумывает и
+      // переносит день назад, к прошлому месяцу: прежний момент, записанный
+      // под сегодняшним числом, перестаёт относиться к своему дню и обязан
+      // исчезнуть — иначе счётчик прочитает месячную привычку как начатую
+      // только что.
+      final EditHabitModel create =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      create.nameController.text = 'No alcohol';
+      expect(create.save(), isTrue, reason: 'computed.commitment#8');
+
+      final int id = scope.habitList.getByPosition(0).id!;
+      expect(scope.definitions.forHabit(id)!.committedAtMillis, isNotNull,
+          reason: 'sanity — сегодняшнее обязательство получило момент, '
+              'иначе следующая проверка не отличила бы стирание от того, что '
+              'стирать было нечего');
+
+      final EditHabitModel edit = EditHabitModel(scope: scope, habitId: id);
+      edit.setCommittedFrom(8960);
+      expect(edit.save(), isTrue, reason: 'computed.commitment#9');
+
+      final HabitDefinition after = scope.definitions.forHabit(id)!;
+      expect(after.committedFrom, 8960, reason: 'computed.commitment#9');
+      expect(after.committedAtMillis, isNull,
+          reason: 'computed.commitment#9 — перенесённый назад день '
+              'обязательства не вправе унести с собой момент, записанный для '
+              'другого дня: иначе счётчик показал бы «0 минут» привычке, '
+              'которой на самом деле месяц');
+    });
+  });
+
   group('the habit an abstinence habit is stored as', () {
     test('at-most, daily, target equal to the allowance', () {
       final EditHabitModel model =

@@ -127,8 +127,8 @@ void main() {
           base.copyWith(committedAtMillis: 1724900000000);
 
       expect(replaced.committedAtMillis, 1724900000000,
-          reason: 'computed.schema#10 — определение возит момент дальше, а '
-              'не теряет его при копировании');
+          reason: 'computed.definition#11 — передан момент: поле заменяет '
+              'прежнее значение');
     });
 
     test('leaves committedAtMillis alone when not given one', () {
@@ -141,8 +141,32 @@ void main() {
           base.copyWith(payload: <String, Object?>{'allowance': 30});
 
       expect(untouched.committedAtMillis, 1724832000000,
-          reason: 'computed.schema#10 — правка другого поля не стирает '
-              'момент');
+          reason: 'computed.definition#11 — аргумент не передан вовсе: поле '
+              'остаётся прежним, а не тем, что подставила бы `??` под '
+              'явным null');
+    });
+
+    test('clears committedAtMillis when given an explicit null', () {
+      // Требование задачи C: перенос дня обязательства назад обязан стирать
+      // момент, записанный для другого дня (`computed.commitment#9`). Стереть
+      // им было бы нельзя, если бы `null ?? this.committedAtMillis` читал
+      // явную пустоту как «не передали» — а именно так вела бы себя эта
+      // сигнатура при обычном `int? committedAtMillis`.
+      const HabitDefinition base = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 8990,
+        committedAtMillis: 1724832000000,
+      );
+
+      final HabitDefinition cleared =
+          base.copyWith(committedFrom: 8960, committedAtMillis: null);
+
+      expect(cleared.committedAtMillis, isNull,
+          reason: 'computed.definition#11 — передан явный null: поле '
+              'стирается, а не остаётся прежним значением');
+      expect(cleared.committedFrom, 8960,
+          reason: 'computed.definition#11 — стирание одного поля не мешает '
+              'обычной замене другого в том же вызове');
     });
   });
 }
