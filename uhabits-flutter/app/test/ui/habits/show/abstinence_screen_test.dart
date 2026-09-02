@@ -146,7 +146,7 @@ void main() {
         reason: 'computed.abstinence-screen#5 — и подпись осталась при своём');
   });
 
-  testWidgets('computed.streak#7 пропуск не обнуляет счётчик', (tester) async {
+  testWidgets('computed.since#1 пропуск не обнуляет счётчик', (tester) async {
     // Пропуск защищён у оценки (`computed.lapse-score#8`), у свода
     // (`computed.abstinence-sync#4`), у двери записи (`computed.day-write#4`)
     // и у ячейки (`computed.abstinence-cell#4`) — и был уронен у серии:
@@ -167,10 +167,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('20 дней'), findsOneWidget,
-        reason: 'computed.streak#7 — «сегодня меня тут нет» не есть срыв, и '
-            'двадцать дней обязательства остаются двадцатью');
+        reason: 'computed.since#1 — судья у счётчика тот же, что у ячейки: '
+            '«сегодня меня тут нет» не есть срыв (`computed.abstinence-cell#2`), '
+            'и двадцать дней обязательства остаются двадцатью. Серию пропуск '
+            'тоже не рвёт (`computed.streak#7`), но счётчик через неё больше '
+            'не ходит, и держит это число уже не она');
     expect(find.textContaining('Последний срыв'), findsNothing,
-        reason: 'computed.streak#7 — и подпись согласна: срыва не было');
+        reason: 'computed.abstinence-screen#2 — и подпись согласна: срыва не '
+            'было. Один вызов на двоих, и разойтись им не в чем');
   });
 
   testWidgets('the best-streaks card counts days lived through',
@@ -184,7 +188,7 @@ void main() {
 
     // Число серии красится на канвасе, а не пишется виджетом `Text`, поэтому
     // `find.text('40')`/`find.text('41')` тут ни при чём: оба видят только
-    // счётчик над карточкой (уже проверен `computed.streak#7`), саму карточку
+    // счётчик над карточкой (уже проверен выше), саму карточку
     // не видит ни один. Смотреть приходится прямо в построенный график, как
     // это уже делает `streak_date_labels_test.dart` для дат.
     final StreakChartView chart = tester

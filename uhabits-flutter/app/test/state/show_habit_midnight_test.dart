@@ -13,9 +13,11 @@
 /// reaches for free.
 ///
 /// The counter no longer goes through `habit.streaks` at all
-/// (`computed.since#4`), so the rollover no longer decides what it prints —
-/// but everything else on the screen is still rebuilt at midnight, and the
-/// counter is still the shortest way to ask whether it was.
+/// (`computed.since#4`), so the rollover no longer decides what it prints:
+/// `abstinenceSinceMillis` answers the same instant on both sides of
+/// midnight, and it is checked here for that instant and nothing else. What
+/// proves the screen rebuilt is `habit.streaks` itself — the very list the
+/// bug left anchored to yesterday — and it is asserted on its own line.
 library;
 
 // The commands, preferences and time seams are reached by their `src` path,
@@ -234,9 +236,10 @@ void main() {
     expect(
         core.abstinenceSinceMillis(habit, scope.lapses,
             isLapseValue: judgeOf(habit)),
-        isNotNull,
-        reason: 'sanity: nobody has lapsed, so the counter has the '
-            'commitment to count from');
+        day1.minus(20).unixTime,
+        reason: 'sanity: nobody has lapsed and the commitment has no moment '
+            'of its own, so the counter reads the midnight of the day it was '
+            'made — twenty days before day1, in the pinned zone');
 
     systemCurrentTimeMillis = () => day2.unixTime + 1000;
     executor.fire();
@@ -250,10 +253,12 @@ void main() {
     expect(
         core.abstinenceSinceMillis(habit, scope.lapses,
             isLapseValue: judgeOf(habit)),
-        isNotNull,
-        reason: 'computed.since#3 — so the counter still has a moment to '
-            'count from, and does not read "0 minutes" for a habit that is '
-            'still being kept');
+        day1.minus(20).unixTime,
+        reason: 'computed.since#3 — the same instant as before the rollover, '
+            'to the millisecond: the commitment did not move, so neither did '
+            'the count. This is not what proves the rebuild — the streak line '
+            'above is — it is what proves the counter says one thing on both '
+            'sides of midnight');
   });
 
   test('an abstinence habit that lapses on the new day counts from that '
@@ -274,9 +279,10 @@ void main() {
     expect(
         core.abstinenceSinceMillis(habit, scope.lapses,
             isLapseValue: judgeOf(habit)),
-        isNotNull,
+        day1.minus(20).unixTime,
         reason: 'sanity: the rollover alone does not end anything — this is '
-            'the same habit as the test above, one line before it lapses');
+            'the same habit as the test above, one line before it lapses, '
+            'still counting from the midnight of its commitment day');
 
     // The person lapses today — day2, now that it really is "today" — the
     // same door the button on screen calls.
