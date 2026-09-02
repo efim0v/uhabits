@@ -172,4 +172,69 @@ void main() {
     expect(db.queryInt('select count(*) from Habits'), 1,
         reason: 'computed.definition#5');
   });
+
+  test('a definition remembers the moment it committed', () {
+    repository.save(
+      1,
+      const HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724832000000,
+      ),
+    );
+
+    expect(repository.forHabit(1)?.committedAtMillis, 1724832000000,
+        reason: 'computed.schema#10 — момент возвращается тем же, каким его '
+            'записали');
+  });
+
+  test('a definition saved without a moment has none', () {
+    repository.save(
+      1,
+      const HabitDefinition(
+          kind: ComputedKind.abstinence, committedFrom: 9000),
+    );
+
+    expect(repository.forHabit(1)?.committedAtMillis, isNull,
+        reason: 'computed.schema#11 — отсутствие момента есть null, а не '
+            'полночь дня обязательства: ноль был бы полуночью первого '
+            'января семидесятого, а не полуночью committedFrom');
+    expect(repository.forHabit(1)?.committedFrom, 9000,
+        reason: 'computed.definition#2 — день при этом читается как есть');
+  });
+
+  test('saving again replaces the moment along with everything else', () {
+    repository.save(
+      1,
+      const HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724832000000,
+      ),
+    );
+    repository.save(
+      1,
+      const HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724900000000,
+      ),
+    );
+
+    expect(repository.forHabit(1)?.committedAtMillis, 1724900000000,
+        reason: 'computed.schema#10 — перезапись определения переписывает '
+            'и момент');
+  });
+
+  test('a definition older than migration 105 has no moment', () {
+    // Written as the row would have looked right after migration 102: no
+    // `committed_at_millis` column value at all, exactly what a definition
+    // saved before 105 leaves behind.
+    db.run("insert into HabitDefinitions (habit, kind, committed_from, "
+        "payload) values (1, 'abstinence', 9000, '{}')");
+
+    expect(repository.forHabit(1)?.committedAtMillis, isNull,
+        reason: 'computed.schema#11 — строка, написанная до миграции, не '
+            'выдумывает момент, которого в ней никогда не было');
+  });
 }

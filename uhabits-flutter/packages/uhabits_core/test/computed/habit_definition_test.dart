@@ -66,5 +66,83 @@ void main() {
       expect(a, b, reason: 'computed.definition#6');
       expect(a.hashCode, b.hashCode, reason: 'computed.definition#6');
     });
+
+    test(
+        'same kind, committedFrom and payload but different committedAtMillis '
+        'are not equal', () {
+      const HabitDefinition a = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724832000000,
+      );
+      const HabitDefinition b = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724900000000,
+      );
+
+      expect(a == b, isFalse, reason: 'computed.definition#6');
+    });
+
+    test('a null committedAtMillis is not equal to a set one', () {
+      const HabitDefinition a = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+      );
+      const HabitDefinition b = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724832000000,
+      );
+
+      expect(a == b, isFalse, reason: 'computed.definition#6');
+    });
+
+    test('equal definitions including committedAtMillis have equal hash '
+        'codes', () {
+      const HabitDefinition a = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724832000000,
+      );
+      const HabitDefinition b = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: 9000,
+        committedAtMillis: 1724832000000,
+      );
+
+      expect(a, b, reason: 'computed.definition#6');
+      expect(a.hashCode, b.hashCode, reason: 'computed.definition#6');
+    });
+  });
+
+  group('HabitDefinition.copyWith', () {
+    test('replaces committedAtMillis when given one', () {
+      const HabitDefinition base = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedAtMillis: 1724832000000,
+      );
+
+      final HabitDefinition replaced =
+          base.copyWith(committedAtMillis: 1724900000000);
+
+      expect(replaced.committedAtMillis, 1724900000000,
+          reason: 'computed.schema#10 — определение возит момент дальше, а '
+              'не теряет его при копировании');
+    });
+
+    test('leaves committedAtMillis alone when not given one', () {
+      const HabitDefinition base = HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedAtMillis: 1724832000000,
+      );
+
+      final HabitDefinition untouched =
+          base.copyWith(payload: <String, Object?>{'allowance': 30});
+
+      expect(untouched.committedAtMillis, 1724832000000,
+          reason: 'computed.schema#10 — правка другого поля не стирает '
+              'момент');
+    });
   });
 }

@@ -74,6 +74,8 @@ create table Lapses (
 );""",
   104: r"""
 alter table Lapses add column at_millis integer;""",
+  105: r"""
+alter table HabitDefinitions add column committed_at_millis integer;""",
 };
 
 /// The schema version this build ships.
@@ -83,7 +85,7 @@ alter table Lapses add column at_millis integer;""",
 /// asks "is this file newer than we understand" or "bring this file up to
 /// date" means this one; anything still asking [databaseVersion] would refuse
 /// our own database.
-const int appDatabaseVersion = 104;
+const int appDatabaseVersion = 105;
 
 /// Whether a database at [version] is one this build can bring up to date.
 ///

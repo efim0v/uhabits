@@ -39,6 +39,7 @@ class HabitDefinition {
   const HabitDefinition({
     required this.kind,
     this.committedFrom,
+    this.committedAtMillis,
     this.payload = const <String, Object?>{},
   });
 
@@ -52,6 +53,15 @@ class HabitDefinition {
   /// an abstinence habit does — has no oldest entry to start from.
   final int? committedFrom;
 
+  /// Момент обязательства в миллисекундах эпохи, или null, когда он неизвестен.
+  ///
+  /// Неизвестность — не полночь [committedFrom]: так честно выглядит
+  /// определение, записанное до миграции 105, или приехавшее из чужой копии,
+  /// которая этой колонки ещё не знала. Тот же выбор уже сделан для срыва —
+  /// там null тоже значит «неизвестно», а не «полночь» (`computed.schema#9`,
+  /// `computed.schema#11`).
+  final int? committedAtMillis;
+
   /// A flat map of scalars — numbers, strings, booleans, null — for a kind
   /// that has nowhere else of its own to keep a handful of values.
   ///
@@ -63,10 +73,13 @@ class HabitDefinition {
   final Map<String, Object?> payload;
 
   HabitDefinition copyWith(
-          {int? committedFrom, Map<String, Object?>? payload}) =>
+          {int? committedFrom,
+          int? committedAtMillis,
+          Map<String, Object?>? payload}) =>
       HabitDefinition(
         kind: kind,
         committedFrom: committedFrom ?? this.committedFrom,
+        committedAtMillis: committedAtMillis ?? this.committedAtMillis,
         payload: payload ?? this.payload,
       );
 
@@ -97,12 +110,14 @@ class HabitDefinition {
       other is HabitDefinition &&
       other.kind == kind &&
       other.committedFrom == committedFrom &&
+      other.committedAtMillis == committedAtMillis &&
       other.encodedPayload == encodedPayload;
 
   @override
-  int get hashCode => Object.hash(kind, committedFrom, encodedPayload);
+  int get hashCode =>
+      Object.hash(kind, committedFrom, committedAtMillis, encodedPayload);
 
   @override
-  String toString() =>
-      'HabitDefinition(${kind.wireName}, from=$committedFrom, $payload)';
+  String toString() => 'HabitDefinition(${kind.wireName}, '
+      'from=$committedFrom, at=$committedAtMillis, $payload)';
 }

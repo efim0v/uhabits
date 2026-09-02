@@ -311,4 +311,45 @@ void main() {
       );
     });
   });
+
+  group('migration 105', () {
+    test('the definition gains a column for the moment of the commitment',
+        () {
+      final Database db = openAppSchemaDatabase();
+      addTearDown(db.close);
+
+      final List<String> columns = [];
+      db.query(
+        "select name from pragma_table_info('HabitDefinitions')",
+        const <String>[],
+        (stmt) => columns.add(stmt.getText(0)),
+      );
+
+      expect(columns, contains('committed_at_millis'),
+          reason: 'computed.schema#10 — счётчик свободы должен считать от '
+              'мгновения, а не от полуночи дня');
+      expect(db.getVersion(), greaterThanOrEqualTo(105),
+          reason: 'computed.schema#10');
+    });
+
+    test('a definition that predates the column reads as no moment at all',
+        () {
+      final Database db = openAppSchemaDatabase();
+      addTearDown(db.close);
+      db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
+      db.run("insert into HabitDefinitions (habit, kind, payload) "
+          "values (1, 'abstinence', '{}')");
+
+      expect(
+        db.querySingle<int?>(
+          'select committed_at_millis from HabitDefinitions where habit = 1',
+          const <String>[],
+          (stmt) => stmt.getIntOrNull(0),
+        ),
+        isNull,
+        reason: 'computed.schema#11 — старая строка не выдумывает момент, '
+            'которого в ней никогда не было',
+      );
+    });
+  });
 }

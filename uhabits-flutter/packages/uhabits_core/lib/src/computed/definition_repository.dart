@@ -14,8 +14,8 @@ class DefinitionRepository {
   final Database _db;
 
   HabitDefinition? forHabit(int habitId) => _db.querySingle<HabitDefinition?>(
-        'select kind, committed_from, payload from HabitDefinitions '
-        'where habit = ?',
+        'select kind, committed_from, payload, committed_at_millis '
+        'from HabitDefinitions where habit = ?',
         <String>['$habitId'],
         (stmt) {
           final ComputedKind? kind = ComputedKind.fromWire(stmt.getText(0));
@@ -24,6 +24,7 @@ class DefinitionRepository {
             kind: kind,
             committedFrom: _realCommitmentDay(stmt.getIntOrNull(1)),
             payload: HabitDefinition.decodePayload(stmt.getText(2)),
+            committedAtMillis: stmt.getIntOrNull(3),
           );
         },
       );
@@ -86,6 +87,10 @@ class DefinitionRepository {
   /// caller's choice that disappears between the write and the next read is
   /// worse than one that never lands. See [_realCommitmentDay] for why such a
   /// day is nobody's choice (`computed.commitment#6`).
+  ///
+  /// `committedAtMillis` goes straight through, null included: unlike the day,
+  /// it carries nothing an unset column could be mistaken for, so it gets none
+  /// of that column's sanitising (`computed.schema#10`, `computed.schema#11`).
   void save(int habitId, HabitDefinition definition) {
     final int? committedFrom = definition.committedFrom;
     if (committedFrom != null && committedFrom <= 0) {
@@ -97,12 +102,14 @@ class DefinitionRepository {
       );
     }
     _db.run(
-      'insert into HabitDefinitions (habit, kind, committed_from, payload) '
-      'values (?, ?, ?, ?) '
+      'insert into HabitDefinitions '
+      '(habit, kind, committed_from, payload, committed_at_millis) '
+      'values (?, ?, ?, ?, ?) '
       'on conflict(habit) do update set '
       ' kind = excluded.kind, '
       ' committed_from = excluded.committed_from, '
-      ' payload = excluded.payload',
+      ' payload = excluded.payload, '
+      ' committed_at_millis = excluded.committed_at_millis',
       (stmt) {
         stmt.bindInt(1, habitId);
         stmt.bindText(2, definition.kind.wireName);
@@ -113,6 +120,12 @@ class DefinitionRepository {
           stmt.bindInt(3, from);
         }
         stmt.bindText(4, definition.encodedPayload);
+        final int? atMillis = definition.committedAtMillis;
+        if (atMillis == null) {
+          stmt.bindNull(5);
+        } else {
+          stmt.bindInt(5, atMillis);
+        }
       },
     );
   }
