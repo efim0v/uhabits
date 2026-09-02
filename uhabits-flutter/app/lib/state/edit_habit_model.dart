@@ -123,6 +123,8 @@ class EditHabitModel extends ChangeNotifier {
     final HabitDefinition? definition = scope.definitions.forHabit(id);
     computedKind = definition?.kind;
     committedFrom = definition?.committedFrom ?? getToday().daysSince2000;
+    _priorCommittedFrom = definition?.committedFrom;
+    _priorCommittedAtMillis = definition?.committedAtMillis;
     if (computedKind == ComputedKind.abstinence) {
       // `targetValue.toString()` renders 30 as "30.0", which is what the
       // ported line above does and what its rule asks for. An allowance is a
@@ -199,6 +201,24 @@ class EditHabitModel extends ChangeNotifier {
   /// ever gets is the first slip — which would make the clean stretch before
   /// it not exist.
   int committedFrom = 0;
+
+  /// The commitment day already on file when this editor opened, or null
+  /// for a fresh habit.
+  ///
+  /// [save] needs this to tell "this save is assigning the day" from "the
+  /// day was always this one, and today just moved on since it was set":
+  /// comparing [committedFrom] against `getToday()` cannot make that
+  /// distinction, because the stored day stays put while today does not
+  /// (`computed.commitment#9`).
+  int? _priorCommittedFrom;
+
+  /// The moment already on file when this editor opened, or null for a
+  /// fresh habit or one that never got one.
+  ///
+  /// Carried forward by [save] whenever the day is not being reassigned,
+  /// so that a save unrelated to the commitment day — a typo fixed in the
+  /// name, an allowance changed — cannot erase it.
+  int? _priorCommittedAtMillis;
 
   // -----------------------------------------------------------------------
   // Derived state the view asks for
@@ -509,22 +529,34 @@ class EditHabitModel extends ChangeNotifier {
       habit.frequency = Frequency(1, 1);
       // Момент обязательства пишется тем же правилом, каким
       // `AbstinenceSync.setLapse` пишет момент срыва (`computed.since#7`,
-      // `computed.commitment#8`): «сейчас» бывает правдой только про
-      // сегодняшний день. День обязательства равен сегодняшнему — момент есть
+      // `computed.commitment#8`), но только тогда, когда день обязательства
+      // действительно назначается заново — на создании, или когда это
+      // сохранение меняет день на другой (`computed.commitment#9`). День не
+      // менялся — момент переносится дальше таким, каким лежал в прежней
+      // строке, даже если это сохранение случилось не сегодня: иначе любая
+      // посторонняя правка привычки, заведённой раньше сегодняшнего дня, —
+      // имя, напоминание, допуск, что угодно, — стирала бы момент навсегда,
+      // потому что `committedFrom` стоит на месте, а `getToday()` уходит
+      // вперёд и после дня, когда обязательство дано, уже никогда с ним не
+      // совпадёт. Ровно это и терялось до правки.
+      //
+      // День назначается заново — момент решает «сейчас»: «сейчас» бывает
+      // правдой только про сегодняшний день. Равен сегодняшнему — момент есть
       // `systemCurrentTimeMillis()`, те же часы, из которых ядро выводит само
       // «сегодня» (`computeToday`), а не `DateTime.now()` напрямую: тест,
       // прибивший часы, обязан прибивать вместе с ними и момент. День в
       // прошлом — по словам человека, привычка держится не с этого сохранения,
       // а раньше, — и момент остаётся пустым; счётчик честно считает от
-      // полуночи того дня (`computed.since#3`).
-      //
-      // Пересчитывается заново при каждом сохранении, а не переносится из
-      // прежней строки: перенесённый назад день обязательства иначе унёс бы с
-      // собой момент, записанный для другого дня, и счётчик показал бы
-      // месячной привычке «0 минут» вместо месяца (`computed.commitment#9`).
-      final int? committedAtMillis = committedFrom == getToday().daysSince2000
-          ? systemCurrentTimeMillis()
-          : null;
+      // полуночи того дня (`computed.since#3`). Тем же путём перенос дня
+      // обязательства назад стирает прежний, уже не свой момент: он был
+      // записан для другого дня, и без стирания счётчик показал бы месячной
+      // привычке «0 минут» вместо месяца.
+      final bool dayReassigned = _priorCommittedFrom != committedFrom;
+      final int? committedAtMillis = dayReassigned
+          ? (committedFrom == getToday().daysSince2000
+              ? systemCurrentTimeMillis()
+              : null)
+          : _priorCommittedAtMillis;
       // The payload is assembled by the core's own door rather than by
       // literals: the keys are named once, the allowance is a `double`, and an
       // empty unit becomes `count` instead of `''` (`computed.allowance#2`).

@@ -202,6 +202,42 @@ void main() {
               'другого дня: иначе счётчик показал бы «0 минут» привычке, '
               'которой на самом деле месяц');
     });
+
+    test('editing something unrelated leaves an existing moment alone', () {
+      // Обязательство дано позавчера, и момент уже лежит в строке — так, как
+      // он лежал бы у привычки, пережившей хотя бы одно сохранение в день
+      // своего обязательства. День с тех пор никто не трогал; строка
+      // подставлена напрямую, а не через второй `save()`, чтобы момент был
+      // ровно тем, что заведомо не совпадает с сегодняшним числом из setUp.
+      final EditHabitModel create =
+          EditHabitModel(scope: scope, computed: ComputedKind.abstinence);
+      create.nameController.text = 'No alcohol';
+      expect(create.save(), isTrue, reason: 'computed.commitment#8');
+
+      final int id = scope.habitList.getByPosition(0).id!;
+      const int at = (8999 + 10957) * 86400000 + 12 * 3600000;
+      scope.definitions.save(
+        id,
+        HabitDefinition(
+          kind: ComputedKind.abstinence,
+          committedFrom: 8999,
+          committedAtMillis: at,
+        ),
+      );
+
+      final EditHabitModel edit = EditHabitModel(scope: scope, habitId: id);
+      expect(edit.committedFrom, 8999,
+          reason: 'computed.commitment#9 — день читается из строки, а не из '
+              '«сегодня»');
+      edit.nameController.text = 'опечатку поправили';
+      expect(edit.save(), isTrue, reason: 'computed.commitment#9');
+
+      expect(scope.definitions.forHabit(id)!.committedAtMillis, at,
+          reason: 'computed.commitment#9 — день обязательства не менялся, и '
+              'посторонняя правка — здесь имя — не вправе стереть момент: '
+              'иначе он терялся бы на первом же сохранении после дня, когда '
+              'обязательство дано, а таких сохранений почти все');
+    });
   });
 
   group('the habit an abstinence habit is stored as', () {
