@@ -197,6 +197,17 @@ void main() {
     // единственный день — серий не остаётся ни одной, — и строка доли от
     // рекорда получала пустоту вместо обоих своих аргументов. Человек видел
     // прямоугольник ошибки вместо Overview, и при повторном открытии тоже.
+    //
+    // Момент срыва и «сейчас» под счётчиком читаются одним и тем же крюком
+    // (`computed.since#7`), и без подмены часов между записью момента (в
+    // `pumpOverview`) и чтением карточки прошло бы настоящее время
+    // выполнения — на медленной машине оно способно перевалить за секунду и
+    // дать «1 секунда» вместо «0 секунд». Часы прибиты на всё время теста.
+    final int Function() realClock = systemCurrentTimeMillis;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+    final int nowMillis = realClock();
+    systemCurrentTimeMillis = () => nowMillis;
+
     await pumpOverview(tester, committedFrom: today, lapses: <int>[today]);
 
     expect(tester.takeException(), isNull,

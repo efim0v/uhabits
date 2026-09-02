@@ -18,6 +18,8 @@ import 'package:uhabits/ui/core_view.dart';
 import 'package:uhabits/ui/habits/abstinence/abstinence_overview.dart';
 import 'package:uhabits/ui/habits/show/cards/streak_card_view.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
+import 'package:uhabits_core/src/time/date_utils.dart'
+    show systemCurrentTimeMillis;
 import 'package:uhabits_core/uhabits_core.dart';
 
 void main() {
@@ -258,6 +260,16 @@ void main() {
       'сегодня', (tester) async {
     final int today = getToday().daysSince2000;
     final Habit habit = addAbstinence(committedFrom: today - 40);
+
+    // Момент срыва и «сейчас» под счётчиком читаются одним и тем же крюком
+    // (`computed.since#7`), и без подмены часов между записью момента и
+    // построением карточки прошло бы настоящее время выполнения — на
+    // медленной машине оно способно перевалить за секунду и дать «1
+    // секунда» вместо «0 секунд». Часы прибиты на всё время теста.
+    final int Function() realClock = systemCurrentTimeMillis;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+    final int nowMillis = realClock();
+    systemCurrentTimeMillis = () => nowMillis;
 
     await tester.pumpWidget(wrap(habit));
     await tester.pumpAndSettle();

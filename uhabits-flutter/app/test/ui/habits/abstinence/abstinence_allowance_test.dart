@@ -30,6 +30,8 @@ import 'package:uhabits/ui/habits/abstinence/abstinence_overview.dart';
 import 'package:uhabits/ui/habits/list/entry_panel.dart';
 import 'package:uhabits/ui/habits/list/habit_list_screen.dart';
 import 'package:uhabits/ui/habits/show/show_habit_screen.dart';
+import 'package:uhabits_core/src/time/date_utils.dart'
+    show systemCurrentTimeMillis;
 import 'package:uhabits_core/uhabits_core.dart';
 
 void main() {
@@ -243,6 +245,16 @@ void main() {
 
   testWidgets('computed.abstinence-cell#8 сорок пять минут — срыв, и трое '
       'согласны с этим', (tester) async {
+    // Момент срыва и «сейчас» под счётчиком читаются одним и тем же крюком
+    // (`computed.since#7`), и без подмены часов между записью момента (в
+    // `answer`) и чтением карточки прошло бы настоящее время выполнения —
+    // на медленной машине оно способно перевалить за секунду и дать «1
+    // секунда» вместо «0 секунд». Часы прибиты на всё время теста.
+    final int Function() realClock = systemCurrentTimeMillis;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+    final int nowMillis = realClock();
+    systemCurrentTimeMillis = () => nowMillis;
+
     await tapToday(tester);
     await answer(tester, '45');
 
