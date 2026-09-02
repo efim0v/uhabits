@@ -252,11 +252,12 @@ void main() {
     // Кнопка и счётчик — `tapToday` уже оставил экран привычки текущим.
     expect(find.text('Отменить срыв'), findsOneWidget,
         reason: 'computed.abstinence-screen#5');
-    // Счётчик больше не пишет голую цифру: срыв сегодня оставляет `since`
-    // пустым (`computed.since#4`), и карточка показывает «0 минут», а не
-    // «0».
+    // Счётчик больше не пишет голую цифру: сорок пять минут записаны
+    // мгновение назад, и счёт идёт от момента этого срыва, а карточка
+    // показывает «0 минут», а не «0».
     expect(find.text('0 минут'), findsWidgets,
-        reason: 'computed.streak#5 — срыв сегодня обнуляет счётчик');
+        reason: 'computed.since#4 — срыв сегодня начинает счёт заново, и в '
+            'первую минуту после него это «0 минут»');
 
     await readList(tester);
     expect(cellToday(tester), AbstinenceCell.lapse,

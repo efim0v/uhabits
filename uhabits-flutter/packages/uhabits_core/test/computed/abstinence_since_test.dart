@@ -13,29 +13,50 @@ void main() {
   /// `abstinence_streaks_test.dart` — записи и оценка напрямую, без прогона
   /// через `AbstinenceSync` — плюс строка в `Habits`, на которую сможет
   /// сослаться `lapses.save`.
+  ///
+  /// [committedAtMillis] — момент обязательства; по умолчанию его нет, как у
+  /// всякой привычки, заведённой до миграции 105 (`computed.schema#11`).
+  /// [allowance] зеркалит `targetValue`: это одно число, записанное дважды
+  /// (`computed.allowance#1`).
   Habit makeAbstinence({
     required int committedFrom,
     List<int> lapses = const <int>[],
+    int? committedAtMillis,
+    double allowance = 0.0,
+    List<Entry> entries = const <Entry>[],
   }) {
     db.run("insert into Habits (id, name, uuid) values (1, 'x', 'u1')");
     final Habit habit = MemoryModelFactory().buildHabit()
       ..id = 1
       ..type = HabitType.numerical
       ..targetType = NumericalHabitType.atMost
-      ..targetValue = 0.0
+      ..targetValue = allowance
       ..frequency = Frequency.daily
       ..definition = HabitDefinition(
         kind: ComputedKind.abstinence,
         committedFrom: committedFrom,
-        payload: abstinencePayload(),
+        committedAtMillis: committedAtMillis,
+        payload: abstinencePayload(allowance: allowance),
       );
     for (final int day in lapses) {
       habit.originalEntries.add(Entry(LocalDate(day), 1000));
+    }
+    for (final Entry entry in entries) {
+      habit.originalEntries.add(entry);
     }
     applyLapseScoring(habit, habit.definition);
     habit.recompute();
     return habit;
   }
+
+  /// Судья дня по хранимому значению — тот же, что на поверхностях
+  /// воздержания: ступеньки `Entry` срывом не бывают, а всё прочее судится
+  /// допуском (`computed.abstinence-cell#2`). В приложении он живёт в
+  /// `abstinence_button_view.dart`, куда ядру не дотянуться; здесь записан
+  /// теми же двумя строками, чтобы шов проверялся тем, чем его кормят.
+  bool Function(int) judgeOf(Habit habit) => (int value) =>
+      value > Entry.skip &&
+      isAbstinenceLapse(habit.definition!, value / 1000.0);
 
   setUp(() {
     setToday(LocalDate(9000));
@@ -55,14 +76,34 @@ void main() {
     final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8995]);
     lapses.save(habit.id!, 8995, amount: 1, atMillis: at);
 
-    expect(abstinenceSinceMillis(habit, lapses), at,
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        at,
         reason: 'computed.since#1 — считаем от того мгновения, когда сорвался');
+  });
+
+  test('#21 the last lapse is the newest one, not the first', () {
+    // Два срыва под одним обязательством, у обоих момент записан.
+    const int older = (8990 + 10957) * 86400000 + 6 * 3600000;
+    const int newer = (8995 + 10957) * 86400000 + 20 * 3600000;
+    final habit =
+        makeAbstinence(committedFrom: 8960, lapses: <int>[8990, 8995]);
+    lapses.save(habit.id!, 8990, amount: 1, atMillis: older);
+    lapses.save(habit.id!, 8995, amount: 1, atMillis: newer);
+
+    expect(lastAbstinenceLapseDay(habit, isLapseValue: judgeOf(habit)), 8995,
+        reason: 'computed.since#1 — последний срыв это самый новый: перебор '
+            'идёт с сегодняшнего дня назад и останавливается на первом же '
+            'найденном');
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        newer,
+        reason: 'computed.since#1 — и счёт идёт от его мгновения, а не от '
+            'того, с которого воздержание начиналось пять дней раньше');
   });
 
   test('#2 a lapse with no moment counts from the midnight after it', () {
     final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8995]);
 
-    expect(abstinenceSinceMillis(habit, lapses),
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
         (8996 + 10957) * 86400000,
         reason: 'computed.since#2 — полночь ПОСЛЕ дня срыва: первый момент, '
             'про который точно известно, что он был чистым');
@@ -79,7 +120,7 @@ void main() {
     DateUtils.setFixedTimeZone(const FixedTimeZone(5 * 3600000));
     final habit = makeAbstinence(committedFrom: 8960);
 
-    expect(abstinenceSinceMillis(habit, lapses),
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
         (8960 + 10957) * 86400000 - 5 * 3600000,
         reason: 'computed.since#3 — полночь 8960-го в зоне UTC+5 наступает на '
             'пять часов раньше, чем полночь того же дня в UTC');
@@ -88,16 +129,115 @@ void main() {
   test('#4 with no lapse at all the count starts at the commitment', () {
     final habit = makeAbstinence(committedFrom: 8960);
 
-    expect(abstinenceSinceMillis(habit, lapses), (8960 + 10957) * 86400000,
-        reason: 'computed.since#3 — день, который человек выбрал сам, с его '
-            'полуночи');
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8960 + 10957) * 86400000,
+        reason: 'computed.since#3 — момента обязательства у этой привычки нет, '
+            'и остаётся полночь того дня, который человек выбрал сам');
   });
 
-  test('#5 a lapse today means the count has not started', () {
+  test('#5 a lapse today starts the count at that lapse, not at midnight', () {
+    // Жалоба владельца дословно: «почему у меня таймер начинает отсчитывать с
+    // начала дня, а не с момента, когда я говорю, что сорвался?». Сорвался
+    // сегодня в половине третьего.
+    const int at = (9000 + 10957) * 86400000 + 14 * 3600000 + 30 * 60000;
+    final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[9000]);
+    lapses.save(habit.id!, 9000, amount: 1, atMillis: at);
+
+    expect(habit.streaks.getCurrent(LocalDate(9000)), isNull,
+        reason: 'sanity: сегодня перестало быть чистым днём, и серии, '
+            'накрывающей его, не осталось ни одной — ровно то, обо что '
+            'счётчик спотыкался');
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        at,
+        reason: 'computed.since#4 — счёт идёт с половины третьего, а не стоит '
+            'на нуле до полуночи: через серию счётчик не ходит вовсе');
+  });
+
+  test('#13 a lapse today with no moment counts from the midnight ending it',
+      () {
+    // Тот же день, но момента у срыва нет: отметили задним числом, а потом
+    // перенесли часы (`computed.since#7`). Полночь после дня срыва ещё не
+    // наступила, и это честно: про сегодня неизвестно ничего, кроме того, что
+    // он не был чистым.
     final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[9000]);
 
-    expect(abstinenceSinceMillis(habit, lapses), isNull,
-        reason: 'computed.since#4 — сорвался сегодня, считать нечего');
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (9001 + 10957) * 86400000,
+        reason: 'computed.since#2 — полночь ПОСЛЕ дня срыва, даже когда этот '
+            'день сегодняшний: счётчик прочитает её нулём, потому что она ещё '
+            'впереди');
+  });
+
+  test('#14 with no lapse at all the count starts at the commitment moment',
+      () {
+    // Обязательство дано в девять утра, а не в полночь.
+    const int at = (8960 + 10957) * 86400000 + 9 * 3600000;
+    final habit = makeAbstinence(committedFrom: 8960, committedAtMillis: at);
+
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        at,
+        reason: 'computed.since#3 — срывов не было, и счёт идёт от того '
+            'мгновения, когда обязательство дано, а не от полуночи его дня');
+  });
+
+  test('#15 a commitment moment of zero is no moment at all', () {
+    final habit = makeAbstinence(committedFrom: 8960, committedAtMillis: 0);
+
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8960 + 10957) * 86400000,
+        reason: 'computed.since#11 — ноль есть первое января семидесятого, и '
+            'принять его за настоящий момент значило бы напечатать полвека '
+            'свободы; остаётся полночь дня обязательства');
+  });
+
+  test('#16 without a commitment day there is nothing to count from', () {
+    final habit = makeAbstinence(committedFrom: 8960);
+    habit.definition = HabitDefinition(
+      kind: ComputedKind.abstinence,
+      payload: abstinencePayload(),
+    );
+
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        isNull,
+        reason: 'computed.since#4 — пусто только тогда, когда считать не от '
+            'чего вовсе: без дня обязательства нет ни окна, в котором ищется '
+            'срыв, ни второй точки отсчёта');
+  });
+
+  test('#17 the counter reads day values, not the journal', () {
+    // Пропуск приезжает восстановлением копии, `DayWriter` его не
+    // переписывает, и строка журнала на таком дне остаётся строкой без дня
+    // (`computed.day-write#4`). Тот же случай, на котором подпись под
+    // счётчиком когда-то расходилась с самим счётчиком.
+    final habit = makeAbstinence(
+      committedFrom: 8960,
+      entries: <Entry>[Entry(LocalDate(8990), Entry.skip)],
+    );
+    lapses.save(habit.id!, 8990,
+        amount: 1, atMillis: (8990 + 10957) * 86400000 + 3600000);
+
+    expect(habit.computedEntries.get(LocalDate(8990)).value, Entry.skip,
+        reason: 'sanity: значение дня осталось пропуском');
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8960 + 10957) * 86400000,
+        reason: 'computed.since#1 — срыв ищется в значениях дней, а не в '
+            'журнале: строка, не ставшая значением дня, счёта не сбрасывает');
+  });
+
+  test('#18 a day inside the allowance is no lapse for the counter', () {
+    // Двадцать минут при допуске тридцать. Судья приходит швом, и второго
+    // сравнения — «записано хоть что-нибудь» — у счётчика нет.
+    final habit = makeAbstinence(
+      committedFrom: 8960,
+      allowance: 30.0,
+      entries: <Entry>[Entry(LocalDate(8990), 20000)],
+    );
+
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8960 + 10957) * 86400000,
+        reason: 'computed.since#1 — судья тот же, что красит ячейку: «не '
+            'более 30» обещание держит, и счёт не сбрасывается '
+            '(`computed.abstinence-cell#2`)');
   });
 
   test(
@@ -114,7 +254,8 @@ void main() {
     habit.definition = habit.definition!.copyWith(committedFrom: 8990);
     habit.recompute();
 
-    expect(abstinenceSinceMillis(habit, lapses), (8990 + 10957) * 86400000,
+    expect(abstinenceSinceMillis(habit, lapses, isLapseValue: judgeOf(habit)),
+        (8990 + 10957) * 86400000,
         reason: 'computed.commitment#2 — день срыва старше нового дня '
             'обязательства, значит он вне окна: счётчик идёт от полуночи '
             'обязательства, а не от мгновения, которое обязательство '
@@ -127,15 +268,6 @@ void main() {
   Streak streakFrom(Habit habit, int start) => habit.streaks
       .getBest(1 << 20)
       .firstWhere((Streak s) => s.start == LocalDate(start));
-
-  /// Судья дня по хранимому значению — тот же, что на поверхностях
-  /// воздержания: ступеньки `Entry` срывом не бывают, а всё прочее судится
-  /// допуском (`computed.abstinence-cell#2`). В приложении он живёт в
-  /// `abstinence_button_view.dart`, куда ядру не дотянуться; здесь записан
-  /// теми же двумя строками, чтобы шов проверялся тем, чем его кормят.
-  bool Function(int) judgeOf(Habit habit) => (int value) =>
-      value > Entry.skip &&
-      isAbstinenceLapse(habit.definition!, value / 1000.0);
 
   test('#7 a streak the journal says nothing about runs midnight to midnight',
       () {
@@ -256,5 +388,49 @@ void main() {
         reason: 'computed.commitment#2 — охрана у карточки серий та же, что у '
             'счётчика: день срыва старше нового дня обязательства, значит он '
             'вне окна, и серия считается от полуночи обязательства');
+  });
+
+  test('#20 a lapse older than the commitment is not the last lapse', () {
+    // Пересчёт значение старого дня из кэша не выбрасывает: строка 8989-го
+    // как лежала со значением, так и лежит, — и без нижней границы окна
+    // подпись назвала бы её последним срывом, а счётчик рядом считал бы от
+    // обязательства. Ровно то расхождение, ради которого стоит охрана.
+    final habit = makeAbstinence(committedFrom: 8960, lapses: <int>[8989]);
+    habit.definition = habit.definition!.copyWith(committedFrom: 8990);
+    habit.recompute();
+
+    expect(habit.computedEntries.get(LocalDate(8989)).value, 1000,
+        reason: 'sanity: значение дня осталось в кэше после переноса');
+    expect(lastAbstinenceLapseDay(habit, isLapseValue: judgeOf(habit)), isNull,
+        reason: 'computed.commitment#2 — день старше обязательства в окно не '
+            'входит: ни счётчику, ни подписи под ним он не последний срыв');
+  });
+
+  test('#19 the first streak starts at the commitment moment too', () {
+    // Обязательство дано в девять утра сорокового дня назад. Перед этой
+    // серией срыва нет по построению — раньше обязательства их не бывает, —
+    // и её началом становится то же мгновение, от которого считает счётчик.
+    const int at = (8960 + 10957) * 86400000 + 9 * 3600000;
+    final habit = makeAbstinence(committedFrom: 8960, committedAtMillis: at);
+    final Streak streak = streakFrom(habit, 8960);
+
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit),
+            nowMillis: (9000 + 10957) * 86400000 + 9 * 3600000),
+        40 * 86400000,
+        reason: 'computed.since#3 — ровно сорок суток от девяти утра до '
+            'девяти утра, а не сорок суток и девять часов от полуночи: у '
+            'первой серии начало есть момент обязательства');
+    expect(
+        abstinenceStreakMillis(habit, lapses, streak,
+            isLapseValue: judgeOf(habit),
+            nowMillis: (9000 + 10957) * 86400000 + 9 * 3600000),
+        (9000 + 10957) * 86400000 +
+            9 * 3600000 -
+            abstinenceSinceMillis(habit, lapses,
+                isLapseValue: judgeOf(habit))!,
+        reason: 'computed.since#8 — надпись в полосе и счётчик над карточкой '
+            'считают от одного мгновения, и расходиться им не в чем');
   });
 }

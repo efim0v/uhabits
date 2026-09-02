@@ -11,6 +11,11 @@
 /// checks the subscription lifecycle and both the "still running" and the
 /// "genuinely lapsed" shape of that bug, plus the plain habit the same fix
 /// reaches for free.
+///
+/// The counter no longer goes through `habit.streaks` at all
+/// (`computed.since#4`), so the rollover no longer decides what it prints —
+/// but everything else on the screen is still rebuilt at midnight, and the
+/// counter is still the shortest way to ask whether it was.
 library;
 
 // The commands, preferences and time seams are reached by their `src` path,
@@ -23,6 +28,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uhabits/platform/app_database.dart';
 import 'package:uhabits/state/app_scope.dart';
 import 'package:uhabits/state/show_habit_model.dart';
+import 'package:uhabits/ui/habits/abstinence/abstinence_button_view.dart'
+    show isAbstinenceLapseDay;
 import 'package:uhabits_core/src/tasks/task_runner.dart'
     show UnconfinedTestDispatcher;
 import 'package:uhabits_core/src/time/date_utils.dart';
@@ -125,6 +132,12 @@ void main() {
     return habit;
   }
 
+  /// The one judge every abstinence surface uses
+  /// (`computed.abstinence-cell#2`); the counter takes it as a seam, because
+  /// the half that translates the scale lives up here and not in the core.
+  bool Function(int) judgeOf(core.Habit habit) =>
+      (int value) => isAbstinenceLapseDay(habit.definition!, value);
+
   /// Records the schedule instead of running it — `MidnightTimer.onResume`'s
   /// reason for taking a `testExecutor` — the same double
   /// app/test/state/midnight_timer_resume_test.dart uses.
@@ -218,8 +231,12 @@ void main() {
     final executor = _FakeExecutor();
     scope.midnightTimer.onResume(0, executor);
 
-    expect(core.abstinenceSinceMillis(habit, scope.lapses), isNotNull,
-        reason: 'sanity: the streak already covers day1 before midnight');
+    expect(
+        core.abstinenceSinceMillis(habit, scope.lapses,
+            isLapseValue: judgeOf(habit)),
+        isNotNull,
+        reason: 'sanity: nobody has lapsed, so the counter has the '
+            'commitment to count from');
 
     systemCurrentTimeMillis = () => day2.unixTime + 1000;
     executor.fire();
@@ -230,14 +247,17 @@ void main() {
     expect(habit.streaks.getCurrent(day2), isNotNull,
         reason: 'atMidnight() recomputes the habit, and a silence-qualifying '
             'streak extends to cover a day nobody lapsed on');
-    expect(core.abstinenceSinceMillis(habit, scope.lapses), isNotNull,
+    expect(
+        core.abstinenceSinceMillis(habit, scope.lapses,
+            isLapseValue: judgeOf(habit)),
+        isNotNull,
         reason: 'computed.since#3 — so the counter still has a moment to '
             'count from, and does not read "0 minutes" for a habit that is '
             'still being kept');
   });
 
-  test('an abstinence habit that lapses on the new day still shows nothing '
-      'running', () {
+  test('an abstinence habit that lapses on the new day counts from that '
+      'lapse', () {
     final scope = openScope();
     final habit = addAbstinence(scope, daysAgo: 20);
     final model = ShowHabitModel(
@@ -251,7 +271,10 @@ void main() {
 
     systemCurrentTimeMillis = () => day2.unixTime + 1000;
     executor.fire();
-    expect(core.abstinenceSinceMillis(habit, scope.lapses), isNotNull,
+    expect(
+        core.abstinenceSinceMillis(habit, scope.lapses,
+            isLapseValue: judgeOf(habit)),
+        isNotNull,
         reason: 'sanity: the rollover alone does not end anything — this is '
             'the same habit as the test above, one line before it lapses');
 
@@ -261,13 +284,16 @@ void main() {
 
     expect(core.getToday(), day2);
     expect(habit.streaks.getCurrent(day2), isNull,
-        reason: 'a real lapse on the new day is still a lapse: the fix that '
-            'stops the counter from reading "0 minutes" for a habit that is '
-            'running must not make it read anything else for one that is '
-            'not');
-    expect(core.abstinenceSinceMillis(habit, scope.lapses), isNull,
-        reason: 'computed.since#4 — сорвался сегодня, и счётчику нечего '
-            'показывать');
+        reason: 'a real lapse on the new day is still a lapse: no streak '
+            'covers day2 any more, and this is exactly what the counter used '
+            'to be asking');
+    expect(
+        core.abstinenceSinceMillis(habit, scope.lapses,
+            isLapseValue: judgeOf(habit)),
+        day2.unixTime + 1000,
+        reason: 'computed.since#4 — счёт идёт от мгновения того срыва: '
+            'секунду назад записанный момент и есть начало счёта, а не ноль '
+            'до следующей полуночи');
   });
 }
 

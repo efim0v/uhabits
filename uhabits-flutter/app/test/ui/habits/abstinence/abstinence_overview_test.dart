@@ -124,8 +124,9 @@ void main() {
   testWidgets('the counter, the ring and the two shares', (tester) async {
     // Двадцать, не сорок: счётчик читает `since` календарно
     // (`computed.since#6`), а `since` без единого срыва — полночь дня
-    // обязательства (`computed.since#3`). Сорок реальных суток от полуночи
-    // до настоящего момента переваливают за длину любого календарного
+    // обязательства, у которого своего момента нет (`computed.since#3`).
+    // Сорок реальных суток от полуночи до настоящего момента
+    // переваливают за длину любого календарного
     // месяца (максимум тридцать один), и `formatAbstinenceDuration` честно
     // показал бы «1 месяц N дней» вместо «40 дней» — календарная арифметика
     // тут работает верно, а вот число «сорок» для голой демонстрации не
@@ -205,8 +206,8 @@ void main() {
         reason: 'computed.streak#12 — рекорда нет: серий не осталось ни '
             'одной');
     expect(find.text('0 минут'), findsOneWidget,
-        reason: 'computed.since#4 — сорвался сегодня, и счётчику нечего '
-            'показывать');
+        reason: 'computed.since#4 — счёт начался заново с мгновения того '
+            'срыва, и с тех пор не прошло и минуты');
     expect(find.text('1'), findsOneWidget,
         reason: 'computed.abstinence-screen#4 — а про один срыв карточке есть '
             'что сказать, и она говорит');
@@ -222,6 +223,42 @@ void main() {
         reason: 'computed.streak#12 — ноль прожитых суток рекордом не бывает');
     expect(find.textContaining('от рекорда'), findsNothing,
         reason: 'computed.streak#12 — и доли от него нет: делить не на что');
+  });
+
+  testWidgets('a lapse marked this afternoon starts the counter at that '
+      'moment', (tester) async {
+    // Жалоба владельца дословно: «почему у меня таймер начинает отсчитывать
+    // с начала дня, а не с момента, когда я говорю, что сорвался?». До
+    // правки счётчик спрашивал серию, накрывающую сегодня; сегодня перестало
+    // быть чистым днём, такой серии не оставалось ни одной, и число вставало
+    // на «0 минут» до полуночи.
+    //
+    // «Сегодня» прибивается на время проверки: часы уводятся на сорок минут
+    // вперёд, и без этого прогон в двадцать минут первого ночи переехал бы
+    // на следующий день вместе с ними.
+    setToday(LocalDate(today));
+    final int Function() realClock = systemCurrentTimeMillis;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+    int nowMillis = realClock();
+    systemCurrentTimeMillis = () => nowMillis;
+
+    final Habit habit = addAbstinence(committedFrom: today - 20);
+    // Та же единственная дверь, что и у кнопки на карточке: момент пишется
+    // потому, что отмечаемый день — сегодняшний (`computed.since#7`).
+    scope.abstinence.setLapse(habit, LocalDate(today), true);
+    nowMillis += 40 * 60000;
+    await pumpHabit(tester, habit);
+
+    expect(
+      tester.widget<Text>(find.byKey(AbstinenceOverviewCard.counterKey)).data,
+      '40 минут',
+      reason: 'computed.since#4 — счёт пошёл с того мгновения, когда человек '
+          'сказал, что сорвался: сорок минут назад, а не «0 минут» до '
+          'полуночи и не двадцать дней от обязательства',
+    );
+    expect(find.textContaining('Последний срыв'), findsOneWidget,
+        reason: 'computed.abstinence-screen#2 — подпись называет тот же срыв, '
+            'от мгновения которого считает число над ней');
   });
 
   testWidgets('the button is here, because it has nowhere else to be',
@@ -337,10 +374,10 @@ void main() {
   testWidgets(
       'the counter moves with the clock, and the timer does not survive '
       'the card', (tester) async {
-    // `since` берётся от полуночи дня обязательства (`computed.since#3`) и
-    // от подмены часов ниже не зависит вовсе — двигаем только «сейчас», тот
-    // же крюк, которым карточка сама читает текущий момент
-    // (`computed.since#5`).
+    // `since` берётся от полуночи дня обязательства — своего момента у него
+    // нет (`computed.since#3`) — и от подмены часов ниже не зависит вовсе:
+    // двигаем только «сейчас», тот же крюк, которым карточка сама читает
+    // текущий момент (`computed.since#5`).
     final int Function() realClock = systemCurrentTimeMillis;
     addTearDown(() => systemCurrentTimeMillis = realClock);
     int nowMillis = realClock();

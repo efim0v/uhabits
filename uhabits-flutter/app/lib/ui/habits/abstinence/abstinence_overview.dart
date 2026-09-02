@@ -104,33 +104,31 @@ class _AbstinenceOverviewCardState extends State<AbstinenceOverviewCard> {
     final L10n l10n = L10n.of(context);
     final core.Theme theme = coreThemeOf(context);
     final core.AbstinenceStreaks streaks = core.abstinenceStreaksOf(habit);
-    final int? since = core.abstinenceSinceMillis(habit, scope.lapses);
     final core.LocalDate today = core.getToday();
     final double level = habit.scores[today].value;
 
-    // Один судья на всё: `isAbstinenceLapseDay` через `abstinenceSquareOf`,
-    // тот же, которым судят ячейка списка, клетка календаря и кнопка ниже.
-    // Вход тоже один — `habit.computedEntries` от дня обязательства до
-    // сегодня. Журнал здесь не читается: он и значения дней расходятся на
-    // пропуске, и подпись, читавшая журнал, объявляла срыв там, где сетка
-    // показывала пропуск.
+    // Один судья на всё: `isAbstinenceLapseDay`, тот же, которым судят ячейка
+    // списка, клетка календаря и кнопка ниже. Вход тоже один —
+    // `habit.computedEntries` от дня обязательства до сегодня. Журнал здесь
+    // не читается: он и значения дней расходятся на пропуске, и подпись,
+    // читавшая журнал, объявляла срыв там, где сетка показывала пропуск.
+    bool isLapseValue(int value) => isAbstinenceLapseDay(definition, value);
+
     final int todayValue = habit.computedEntries.get(today).value;
-    final bool lapsedToday = isAbstinenceLapseDay(definition, todayValue);
+    final bool lapsedToday = isLapseValue(todayValue);
+    final int? since = core.abstinenceSinceMillis(habit, scope.lapses,
+        isLapseValue: isLapseValue);
+    // Тот же день, что взял счётчик, и взят он тем же вызовом: число над
+    // подписью и дата в ней называют один срыв потому, что спрашивают его
+    // одной функцией, а не потому, что два цикла написаны одинаково
+    // (`computed.abstinence-screen#2`).
+    final int? lastLapse =
+        core.lastAbstinenceLapseDay(habit, isLapseValue: isLapseValue);
     final List<core.Entry> days = habit.computedEntries.getByInterval(
         core.LocalDate(definition.committedFrom!), today);
     final bool Function(core.Entry)? isLapse =
         abstinenceCountsTowardsTotal(habit);
     final int lapsesTotal = isLapse == null ? 0 : days.where(isLapse).length;
-    // `getByInterval` отдаёт дни от новых к старым, поэтому первое совпадение
-    // и есть последний срыв. В будущее заглядывать незачем: срыв не может
-    // лежать позже сегодняшнего дня.
-    int? lastLapse;
-    for (final core.Entry entry in days) {
-      if (isAbstinenceLapseDay(definition, entry.value)) {
-        lastLapse = entry.date.daysSince2000;
-        break;
-      }
-    }
     final IntlLocalDateFormatter formatter =
         IntlLocalDateFormatter.of(context);
 
