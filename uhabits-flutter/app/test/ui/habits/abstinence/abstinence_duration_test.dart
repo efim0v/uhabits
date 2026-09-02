@@ -36,16 +36,40 @@ void main() {
     expect(after(const Duration(minutes: 3)), '3 минуты',
         reason: 'computed.since#5 — счётчик отвечает с первой минуты, а не с '
             'первого дня');
-    expect(after(Duration.zero), '0 минут',
-        reason: 'computed.since#5 — и в самое первое мгновение тоже');
+    expect(after(Duration.zero), '0 секунд',
+        reason: 'computed.since#5 — а в самое первое мгновение секундами: '
+            'секунда, не минута, — младшая единица счётчика');
+  });
+
+  test('seconds are a real unit in the first hours of a streak', () {
+    expect(after(const Duration(hours: 2, minutes: 14, seconds: 9)),
+        '2 часа 14 минут 9 секунд',
+        reason: 'computed.since#5 — секунда занимает третье место в тройке, '
+            'пока часы и минуты не заполнили первые два');
+  });
+
+  test('seconds lose their place once days show up, and vanish on their own',
+      () {
+    expect(
+        after(const Duration(
+            days: 14, hours: 6, minutes: 12, seconds: 9)),
+        '14 дней 6 часов 12 минут',
+        reason: 'computed.since#5 — четыре ненулевые единицы, три места: '
+            'секунда — младшая, и её вытесняют без отдельного выключателя');
+  });
+
+  test('less than a second held reads as zero seconds, not zero minutes', () {
+    expect(after(const Duration(milliseconds: 500)), '0 секунд',
+        reason: 'computed.since#5 — «0 минут» соврало бы: минута ещё не '
+            'прошла даже наполовину, а секунда — младшая единица счётчика');
   });
 
   test('a start that has not arrived yet reads as nothing held', () {
     // Так выглядит сегодняшний срыв, о моменте которого ничего не известно:
     // счёт идёт от полуночи ПОСЛЕ дня срыва, а она ещё впереди.
-    expect(after(const Duration(hours: -5)), '0 минут',
+    expect(after(const Duration(hours: -5)), '0 секунд',
         reason: 'computed.since#2 — полночь после сегодняшнего срыва ещё не '
-            'наступила, и «0 минут» — всё, что можно сказать про день, в '
+            'наступила, и «0 секунд» — всё, что можно сказать про день, в '
             'который сорвались неизвестно когда');
   });
 

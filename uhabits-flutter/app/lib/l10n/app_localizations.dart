@@ -1724,11 +1724,17 @@ abstract class L10n {
   /// **'{count, plural, =1{{count} hour} other{{count} hours}}'**
   String abstinenceDurationHours(num count);
 
-  /// The minutes part of the abstinence duration phrase, e.g. "12 minutes". Also the whole phrase at the first instant of a clean streak, where it alone reads "0 minutes".
+  /// The minutes part of the abstinence duration phrase, e.g. "12 minutes".
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{{count} minute} other{{count} minutes}}'**
   String abstinenceDurationMinutes(num count);
+
+  /// The seconds part of the abstinence duration phrase, the counter's smallest unit, e.g. "2 hours 14 minutes 9 seconds". Also the whole phrase whenever less than a second has passed, where it alone reads "0 seconds".
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} second} other{{count} seconds}}'**
+  String abstinenceDurationSeconds(num count);
 
   /// Label beside the current streak's share of the all-time best streak, on the abstinence overview card.
   ///

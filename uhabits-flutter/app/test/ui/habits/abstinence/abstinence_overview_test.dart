@@ -205,9 +205,9 @@ void main() {
     expect(find.textContaining('от рекорда'), findsNothing,
         reason: 'computed.streak#12 — рекорда нет: серий не осталось ни '
             'одной');
-    expect(find.text('0 минут'), findsOneWidget,
+    expect(find.text('0 секунд'), findsOneWidget,
         reason: 'computed.since#4 — счёт начался заново с мгновения того '
-            'срыва, и с тех пор не прошло и минуты');
+            'срыва, и с тех пор не прошло и секунды');
     expect(find.text('1'), findsOneWidget,
         reason: 'computed.abstinence-screen#4 — а про один срыв карточке есть '
             'что сказать, и она говорит');
@@ -393,14 +393,15 @@ void main() {
         .data!;
     final String before = counterText();
 
-    // Минута вперёд — граница, на которой обязана сдвинуться младшая
-    // единица счётчика, а не «когда-нибудь при следующей перерисовке
-    // экрана» (`computed.since#5`).
+    // Минута вперёд — граница, на которой обязана сдвинуться младшая из
+    // трёх единиц, видимых здесь (дни, часы, минуты — секунде в тройке уже
+    // не осталось места, `computed.since#5`), а не «когда-нибудь при
+    // следующей перерисовке экрана».
     nowMillis += 60000;
     await tester.pump(const Duration(minutes: 1));
 
     expect(counterText(), isNot(before),
-        reason: 'computed.since#5 — счётчик идёт сам, тикая раз в минуту, а '
+        reason: 'computed.since#5 — счётчик идёт сам, тикая раз в секунду, а '
             'не ждёт внешней перерисовки экрана');
 
     // Карточка уходит с экрана — и вместе с ней обязан уйти таймер: не
@@ -416,5 +417,54 @@ void main() {
     expect(tester.takeException(), isNull,
         reason: 'computed.since#5 — таймер остановлен в dispose и не тикает '
             'вхолостую после того, как карточка исчезла с экрана');
+  });
+
+  testWidgets('the counter shows and ticks seconds in the first half minute '
+      'of a streak', (tester) async {
+    // Момент обязательства записан явно, тем же путём, каким его пишет
+    // редактор (`computed.commitment#8`), — так что «since» есть точное
+    // мгновение, а не полночь дня. Дней и часов в отрезке ещё нет, и секунда
+    // — одна из трёх видимых единиц с самого начала (`computed.since#1`,
+    // `computed.since#5`).
+    final int Function() realClock = systemCurrentTimeMillis;
+    addTearDown(() => systemCurrentTimeMillis = realClock);
+    int nowMillis = realClock();
+    final int committedAtMillis = nowMillis - 30000;
+    systemCurrentTimeMillis = () => nowMillis;
+
+    final Habit habit = scope.modelFactory.buildHabit()
+      ..name = 'Sober'
+      ..type = HabitType.numerical
+      ..targetType = NumericalHabitType.atMost
+      ..targetValue = 0.0;
+    scope.habitList.add(habit);
+    scope.definitions.save(
+      habit.id!,
+      HabitDefinition(
+        kind: ComputedKind.abstinence,
+        committedFrom: today,
+        committedAtMillis: committedAtMillis,
+        payload: abstinencePayload(allowance: 0.0),
+      ),
+    );
+    attachDefinition(habit, scope.definitions);
+    habit.recompute();
+    await pumpHabit(tester, habit);
+
+    String counterText() => tester
+        .widget<Text>(find.byKey(AbstinenceOverviewCard.counterKey))
+        .data!;
+    expect(counterText(), '30 секунд',
+        reason: 'computed.since#5 — секунда есть младшая единица счётчика, '
+            'и в первые полминуты воздержания она единственная на экране');
+
+    // Секунда вперёд — не минута: тикает раз в секунду, а не раз в минуту
+    // (`computed.since#5`).
+    nowMillis += 1000;
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(counterText(), '31 секунда',
+        reason: 'computed.since#5 — цифра сдвинулась через одну секунду, а '
+            'не простояла минуту неподвижно');
   });
 }

@@ -78,15 +78,15 @@ class _AbstinenceOverviewCardState extends State<AbstinenceOverviewCard> {
     super.dispose();
   }
 
-  /// Планирует следующую перерисовку ровно на границу минуты.
+  /// Планирует следующую перерисовку ровно на границу секунды.
   ///
-  /// Не «через шестьдесят секунд от того, как открыли экран» — так цифра
-  /// менялась бы в случайный момент внутри минуты, — а на первый момент
-  /// после «сейчас», у которого миллисекунды от начала минуты нулевые: ровно
+  /// Не «через тысячу миллисекунд от того, как открыли экран» — так цифра
+  /// менялась бы в случайный момент внутри секунды, — а на первый момент
+  /// после «сейчас», у которого миллисекунды от начала секунды нулевые: ровно
   /// тогда меняется младшая единица счётчика (`computed.since#5`).
   void _scheduleTick() {
-    final int msIntoMinute = systemCurrentTimeMillis() % 60000;
-    final int delay = 60000 - msIntoMinute;
+    final int msIntoSecond = systemCurrentTimeMillis() % 1000;
+    final int delay = 1000 - msIntoSecond;
     _tick = Timer(Duration(milliseconds: delay), () {
       if (!mounted) return;
       setState(() {});
@@ -152,7 +152,7 @@ class _AbstinenceOverviewCardState extends State<AbstinenceOverviewCard> {
             ),
             child: Text(
               since == null
-                  ? l10n.abstinenceDurationMinutes(0)
+                  ? l10n.abstinenceDurationSeconds(0)
                   : formatAbstinenceDuration(
                       l10n,
                       DateTime.fromMillisecondsSinceEpoch(since),

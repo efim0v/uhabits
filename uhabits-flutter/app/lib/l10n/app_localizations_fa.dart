@@ -937,6 +937,17 @@ class L10nFa extends L10n {
   }
 
   @override
+  String abstinenceDurationSeconds(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count seconds',
+      one: '$count second',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get abstinenceOfRecord => 'of the record';
 
   @override

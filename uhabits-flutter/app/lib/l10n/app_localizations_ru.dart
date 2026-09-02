@@ -962,6 +962,19 @@ class L10nRu extends L10n {
   }
 
   @override
+  String abstinenceDurationSeconds(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count секунды',
+      many: '$count секунд',
+      few: '$count секунды',
+      one: '$count секунда',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get abstinenceOfRecord => 'от рекорда';
 
   @override

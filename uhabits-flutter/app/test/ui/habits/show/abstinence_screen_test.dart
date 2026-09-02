@@ -273,11 +273,12 @@ void main() {
     expect(scope.lapses.lastDay(habit.id!), today,
         reason: 'computed.abstinence-screen#5');
     // Счётчик больше не пишет голую цифру: срыв записан мгновение назад,
-    // счёт идёт от его момента (`computed.since#4`), и прошло меньше минуты
-    // — карточка показывает «0 минут», а не «0» (`abstinence_overview.dart`).
-    expect(find.text('0 минут'), findsOneWidget,
+    // счёт идёт от его момента (`computed.since#4`), и прошло меньше
+    // секунды — карточка показывает «0 секунд», а не «0»
+    // (`abstinence_overview.dart`).
+    expect(find.text('0 секунд'), findsOneWidget,
         reason: 'computed.abstinence-screen#2 — срыв сегодня начинает счёт '
-            'заново, и в первую минуту после него это «0 минут»');
+            'заново, и в первую секунду после него это «0 секунд»');
     expect(find.text('Отменить срыв'), findsOneWidget,
         reason: 'computed.abstinence-screen#5 — надпись меняется вместе с '
             'состоянием дня');

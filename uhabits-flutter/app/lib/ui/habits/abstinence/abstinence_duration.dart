@@ -2,8 +2,10 @@ import '../../../l10n/app_localizations.dart';
 
 /// Сколько единиц времени показывает счётчик.
 ///
-/// Три: «14 дней 6 часов 12 минут» читается, «1 год 2 месяца 14 дней 6 часов
-/// 12 минут» — уже нет (`computed.since#5`).
+/// Три: «2 часа 14 минут 9 секунд» читается, «14 дней 6 часов 12 минут
+/// 9 секунд» — уже нет. Секунды никто не убирает нарочно: их просто
+/// вытесняет четвёртая единица, как только старших единиц набирается три и
+/// без них (`computed.since#5`).
 const int _unitsShown = 3;
 
 /// Длительность воздержания словами, тремя старшими ненулевыми единицами.
@@ -41,7 +43,11 @@ DateTime _shiftMonths(DateTime from, int totalMonths) {
 }
 
 String formatAbstinenceDuration(L10n l10n, DateTime from, DateTime to) {
-  if (!to.isAfter(from)) return l10n.abstinenceDurationMinutes(0);
+  // `to` не позже `from` — сбитые часы или срыв, чей момент ещё не настал
+  // (`computed.since#2`). Секунда — младшая единица счётчика, и «ничего не
+  // прошло» читается нулём секунд, а не нулём минут: минута была бы неправдой
+  // о том, что прошло меньше её целой.
+  if (!to.isAfter(from)) return l10n.abstinenceDurationSeconds(0);
 
   // Сколько целых месяцев уместилось: берём оценку сверху и убавляем, пока
   // перенос обгоняет настоящее. Цикл делает один-два шага.
@@ -64,9 +70,10 @@ String formatAbstinenceDuration(L10n l10n, DateTime from, DateTime to) {
   add(rest.inDays, l10n.abstinenceDurationDays);
   add(rest.inHours.remainder(24), l10n.abstinenceDurationHours);
   add(rest.inMinutes.remainder(60), l10n.abstinenceDurationMinutes);
+  add(rest.inSeconds.remainder(60), l10n.abstinenceDurationSeconds);
 
-  // Первая минута воздержания — тоже ответ, и он не должен быть пустым.
-  if (parts.isEmpty) return l10n.abstinenceDurationMinutes(0);
+  // Первая секунда воздержания — тоже ответ, и он не должен быть пустым.
+  if (parts.isEmpty) return l10n.abstinenceDurationSeconds(0);
   return parts.join(' ');
 }
 

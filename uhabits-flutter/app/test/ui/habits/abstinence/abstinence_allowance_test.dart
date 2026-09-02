@@ -254,10 +254,10 @@ void main() {
         reason: 'computed.abstinence-screen#5');
     // Счётчик больше не пишет голую цифру: сорок пять минут записаны
     // мгновение назад, и счёт идёт от момента этого срыва, а карточка
-    // показывает «0 минут», а не «0».
-    expect(find.text('0 минут'), findsWidgets,
+    // показывает «0 секунд», а не «0».
+    expect(find.text('0 секунд'), findsWidgets,
         reason: 'computed.since#4 — срыв сегодня начинает счёт заново, и в '
-            'первую минуту после него это «0 минут»');
+            'первую секунду после него это «0 секунд»');
 
     await readList(tester);
     expect(cellToday(tester), AbstinenceCell.lapse,
